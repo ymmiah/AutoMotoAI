@@ -55,7 +55,7 @@ AutoMoto AI is a revolutionary Windows desktop automation tool that bridges the 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/AutoMotoAI.git
+   git clone https://github.com/ymmiah/AutoMotoAI.git
    cd AutoMotoAI
    ```
 
@@ -264,8 +264,8 @@ pip install -r requirements.txt
 
 ### Getting Help
 - 📖 Check the [Troubleshooting Guide](docs/troubleshooting.html)
-- 🐛 [Open an Issue](https://github.com/yourusername/AutoMotoAI/issues)
-- 💬 [Discussions](https://github.com/yourusername/AutoMotoAI/discussions)
+- 🐛 [Open an Issue](https://github.com/ymmiah/AutoMotoAI/issues)
+- 💬 [Discussions](https://github.com/ymmiah/AutoMotoAI/discussions)
 
 ---
 
@@ -274,8 +274,8 @@ pip install -r requirements.txt
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Ways to Contribute
-- 🐛 **Bug Reports** - [Open an Issue](https://github.com/yourusername/AutoMotoAI/issues)
-- 💡 **Feature Requests** - [Start a Discussion](https://github.com/yourusername/AutoMotoAI/discussions)
+- 🐛 **Bug Reports** - [Open an Issue](https://github.com/ymmiah/AutoMotoAI/issues)
+- 💡 **Feature Requests** - [Start a Discussion](https://github.com/ymmiah/AutoMotoAI/discussions)
 - 🔧 **Code Contributions** - Submit a Pull Request
 - 📚 **Documentation** - Help improve our docs
 - 🧪 **Testing** - Test on different Windows versions
@@ -283,7 +283,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ### Development Setup
 ```bash
 # Fork and clone the repository
-git clone https://github.com/yourusername/AutoMotoAI.git
+git clone https://github.com/ymmiah/AutoMotoAI.git
 cd AutoMotoAI
 
 # Create virtual environment
@@ -356,4 +356,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
     <a href="CHANGELOG.md">Changelog</a>
   </p>
 </div>
+
 
