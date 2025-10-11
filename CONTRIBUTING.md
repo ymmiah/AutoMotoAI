@@ -38,7 +38,7 @@ See our [Code of Conduct](CODE_OF_CONDUCT.md) for more details.
 ```bash
 # Fork the repository on GitHub
 # Clone your fork
-git clone https://github.com/yourusername/AutoMotoAI.git
+git clone https://github.com/ymmiah/AutoMotoAI.git
 cd AutoMotoAI
 
 # Create virtual environment
@@ -99,7 +99,7 @@ python main.py
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/AutoMotoAI.git
+   git clone https://github.com/ymmiah/AutoMotoAI.git
    cd AutoMotoAI
    ```
 
@@ -382,4 +382,5 @@ Contributors will be recognized in:
 
 Thank you for contributing to AutoMoto AI! Your contributions help make desktop automation more accessible and powerful for everyone.
 
-For questions or help getting started, don't hesitate to [open an issue](https://github.com/yourusername/AutoMotoAI/issues) or [start a discussion](https://github.com/yourusername/AutoMotoAI/discussions).
+For questions or help getting started, don't hesitate to [open an issue](https://github.com/ymmiah/AutoMotoAI/issues) or [start a discussion](https://github.com/ymmiah/AutoMotoAI/discussions).
+
