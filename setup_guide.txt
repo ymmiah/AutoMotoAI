@@ -1,0 +1,79 @@
+===========================================
+AutoMoto AI - Quick Setup Guide
+===========================================
+
+Follow these steps to get AutoMoto AI running:
+
+STEP 1: Install Python
+-----------------------
+1. Download Python 3.10+ from python.org
+2. During installation, check "Add Python to PATH"
+3. Verify installation: Open CMD and type: python --version
+
+STEP 2: Set Up Project
+-----------------------
+1. Open Command Prompt (CMD)
+2. Navigate to the AutoMotoAI folder:
+   cd C:\Users\YourUsername\Desktop\AutoMotoAI
+
+3. Create virtual environment:
+   python -m venv venv
+
+4. Activate virtual environment:
+   venv\Scripts\activate
+
+5. Install dependencies:
+   pip install -r requirements.txt
+
+STEP 3: Configure OpenAI API
+-----------------------------
+1. Get your API key from: https://platform.openai.com/api-keys
+2. Rename ".env.example" to ".env"
+3. Open .env file in notepad
+4. Replace "your_openai_api_key_here" with your actual API key
+5. Save and close
+
+STEP 4: Run the Application
+----------------------------
+1. Make sure virtual environment is activated (you should see (venv) in CMD)
+2. Run: python main.py
+3. Follow the on-screen instructions
+
+STEP 5: Test Basic Commands
+----------------------------
+Try these commands to test:
+- "open notepad"
+- "hello"
+- "take a screenshot"
+- "create a new file"
+
+TROUBLESHOOTING
+---------------
+Problem: "pip is not recognized"
+Solution: Reinstall Python and check "Add to PATH"
+
+Problem: "No module named 'openai'"
+Solution: Activate venv and run: pip install -r requirements.txt
+
+Problem: "API key not set"
+Solution: Check that .env file exists and contains your API key
+
+Problem: Voice input not working
+Solution: Check microphone permissions in Windows Settings
+
+OPTIONAL: Create Executable
+----------------------------
+To create a standalone .exe file:
+1. Install PyInstaller: pip install pyinstaller
+2. Run: pyinstaller --onefile --windowed main.py
+3. Find the .exe in the "dist" folder
+
+SUPPORT
+-------
+- Read README.md for detailed documentation
+- Check code comments for technical details
+- Review OpenAI API documentation for API issues
+
+===========================================
+Enjoy using AutoMoto AI!
+===========================================

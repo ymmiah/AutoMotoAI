@@ -1,0 +1,247 @@
+================================================================================
+                        AutoMoto AI - System Architecture
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER INTERFACE                                  │
+│                                                                              │
+│  ┌──────────────┐         ┌──────────────┐         ┌──────────────┐       │
+│  │   Voice      │         │     Text     │         │     GUI      │       │
+│  │   Input      │         │    Input     │         │   Dialogs    │       │
+│  │  (Microphone)│         │  (Keyboard)  │         │  (Tkinter)   │       │
+│  └──────┬───────┘         └──────┬───────┘         └──────┬───────┘       │
+│         │                        │                        │                │
+│         └────────────────────────┴────────────────────────┘                │
+│                                  │                                          │
+│                                  ▼                                          │
+│                        ┌──────────────────┐                                │
+│                        │  interaction.py  │                                │
+│                        │  - speak()       │                                │
+│                        │  - listen()      │                                │
+│                        │  - ask_user()    │                                │
+│                        └────────┬─────────┘                                │
+└─────────────────────────────────┼──────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          APPLICATION LOGIC LAYER                             │
+│                                                                              │
+│                        ┌──────────────────┐                                │
+│                        │     main.py      │                                │
+│                        │                  │                                │
+│                        │  Main Loop:      │                                │
+│                        │  1. Get Input    │                                │
+│                        │  2. Ask AI       │                                │
+│                        │  3. Confirm      │                                │
+│                        │  4. Execute      │                                │
+│                        │  5. Feedback     │                                │
+│                        └────┬────────┬────┘                                │
+│                             │        │                                      │
+│                    ┌────────┘        └────────┐                            │
+│                    ▼                           ▼                            │
+│         ┌──────────────────┐       ┌──────────────────┐                   │
+│         │   prompts.py     │       │   config.py      │                   │
+│         │                  │       │                  │                   │
+│         │ - Task prompts   │       │ - API Key        │                   │
+│         │ - Analysis       │       │ - System Prompt  │                   │
+│         │ - Clarification  │       │ - Settings       │                   │
+│         └──────────────────┘       └──────────────────┘                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                    │                           │
+        ┌───────────┘                           └───────────┐
+        ▼                                                   ▼
+┌──────────────────────┐                       ┌──────────────────────┐
+│    AI LAYER          │                       │   ACTION LAYER       │
+│                      │                       │                      │
+│  ┌────────────────┐  │                       │  ┌────────────────┐  │
+│  │  OpenAI API    │  │                       │  │   actions.py   │  │
+│  │                │  │                       │  │                │  │
+│  │  GPT-4 Model   │  │                       │  │ - open_app()   │  │
+│  │  Temperature:  │  │                       │  │ - close_app()  │  │
+│  │  0.3           │  │                       │  │ - create_file()│  │
+│  │  Max Tokens:   │  │                       │  │ - screenshot() │  │
+│  │  500           │  │                       │  │ - type_text()  │  │
+│  │                │  │                       │  │ - hotkey()     │  │
+│  └────────────────┘  │                       │  └────────────────┘  │
+│                      │                       │                      │
+│  Returns:            │                       │  Uses:               │
+│  - Task analysis     │                       │  - PyAutoGUI         │
+│  - Confirmation      │                       │  - subprocess        │
+│  - Suggestions       │                       │  - os module         │
+└──────────────────────┘                       └──────────────────────┘
+        │                                                   │
+        └───────────────────┬───────────────────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          SYSTEM INTERACTION                                  │
+│                                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │   Windows    │  │     File     │  │   Desktop    │  │   Network    │  │
+│  │     OS       │  │    System    │  │  Automation  │  │     API      │  │
+│  │              │  │              │  │              │  │              │  │
+│  │ - Apps       │  │ - Create     │  │ - Mouse      │  │ - OpenAI     │  │
+│  │ - Windows    │  │ - Read       │  │ - Keyboard   │  │ - Speech     │  │
+│  │ - Processes  │  │ - Write      │  │ - Screen     │  │   Services   │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                              DATA FLOW DIAGRAM
+================================================================================
+
+User Input → interaction.py → main.py → OpenAI API
+                                  ↓
+                            AI Response
+                                  ↓
+                         User Confirmation
+                                  ↓
+                         parse_and_execute()
+                                  ↓
+                            actions.py
+                                  ↓
+                         System Execution
+                                  ↓
+                         Feedback to User
+
+================================================================================
+                            EXECUTION FLOW EXAMPLE
+================================================================================
+
+Step 1: User says "open notepad"
+   ↓
+Step 2: interaction.listen() captures speech
+   ↓
+Step 3: main.py receives: "open notepad"
+   ↓
+Step 4: ask_ai() sends to OpenAI:
+        "User requested task: open notepad. Should I proceed?"
+   ↓
+Step 5: AI responds: "Yes, I can open Notepad application"
+   ↓
+Step 6: ask_yes_no() shows confirmation dialog
+   ↓
+Step 7: User clicks "Yes"
+   ↓
+Step 8: parse_and_execute_task() identifies "open" command
+   ↓
+Step 9: actions.open_application("notepad") executes
+   ↓
+Step 10: PyAutoGUI presses Win key, types "notepad", presses Enter
+   ↓
+Step 11: Notepad opens
+   ↓
+Step 12: speak("Task completed successfully")
+   ↓
+Step 13: show_message("Task completed successfully!")
+
+================================================================================
+                              MODULE DEPENDENCIES
+================================================================================
+
+main.py
+  ├── config.py
+  │     └── python-dotenv
+  ├── prompts.py
+  ├── actions.py
+  │     ├── pyautogui
+  │     ├── subprocess
+  │     └── os
+  ├── interaction.py
+  │     ├── pyttsx3
+  │     ├── speech_recognition
+  │     └── tkinter
+  └── openai
+
+================================================================================
+                            SAFETY MECHANISMS
+================================================================================
+
+1. User Confirmation
+   ┌─────────────────────────────────────┐
+   │ Every task requires user approval   │
+   │ before execution                    │
+   └─────────────────────────────────────┘
+
+2. PyAutoGUI Failsafe
+   ┌─────────────────────────────────────┐
+   │ Move mouse to corner to stop        │
+   │ automation immediately              │
+   └─────────────────────────────────────┘
+
+3. Error Handling
+   ┌─────────────────────────────────────┐
+   │ Try-except blocks in all functions  │
+   │ Graceful error messages             │
+   └─────────────────────────────────────┘
+
+4. API Key Protection
+   ┌─────────────────────────────────────┐
+   │ Stored in .env file                 │
+   │ Not committed to version control    │
+   └─────────────────────────────────────┘
+
+================================================================================
+                          CONFIGURATION FILES
+================================================================================
+
+.env (User creates from .env.example)
+  ├── OPENAI_API_KEY=sk-...
+  └── (Other environment variables)
+
+config.py
+  ├── Loads .env variables
+  ├── Defines SYSTEM_PROMPT
+  └── Sets application constants
+
+requirements.txt
+  └── Lists all Python dependencies
+
+================================================================================
+                            STARTUP SEQUENCE
+================================================================================
+
+1. User runs: python main.py
+   ↓
+2. Import all modules
+   ↓
+3. Load config.py
+   ↓
+4. Check OPENAI_API_KEY
+   ↓
+5. Initialize text-to-speech engine
+   ↓
+6. Display welcome message
+   ↓
+7. Enter main loop
+   ↓
+8. Wait for user input
+   ↓
+9. Process commands
+   ↓
+10. Repeat until exit
+
+================================================================================
+                          EXTENSION POINTS
+================================================================================
+
+To Add New Features:
+
+1. New Actions
+   └── Add function to actions.py
+       └── Update parse_and_execute_task() in main.py
+
+2. New Prompts
+   └── Add template to prompts.py
+       └── Use in main.py AI calls
+
+3. New Input Methods
+   └── Add function to interaction.py
+       └── Integrate in main loop
+
+4. New AI Behavior
+   └── Modify SYSTEM_PROMPT in config.py
+       └── Adjust temperature/tokens in ask_ai()
+
+================================================================================
+                              END OF DIAGRAM
+================================================================================

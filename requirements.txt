@@ -1,0 +1,9 @@
+openai
+google-generativeai
+anthropic
+requests
+python-dotenv
+pyttsx3
+speechrecognition
+pyautogui
+pywin32
