@@ -13,7 +13,7 @@ If you discover a security vulnerability in AutoMoto AI, please help us by repor
 **Please DO NOT report security vulnerabilities through public GitHub issues.**
 
 Instead, please report security vulnerabilities by emailing:
-- **Email**: security@automoto.ai
+- **Email**: ymmiah96@gmail.com
 - **Subject**: `[SECURITY] Vulnerability Report - AutoMoto AI`
 
 ### 📋 What to Include
@@ -130,8 +130,8 @@ We will keep you informed about our progress throughout the process of fixing th
 
 ## 📞 Contact Information
 
-- **Security Issues**: security@automoto.ai
-- **General Support**: support@automoto.ai
+- **Security Issues**: ymmiah96@gmail.com
+- **General Support**: ymmiah96@gmail.com
 - **GitHub Issues**: For non-security related issues
 
 ## 📜 Security Hall of Fame
@@ -149,3 +149,4 @@ We appreciate security researchers who help make AutoMoto AI safer. With your pe
 
 **Last Updated**: November 10, 2025
 **Version**: 2.1.0
+
