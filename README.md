@@ -321,9 +321,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 **Email**: support@automoto.ai
-- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/AutoMotoAI/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/yourusername/AutoMotoAI/discussions)
+- 📧 **Email**: ymmiah96@gmail.com
+- 🐛 **Issues**: [GitHub Issues](https://github.com/ymmiah/AutoMotoAI/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/ymmiah/AutoMotoAI/discussions)
 - 📖 **Documentation**: [docs/index.html](docs/index.html)
 
 ---
@@ -349,10 +349,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-  <p><strong>Built with ❤️ using Python and AI</strong></p>
+  <p><strong>Built with ❤️ using Python and Powered by Yasin Mohammed Miah.</strong></p>
   <p>
     <a href="#top">Back to Top</a> •
     <a href="docs/index.html">Documentation</a> •
     <a href="CHANGELOG.md">Changelog</a>
   </p>
 </div>
+
