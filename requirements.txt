@@ -1,9 +1,22 @@
-openai
-google-generativeai
-anthropic
-requests
-python-dotenv
-pyttsx3
-speechrecognition
-pyautogui
-pywin32
+# ── Core ─────────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── AI Providers (install the ones you need) ──────────────────────────────────
+openai>=1.0.0               # OpenAI GPT-4
+google-generativeai>=0.8.0  # Google Gemini
+anthropic>=0.40.0           # Anthropic Claude
+requests>=2.31.0            # Blackbox AI (plain HTTP) + general HTTP
+
+# ── Desktop Automation (Windows) ─────────────────────────────────────────────
+pyautogui>=0.9.54           # Mouse/keyboard simulation + screenshots
+pygetwindow>=0.0.9          # Window management
+
+# ── Voice I/O ────────────────────────────────────────────────────────────────
+pyttsx3>=2.90               # Text-to-speech (offline)
+SpeechRecognition>=3.10.0   # Speech-to-text
+
+# ── Web Server ────────────────────────────────────────────────────────────────
+flask>=3.0.0
+
+# ── Optional: process listing ─────────────────────────────────────────────────
+# psutil>=5.9.0

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoMoto AI</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<header class="topbar">
+  <span class="logo">🤖 AutoMoto AI</span>
+  <div class="topbar-right">
+    <label class="label-dim">Provider:</label>
+    <select id="providerSelect" class="select-sm"></select>
+    <span id="statusBadge" class="badge badge-green">Ready</span>
+    <button class="btn btn-sm" id="btnScreenshot" title="Take screenshot">📸</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════ LAYOUT ═══════════════════════ -->
+<div class="layout">
+
+  <!-- ─────────── SIDEBAR ─────────── -->
+  <aside class="sidebar">
+    <div class="tabs">
+      <button class="tab active" data-tab="files">📁 Files</button>
+      <button class="tab"        data-tab="apps" >🚀 Apps</button>
+    </div>
+
+    <!-- FILE BROWSER -->
+    <div id="tabFiles" class="tab-panel active">
+      <div class="path-bar">
+        <button class="btn-icon" id="btnUp"      title="Up">↑</button>
+        <button class="btn-icon" id="btnHome"    title="Home">🏠</button>
+        <button class="btn-icon" id="btnRefresh" title="Refresh">⟳</button>
+        <input  id="pathInput" class="path-input" type="text" placeholder="Type a path…" />
+        <button class="btn-icon" id="btnGo"      title="Go">▶</button>
+      </div>
+      <div class="fb-toolbar">
+        <button class="btn btn-sm" id="btnNewFile">+ File</button>
+        <button class="btn btn-sm" id="btnNewDir" >+ Folder</button>
+        <button class="btn btn-sm" id="btnOpenExp">🗂 Explorer</button>
+      </div>
+      <div id="fileList" class="file-list"></div>
+    </div>
+
+    <!-- APP LAUNCHER -->
+    <div id="tabApps" class="tab-panel">
+      <input id="appSearch" class="path-input" type="text" placeholder="🔍 Search apps…" />
+      <div id="appList" class="file-list"></div>
+    </div>
+  </aside>
+
+  <!-- ─────────── CHAT ─────────── -->
+  <main class="chat-area">
+    <div id="chatHistory" class="chat-history"></div>
+
+    <div class="chat-input-row">
+      <button id="btnVoice" class="btn-icon" title="Voice input">🎤</button>
+      <input  id="chatInput" class="chat-input" type="text"
+              placeholder="Ask anything or give a command…" autocomplete="off" />
+      <button id="btnSend" class="btn btn-accent">Send ▶</button>
+      <button id="btnClear" class="btn btn-sm" title="Clear chat">🗑</button>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════ MODAL ═══════════════════════ -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <p  id="modalPrompt" class="modal-prompt"></p>
+    <input id="modalInput" class="path-input" type="text" />
+    <div class="modal-btns">
+      <button id="modalOk"     class="btn btn-accent">OK</button>
+      <button id="modalCancel" class="btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
