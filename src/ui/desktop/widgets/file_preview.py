@@ -22,6 +22,7 @@ _TEXT_EXTS = {
     ".go", ".rs", ".sh", ".bat", ".ps1", ".sql", ".env",
 }
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".tiff"}
+_RICH_EXTS  = {".pdf", ".docx", ".docm", ".xlsx", ".xlsm", ".xls", ".pptx", ".pptm"}
 _MAX_TEXT_BYTES = 256 * 1024   # 256 KB max preview
 _MAX_LINES      = 500
 
@@ -113,6 +114,9 @@ class FilePreview(ttk.Frame):
         if ext in _IMAGE_EXTS:
             self._preview_image(p)
             self._nb.select(1)
+        elif ext in _RICH_EXTS:
+            self._preview_rich(p, ext)
+            self._nb.select(0)
         elif ext in _TEXT_EXTS or self._is_text_file(p):
             self._preview_text(p)
             self._nb.select(0)
@@ -175,6 +179,31 @@ class FilePreview(ttk.Frame):
             self._text.configure(state="disabled")
         except OSError as exc:
             self._clear_text(f"Cannot read file: {exc}")
+
+    def _preview_rich(self, p: Path, ext: str):
+        """Use document_reader for rich-format files (PDF, DOCX, XLSX, PPTX)."""
+        try:
+            from src.automation.document_reader import read_file
+            result = read_file(p)
+            if not result.ok:
+                self._clear_text(f"Cannot preview: {result.error}")
+                return
+            lines = result.content.splitlines()
+            truncated = len(lines) > _MAX_LINES
+            lines = lines[:_MAX_LINES]
+            self._text.configure(state="normal")
+            self._text.delete("1.0", "end")
+            meta = "  ".join(f"{k}: {v}" for k, v in result.summary_meta.items())
+            self._text.insert("end", f"[{result.format.upper()}]  {meta}\n\n", "lineno")
+            width = len(str(len(lines))) + 1
+            for i, line in enumerate(lines, 1):
+                self._text.insert("end", f"{i:>{width}}  ", "lineno")
+                self._text.insert("end", line + "\n", "content")
+            if truncated:
+                self._text.insert("end", f"\n… (truncated at {_MAX_LINES} lines)", "lineno")
+            self._text.configure(state="disabled")
+        except Exception as exc:
+            self._clear_text(f"Preview error: {exc}")
 
     def _preview_image(self, p: Path):
         try:

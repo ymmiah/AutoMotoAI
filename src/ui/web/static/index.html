@@ -109,13 +109,20 @@
   <main class="chat-area">
     <div id="chatHistory" class="chat-history"></div>
 
+    <!-- file attach chips -->
+    <div id="attachChips" class="attach-chips hidden"></div>
+
     <div class="chat-input-row">
-      <button id="btnVoice" class="btn-icon" title="Voice input">🎤</button>
+      <button id="btnVoice"  class="btn-icon" title="Voice input">🎤</button>
+      <button id="btnAttach" class="btn-icon" title="Attach files">📎</button>
       <input  id="chatInput" class="chat-input" type="text"
               placeholder="Ask anything or give a command…" autocomplete="off" />
-      <button id="btnSend" class="btn btn-accent">Send ▶</button>
-      <button id="btnClear" class="btn btn-sm" title="Clear chat">🗑</button>
+      <button id="btnSend"  class="btn btn-accent">Send ▶</button>
+      <button id="btnClear" class="btn btn-sm"    title="Clear chat">🗑</button>
     </div>
+    <!-- hidden file input -->
+    <input id="fileInput" type="file" multiple style="display:none"
+           accept=".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.py,.js,.ts,.html,.htm,.css,.json,.xml,.yaml,.yml" />
   </main>
 </div>
 

@@ -357,6 +357,94 @@ def api_monitor_kill():
         return _err(str(exc), 500)
 
 
+# ────────────────────────────── documents ────────────────────────────────────
+
+_DOC_OUT_DIR = Path.home() / "Documents" / "AutoMotoAI_Documents"
+
+
+@app.route("/api/documents/read", methods=["POST"])
+def api_doc_read():
+    body = request.get_json(silent=True) or {}
+    paths = body.get("paths") or []
+    if isinstance(paths, str):
+        paths = [p.strip() for p in paths.replace(",", "\n").splitlines() if p.strip()]
+    if not paths:
+        return _err("paths is required")
+    try:
+        from src.automation.document_reader import build_multi_file_context, read_multiple_files
+        results = read_multiple_files(paths)
+        context = build_multi_file_context(paths)
+        summaries = [
+            {"name": r.name, "format": r.format, "ok": r.ok,
+             "meta": r.summary_meta, "error": r.error or None}
+            for r in results
+        ]
+        return _ok({"context": context, "files": summaries})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/documents/combine", methods=["POST"])
+def api_doc_combine():
+    body = request.get_json(silent=True) or {}
+    paths = body.get("paths") or []
+    if isinstance(paths, str):
+        paths = [p.strip() for p in paths.replace(",", "\n").splitlines() if p.strip()]
+    fmt = (body.get("output_format") or "txt").lstrip(".").lower()
+    output_path = (body.get("output_path") or "").strip() or None
+    if not paths:
+        return _err("paths is required")
+    try:
+        from src.automation.document_writer import combine_documents
+        out = combine_documents(paths, fmt, output_path)
+        return _ok({"path": str(out), "filename": out.name})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/documents/create", methods=["POST"])
+def api_doc_create():
+    body = request.get_json(silent=True) or {}
+    content = (body.get("content") or "").strip()
+    fmt = (body.get("output_format") or "txt").lstrip(".").lower()
+    filename = (body.get("filename") or "").strip() or None
+    output_path = (body.get("output_path") or "").strip() or None
+    if not content:
+        return _err("content is required")
+    try:
+        from src.automation.document_writer import create_document
+        out = create_document(content, fmt, output_path, filename)
+        return _ok({"path": str(out), "filename": out.name})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/documents/convert", methods=["POST"])
+def api_doc_convert():
+    body = request.get_json(silent=True) or {}
+    source_path = (body.get("source_path") or "").strip()
+    target_fmt = (body.get("target_format") or "").lstrip(".").lower()
+    output_path = (body.get("output_path") or "").strip() or None
+    if not source_path or not target_fmt:
+        return _err("source_path and target_format are required")
+    try:
+        from src.automation.document_writer import convert_document
+        out = convert_document(source_path, target_fmt, output_path)
+        return _ok({"path": str(out), "filename": out.name})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/documents/download/<path:filename>")
+def api_doc_download(filename):
+    _DOC_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    safe = Path(filename).name   # strip any directory traversal
+    target = _DOC_OUT_DIR / safe
+    if not target.exists():
+        return _err("file not found", 404)
+    return send_from_directory(str(_DOC_OUT_DIR), safe, as_attachment=True)
+
+
 # ────────────────────────────── error handlers ───────────────────────────────
 
 @app.errorhandler(404)

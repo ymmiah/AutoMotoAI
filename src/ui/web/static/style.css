@@ -449,3 +449,34 @@ html, body {
 
 /* ── Thinking indicator ── */
 .thinking { display: flex; align-items: center; gap: 8px; color: var(--fg-dim); font-size: 13px; }
+
+/* ── Attach chips ── */
+.attach-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 16px 0;
+  background: var(--bg2);
+}
+.attach-chips.hidden { display: none; }
+.attach-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px 2px 10px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.attach-chip button {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.attach-chip button:hover { color: var(--red); }

@@ -17,7 +17,8 @@ import queue
 import re
 import threading
 import tkinter as tk
-from tkinter import ttk
+from pathlib import Path
+from tkinter import filedialog, ttk
 
 from src.ai.base import Message
 from src.ai.registry import EVT_DONE, EVT_ERROR, EVT_TOKEN, EVT_TOOL_CALL, EVT_TOOL_RESULT
@@ -47,6 +48,7 @@ class ChatPanel(ttk.Frame):
         self._hist_idx:  int          = -1
         self._voice_active = False
         self._busy         = False
+        self._attached: list[Path]    = []   # files attached to next message
         self._build()
 
     # ─────────────────────────────── build ─────────────────────────────────
@@ -121,9 +123,13 @@ class ChatPanel(ttk.Frame):
         ttk.Button(ctrl, text="📸", width=3,  command=self._take_screenshot).pack(side="right")
         ttk.Button(ctrl, text="🗑 Clear", width=8, command=self._clear).pack(side="right", padx=4)
 
+        # ── attach chips row ──────────────────────────────────────────
+        self._chips_frame = ttk.Frame(self)
+        self._chips_frame.grid(row=2, column=0, sticky="ew", padx=4, pady=(0, 0))
+
         # ── input row ─────────────────────────────────────────────────
         inp = ttk.Frame(self)
-        inp.grid(row=2, column=0, sticky="ew", padx=4, pady=(0, 4))
+        inp.grid(row=3, column=0, sticky="ew", padx=4, pady=(0, 4))
         inp.columnconfigure(0, weight=1)
 
         self._input_var = tk.StringVar()
@@ -134,13 +140,16 @@ class ChatPanel(ttk.Frame):
         self._entry.bind("<Down>",      self._history_down)
         self._entry.focus_set()
 
-        self._voice_btn = ttk.Button(inp, text="🎤", width=3, command=self._toggle_voice)
-        self._voice_btn.grid(row=0, column=1, padx=(4, 0))
+        ttk.Button(inp, text="📎", width=3, command=self._attach_files).grid(row=0, column=1, padx=(4, 0))
 
-        ttk.Button(inp, text="Send ▶", command=self._send, width=8).grid(row=0, column=2, padx=(4, 0))
+        self._voice_btn = ttk.Button(inp, text="🎤", width=3, command=self._toggle_voice)
+        self._voice_btn.grid(row=0, column=2, padx=(4, 0))
+
+        ttk.Button(inp, text="Send ▶", command=self._send, width=8).grid(row=0, column=3, padx=(4, 0))
 
         # startup message
         self._append_system(f"AutoMoto AI ready.  Tool calling: {'enabled' if self._tools_var.get() else 'off'}")
+        self._refresh_chips()
 
     # ──────────────────────────── append helpers ────────────────────────────
 
@@ -185,6 +194,39 @@ class ChatPanel(ttk.Frame):
 
     # ─────────────────────────── send / AI call ─────────────────────────────
 
+    def _attach_files(self):
+        paths = filedialog.askopenfilenames(
+            title="Attach files",
+            filetypes=[
+                ("All supported", "*.pdf *.docx *.pptx *.xlsx *.xls *.csv *.txt *.md *.py *.js *.ts *.html *.htm *.css *.json *.xml *.yaml *.yml"),
+                ("PDF", "*.pdf"), ("Word", "*.docx"), ("PowerPoint", "*.pptx"),
+                ("Excel", "*.xlsx *.xls"), ("Text/Code", "*.txt *.md *.py *.js *.ts *.html *.css *.json"),
+                ("All files", "*.*"),
+            ],
+        )
+        for p in paths:
+            pp = Path(p)
+            if pp not in self._attached:
+                self._attached.append(pp)
+        self._refresh_chips()
+
+    def _refresh_chips(self):
+        for w in self._chips_frame.winfo_children():
+            w.destroy()
+        for i, p in enumerate(self._attached):
+            chip = ttk.Frame(self._chips_frame)
+            chip.pack(side="left", padx=2, pady=2)
+            ttk.Label(chip, text=f"📄 {p.name}", font=FONTS["small"],
+                      foreground=COLORS["fg_dim"]).pack(side="left")
+            idx = i
+            ttk.Button(chip, text="✕", width=2,
+                       command=lambda i=idx: self._remove_chip(i)).pack(side="left")
+
+    def _remove_chip(self, idx: int):
+        if 0 <= idx < len(self._attached):
+            self._attached.pop(idx)
+            self._refresh_chips()
+
     def _send(self, _event=None):
         if self._busy:
             return
@@ -198,6 +240,20 @@ class ChatPanel(ttk.Frame):
             if len(self._cmd_hist) > _MAX_HISTORY:
                 self._cmd_hist.pop(0)
 
+        # inject attached file context
+        user_content = text
+        if self._attached:
+            try:
+                from src.automation.document_reader import build_multi_file_context
+                file_ctx = build_multi_file_context([str(p) for p in self._attached])
+                user_content = f"{file_ctx}\n\nUser request: {text}"
+                self._append_system(f"Attached {len(self._attached)} file(s): " +
+                                    ", ".join(p.name for p in self._attached))
+            except Exception as exc:
+                self._append_error(f"Could not read attachments: {exc}")
+            self._attached.clear()
+            self._refresh_chips()
+
         self._append_user(text)
         self._entry.configure(state="disabled")
         self._busy = True
@@ -206,7 +262,7 @@ class ChatPanel(ttk.Frame):
         if not self._history:
             from src.core.config import ai_config
             self._history.append(Message("system", ai_config.system_prompt))
-        self._history.append(Message("user", text))
+        self._history.append(Message("user", user_content))
 
         q: queue.Queue = queue.Queue()
 

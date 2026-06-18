@@ -197,6 +197,15 @@ async function sendMessage() {
 
   const useTools = toolsToggle.checked;
 
+  // Prepend attached file context
+  let msgContent = text;
+  if (attachedFiles.length) {
+    const ctx = await buildAttachContext();
+    if (ctx) msgContent = `${ctx}\n\nUser request: ${text}`;
+    attachedFiles.length = 0;
+    refreshChips();
+  }
+
   // SSE streaming path
   beginBotStream();
 
@@ -205,7 +214,7 @@ async function sendMessage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message:    text,
+        message:    msgContent,
         session_id: SESSION_ID,
         provider:   providerSelect.value || null,
         use_tools:  useTools,
@@ -551,6 +560,58 @@ function startMonitor() {
 
 function stopMonitor() {
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+}
+
+// ── File attach ───────────────────────────────────────────────────────────
+const attachedFiles  = [];   // { name, path } objects — path is the server-side absolute path
+const attachChips    = $("attachChips");
+const fileInput      = $("fileInput");
+
+function refreshChips() {
+  attachChips.innerHTML = "";
+  if (!attachedFiles.length) { attachChips.classList.add("hidden"); return; }
+  attachChips.classList.remove("hidden");
+  attachedFiles.forEach((f, i) => {
+    const chip = document.createElement("div");
+    chip.className = "attach-chip";
+    chip.innerHTML =
+      `<span>📄 ${escHtml(f.name)}</span>` +
+      `<button title="Remove" onclick="removeChip(${i})">✕</button>`;
+    attachChips.appendChild(chip);
+  });
+}
+
+window.removeChip = function(idx) {
+  attachedFiles.splice(idx, 1);
+  refreshChips();
+};
+
+$("btnAttach").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  for (const f of fileInput.files) {
+    if (!attachedFiles.find(a => a.name === f.name)) {
+      attachedFiles.push({ name: f.name, file: f });
+    }
+  }
+  fileInput.value = "";
+  refreshChips();
+});
+
+async function buildAttachContext() {
+  if (!attachedFiles.length) return "";
+  const names = attachedFiles.map(f => f.name).join(", ");
+  appendMsg("system", `Reading ${attachedFiles.length} attached file(s): ${names}`);
+  try {
+    const paths = attachedFiles.map(f => f.name);
+    const data = await api("documents/read", {
+      method: "POST",
+      body: JSON.stringify({ paths }),
+    });
+    return data.context || "";
+  } catch(e) {
+    appendMsg("error", `Could not read attachments: ${e.message}`);
+    return "";
+  }
 }
 
 // ── Voice ─────────────────────────────────────────────────────────────────

@@ -188,6 +188,64 @@ def _build_default_registry() -> ToolRegistry:
         open_in_file_manager(path)
         return f"Opened in file manager: {path}"
 
+    # ── document tools ────────────────────────────────────────────────────
+    def _read_file_tool(path: str) -> str:
+        from src.automation.document_reader import read_file
+        result = read_file(path)
+        if not result.ok:
+            return f"[ERROR] {result.error}"
+        return result.as_context()
+
+    def _read_multiple_files_tool(paths: str) -> str:
+        """paths is a newline- or comma-separated list of file paths."""
+        import re as _re
+        from src.automation.document_reader import build_multi_file_context
+        path_list = [p.strip() for p in _re.split(r"[\n,]+", paths) if p.strip()]
+        if not path_list:
+            return "[ERROR] No paths provided"
+        return build_multi_file_context(path_list)
+
+    def _summarize_files_tool(paths: str, focus: str = "") -> str:
+        """Read files and return a structured summary."""
+        import re as _re
+        from src.automation.document_reader import read_multiple_files
+        path_list = [p.strip() for p in _re.split(r"[\n,]+", paths) if p.strip()]
+        if not path_list:
+            return "[ERROR] No paths provided"
+        results = read_multiple_files(path_list)
+        parts = []
+        for r in results:
+            if r.ok:
+                meta = ", ".join(f"{k}={v}" for k, v in r.summary_meta.items())
+                snippet = r.content[:800].replace("\n", " ")
+                tail = "…" if len(r.content) > 800 else ""
+                focus_note = f"  Focus: {focus}\n" if focus else ""
+                parts.append(f"File: {r.name}  [{r.format}]  {meta}\n{focus_note}Preview: {snippet}{tail}")
+            else:
+                parts.append(f"File: {r.name}  [ERROR: {r.error}]")
+        return "\n\n".join(parts)
+
+    def _combine_files_tool(paths: str, output_format: str = "txt", output_path: str = "") -> str:
+        import re as _re
+        from src.automation.document_writer import combine_documents
+        path_list = [p.strip() for p in _re.split(r"[\n,]+", paths) if p.strip()]
+        if not path_list:
+            return "[ERROR] No paths provided"
+        out = combine_documents(path_list, output_format, output_path or None)
+        return f"Combined {len(path_list)} file(s) → {out}"
+
+    def _create_document_tool(content: str, output_format: str = "txt",
+                               filename: str = "", output_path: str = "") -> str:
+        from src.automation.document_writer import create_document
+        out = create_document(content, output_format, output_path or None, filename or None)
+        return f"Document created: {out}"
+
+    def _convert_document_tool(source_path: str, target_format: str,
+                                output_path: str = "") -> str:
+        from src.automation.document_writer import convert_document
+        out = convert_document(source_path, target_format, output_path or None)
+        return f"Converted → {out}"
+
     tools = [
         ToolDefinition("open_application",
             "Open an application by name or executable path. E.g. 'notepad', 'chrome', 'calc.exe'.",
@@ -232,6 +290,45 @@ def _build_default_registry() -> ToolRegistry:
             "Open a file or folder in the system file manager (Windows Explorer).",
             [ToolParam("path", "string", "Path to open in the file manager")],
             _open_in_explorer),
+        ToolDefinition("read_file",
+            "Read a single file and return its content. Supports PDF, DOCX, PPTX, XLSX, CSV, and all text/code formats.",
+            [ToolParam("path", "string", "Absolute path of the file to read")],
+            _read_file_tool),
+        ToolDefinition("read_multiple_files",
+            "Read multiple files concurrently and return their combined content as a structured context block. "
+            "Supports PDF, DOCX, PPTX, XLSX, CSV, and text files.",
+            [ToolParam("paths", "string", "Comma- or newline-separated list of absolute file paths")],
+            _read_multiple_files_tool),
+        ToolDefinition("summarize_files",
+            "Read one or more files and return a concise structured summary of each, "
+            "including metadata (page count, row count, etc.) and a content preview.",
+            [ToolParam("paths", "string", "Comma- or newline-separated list of absolute file paths"),
+             ToolParam("focus", "string", "Optional topic or question to focus the summary on", required=False)],
+            _summarize_files_tool),
+        ToolDefinition("combine_files",
+            "Merge multiple source files into a single output document. "
+            "The merged content is saved to ~/Documents/AutoMotoAI_Documents/ by default.",
+            [ToolParam("paths", "string", "Comma- or newline-separated list of source file paths"),
+             ToolParam("output_format", "string", "Output format: txt, md, html, docx, pdf, xlsx, csv", required=False,
+                       enum=["txt", "md", "html", "docx", "pdf", "xlsx", "csv"]),
+             ToolParam("output_path", "string", "Optional absolute output path (overrides default directory)", required=False)],
+            _combine_files_tool),
+        ToolDefinition("create_document",
+            "Create a new document from text content and save it in the requested format. "
+            "Content may use basic Markdown (# headings, **bold**, `code`).",
+            [ToolParam("content", "string", "Text/Markdown content for the document"),
+             ToolParam("output_format", "string", "Output format: txt, md, html, docx, pdf, xlsx, csv",
+                       enum=["txt", "md", "html", "docx", "pdf", "xlsx", "csv"]),
+             ToolParam("filename", "string", "Base filename without extension (optional)", required=False),
+             ToolParam("output_path", "string", "Optional absolute output path", required=False)],
+            _create_document_tool),
+        ToolDefinition("convert_document",
+            "Convert an existing file from its current format to a different output format.",
+            [ToolParam("source_path", "string", "Absolute path of the source file"),
+             ToolParam("target_format", "string", "Target format: txt, md, html, docx, pdf, xlsx, csv",
+                       enum=["txt", "md", "html", "docx", "pdf", "xlsx", "csv"]),
+             ToolParam("output_path", "string", "Optional absolute output path", required=False)],
+            _convert_document_tool),
     ]
     for t in tools:
         reg.register(t)
