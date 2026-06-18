@@ -14,6 +14,9 @@
   <div class="topbar-right">
     <label class="label-dim">Provider:</label>
     <select id="providerSelect" class="select-sm"></select>
+    <label class="label-dim" style="margin-left:6px">
+      <input type="checkbox" id="toolsToggle" checked /> Tools
+    </label>
     <span id="statusBadge" class="badge badge-green">Ready</span>
     <button class="btn btn-sm" id="btnScreenshot" title="Take screenshot">📸</button>
   </div>
@@ -25,8 +28,9 @@
   <!-- ─────────── SIDEBAR ─────────── -->
   <aside class="sidebar">
     <div class="tabs">
-      <button class="tab active" data-tab="files">📁 Files</button>
-      <button class="tab"        data-tab="apps" >🚀 Apps</button>
+      <button class="tab active" data-tab="files"  >📁 Files</button>
+      <button class="tab"        data-tab="apps"   >🚀 Apps</button>
+      <button class="tab"        data-tab="monitor">📊 Monitor</button>
     </div>
 
     <!-- FILE BROWSER -->
@@ -50,6 +54,54 @@
     <div id="tabApps" class="tab-panel">
       <input id="appSearch" class="path-input" type="text" placeholder="🔍 Search apps…" />
       <div id="appList" class="file-list"></div>
+    </div>
+
+    <!-- SYSTEM MONITOR -->
+    <div id="tabMonitor" class="tab-panel">
+      <div class="monitor-bars" id="monitorBars">
+        <div class="metric-row">
+          <span class="metric-label">CPU</span>
+          <div class="metric-track"><div class="metric-fill" id="barCpu"></div></div>
+          <span class="metric-value" id="valCpu">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">RAM</span>
+          <div class="metric-track"><div class="metric-fill" id="barRam"></div></div>
+          <span class="metric-value" id="valRam">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Disk</span>
+          <div class="metric-track"><div class="metric-fill" id="barDisk"></div></div>
+          <span class="metric-value" id="valDisk">—</span>
+        </div>
+        <div class="net-row">
+          <span class="label-dim">Net ↑</span>
+          <span id="netUp" class="net-val net-up">—</span>
+          <span class="label-dim">↓</span>
+          <span id="netDn" class="net-val net-dn">—</span>
+        </div>
+      </div>
+
+      <div class="proc-toolbar">
+        <span class="label-dim" style="font-size:11px">🔍</span>
+        <input id="procSearch" class="path-input" placeholder="Filter processes…" style="flex:1;margin:0 4px;" />
+        <button class="btn btn-sm" id="btnProcKill" style="color:var(--red)">🔴 Kill</button>
+      </div>
+
+      <div class="proc-table-wrap">
+        <table class="proc-table">
+          <thead>
+            <tr>
+              <th class="col-name">Process</th>
+              <th class="col-num">PID</th>
+              <th class="col-num">CPU%</th>
+              <th class="col-num">MEM%</th>
+              <th class="col-status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="procBody"></tbody>
+        </table>
+      </div>
     </div>
   </aside>
 
