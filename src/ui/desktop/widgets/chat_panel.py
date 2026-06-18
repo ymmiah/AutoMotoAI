@@ -152,12 +152,7 @@ class ChatPanel(ttk.Frame):
         self._write(f"  {text}\n", "user_msg")
 
     def _begin_bot(self):
-        """Insert bot label and return the insert index for streaming into."""
         self._write("\n  AutoMoto AI\n", "bot_label")
-        self._text.configure(state="normal")
-        start = self._text.index("end")
-        self._text.configure(state="disabled")
-        return start
 
     def _append_token(self, token: str, tag: str = "bot_msg"):
         self._text.configure(state="normal")

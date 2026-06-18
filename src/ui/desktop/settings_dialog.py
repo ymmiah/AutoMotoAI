@@ -57,10 +57,24 @@ _defaults: dict = {
 }
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Merge override into base one level deep — preserves keys absent from override."""
+    result = {}
+    for key, default_val in base.items():
+        saved_val = override.get(key)
+        if isinstance(default_val, dict) and isinstance(saved_val, dict):
+            result[key] = {**default_val, **saved_val}
+        elif saved_val is not None:
+            result[key] = saved_val
+        else:
+            result[key] = default_val
+    return result
+
+
 class SettingsDialog:
     def __init__(self, parent: tk.Widget):
         self._parent = parent
-        self._data   = {**_defaults, **load_settings()}
+        self._data   = _deep_merge(_defaults, load_settings())
 
     def show(self) -> dict | None:
         dlg = tk.Toplevel(self._parent)

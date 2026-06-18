@@ -255,4 +255,3 @@ class AIRegistry:
             yield (EVT_ERROR, str(exc))
 
 
-registry = AIRegistry()

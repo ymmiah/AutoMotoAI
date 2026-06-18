@@ -195,10 +195,6 @@ class DesktopApp:
         logger.debug("AI action reply: %.60s…", reply)
 
     def _on_tab_changed(self, _event):
-        tab_text = self._root.nametowidget(
-            self._root.nametowidget(_event.widget).select()
-        ).winfo_name() if False else ""
-        # Start/stop monitor based on tab visibility
         try:
             nb = _event.widget
             current_tab = nb.tab(nb.select(), "text")

@@ -131,7 +131,10 @@ class FilePreview(ttk.Frame):
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _update_header(self, p: Path):
-        size = self._fmt_size(p.stat().st_size) if p.is_file() else ""
+        try:
+            size = self._fmt_size(p.stat().st_size) if p.is_file() else ""
+        except OSError:
+            size = ""
         self._header.configure(text=f"{p.name}  {size}")
 
     def _update_info(self, p: Path):
