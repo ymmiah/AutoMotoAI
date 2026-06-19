@@ -93,14 +93,35 @@ We will keep you informed about our progress throughout the process of fixing th
 
 ## 🔧 Security Features
 
-### Built-in Security Measures
+### Built-in Security Measures (v3.0+)
 
-- **Confirmation dialogs** for all actions
+- **CSRF protection** — all mutating API endpoints require `X-Requested-With: XMLHttpRequest` header
+- **Server-issued session tokens** — sessions are created server-side; clients cannot forge or hijack another user's history
+- **Application launch allowlist** — only pre-approved executables can be launched via the web API; extend via `ALLOWED_APPS` env var
+- **Process-kill PID guard** — PIDs below 100 (system/kernel processes) are rejected unconditionally
+- **Output path sandboxing** — document write endpoints restrict output to `~/Documents/AutoMotoAI_Documents/`; caller-supplied paths outside this root are rejected
+- **Input length limits** — chat messages (120 KB), document content (500 KB), paths (4096 bytes), batch size (20 files) are all bounded
+- **Sanitised error messages** — internal file paths and stack traces are never returned to the client; all error strings are generic
+- **Hardened HTTP response headers** — `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options`, `X-XSS-Protection`, `Referrer-Policy`, `Permissions-Policy`
+- **Safe integer parsing** — numeric query/body parameters are parsed with explicit type coercion and range clamping
+- **Download path traversal protection** — `Path(filename).name` strips directory components before serving files
+- **Debug mode disabled** — Flask debug/Werkzeug debugger is unconditionally off in `server.py`; never set `FLASK_DEBUG=true` in production
+- **Confirmation dialogs** for all automation actions
 - **Fail-safe hotkeys** (Ctrl+C or mouse to corner)
-- **Input sanitization** and validation
-- **Error boundaries** prevent crashes
-- **Secure API communication** with HTTPS
 - **Local data storage** only
+
+### Local-deployment security posture
+
+AutoMoto AI's web server binds to `127.0.0.1` (loopback only) by default,
+limiting network exposure to the local machine. This mitigates most remote
+attack scenarios, but **does not eliminate** threats from:
+
+- Other processes running on the same machine (SSRF, local scripts)
+- Malicious web pages with localhost CSRF (mitigated by CSRF header check)
+- Compromised browser extensions
+
+If you expose the server on `0.0.0.0` or a public interface, **you must add
+your own authentication layer** (reverse proxy with HTTP Basic Auth, VPN, etc.).
 
 ### AI Provider Security
 
@@ -147,6 +168,6 @@ We appreciate security researchers who help make AutoMoto AI safer. With your pe
 
 ---
 
-**Last Updated**: November 10, 2025
-**Version**: 2.1.0
+**Last Updated**: June 19, 2026
+**Version**: 3.0.0
 
