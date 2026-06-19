@@ -26,9 +26,9 @@ class AIConfig:
     max_tokens: int = int(_env("AI_MAX_TOKENS", "1024"))
     blackbox_api_url: str = "https://api.blackbox.ai/v1/chat/completions"
     models: dict = {
-        "openai": _env("OPENAI_MODEL", "gpt-4"),
-        "gemini": _env("GEMINI_MODEL", "gemini-pro"),
-        "claude": _env("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+        "openai": _env("OPENAI_MODEL", "gpt-4o"),
+        "gemini": _env("GEMINI_MODEL", "gemini-1.5-flash"),
+        "claude": _env("CLAUDE_MODEL", "claude-opus-4-8"),
         "blackbox": _env("BLACKBOX_MODEL", "blackboxai"),
     }
     system_prompt: str = (

@@ -24,14 +24,30 @@ class GeminiProvider(AIProvider):
     def supports_streaming(self) -> bool:
         return True
 
-    def _build_prompt(self, messages: list[Message]) -> str:
-        label = {"system": "[System]", "user": "User", "assistant": "Assistant"}
-        return "\n".join(f"{label.get(m.role, m.role)}: {m.content}" for m in messages)
-
-    def _get_model(self):
+    def _configure(self):
         import google.generativeai as genai
         genai.configure(api_key=ai_config.gemini_api_key)
-        return genai.GenerativeModel(ai_config.models["gemini"])
+        return genai
+
+    def _build_contents(self, messages: list[Message]) -> tuple[str, list[dict]]:
+        """Return (system_instruction, contents) in the Gemini multi-turn format."""
+        system_parts = [m.content for m in messages if m.role == "system"]
+        system_instr = " ".join(system_parts) if system_parts else ""
+        role_map = {"user": "user", "assistant": "model"}
+        contents = [
+            {"role": role_map.get(m.role, "user"), "parts": [{"text": m.content}]}
+            for m in messages if m.role != "system"
+        ]
+        if not contents:
+            contents = [{"role": "user", "parts": [{"text": "Hello"}]}]
+        return system_instr, contents
+
+    def _get_model(self, system_instr: str):
+        genai = self._configure()
+        kwargs: dict = {"model_name": ai_config.models["gemini"]}
+        if system_instr:
+            kwargs["system_instruction"] = system_instr
+        return genai.GenerativeModel(**kwargs)
 
     def _gen_config(self, temperature: float, max_tokens: int):
         import google.generativeai as genai
@@ -39,9 +55,10 @@ class GeminiProvider(AIProvider):
 
     def chat(self, messages: list[Message], temperature: float = 0.3, max_tokens: int = 1024) -> str:
         try:
-            model = self._get_model()
+            system_instr, contents = self._build_contents(messages)
+            model = self._get_model(system_instr)
             resp = model.generate_content(
-                self._build_prompt(messages),
+                contents,
                 generation_config=self._gen_config(temperature, max_tokens),
             )
             return resp.text.strip()
@@ -51,9 +68,10 @@ class GeminiProvider(AIProvider):
 
     def stream_chat(self, messages: list[Message], temperature: float = 0.3, max_tokens: int = 1024) -> Generator[str, None, None]:
         try:
-            model = self._get_model()
+            system_instr, contents = self._build_contents(messages)
+            model = self._get_model(system_instr)
             stream = model.generate_content(
-                self._build_prompt(messages),
+                contents,
                 generation_config=self._gen_config(temperature, max_tokens),
                 stream=True,
             )
