@@ -598,6 +598,152 @@ def api_doc_download(filename):
     return send_from_directory(str(_DOC_OUT_DIR), safe, as_attachment=True)
 
 
+# ─────────────────────────── image / design studio ────────────────────────────
+
+_IMG_DIR = Path.home() / "Documents" / "AutoMotoAI_Documents" / "images"
+_MAX_IMG_BYTES   = 8 * 1024 * 1024   # 8 MB upload limit for inpainting
+_MAX_PROMPT_LEN  = 4000
+
+
+@app.route("/api/image/generate", methods=["POST"])
+@_csrf
+def api_image_generate():
+    body    = request.get_json(silent=True) or {}
+    prompt  = (body.get("prompt")  or "").strip()[:_MAX_PROMPT_LEN]
+    style   = (body.get("style")   or "photo").strip()[:20]
+    size    = (body.get("size")    or "square").strip()[:12]
+    quality = (body.get("quality") or "hd").strip()[:10]
+    if not prompt:
+        return _err("prompt is required")
+    try:
+        from src.ai.image_generator import image_generator, STYLE_PRESETS, SIZE_PRESETS
+        if style not in STYLE_PRESETS:
+            style = "photo"
+        if size not in SIZE_PRESETS:
+            size = "square"
+        if quality not in ("hd", "standard"):
+            quality = "hd"
+        result = image_generator.generate(prompt, style=style, size=size, quality=quality)
+        return _ok({
+            "filename":       result.filename,
+            "width":          result.width,
+            "height":         result.height,
+            "style":          result.style,
+            "provider":       result.provider,
+            "generation_time": result.generation_time,
+            "revised_prompt": result.revised_prompt,
+        })
+    except Exception as exc:
+        logger.error("Image generation failed: %s", exc)
+        return _err("Image generation failed — check your OPENAI_API_KEY and try again.", 500)
+
+
+@app.route("/api/image/inpaint", methods=["POST"])
+@_csrf
+def api_image_inpaint():
+    prompt     = (request.form.get("prompt") or "").strip()[:_MAX_PROMPT_LEN]
+    img_file   = request.files.get("image")
+    mask_file  = request.files.get("mask")
+    if not prompt:
+        return _err("prompt is required")
+    if not img_file or not mask_file:
+        return _err("image and mask files are required")
+    img_bytes  = img_file.read(_MAX_IMG_BYTES)
+    mask_bytes = mask_file.read(_MAX_IMG_BYTES)
+    if len(img_bytes) >= _MAX_IMG_BYTES or len(mask_bytes) >= _MAX_IMG_BYTES:
+        return _err("File too large (max 8 MB)", 413)
+    try:
+        from src.ai.image_generator import image_generator
+        result = image_generator.inpaint(img_bytes, mask_bytes, prompt)
+        return _ok({
+            "filename":       result.filename,
+            "width":          result.width,
+            "height":         result.height,
+            "provider":       result.provider,
+            "generation_time": result.generation_time,
+        })
+    except Exception as exc:
+        logger.error("Inpainting failed: %s", exc)
+        return _err("Inpainting failed — check your OPENAI_API_KEY and try again.", 500)
+
+
+@app.route("/api/image/export", methods=["POST"])
+@_csrf
+def api_image_export():
+    body      = request.get_json(silent=True) or {}
+    filename  = (body.get("filename") or "").strip()
+    fmt       = (body.get("format")   or "png_print").strip()[:20]
+    upscale   = (body.get("upscale")  or "1x").strip()[:4]
+    if not filename:
+        return _err("filename is required")
+    safe = Path(filename).name
+    if not safe or ".." in safe:
+        return _err("invalid filename", 400)
+    src_path = _IMG_DIR / safe
+    if not src_path.exists() or not src_path.is_file():
+        return _err("source image not found", 404)
+    try:
+        from src.automation.image_exporter import image_exporter, EXPORT_FORMATS, UPSCALE_OPTIONS
+        if fmt not in EXPORT_FORMATS:
+            return _err(f"Unknown format. Choose from: {', '.join(EXPORT_FORMATS)}", 400)
+        if upscale not in UPSCALE_OPTIONS:
+            return _err(f"Unknown upscale. Choose from: {', '.join(UPSCALE_OPTIONS)}", 400)
+        src_bytes = src_path.read_bytes()
+        result    = image_exporter.export(src_bytes, fmt=fmt, upscale=upscale,
+                                          base_name=safe.rsplit(".", 1)[0])
+        return _ok({
+            "filename": result.filename,
+            "format":   result.format,
+            "size_kb":  result.size_kb,
+            "width":    result.width,
+            "height":   result.height,
+        })
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    except Exception as exc:
+        logger.error("Export failed: %s", exc)
+        return _err("Export failed", 500)
+
+
+@app.route("/api/image/view/<path:filename>")
+def api_image_view(filename):
+    _IMG_DIR.mkdir(parents=True, exist_ok=True)
+    safe = Path(filename).name
+    if not safe or safe.startswith("."):
+        return _err("invalid filename", 400)
+    target = _IMG_DIR / safe
+    if not target.exists() or not target.is_file():
+        return _err("not found", 404)
+    return send_from_directory(str(_IMG_DIR), safe)
+
+
+@app.route("/api/image/download/<path:filename>")
+def api_image_download(filename):
+    _IMG_DIR.mkdir(parents=True, exist_ok=True)
+    safe = Path(filename).name
+    if not safe or safe.startswith("."):
+        return _err("invalid filename", 400)
+    target = _IMG_DIR / safe
+    if not target.exists() or not target.is_file():
+        return _err("not found", 404)
+    return send_from_directory(str(_IMG_DIR), safe, as_attachment=True)
+
+
+@app.route("/api/image/gallery")
+def api_image_gallery():
+    _IMG_DIR.mkdir(parents=True, exist_ok=True)
+    exts = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".pdf"}
+    items = []
+    for p in sorted(_IMG_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:50]:
+        if p.is_file() and p.suffix.lower() in exts:
+            items.append({
+                "filename": p.name,
+                "size_kb":  round(p.stat().st_size / 1024, 1),
+                "mtime":    int(p.stat().st_mtime),
+            })
+    return _ok(items)
+
+
 # ─────────────────────────── error handlers ───────────────────────────────────
 
 @app.errorhandler(404)

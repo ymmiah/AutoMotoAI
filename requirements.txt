@@ -29,8 +29,9 @@ openpyxl>=3.1.0                # Excel reading + writing
 pandas>=2.0.0                  # CSV / Excel tabular reading
 fpdf2>=2.7.0                   # PDF creation (no system dependencies)
 
-# ── Image preview (optional — install for image thumbnails in desktop app) ────
-# Pillow>=10.0.0
+# ── Image / Design Studio ─────────────────────────────────────────────────────
+Pillow>=10.0.0              # Image processing: PNG/TIFF/WebP export, inpaint mask prep
+vtracer>=0.6.0              # Raster PNG → SVG vector conversion (optional, falls back to embedded SVG)
 
 # ── Security / dependency audit (dev / CI use) ────────────────────────────────
 # pip-audit>=2.7.0            # scan dependencies for CVEs: pip-audit -r requirements.txt

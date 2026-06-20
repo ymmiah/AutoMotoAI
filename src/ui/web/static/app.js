@@ -962,3 +962,326 @@ async function init() {
 }
 
 init();
+
+// ══════════════════════════════════════════════════════════════
+//  DESIGN STUDIO
+// ══════════════════════════════════════════════════════════════
+
+const ds = {
+  // DOM
+  panel:          $("designStudio"),
+  prompt:         $("dsPrompt"),
+  quality:        $("dsQuality"),
+  imageCanvas:    $("dsImageCanvas"),
+  maskCanvas:     $("dsMaskCanvas"),
+  spinner:        $("dsSpinner"),
+  spinnerMsg:     $("dsSpinnerMsg"),
+  status:         $("dsStatus"),
+  inpaintSection: $("dsInpaintSection"),
+  exportSection:  $("dsExportSection"),
+  placeholder:    $("dsPlaceholder"),
+  gallery:        $("dsGallery"),
+  galleryGrid:    $("dsGalleryGrid"),
+  brushSizeInput: $("dsBrushSize"),
+  brushSizeVal:   $("dsBrushSizeVal"),
+  inpaintPrompt:  $("dsInpaintPrompt"),
+  // State
+  style:          "photo",
+  size:           "square",
+  currentFile:    null,     // filename of the last generated image
+  brushMode:      "brush",  // "brush" | "erase"
+  brushSize:      20,
+  isPainting:     false,
+  lastX:          0,
+  lastY:          0,
+  maskCtx:        null,
+  imageCtx:       null,
+};
+
+// ── Open / close ──────────────────────────────────────────────
+$("btnOpenDesignStudio").addEventListener("click", () => {
+  ds.panel.classList.remove("hidden");
+});
+$("dsBtnClose").addEventListener("click", () => {
+  ds.panel.classList.add("hidden");
+});
+
+// ── Style chips ───────────────────────────────────────────────
+document.querySelectorAll("#dsStyleChips .ds-chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#dsStyleChips .ds-chip").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    ds.style = btn.dataset.val;
+  });
+});
+
+// ── Size chips ────────────────────────────────────────────────
+document.querySelectorAll("#dsSizeChips .ds-chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#dsSizeChips .ds-chip").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    ds.size = btn.dataset.val;
+  });
+});
+
+// ── Brush size slider ─────────────────────────────────────────
+ds.brushSizeInput.addEventListener("input", () => {
+  ds.brushSize = parseInt(ds.brushSizeInput.value, 10);
+  ds.brushSizeVal.textContent = ds.brushSize + "px";
+});
+
+// ── Brush / erase / clear buttons ─────────────────────────────
+$("dsBtnBrush").addEventListener("click", () => {
+  ds.brushMode = "brush";
+  $("dsBtnBrush").classList.add("active");
+  $("dsBtnEraser").classList.remove("active");
+});
+$("dsBtnEraser").addEventListener("click", () => {
+  ds.brushMode = "erase";
+  $("dsBtnEraser").classList.add("active");
+  $("dsBtnBrush").classList.remove("active");
+});
+$("dsBtnClearMask").addEventListener("click", () => {
+  if (!ds.maskCtx) return;
+  ds.maskCtx.clearRect(0, 0, ds.maskCanvas.width, ds.maskCanvas.height);
+});
+
+// ── Generate ──────────────────────────────────────────────────
+$("dsBtnGenerate").addEventListener("click", dsGenerate);
+
+async function dsGenerate() {
+  const prompt = ds.prompt.value.trim();
+  if (!prompt) { ds.status.textContent = "⚠ Please enter a prompt."; return; }
+
+  dsShowSpinner("Generating with DALL-E 3…");
+  $("dsBtnGenerate").disabled = true;
+
+  try {
+    const data = await api("image/generate", {
+      method:  "POST",
+      body:    JSON.stringify({
+        prompt,
+        style:   ds.style,
+        size:    ds.size,
+        quality: ds.quality.value,
+      }),
+    });
+    ds.currentFile = data.filename;
+    await dsLoadImage(data.filename);
+    ds.status.textContent =
+      `✓ Generated in ${data.generation_time}s  ·  ${data.width}×${data.height}  ·  ${data.provider}` +
+      (data.revised_prompt ? `  ·  Revised: "${data.revised_prompt.slice(0, 60)}…"` : "");
+    ds.inpaintSection.classList.remove("hidden");
+    ds.exportSection.classList.remove("hidden");
+  } catch (e) {
+    ds.status.textContent = "⚠ " + e.message;
+  } finally {
+    dsHideSpinner();
+    $("dsBtnGenerate").disabled = false;
+  }
+}
+
+// ── Load image onto canvas ────────────────────────────────────
+function dsLoadImage(filename) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      ds.placeholder.style.display = "none";
+      ds.imageCanvas.width  = img.naturalWidth;
+      ds.imageCanvas.height = img.naturalHeight;
+      ds.imageCanvas.style.display = "block";
+
+      ds.imageCtx = ds.imageCanvas.getContext("2d");
+      ds.imageCtx.drawImage(img, 0, 0);
+
+      // Prepare mask canvas (same pixel dimensions, CSS-sized to match)
+      ds.maskCanvas.width  = img.naturalWidth;
+      ds.maskCanvas.height = img.naturalHeight;
+      ds.maskCtx = ds.maskCanvas.getContext("2d");
+      ds.maskCtx.clearRect(0, 0, ds.maskCanvas.width, ds.maskCanvas.height);
+      ds.maskCanvas.classList.remove("hidden");
+
+      resolve();
+    };
+    img.onerror = () => reject(new Error("Failed to load image preview"));
+    img.src = `/api/image/view/${encodeURIComponent(filename)}`;
+  });
+}
+
+// ── Canvas mask painting ──────────────────────────────────────
+function dsMaskPos(e) {
+  const rect = ds.maskCanvas.getBoundingClientRect();
+  const scaleX = ds.maskCanvas.width  / rect.width;
+  const scaleY = ds.maskCanvas.height / rect.height;
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  return [(cx - rect.left) * scaleX, (cy - rect.top) * scaleY];
+}
+
+function dsPaint(x, y) {
+  const ctx = ds.maskCtx;
+  ctx.globalCompositeOperation = ds.brushMode === "erase" ? "destination-out" : "source-over";
+  ctx.fillStyle = "rgba(255, 80, 80, 0.55)";
+  ctx.beginPath();
+  ctx.arc(x, y, ds.brushSize / 2, 0, Math.PI * 2);
+  ctx.fill();
+  if (ds.lastX && ds.lastY) {
+    ctx.lineWidth  = ds.brushSize;
+    ctx.lineCap    = "round";
+    ctx.lineJoin   = "round";
+    ctx.strokeStyle = ds.brushMode === "erase" ? "rgba(0,0,0,1)" : "rgba(255,80,80,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(ds.lastX, ds.lastY);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+  ds.lastX = x; ds.lastY = y;
+}
+
+ds.maskCanvas.addEventListener("pointerdown", e => {
+  if (!ds.maskCtx) return;
+  ds.isPainting = true;
+  ds.maskCanvas.setPointerCapture(e.pointerId);
+  const [x, y] = dsMaskPos(e);
+  ds.lastX = x; ds.lastY = y;
+  dsPaint(x, y);
+  e.preventDefault();
+});
+ds.maskCanvas.addEventListener("pointermove", e => {
+  if (!ds.isPainting || !ds.maskCtx) return;
+  const [x, y] = dsMaskPos(e);
+  dsPaint(x, y);
+  e.preventDefault();
+});
+ds.maskCanvas.addEventListener("pointerup",   () => { ds.isPainting = false; ds.lastX = 0; ds.lastY = 0; });
+ds.maskCanvas.addEventListener("pointerleave", () => { ds.isPainting = false; ds.lastX = 0; ds.lastY = 0; });
+
+// ── Inpaint ───────────────────────────────────────────────────
+$("dsBtnInpaint").addEventListener("click", dsInpaint);
+
+async function dsInpaint() {
+  if (!ds.currentFile || !ds.maskCtx) {
+    ds.status.textContent = "⚠ Generate an image first, then paint the area to fix.";
+    return;
+  }
+  const prompt = ds.inpaintPrompt.value.trim();
+  if (!prompt) { ds.status.textContent = "⚠ Enter a prompt for the area to fix."; return; }
+
+  // Export image canvas to PNG blob
+  const imageBlob = await new Promise(r => ds.imageCanvas.toBlob(r, "image/png"));
+  // Export mask canvas to PNG blob
+  const maskBlob  = await new Promise(r => ds.maskCanvas.toBlob(r, "image/png"));
+
+  const form = new FormData();
+  form.append("prompt", prompt);
+  form.append("image",  imageBlob, "image.png");
+  form.append("mask",   maskBlob,  "mask.png");
+
+  dsShowSpinner("Inpainting selected area…");
+  $("dsBtnInpaint").disabled = true;
+
+  try {
+    const res = await fetch("/api/image/inpaint", {
+      method:  "POST",
+      headers: CSRF_HEADER,
+      body:    form,
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || "Inpainting failed");
+    ds.currentFile = j.data.filename;
+    ds.maskCtx.clearRect(0, 0, ds.maskCanvas.width, ds.maskCanvas.height);
+    await dsLoadImage(j.data.filename);
+    ds.status.textContent = `✓ Inpainted in ${j.data.generation_time}s`;
+  } catch (e) {
+    ds.status.textContent = "⚠ " + e.message;
+  } finally {
+    dsHideSpinner();
+    $("dsBtnInpaint").disabled = false;
+  }
+}
+
+// ── Export ────────────────────────────────────────────────────
+document.querySelectorAll(".ds-export-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    if (!ds.currentFile) { ds.status.textContent = "⚠ Generate an image first."; return; }
+    const fmt     = btn.dataset.fmt;
+    const upscale = $("dsExportUpscale").value;
+    btn.disabled  = true;
+    ds.status.textContent = `Exporting as ${fmt}…`;
+    try {
+      const data = await api("image/export", {
+        method: "POST",
+        body:   JSON.stringify({ filename: ds.currentFile, format: fmt, upscale }),
+      });
+      ds.status.textContent =
+        `✓ Exported: ${data.filename}  (${data.size_kb} KB  ·  ${data.width}×${data.height})`;
+      // Trigger download
+      const a = document.createElement("a");
+      a.href     = `/api/image/download/${encodeURIComponent(data.filename)}`;
+      a.download = data.filename;
+      a.click();
+    } catch (e) {
+      ds.status.textContent = "⚠ Export failed: " + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
+// ── Gallery ───────────────────────────────────────────────────
+$("dsBtnGallery").addEventListener("click", async () => {
+  ds.gallery.classList.remove("hidden");
+  ds.galleryGrid.innerHTML = '<div style="color:var(--fg-dim);padding:20px">Loading…</div>';
+  try {
+    const items = await api("image/gallery");
+    ds.galleryGrid.innerHTML = "";
+    if (!items.length) {
+      ds.galleryGrid.innerHTML = '<div style="color:var(--fg-dim);padding:20px">No images yet — generate one first!</div>';
+      return;
+    }
+    const previewExts = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+    for (const item of items) {
+      const ext = item.filename.slice(item.filename.lastIndexOf(".")).toLowerCase();
+      const div = document.createElement("div");
+      div.className = "ds-gallery-item";
+      if (previewExts.has(ext)) {
+        div.innerHTML =
+          `<img class="ds-gallery-thumb" src="/api/image/view/${encodeURIComponent(item.filename)}" loading="lazy" alt="${escHtml(item.filename)}" />` +
+          `<div class="ds-gallery-name" title="${escHtml(item.filename)}">${escHtml(item.filename)}</div>` +
+          `<div class="ds-gallery-size">${item.size_kb} KB</div>`;
+      } else {
+        const icon = ext === ".svg" ? "✏" : ext === ".pdf" ? "📄" : ext === ".tif" || ext === ".tiff" ? "🎨" : "📁";
+        div.innerHTML =
+          `<div class="ds-gallery-thumb-placeholder">${icon}</div>` +
+          `<div class="ds-gallery-name" title="${escHtml(item.filename)}">${escHtml(item.filename)}</div>` +
+          `<div class="ds-gallery-size">${item.size_kb} KB</div>`;
+      }
+      div.addEventListener("click", async () => {
+        ds.gallery.classList.add("hidden");
+        ds.currentFile = item.filename;
+        if (previewExts.has(ext)) {
+          await dsLoadImage(item.filename);
+          ds.inpaintSection.classList.remove("hidden");
+          ds.exportSection.classList.remove("hidden");
+          ds.placeholder.style.display = "none";
+        }
+        ds.status.textContent = `Loaded: ${item.filename}`;
+      });
+      ds.galleryGrid.appendChild(div);
+    }
+  } catch (e) {
+    ds.galleryGrid.innerHTML = `<div style="color:var(--red);padding:20px">⚠ ${escHtml(e.message)}</div>`;
+  }
+});
+
+$("dsBtnCloseGallery").addEventListener("click", () => ds.gallery.classList.add("hidden"));
+
+// ── Spinner helpers ───────────────────────────────────────────
+function dsShowSpinner(msg) {
+  ds.spinnerMsg.textContent = msg || "Processing…";
+  ds.spinner.classList.remove("hidden");
+}
+function dsHideSpinner() {
+  ds.spinner.classList.add("hidden");
+}

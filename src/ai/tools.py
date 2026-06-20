@@ -246,6 +246,25 @@ def _build_default_registry() -> ToolRegistry:
         out = convert_document(source_path, target_format, output_path or None)
         return f"Converted → {out}"
 
+    def _generate_image_tool(
+        prompt: str,
+        style: str = "photo",
+        size: str = "square",
+        quality: str = "hd",
+    ) -> str:
+        from src.ai.image_generator import image_generator
+        result = image_generator.generate(prompt, style=style, size=size, quality=quality)
+        return (
+            f"Image generated successfully!\n"
+            f"Filename : {result.filename}\n"
+            f"Size     : {result.width}×{result.height} px\n"
+            f"Style    : {result.style}\n"
+            f"Provider : {result.provider}\n"
+            f"Time     : {result.generation_time}s\n"
+            f"Saved to : ~/Documents/AutoMotoAI_Documents/images/{result.filename}\n"
+            + (f"Revised prompt: {result.revised_prompt}" if result.revised_prompt else "")
+        )
+
     tools = [
         ToolDefinition("open_application",
             "Open an application by name or executable path. E.g. 'notepad', 'chrome', 'calc.exe'.",
@@ -329,6 +348,22 @@ def _build_default_registry() -> ToolRegistry:
                        enum=["txt", "md", "html", "docx", "pdf", "xlsx", "csv"]),
              ToolParam("output_path", "string", "Optional absolute output path", required=False)],
             _convert_document_tool),
+        ToolDefinition("generate_image",
+            "Generate a professional image from a text description using DALL-E 3. "
+            "Supports styles: photo, logo, poster, social, print, icon, product, character, background, infographic. "
+            "Sizes: square (1:1), landscape (16:9), portrait (9:16). "
+            "Quality: hd or standard. The image is saved to ~/Documents/AutoMotoAI_Documents/images/.",
+            [ToolParam("prompt", "string", "Detailed description of the image to generate"),
+             ToolParam("style", "string",
+                       "Visual style preset: photo, logo, poster, social, print, icon, product, character, background, infographic",
+                       required=False,
+                       enum=["photo", "logo", "poster", "social", "print", "icon",
+                             "product", "character", "background", "infographic"]),
+             ToolParam("size", "string", "Canvas size: square (1:1), landscape (16:9), portrait (9:16)",
+                       required=False, enum=["square", "landscape", "portrait"]),
+             ToolParam("quality", "string", "Generation quality: hd or standard",
+                       required=False, enum=["hd", "standard"])],
+            _generate_image_tool),
     ]
     for t in tools:
         reg.register(t)

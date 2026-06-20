@@ -27,6 +27,9 @@
     <button class="sidebar-link" id="btnOpenTools" title="Files, Apps &amp; Monitor">
       🛠 Tools Panel
     </button>
+    <button class="sidebar-link" id="btnOpenDesignStudio" title="AI Design Studio">
+      🎨 Design Studio
+    </button>
     <a class="sidebar-link" href="https://github.com/ymmiah/automotoai" target="_blank" rel="noopener">
       📦 Open Source
     </a>
@@ -286,6 +289,149 @@
 <!-- hidden file input -->
 <input id="fileInput" type="file" multiple style="display:none"
        accept=".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.py,.js,.ts,.html,.htm,.css,.json,.xml,.yaml,.yml" />
+
+<!-- ══════════════════════ DESIGN STUDIO ══════════════════════ -->
+<div id="designStudio" class="design-studio hidden">
+
+  <!-- Header -->
+  <div class="ds-header">
+    <div class="ds-brand">🎨 Design Studio</div>
+    <div class="ds-header-actions">
+      <button id="dsBtnGallery"  class="btn btn-sm">🖼 Gallery</button>
+      <button id="dsBtnClose"    class="btn-icon ds-close">✕</button>
+    </div>
+  </div>
+
+  <div class="ds-body">
+
+    <!-- ── Left controls column ── -->
+    <div class="ds-controls">
+
+      <!-- Prompt -->
+      <div class="ds-section">
+        <label class="ds-label">Prompt</label>
+        <textarea id="dsPrompt" class="ds-textarea"
+                  placeholder="Describe your design… e.g. 'A sleek electric car logo with blue lightning bolt on dark background'"
+                  rows="4"></textarea>
+      </div>
+
+      <!-- Style chips -->
+      <div class="ds-section">
+        <label class="ds-label">Style</label>
+        <div class="ds-chips" id="dsStyleChips">
+          <button class="ds-chip active" data-val="photo">📷 Photo</button>
+          <button class="ds-chip" data-val="logo">🏷 Logo</button>
+          <button class="ds-chip" data-val="poster">🎬 Poster</button>
+          <button class="ds-chip" data-val="social">📱 Social</button>
+          <button class="ds-chip" data-val="print">🖨 Print</button>
+          <button class="ds-chip" data-val="icon">💎 Icon</button>
+          <button class="ds-chip" data-val="product">📦 Product</button>
+          <button class="ds-chip" data-val="character">🧑 Character</button>
+          <button class="ds-chip" data-val="background">🌄 Background</button>
+          <button class="ds-chip" data-val="infographic">📊 Infographic</button>
+        </div>
+      </div>
+
+      <!-- Size chips -->
+      <div class="ds-section">
+        <label class="ds-label">Canvas Size</label>
+        <div class="ds-chips" id="dsSizeChips">
+          <button class="ds-chip active" data-val="square">⬛ Square 1:1</button>
+          <button class="ds-chip" data-val="landscape">🖥 Landscape 16:9</button>
+          <button class="ds-chip" data-val="portrait">📱 Portrait 9:16</button>
+        </div>
+      </div>
+
+      <!-- Quality -->
+      <div class="ds-section">
+        <label class="ds-label">Quality</label>
+        <select id="dsQuality" class="select-sm" style="width:100%">
+          <option value="hd" selected>HD (highest quality)</option>
+          <option value="standard">Standard (faster)</option>
+        </select>
+      </div>
+
+      <!-- Generate button -->
+      <button id="dsBtnGenerate" class="btn btn-accent ds-generate-btn">
+        ✨ Generate Image
+      </button>
+
+      <!-- Inpaint section (visible after image is generated) -->
+      <div id="dsInpaintSection" class="ds-section hidden">
+        <label class="ds-label">Fix Selected Area</label>
+        <div class="ds-tools">
+          <button class="ds-tool active" id="dsBtnBrush" title="Paint mask">🖌 Brush</button>
+          <button class="ds-tool" id="dsBtnEraser" title="Erase mask">⬜ Erase</button>
+          <button class="ds-tool" id="dsBtnClearMask" title="Clear all mask">🗑 Clear</button>
+        </div>
+        <div class="ds-brush-row">
+          <label class="ds-label-sm">Brush size</label>
+          <input type="range" id="dsBrushSize" min="5" max="80" value="20" class="ds-slider" />
+          <span id="dsBrushSizeVal" class="ds-label-sm">20px</span>
+        </div>
+        <textarea id="dsInpaintPrompt" class="ds-textarea" rows="2"
+                  placeholder="Describe what to generate in the selected area…"></textarea>
+        <button id="dsBtnInpaint" class="btn btn-accent ds-generate-btn">
+          🔧 Fix Selected Area
+        </button>
+      </div>
+
+      <!-- Export grid (visible after image is generated) -->
+      <div id="dsExportSection" class="ds-section hidden">
+        <label class="ds-label">Export</label>
+        <div class="ds-export-row">
+          <select id="dsExportUpscale" class="select-sm">
+            <option value="1x">No upscale (1×)</option>
+            <option value="2x">2× Upscale</option>
+            <option value="4x">4× Upscale (print)</option>
+          </select>
+        </div>
+        <div class="ds-export-grid">
+          <button class="ds-export-btn" data-fmt="png_web">🌐 PNG Web</button>
+          <button class="ds-export-btn" data-fmt="png_print">🖨 PNG Print</button>
+          <button class="ds-export-btn" data-fmt="webp">⚡ WebP</button>
+          <button class="ds-export-btn" data-fmt="svg">✏ SVG Vector</button>
+          <button class="ds-export-btn" data-fmt="pdf">📄 PDF</button>
+          <button class="ds-export-btn" data-fmt="tiff">🎨 TIFF/PS</button>
+          <button class="ds-export-btn" data-fmt="ai_pdf">💡 AI/PDF</button>
+        </div>
+      </div>
+
+    </div><!-- /ds-controls -->
+
+    <!-- ── Right canvas area ── -->
+    <div class="ds-canvas-area">
+      <div class="ds-canvas-wrap" id="dsCanvasWrap">
+        <!-- Placeholder shown before first generation -->
+        <div id="dsPlaceholder" class="ds-placeholder">
+          <div class="ds-placeholder-icon">🎨</div>
+          <div>Generate an image to begin</div>
+        </div>
+        <!-- Stacked canvases (image under, mask on top) -->
+        <canvas id="dsImageCanvas" class="ds-canvas"></canvas>
+        <canvas id="dsMaskCanvas"  class="ds-canvas ds-mask-canvas hidden"></canvas>
+      </div>
+      <div id="dsSpinner" class="ds-spinner hidden">
+        <div class="ds-spinner-ring"></div>
+        <div id="dsSpinnerMsg" class="ds-spinner-msg">Generating…</div>
+      </div>
+      <div id="dsStatus" class="ds-status"></div>
+    </div><!-- /ds-canvas-area -->
+
+  </div><!-- /ds-body -->
+
+  <!-- Gallery overlay -->
+  <div id="dsGallery" class="ds-gallery hidden">
+    <div class="ds-gallery-header">
+      <span>Recent Images</span>
+      <button id="dsBtnCloseGallery" class="btn-icon">✕</button>
+    </div>
+    <div id="dsGalleryGrid" class="ds-gallery-grid"></div>
+  </div>
+
+</div><!-- /designStudio -->
+
+<!-- Design Studio trigger (in sidebar footer) is added via JS -->
 
 <script src="app.js"></script>
 </body>
