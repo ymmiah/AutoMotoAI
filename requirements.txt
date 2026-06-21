@@ -7,13 +7,21 @@ google-generativeai>=0.8.0  # Google Gemini
 anthropic>=0.40.0           # Anthropic Claude
 requests>=2.31.0            # Blackbox AI (plain HTTP) + general HTTP
 
-# ── Desktop Automation (Windows) ─────────────────────────────────────────────
-pyautogui>=0.9.54           # Mouse/keyboard simulation + screenshots
-pygetwindow>=0.0.9          # Window management
+# ── Desktop Automation (cross-platform) ──────────────────────────────────────
+pyautogui>=0.9.54           # Mouse/keyboard simulation + screenshots (all platforms)
+pygetwindow>=0.0.9          # Window management (Windows; optional on Linux)
+# Linux window management: sudo apt install xdotool wmctrl
+# Linux screenshot backends: sudo apt install scrot maim
+# Linux tkinter dialogs: sudo apt install python3-tk
+# Wayland keyboard input: sudo apt install ydotool
 
 # ── Voice I/O ────────────────────────────────────────────────────────────────
-pyttsx3>=2.90               # Text-to-speech (offline)
-SpeechRecognition>=3.10.0   # Speech-to-text
+pyttsx3>=2.90               # Text-to-speech (espeak on Linux, SAPI on Windows)
+SpeechRecognition>=3.10.0   # Speech-to-text (Google API + audio file transcription)
+# Microphone input (optional): pip install pyaudio
+#   Linux deps: sudo apt install python3-pyaudio portaudio19-dev
+# Local Whisper transcription (optional): pip install openai-whisper
+# Linux TTS alternatives: sudo apt install espeak  OR  sudo apt install flite
 
 # ── Web Server ────────────────────────────────────────────────────────────────
 flask>=3.0.0

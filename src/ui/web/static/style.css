@@ -1056,3 +1056,23 @@ button { font-family: var(--font); cursor: pointer; }
   text-overflow: ellipsis;
 }
 .ds-gallery-size { padding: 0 8px 6px; font-size: 10px; color: var(--fg-faint); }
+
+/* ── Voice controls ─────────────────────────────────────────────────────────── */
+#btnVoice.recording {
+  color: #ef4444;
+  animation: pulse-mic 1s ease-in-out infinite;
+}
+
+@keyframes pulse-mic {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%       { transform: scale(1.2); opacity: 0.7; }
+}
+
+#btnAutoSpeak.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ── Voice settings rows ─────────────────────────────────────────────────────── */
+.settings-section h3 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase;
+                        letter-spacing: .08em; color: var(--fg-dim); }

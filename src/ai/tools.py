@@ -253,6 +253,92 @@ def _build_default_registry() -> ToolRegistry:
         out = convert_document(source_path, target_format, output_path or None)
         return f"Converted → {out}"
 
+    # ── voice tools ───────────────────────────────────────────────────────
+    def _speak_tool(text: str, rate: int = 175) -> str:
+        from src.automation.voice import speak_to_file, get_audio_dir
+        import datetime as _dt, hashlib as _hl
+        ts   = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        slug = _hl.md5(text[:64].encode()).hexdigest()[:8]
+        out  = get_audio_dir() / f"tts_{ts}_{slug}.wav"
+        speak_to_file(text, out, rate=rate)
+        return f"Speech synthesized → {out.name}"
+
+    def _listen_tool(timeout: int = 10) -> str:
+        from src.automation.voice import listen
+        return listen(timeout=timeout)
+
+    def _transcribe_tool(audio_path: str, language: str = "en") -> str:
+        from src.automation.voice import transcribe_file
+        return transcribe_file(audio_path, language=language)
+
+    # ── window management tools ───────────────────────────────────────────
+    def _list_windows_tool() -> str:
+        from src.automation.desktop import get_window_list
+        wins = get_window_list()
+        return "\n".join(f"• {w}" for w in wins) or "(no windows found)"
+
+    def _focus_window_tool(title: str) -> str:
+        from src.automation.desktop import focus_window
+        focus_window(title)
+        return f"Focused: {title}"
+
+    def _minimize_window_tool(title: str) -> str:
+        from src.automation.desktop import minimize_window
+        minimize_window(title)
+        return f"Minimized: {title}"
+
+    def _maximize_window_tool(title: str) -> str:
+        from src.automation.desktop import maximize_window
+        maximize_window(title)
+        return f"Maximized: {title}"
+
+    def _close_window_tool(title: str) -> str:
+        from src.automation.desktop import close_window
+        close_window(title)
+        return f"Closed: {title}"
+
+    # ── dialog tools ──────────────────────────────────────────────────────
+    def _show_dialog_tool(title: str, message: str, kind: str = "info") -> str:
+        from src.automation.dialog import show_message
+        show_message(title, message, kind)
+        return f"Dialog shown: [{kind}] {title}"
+
+    def _ask_yes_no_tool(title: str, message: str) -> str:
+        from src.automation.dialog import ask_yes_no
+        result = ask_yes_no(title, message)
+        return "yes" if result else "no"
+
+    def _ask_input_tool(title: str, prompt: str, default: str = "") -> str:
+        from src.automation.dialog import ask_input
+        result = ask_input(title, prompt, default)
+        return result if result is not None else "(cancelled)"
+
+    def _open_file_dialog_tool(title: str = "Open File", initial_dir: str = "") -> str:
+        from src.automation.dialog import open_file_dialog
+        result = open_file_dialog(title=title, initial_dir=initial_dir)
+        return result if result else "(cancelled)"
+
+    def _save_file_dialog_tool(title: str = "Save File", default_name: str = "") -> str:
+        from src.automation.dialog import save_file_dialog
+        result = save_file_dialog(title=title, default_name=default_name)
+        return result if result else "(cancelled)"
+
+    # ── click / scroll / drag tools ───────────────────────────────────────
+    def _click_tool(x: int, y: int, button: str = "left") -> str:
+        from src.automation.input_sim import click
+        click(x, y, button=button)
+        return f"Clicked ({x},{y}) with {button} button"
+
+    def _scroll_tool(x: int, y: int, direction: str = "down", amount: int = 3) -> str:
+        from src.automation.input_sim import scroll
+        scroll(x, y, direction=direction, amount=amount)
+        return f"Scrolled {direction} × {amount} at ({x},{y})"
+
+    def _drag_tool(start_x: int, start_y: int, end_x: int, end_y: int) -> str:
+        from src.automation.input_sim import drag
+        drag(start_x, start_y, end_x, end_y)
+        return f"Dragged ({start_x},{start_y}) → ({end_x},{end_y})"
+
     def _generate_image_tool(
         prompt: str,
         style: str = "photo",
@@ -371,6 +457,96 @@ def _build_default_registry() -> ToolRegistry:
              ToolParam("quality", "string", "Generation quality: hd or standard",
                        required=False, enum=["hd", "standard"])],
             _generate_image_tool),
+        # ── voice ──────────────────────────────────────────────────────────
+        ToolDefinition("speak",
+            "Synthesize text as speech and save to a WAV audio file. "
+            "Uses espeak, pyttsx3, or festival depending on what is installed.",
+            [ToolParam("text", "string", "Text to synthesize"),
+             ToolParam("rate", "integer", "Speech rate in words per minute (default 175)", required=False)],
+            _speak_tool),
+        ToolDefinition("listen",
+            "Record audio from the microphone and return the transcribed text. "
+            "Requires a connected microphone and PyAudio.",
+            [ToolParam("timeout", "integer", "Max seconds to wait for speech (default 10)", required=False)],
+            _listen_tool),
+        ToolDefinition("transcribe_audio",
+            "Transcribe an audio file (WAV/MP3/OGG) to text using OpenAI Whisper or Google STT.",
+            [ToolParam("audio_path", "string", "Absolute path to the audio file"),
+             ToolParam("language", "string", "Language code (e.g. en, fr, de)", required=False)],
+            _transcribe_tool),
+        # ── window management ───────────────────────────────────────────────
+        ToolDefinition("list_windows",
+            "Return the titles of all visible windows on the desktop.",
+            [], _list_windows_tool),
+        ToolDefinition("focus_window",
+            "Bring a window to the foreground by its title.",
+            [ToolParam("title", "string", "Full or partial window title")],
+            _focus_window_tool),
+        ToolDefinition("minimize_window",
+            "Minimize (hide to taskbar) a window by its title.",
+            [ToolParam("title", "string", "Full or partial window title")],
+            _minimize_window_tool),
+        ToolDefinition("maximize_window",
+            "Maximize a window to fill the screen.",
+            [ToolParam("title", "string", "Full or partial window title")],
+            _maximize_window_tool),
+        ToolDefinition("close_window",
+            "Close a window gracefully by its title.",
+            [ToolParam("title", "string", "Full or partial window title")],
+            _close_window_tool),
+        # ── GUI dialogs ─────────────────────────────────────────────────────
+        ToolDefinition("show_dialog",
+            "Display a GUI message dialog on the desktop (info, warning, or error).",
+            [ToolParam("title", "string", "Dialog window title"),
+             ToolParam("message", "string", "Message body text"),
+             ToolParam("kind", "string", "Dialog type: info, warning, or error",
+                       required=False, enum=["info", "warning", "error"])],
+            _show_dialog_tool),
+        ToolDefinition("ask_yes_no",
+            "Display a Yes/No GUI dialog and return the user's answer.",
+            [ToolParam("title", "string", "Dialog window title"),
+             ToolParam("message", "string", "Question to display")],
+            _ask_yes_no_tool),
+        ToolDefinition("ask_input_dialog",
+            "Show a GUI text-input dialog and return what the user typed.",
+            [ToolParam("title", "string", "Dialog window title"),
+             ToolParam("prompt", "string", "Prompt message shown above the input field"),
+             ToolParam("default", "string", "Pre-filled default value", required=False)],
+            _ask_input_tool),
+        ToolDefinition("open_file_dialog",
+            "Show a native file-picker dialog so the user can select a file to open. "
+            "Returns the absolute path of the chosen file.",
+            [ToolParam("title", "string", "Dialog title", required=False),
+             ToolParam("initial_dir", "string", "Starting directory", required=False)],
+            _open_file_dialog_tool),
+        ToolDefinition("save_file_dialog",
+            "Show a native save-file dialog and return the path chosen by the user.",
+            [ToolParam("title", "string", "Dialog title", required=False),
+             ToolParam("default_name", "string", "Default filename", required=False)],
+            _save_file_dialog_tool),
+        # ── mouse actions ───────────────────────────────────────────────────
+        ToolDefinition("mouse_click",
+            "Simulate a mouse click at screen coordinates (x, y).",
+            [ToolParam("x", "integer", "X coordinate in pixels"),
+             ToolParam("y", "integer", "Y coordinate in pixels"),
+             ToolParam("button", "string", "Mouse button: left, middle, or right",
+                       required=False, enum=["left", "middle", "right"])],
+            _click_tool, requires_confirmation=True),
+        ToolDefinition("mouse_scroll",
+            "Scroll the mouse wheel at (x, y).",
+            [ToolParam("x", "integer", "X coordinate"),
+             ToolParam("y", "integer", "Y coordinate"),
+             ToolParam("direction", "string", "Scroll direction: up or down",
+                       required=False, enum=["up", "down", "left", "right"]),
+             ToolParam("amount", "integer", "Number of scroll clicks (default 3)", required=False)],
+            _scroll_tool, requires_confirmation=True),
+        ToolDefinition("mouse_drag",
+            "Click and drag from one screen position to another.",
+            [ToolParam("start_x", "integer", "Start X coordinate"),
+             ToolParam("start_y", "integer", "Start Y coordinate"),
+             ToolParam("end_x", "integer", "End X coordinate"),
+             ToolParam("end_y", "integer", "End Y coordinate")],
+            _drag_tool, requires_confirmation=True),
     ]
     for t in tools:
         reg.register(t)

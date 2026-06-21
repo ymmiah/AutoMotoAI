@@ -34,6 +34,13 @@ from src.automation.files import (
 )
 from src.automation.desktop import (
     get_installed_apps,
+    get_window_list,
+    focus_window,
+    minimize_window,
+    maximize_window,
+    close_window,
+    move_resize_window,
+    desktop_status,
     open_application,
     open_in_file_manager,
     take_screenshot,
@@ -96,7 +103,7 @@ def add_security_headers(response: Response) -> Response:
     response.headers["X-Frame-Options"]         = "DENY"
     response.headers["X-XSS-Protection"]        = "1; mode=block"
     response.headers["Referrer-Policy"]         = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()"
+    response.headers["Permissions-Policy"]      = "camera=(), geolocation=()"
     # Relaxed CSP — allows scripts/styles from same origin only; no inline scripts
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
@@ -890,6 +897,329 @@ def api_image_gallery():
                 "mtime":    int(p.stat().st_mtime),
             })
     return _ok(items)
+
+
+# ─────────────────────────── window management ────────────────────────────────
+
+@app.route("/api/window/list")
+def api_window_list():
+    try:
+        return _ok(get_window_list())
+    except Exception:
+        return _err("Cannot list windows", 500)
+
+
+@app.route("/api/window/focus", methods=["POST"])
+@_csrf
+def api_window_focus():
+    body  = request.get_json(silent=True) or {}
+    title = (body.get("title") or "").strip()[:256]
+    if not title:
+        return _err("title is required")
+    try:
+        focus_window(title)
+        return _ok()
+    except Exception as exc:
+        return _err(str(exc), 400)
+
+
+@app.route("/api/window/minimize", methods=["POST"])
+@_csrf
+def api_window_minimize():
+    body  = request.get_json(silent=True) or {}
+    title = (body.get("title") or "").strip()[:256]
+    if not title:
+        return _err("title is required")
+    try:
+        minimize_window(title)
+        return _ok()
+    except Exception as exc:
+        return _err(str(exc), 400)
+
+
+@app.route("/api/window/maximize", methods=["POST"])
+@_csrf
+def api_window_maximize():
+    body  = request.get_json(silent=True) or {}
+    title = (body.get("title") or "").strip()[:256]
+    if not title:
+        return _err("title is required")
+    try:
+        maximize_window(title)
+        return _ok()
+    except Exception as exc:
+        return _err(str(exc), 400)
+
+
+@app.route("/api/window/close", methods=["POST"])
+@_csrf
+def api_window_close():
+    body  = request.get_json(silent=True) or {}
+    title = (body.get("title") or "").strip()[:256]
+    if not title:
+        return _err("title is required")
+    try:
+        close_window(title)
+        return _ok()
+    except Exception as exc:
+        return _err(str(exc), 400)
+
+
+@app.route("/api/window/move-resize", methods=["POST"])
+@_csrf
+def api_window_move_resize():
+    body   = request.get_json(silent=True) or {}
+    title  = (body.get("title") or "").strip()[:256]
+    x      = _safe_int(body.get("x"), default=0)
+    y      = _safe_int(body.get("y"), default=0)
+    width  = _safe_int(body.get("width"),  default=800, min_val=1, max_val=8192)
+    height = _safe_int(body.get("height"), default=600, min_val=1, max_val=8192)
+    if not title:
+        return _err("title is required")
+    try:
+        move_resize_window(title, x, y, width, height)
+        return _ok()
+    except Exception as exc:
+        return _err(str(exc), 400)
+
+
+@app.route("/api/desktop/status")
+def api_desktop_status():
+    try:
+        from src.automation.input_sim import input_status
+        return _ok({
+            "desktop": desktop_status(),
+            "input":   input_status(),
+        })
+    except Exception:
+        return _err("Cannot get desktop status", 500)
+
+
+# ─────────────────────────── voice ────────────────────────────────────────────
+
+_AUDIO_DIR = Path.home() / "Documents" / "AutoMotoAI_Documents" / "audio"
+_MAX_AUDIO_BYTES = 25 * 1024 * 1024   # 25 MB
+_MAX_TTS_LEN     = 10_000             # characters
+
+
+@app.route("/api/voice/status")
+def api_voice_status():
+    try:
+        from src.automation.voice import is_tts_available, is_stt_available
+        return _ok({
+            "tts": is_tts_available(),
+            "stt": is_stt_available(),
+        })
+    except Exception as exc:
+        return _err("Cannot get voice status", 500)
+
+
+@app.route("/api/voice/speak", methods=["POST"])
+@_csrf
+def api_voice_speak():
+    """Server-side TTS — synthesize text to a WAV file and return the filename."""
+    body = request.get_json(silent=True) or {}
+    text = (body.get("text") or "").strip()[:_MAX_TTS_LEN]
+    rate = _safe_int(body.get("rate"), default=175, min_val=50, max_val=400)
+    if not text:
+        return _err("text is required")
+    try:
+        from src.automation.voice import speak_to_file, get_audio_dir
+        import datetime as _dt, hashlib as _hl
+        ts   = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        slug = _hl.md5(text[:64].encode()).hexdigest()[:8]
+        out  = get_audio_dir() / f"tts_{ts}_{slug}.wav"
+        speak_to_file(text, out, rate=rate)
+        return _ok({"filename": out.name})
+    except Exception as exc:
+        logger.error("TTS failed: %s", exc)
+        return _err(f"TTS failed: {exc}", 500)
+
+
+@app.route("/api/voice/speak-aloud", methods=["POST"])
+@_csrf
+def api_voice_speak_aloud():
+    """Server-side TTS — play audio through the server's speakers immediately."""
+    body = request.get_json(silent=True) or {}
+    text = (body.get("text") or "").strip()[:_MAX_TTS_LEN]
+    rate = _safe_int(body.get("rate"), default=175, min_val=50, max_val=400)
+    if not text:
+        return _err("text is required")
+    try:
+        from src.automation.voice import speak
+        import threading
+        t = threading.Thread(target=speak, kwargs={"text": text, "rate": rate}, daemon=True)
+        t.start()
+        return _ok({"queued": True})
+    except Exception as exc:
+        return _err(f"TTS failed: {exc}", 500)
+
+
+@app.route("/api/voice/audio/<path:filename>")
+def api_voice_audio(filename):
+    """Serve a generated TTS audio file."""
+    _AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    safe = Path(filename).name
+    if not safe or safe.startswith("."):
+        return _err("invalid filename", 400)
+    target = _AUDIO_DIR / safe
+    if not target.exists() or not target.is_file():
+        return _err("not found", 404)
+    return send_from_directory(str(_AUDIO_DIR), safe)
+
+
+@app.route("/api/voice/transcribe", methods=["POST"])
+@_csrf
+def api_voice_transcribe():
+    """Transcribe an uploaded audio file (WAV/MP3/OGG/WEBM)."""
+    audio_file = request.files.get("audio")
+    language   = (request.form.get("language") or "en").strip()[:10]
+    if not audio_file:
+        return _err("audio file is required")
+    audio_bytes = audio_file.read(_MAX_AUDIO_BYTES)
+    if len(audio_bytes) >= _MAX_AUDIO_BYTES:
+        return _err("Audio file too large (max 25 MB)", 413)
+    try:
+        import tempfile, os as _os
+        suffix = Path(audio_file.filename or "audio.webm").suffix or ".webm"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+        try:
+            from src.automation.voice import transcribe_file
+            text = transcribe_file(tmp_path, language=language)
+        finally:
+            _os.unlink(tmp_path)
+        return _ok({"text": text})
+    except Exception as exc:
+        logger.error("Transcription failed: %s", exc)
+        return _err(f"Transcription failed: {exc}", 500)
+
+
+@app.route("/api/voice/listen", methods=["POST"])
+@_csrf
+def api_voice_listen():
+    """Record from the server's microphone and transcribe."""
+    body     = request.get_json(silent=True) or {}
+    timeout  = _safe_int(body.get("timeout"), default=10, min_val=1, max_val=60)
+    language = (body.get("language") or "en-US").strip()[:10]
+    try:
+        from src.automation.voice import listen
+        text = listen(timeout=timeout, language=language)
+        return _ok({"text": text})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+# ─────────────────────────── GUI dialogs ──────────────────────────────────────
+
+@app.route("/api/dialog/status")
+def api_dialog_status():
+    try:
+        from src.automation.dialog import dialog_status
+        return _ok(dialog_status())
+    except Exception:
+        return _err("Cannot get dialog status", 500)
+
+
+@app.route("/api/dialog/message", methods=["POST"])
+@_csrf
+def api_dialog_message():
+    body    = request.get_json(silent=True) or {}
+    title   = (body.get("title")   or "AutoMoto AI").strip()[:256]
+    message = (body.get("message") or "").strip()[:2000]
+    kind    = (body.get("kind")    or "info").strip()[:16]
+    if kind not in ("info", "warning", "error"):
+        kind = "info"
+    if not message:
+        return _err("message is required")
+    try:
+        from src.automation.dialog import show_message
+        import threading
+        t = threading.Thread(target=show_message,
+                             args=(title, message, kind), daemon=True)
+        t.start()
+        return _ok({"queued": True})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/dialog/ask", methods=["POST"])
+@_csrf
+def api_dialog_ask():
+    """Show a Yes/No dialog and return the answer."""
+    body    = request.get_json(silent=True) or {}
+    title   = (body.get("title")   or "AutoMoto AI").strip()[:256]
+    message = (body.get("message") or "").strip()[:2000]
+    if not message:
+        return _err("message is required")
+    try:
+        from src.automation.dialog import ask_yes_no
+        result = ask_yes_no(title, message)
+        return _ok({"answer": result})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/dialog/input", methods=["POST"])
+@_csrf
+def api_dialog_input():
+    """Show a text-input dialog and return what the user typed."""
+    body    = request.get_json(silent=True) or {}
+    title   = (body.get("title")   or "AutoMoto AI").strip()[:256]
+    prompt  = (body.get("prompt")  or "").strip()[:512]
+    default = (body.get("default") or "").strip()[:512]
+    if not prompt:
+        return _err("prompt is required")
+    try:
+        from src.automation.dialog import ask_input
+        result = ask_input(title, prompt, default)
+        return _ok({"text": result, "cancelled": result is None})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/dialog/file/open", methods=["POST"])
+@_csrf
+def api_dialog_file_open():
+    body    = request.get_json(silent=True) or {}
+    title   = (body.get("title")       or "Open File").strip()[:256]
+    init_dir = (body.get("initial_dir") or "").strip()[:_MAX_PATH_LEN]
+    try:
+        from src.automation.dialog import open_file_dialog
+        path = open_file_dialog(title=title, initial_dir=init_dir)
+        return _ok({"path": path, "cancelled": path is None})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/dialog/file/save", methods=["POST"])
+@_csrf
+def api_dialog_file_save():
+    body    = request.get_json(silent=True) or {}
+    title        = (body.get("title")        or "Save File").strip()[:256]
+    default_name = (body.get("default_name") or "").strip()[:256]
+    init_dir     = (body.get("initial_dir")  or "").strip()[:_MAX_PATH_LEN]
+    try:
+        from src.automation.dialog import save_file_dialog
+        path = save_file_dialog(title=title, default_name=default_name, initial_dir=init_dir)
+        return _ok({"path": path, "cancelled": path is None})
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+@app.route("/api/dialog/folder", methods=["POST"])
+@_csrf
+def api_dialog_folder():
+    body    = request.get_json(silent=True) or {}
+    title    = (body.get("title")       or "Select Folder").strip()[:256]
+    init_dir = (body.get("initial_dir") or "").strip()[:_MAX_PATH_LEN]
+    try:
+        from src.automation.dialog import open_folder_dialog
+        path = open_folder_dialog(title=title, initial_dir=init_dir)
+        return _ok({"path": path, "cancelled": path is None})
+    except Exception as exc:
+        return _err(str(exc), 500)
 
 
 # ─────────────────────────── error handlers ───────────────────────────────────

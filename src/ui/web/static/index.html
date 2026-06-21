@@ -56,6 +56,7 @@
         <span>Tools</span>
       </label>
       <span id="statusBadge" class="badge badge-green">Ready</span>
+      <button id="btnAutoSpeak" class="btn-icon" title="Auto-speak AI responses (off)" aria-pressed="false">🔇</button>
       <button id="btnTheme" class="btn-icon" title="Toggle theme">🌙</button>
       <button id="btnScreenshot" class="btn-icon" title="Take screenshot">📸</button>
     </div>
@@ -268,6 +269,37 @@
         <label class="setting-row">
           <span>Tool calling</span>
           <input type="checkbox" id="settingTools" checked />
+        </label>
+      </div>
+      <div class="settings-section">
+        <h3>Voice</h3>
+        <label class="setting-row">
+          <span>Auto-speak replies</span>
+          <input type="checkbox" id="settingAutoSpeak" />
+        </label>
+        <label class="setting-row">
+          <span>Language</span>
+          <select id="settingVoiceLang" class="select-sm">
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="fr-FR">French</option>
+            <option value="de-DE">German</option>
+            <option value="es-ES">Spanish</option>
+            <option value="it-IT">Italian</option>
+            <option value="pt-BR">Portuguese (BR)</option>
+            <option value="ja-JP">Japanese</option>
+            <option value="zh-CN">Chinese (Simplified)</option>
+            <option value="ar-SA">Arabic</option>
+          </select>
+        </label>
+        <label class="setting-row">
+          <span>Speed</span>
+          <select id="settingVoiceRate" class="select-sm">
+            <option value="0.75">Slow (0.75×)</option>
+            <option value="1.0" selected>Normal (1×)</option>
+            <option value="1.25">Fast (1.25×)</option>
+            <option value="1.5">Very fast (1.5×)</option>
+          </select>
         </label>
       </div>
       <div class="settings-section">

@@ -489,7 +489,9 @@ async function sendMessage() {
           endBotStream(fullReply || "");
           appendMsg("error", payload.message);
         } else if (eventType === "done") {
-          endBotStream(payload.full_reply || fullReply);
+          const finalText = payload.full_reply || fullReply;
+          endBotStream(finalText);
+          speakText(finalText);
         }
       }
     }
@@ -788,24 +790,130 @@ function stopMonitor() {
 }
 
 // ── Voice ─────────────────────────────────────────────────────────────────────
-let recognition = null;
-const btnVoice  = $("btnVoice");
+let recognition    = null;
+let autoSpeakOn    = localStorage.getItem("amAiAutoSpeak") === "true";
+let voiceLang      = localStorage.getItem("amAiVoiceLang") || "en-US";
+let voiceRate      = parseFloat(localStorage.getItem("amAiVoiceRate") || "1.0");
+const btnVoice     = $("btnVoice");
+const btnAutoSpeak = $("btnAutoSpeak");
 
+// Initialise auto-speak button state
+function _syncAutoSpeakBtn() {
+  btnAutoSpeak.textContent    = autoSpeakOn ? "🔊" : "🔇";
+  btnAutoSpeak.title          = autoSpeakOn ? "Auto-speak ON (click to disable)" : "Auto-speak OFF (click to enable)";
+  btnAutoSpeak.setAttribute("aria-pressed", autoSpeakOn ? "true" : "false");
+  btnAutoSpeak.classList.toggle("active", autoSpeakOn);
+}
+_syncAutoSpeakBtn();
+
+btnAutoSpeak.addEventListener("click", () => {
+  autoSpeakOn = !autoSpeakOn;
+  localStorage.setItem("amAiAutoSpeak", autoSpeakOn);
+  _syncAutoSpeakBtn();
+  if (!autoSpeakOn && window.speechSynthesis) window.speechSynthesis.cancel();
+});
+
+// Speak text using browser Web Speech Synthesis
+function speakText(text) {
+  if (!autoSpeakOn) return;
+  if (!window.speechSynthesis) return;
+  // Strip markdown symbols for cleaner TTS
+  const clean = text
+    .replace(/```[\s\S]*?```/g, "code block")
+    .replace(/`[^`]+`/g, "")
+    .replace(/#{1,6}\s/g, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .slice(0, 5000);
+  window.speechSynthesis.cancel();
+  const utt  = new SpeechSynthesisUtterance(clean);
+  utt.lang   = voiceLang;
+  utt.rate   = voiceRate;
+  utt.volume = 0.9;
+  window.speechSynthesis.speak(utt);
+}
+
+// STT — browser Web Speech Recognition
 function toggleVoice() {
-  if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-    appendMsg("error", "Speech recognition not supported — use Chrome or Edge.");
+  const hasSR = ("webkitSpeechRecognition" in window) || ("SpeechRecognition" in window);
+  if (!hasSR) {
+    appendMsg("error", "Speech recognition is not supported in this browser. Use Chrome or Edge.");
     return;
   }
+  // Stop if currently listening
   if (recognition) { recognition.stop(); return; }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  const SR  = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
-  recognition.lang = "en-US";
-  recognition.interimResults = false;
-  recognition.onstart  = () => { btnVoice.textContent = "🔴"; setStatus("Listening…", "yellow"); };
-  recognition.onresult = e  => { chatInput.value = e.results[0][0].transcript; sendMessage(); };
-  recognition.onerror  = e  => appendMsg("error", "Voice error: " + e.error);
-  recognition.onend    = () => { recognition = null; btnVoice.textContent = "🎤"; setStatus("Ready"); };
+  recognition.lang            = voiceLang;
+  recognition.interimResults  = true;
+  recognition.maxAlternatives = 1;
+  recognition.continuous      = false;
+
+  recognition.onstart = () => {
+    btnVoice.textContent = "🔴";
+    btnVoice.classList.add("recording");
+    setStatus("Listening…", "yellow");
+    chatInput.placeholder = "Speak now…";
+  };
+
+  recognition.onresult = e => {
+    let interim = "", final = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    // Show interim in placeholder, final in textarea
+    if (final) {
+      chatInput.value = final.trim();
+      autoResize(chatInput);
+    } else if (interim) {
+      chatInput.placeholder = interim + "…";
+    }
+  };
+
+  recognition.onerror = e => {
+    const msg = e.error === "not-allowed"
+      ? "Microphone access denied. Allow mic permission and try again."
+      : `Voice error: ${e.error}`;
+    appendMsg("error", msg);
+  };
+
+  recognition.onend = () => {
+    recognition = null;
+    btnVoice.textContent = "🎤";
+    btnVoice.classList.remove("recording");
+    setStatus("Ready");
+    chatInput.placeholder = "Message AutoMoto AI…";
+    // Auto-send if there's text
+    if (chatInput.value.trim()) sendMessage();
+  };
+
   recognition.start();
+}
+
+// Upload audio file for server-side transcription
+async function transcribeAudioFile(file) {
+  const formData = new FormData();
+  formData.append("audio", file);
+  formData.append("language", voiceLang.split("-")[0]);
+  setStatus("Transcribing…", "yellow");
+  try {
+    const res = await fetch("/api/voice/transcribe", {
+      method: "POST",
+      headers: CSRF_HEADER,
+      body: formData,
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Transcription failed");
+    chatInput.value = data.data.text;
+    autoResize(chatInput);
+    setStatus("Ready");
+  } catch (e) {
+    appendMsg("error", "Transcription failed: " + e.message);
+    setStatus("Error", "red");
+  }
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -830,6 +938,10 @@ $("btnSettings").addEventListener("click", () => {
   const settingProv = $("settingProvider");
   settingProv.innerHTML = providerSelect.innerHTML;
   settingProv.value = providerSelect.value;
+  // Voice settings
+  $("settingAutoSpeak").checked = autoSpeakOn;
+  $("settingVoiceLang").value   = voiceLang;
+  $("settingVoiceRate").value   = String(voiceRate);
 });
 
 $("btnCloseSettings").addEventListener("click", () => $("settingsModal").classList.add("hidden"));
@@ -837,8 +949,16 @@ $("btnCloseSettings").addEventListener("click", () => $("settingsModal").classLi
 $("btnSaveSettings").addEventListener("click", () => {
   applyTheme($("settingTheme").value);
   document.body.style.fontSize = $("settingFontSize").value + "px";
-  toolsToggle.checked = $("settingTools").checked;
-  providerSelect.value = $("settingProvider").value;
+  toolsToggle.checked   = $("settingTools").checked;
+  providerSelect.value  = $("settingProvider").value;
+  // Save voice settings
+  autoSpeakOn = $("settingAutoSpeak").checked;
+  voiceLang   = $("settingVoiceLang").value;
+  voiceRate   = parseFloat($("settingVoiceRate").value);
+  localStorage.setItem("amAiAutoSpeak",  autoSpeakOn);
+  localStorage.setItem("amAiVoiceLang",  voiceLang);
+  localStorage.setItem("amAiVoiceRate",  voiceRate);
+  _syncAutoSpeakBtn();
   $("settingsModal").classList.add("hidden");
 });
 
