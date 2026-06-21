@@ -33,6 +33,11 @@ fpdf2>=2.7.0                   # PDF creation (no system dependencies)
 Pillow>=10.0.0              # Image processing: PNG/TIFF/WebP export, inpaint mask prep
 vtracer>=0.6.0              # Raster PNG → SVG vector conversion (optional, falls back to embedded SVG)
 
+# ── Security ──────────────────────────────────────────────────────────────────
+cryptography>=42.0.0        # Fernet encrypted secret store (AES-128-CBC + HMAC-SHA256)
+pyotp>=2.9.0                # TOTP two-factor authentication (RFC 6238)
+qrcode[pil]>=7.4.0          # QR code generation for 2FA setup (optional, requires Pillow)
+
 # ── Security / dependency audit (dev / CI use) ────────────────────────────────
 # pip-audit>=2.7.0            # scan dependencies for CVEs: pip-audit -r requirements.txt
 # safety>=3.0.0               # alternative CVE scanner: safety check

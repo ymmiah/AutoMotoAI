@@ -1,4 +1,4 @@
-"""Application configuration loaded exclusively from environment variables."""
+"""Application configuration — env vars + encrypted secret store."""
 from __future__ import annotations
 
 import os
@@ -16,11 +16,21 @@ def _env(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
 
+def _secret(key: str, default: str = "") -> str:
+    """Return key from encrypted store if available, else plain env."""
+    try:
+        from src.core.secret_store import secret_store
+        val = secret_store.get(key, "")
+        return val or _env(key, default)
+    except Exception:
+        return _env(key, default)
+
+
 class AIConfig:
-    openai_api_key: str = _env("OPENAI_API_KEY")
-    gemini_api_key: str = _env("GEMINI_API_KEY")
-    anthropic_api_key: str = _env("ANTHROPIC_API_KEY")
-    blackbox_api_key: str = _env("BLACKBOX_API_KEY")
+    openai_api_key: str = _secret("OPENAI_API_KEY")
+    gemini_api_key: str = _secret("GEMINI_API_KEY")
+    anthropic_api_key: str = _secret("ANTHROPIC_API_KEY")
+    blackbox_api_key: str = _secret("BLACKBOX_API_KEY")
     default_provider: str = _env("DEFAULT_AI_PROVIDER", "openai").lower()
     temperature: float = float(_env("AI_TEMPERATURE", "0.3"))
     max_tokens: int = int(_env("AI_MAX_TOKENS", "1024"))

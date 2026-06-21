@@ -44,6 +44,10 @@ from src.core.exceptions import (
     FileOperationError,
     NoProviderAvailableError,
 )
+from src.core.audit import attach_to_flask, log_action
+from src.core import totp as _totp
+from src.core.sandbox import get_guard, reset_guard, status as sandbox_status
+from src.core.updater import start_background_check, get_report as get_update_report
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,12 @@ _ALLOWED_APPS: set[str] = _DEFAULT_SAFE_APPS | {
 
 app = Flask(__name__, static_folder=str(_STATIC_DIR))
 app.secret_key = server_config.secret_key
+
+# Attach audit logging to all requests
+attach_to_flask(app)
+
+# Start background security update checker
+start_background_check()
 
 
 # ─────────────────────────── security headers ─────────────────────────────────
@@ -194,6 +204,111 @@ def api_session_new():
     _session_store[token] = True
     _conversations[token] = []
     return _ok({"token": token})
+
+
+# ─────────────────────────── 2FA auth ─────────────────────────────────────────
+
+@app.route("/api/auth/2fa/setup", methods=["POST"])
+@_csrf
+def api_2fa_setup():
+    """Generate a TOTP secret and return the OTPAuth URI for QR scanning."""
+    try:
+        info = _totp.setup()
+        log_action(
+            session_token=(request.get_json(silent=True) or {}).get("session_token", ""),
+            ip=request.remote_addr or "127.0.0.1",
+            method="POST", path=request.path,
+            action="2fa_setup", result="ok", status=200,
+        )
+        return _ok(info)
+    except RuntimeError as exc:
+        return _err(str(exc), 503)
+    except Exception:
+        return _err("2FA setup failed", 500)
+
+
+@app.route("/api/auth/2fa/verify", methods=["POST"])
+@_csrf
+def api_2fa_verify():
+    """Verify a TOTP code and issue a short-lived sensitive-operation token."""
+    body  = request.get_json(silent=True) or {}
+    code  = str(body.get("code") or "").strip()
+    token = str(body.get("session_token") or "").strip()
+    if not code:
+        return _err("code is required")
+    if not _totp.is_enabled():
+        return _err("2FA is not configured — call /api/auth/2fa/setup first", 400)
+    if not _totp.verify_code(code):
+        log_action(
+            session_token=token, ip=request.remote_addr or "127.0.0.1",
+            method="POST", path=request.path,
+            action="2fa_verify", result="denied", status=403,
+        )
+        return _err("Invalid or expired 2FA code", 403)
+    sensitive_token = _totp.issue_sensitive_token(token)
+    log_action(
+        session_token=token, ip=request.remote_addr or "127.0.0.1",
+        method="POST", path=request.path,
+        action="2fa_verify", result="ok", status=200,
+    )
+    return _ok({"sensitive_token": sensitive_token, "ttl_seconds": 1800})
+
+
+@app.route("/api/auth/2fa/status")
+def api_2fa_status():
+    """Return whether 2FA is configured (no secrets exposed)."""
+    return _ok({
+        "enabled":   _totp.is_enabled(),
+        "available": True,
+    })
+
+
+# ─────────────────────────── security status ──────────────────────────────────
+
+@app.route("/api/security/status")
+def api_security_status():
+    """Return security posture: update report, sandbox stats, 2FA state."""
+    from src.core.audit import verify_log
+    audit_ok, audit_msg = verify_log()
+    return _ok({
+        "updates":   get_update_report(),
+        "sandbox":   sandbox_status(),
+        "two_fa":    {"enabled": _totp.is_enabled()},
+        "audit_log": {"integrity_ok": audit_ok, "message": audit_msg},
+    })
+
+
+@app.route("/api/security/audit/verify")
+def api_audit_verify():
+    """Verify audit log HMAC chain integrity."""
+    from src.core.audit import verify_log
+    ok, msg = verify_log()
+    return _ok({"ok": ok, "message": msg})
+
+
+@app.route("/api/security/secrets/migrate", methods=["POST"])
+@_csrf
+def api_secrets_migrate():
+    """
+    One-time migration: encrypt all API keys from .env into the
+    encrypted secret store. Idempotent — safe to call multiple times.
+    """
+    try:
+        from src.core.secret_store import secret_store
+        keys = ["OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "BLACKBOX_API_KEY"]
+        ok = secret_store.migrate_from_env(keys)
+        log_action(
+            session_token=(request.get_json(silent=True) or {}).get("session_token", ""),
+            ip=request.remote_addr or "127.0.0.1",
+            method="POST", path=request.path,
+            action="secrets_migrate", result="ok" if ok else "noop", status=200,
+        )
+        msg = "Secrets migrated to encrypted store." if ok else "No non-empty API keys found in environment."
+        return _ok({"migrated": ok, "message": msg})
+    except RuntimeError as exc:
+        return _err(str(exc), 503)
+    except Exception:
+        return _err("Migration failed", 500)
 
 
 # ─────────────────────────── info ─────────────────────────────────────────────
@@ -363,8 +478,19 @@ def api_create_dir():
 @app.route("/api/files/delete", methods=["POST"])
 @_csrf
 def api_delete():
-    body = request.get_json(silent=True) or {}
-    path = (body.get("path") or "").strip()[:_MAX_PATH_LEN]
+    body  = request.get_json(silent=True) or {}
+    path  = (body.get("path") or "").strip()[:_MAX_PATH_LEN]
+    stok  = str(body.get("sensitive_token") or "")
+    stok_session = str(body.get("session_token") or "")
+    if not _totp.check_sensitive(stok, stok_session):
+        log_action(
+            session_token=stok_session, ip=request.remote_addr or "127.0.0.1",
+            method="POST", path=request.path,
+            action="delete_path", result="denied", status=403,
+            extra={"reason": "2FA required"},
+        )
+        return _err("2FA verification required for this operation. "
+                    "Call /api/auth/2fa/verify first.", 403)
     if not path:
         return _err("path is required")
     try:
@@ -415,8 +541,19 @@ def api_apps_list():
 @app.route("/api/apps/launch", methods=["POST"])
 @_csrf
 def api_apps_launch():
-    body = request.get_json(silent=True) or {}
-    cmd  = (body.get("cmd") or "").strip()[:512]
+    body  = request.get_json(silent=True) or {}
+    cmd   = (body.get("cmd") or "").strip()[:512]
+    stok  = str(body.get("sensitive_token") or "")
+    stok_session = str(body.get("session_token") or "")
+    if not _totp.check_sensitive(stok, stok_session):
+        log_action(
+            session_token=stok_session, ip=request.remote_addr or "127.0.0.1",
+            method="POST", path=request.path,
+            action="launch_app", result="denied", status=403,
+            extra={"reason": "2FA required"},
+        )
+        return _err("2FA verification required for this operation. "
+                    "Call /api/auth/2fa/verify first.", 403)
     if not cmd:
         return _err("cmd is required")
     # Allowlist check — only permit known safe applications
@@ -473,8 +610,19 @@ _MIN_SAFE_PID = 100   # never kill PID < 100 (init, kernel threads, etc.)
 @app.route("/api/monitor/kill", methods=["POST"])
 @_csrf
 def api_monitor_kill():
-    body = request.get_json(silent=True) or {}
-    pid  = body.get("pid")
+    body  = request.get_json(silent=True) or {}
+    pid   = body.get("pid")
+    stok  = str(body.get("sensitive_token") or "")
+    stok_session = str(body.get("session_token") or "")
+    if not _totp.check_sensitive(stok, stok_session):
+        log_action(
+            session_token=stok_session, ip=request.remote_addr or "127.0.0.1",
+            method="POST", path=request.path,
+            action="kill_process", result="denied", status=403,
+            extra={"reason": "2FA required"},
+        )
+        return _err("2FA verification required for this operation. "
+                    "Call /api/auth/2fa/verify first.", 403)
     if pid is None:
         return _err("pid is required")
     try:

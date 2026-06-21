@@ -72,10 +72,17 @@ class ToolRegistry:
         if not tool:
             return ToolCallResult(request.id, request.name, f"Unknown tool: {request.name}", False)
         try:
-            result = tool.handler(**request.arguments)
+            from src.core.sandbox import execute_with_timeout
+            result = execute_with_timeout(tool.handler, **request.arguments)
             result_str = str(result) if result is not None else "Done"
             logger.info("Tool '%s' succeeded: %.80s", request.name, result_str)
             return ToolCallResult(request.id, request.name, result_str, True)
+        except TimeoutError as exc:
+            logger.error("Tool '%s' timed out: %s", request.name, exc)
+            return ToolCallResult(request.id, request.name, f"Timeout: {exc}", False)
+        except PermissionError as exc:
+            logger.warning("Tool '%s' sandbox blocked: %s", request.name, exc)
+            return ToolCallResult(request.id, request.name, f"Sandbox denied: {exc}", False)
         except Exception as exc:
             logger.error("Tool '%s' failed: %s", request.name, exc)
             return ToolCallResult(request.id, request.name, str(exc), False)
