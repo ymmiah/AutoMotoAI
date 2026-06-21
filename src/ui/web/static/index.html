@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AutoMoto AI — open-source AI desktop automation assistant" />
+  <title>AutoMoto AI</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ══════════════════════ SIDEBAR ══════════════════════ -->
+<aside id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <div class="brand">
+      <span class="brand-icon">🤖</span>
+      <span class="brand-name">AutoMoto AI</span>
+    </div>
+    <button id="btnNewChat" class="btn-new-chat" title="New conversation">+</button>
+  </div>
+
+  <div id="convList" class="conv-list">
+    <!-- conversation items injected by JS -->
+  </div>
+
+  <div class="sidebar-footer">
+    <button class="sidebar-link" id="btnOpenTools" title="Files, Apps &amp; Monitor">
+      🛠 Tools Panel
+    </button>
+    <button class="sidebar-link" id="btnOpenDesignStudio" title="AI Design Studio">
+      🎨 Design Studio
+    </button>
+    <a class="sidebar-link" href="https://github.com/ymmiah/automotoai" target="_blank" rel="noopener">
+      📦 Open Source
+    </a>
+    <button class="sidebar-link" id="btnSettings" title="Settings">
+      ⚙ Settings
+    </button>
+  </div>
+</aside>
+
+<!-- ══════════════════════ MAIN CONTENT ══════════════════════ -->
+<div id="mainWrap" class="main-wrap">
+
+  <!-- ── Top bar ── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button id="btnToggleSidebar" class="btn-icon" title="Toggle sidebar">☰</button>
+      <span class="topbar-title" id="topbarTitle">New Conversation</span>
+    </div>
+    <div class="topbar-right">
+      <label class="label-dim small">Provider</label>
+      <select id="providerSelect" class="select-sm"></select>
+      <label class="toggle-label small">
+        <input type="checkbox" id="toolsToggle" checked />
+        <span>Tools</span>
+      </label>
+      <span id="statusBadge" class="badge badge-green">Ready</span>
+      <button id="btnTheme" class="btn-icon" title="Toggle theme">🌙</button>
+      <button id="btnScreenshot" class="btn-icon" title="Take screenshot">📸</button>
+    </div>
+  </header>
+
+  <!-- ── Chat history ── -->
+  <div id="chatHistory" class="chat-history">
+
+    <!-- Welcome / landing screen -->
+    <div id="welcomeScreen" class="welcome-screen">
+      <div class="welcome-hero">
+        <div class="welcome-logo">🤖</div>
+        <h1 class="welcome-title">AutoMoto AI</h1>
+        <p class="welcome-sub">
+          Open-source AI desktop automation &amp; document intelligence
+        </p>
+        <div class="welcome-badges">
+          <span class="badge-pill">Free &amp; Open Source</span>
+          <span class="badge-pill">Multi-Provider AI</span>
+          <span class="badge-pill">Document Intelligence</span>
+          <span class="badge-pill">Desktop Automation</span>
+        </div>
+      </div>
+
+      <div class="welcome-grid">
+        <div class="welcome-card" data-prompt="Summarise the documents I attach and highlight key points">
+          <div class="wc-icon">📄</div>
+          <div class="wc-title">Summarise files</div>
+          <div class="wc-desc">PDF, DOCX, PPTX, XLSX, CSV and more</div>
+        </div>
+        <div class="welcome-card" data-prompt="List all running processes sorted by CPU usage">
+          <div class="wc-icon">📊</div>
+          <div class="wc-title">Monitor system</div>
+          <div class="wc-desc">CPU, RAM, disk, network &amp; processes</div>
+        </div>
+        <div class="welcome-card" data-prompt="Create a professional PDF report from my notes">
+          <div class="wc-icon">📝</div>
+          <div class="wc-title">Create documents</div>
+          <div class="wc-desc">Export to DOCX, PDF, HTML, XLSX</div>
+        </div>
+        <div class="welcome-card" data-prompt="Open Notepad and type a short message">
+          <div class="wc-icon">⚡</div>
+          <div class="wc-title">Automate desktop</div>
+          <div class="wc-desc">Launch apps, type text, hotkeys</div>
+        </div>
+        <div class="welcome-card" data-prompt="Convert all my CSV files in this folder into a single Excel workbook">
+          <div class="wc-icon">🔄</div>
+          <div class="wc-title">Convert &amp; combine</div>
+          <div class="wc-desc">Merge and convert between formats</div>
+        </div>
+        <div class="welcome-card" data-prompt="Take a screenshot and describe what you see">
+          <div class="wc-icon">📸</div>
+          <div class="wc-title">Screenshot &amp; analyse</div>
+          <div class="wc-desc">Capture screen, describe contents</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /chatHistory -->
+
+  <!-- ── Attach chips ── -->
+  <div id="attachChips" class="attach-chips hidden"></div>
+
+  <!-- ── Input area ── -->
+  <div class="input-area">
+    <div class="input-box">
+      <button id="btnAttach" class="input-action-btn" title="Attach files (PDF, DOCX, XLSX…)">📎</button>
+      <textarea id="chatInput" class="chat-textarea" placeholder="Message AutoMoto AI…"
+                rows="1" autocomplete="off" spellcheck="true"></textarea>
+      <button id="btnVoice" class="input-action-btn" title="Voice input">🎤</button>
+      <button id="btnSend" class="btn-send" title="Send (Enter)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="input-footer">
+      <span>AutoMoto AI v<span id="footerVersion">3.0.0</span> ·
+        <a href="https://github.com/ymmiah/automotoai" target="_blank" rel="noopener" class="link-dim">Open Source</a>
+      </span>
+      <button id="btnClear" class="link-btn" title="Clear conversation">🗑 Clear chat</button>
+    </div>
+  </div>
+
+</div><!-- /mainWrap -->
+
+<!-- ══════════════════════ TOOLS PANEL ══════════════════════ -->
+<aside id="toolsPanel" class="tools-panel hidden">
+  <div class="tools-panel-header">
+    <span>Tools</span>
+    <button id="btnCloseTools" class="btn-icon">✕</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="files">📁 Files</button>
+    <button class="tab"        data-tab="apps" >🚀 Apps</button>
+    <button class="tab"        data-tab="mon"  >📊 Monitor</button>
+  </div>
+
+  <!-- Files tab -->
+  <div id="tabFiles" class="tab-panel active">
+    <div class="path-bar">
+      <button class="btn-icon sm" id="btnUp"      title="Up">↑</button>
+      <button class="btn-icon sm" id="btnHome"    title="Home">🏠</button>
+      <button class="btn-icon sm" id="btnRefresh" title="Refresh">⟳</button>
+      <input  id="pathInput" class="path-input" type="text" placeholder="Path…" />
+      <button class="btn-icon sm" id="btnGo"      title="Go">▶</button>
+    </div>
+    <div class="fb-toolbar">
+      <button class="btn btn-sm" id="btnNewFile">+ File</button>
+      <button class="btn btn-sm" id="btnNewDir" >+ Folder</button>
+      <button class="btn btn-sm" id="btnOpenExp">🗂 Explorer</button>
+    </div>
+    <div id="fileList" class="file-list"></div>
+  </div>
+
+  <!-- Apps tab -->
+  <div id="tabApps" class="tab-panel">
+    <input id="appSearch" class="path-input" type="text" placeholder="🔍 Search apps…"
+           style="margin:8px;width:calc(100% - 16px);" />
+    <div id="appList" class="file-list"></div>
+  </div>
+
+  <!-- Monitor tab -->
+  <div id="tabMon" class="tab-panel">
+    <div class="monitor-bars">
+      <div class="metric-row">
+        <span class="metric-label">CPU</span>
+        <div class="metric-track"><div class="metric-fill" id="barCpu"></div></div>
+        <span class="metric-value" id="valCpu">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">RAM</span>
+        <div class="metric-track"><div class="metric-fill" id="barRam"></div></div>
+        <span class="metric-value" id="valRam">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Disk</span>
+        <div class="metric-track"><div class="metric-fill" id="barDisk"></div></div>
+        <span class="metric-value" id="valDisk">—</span>
+      </div>
+      <div class="net-row">
+        <span class="label-dim">↑</span><span id="netUp" class="net-up">—</span>
+        <span class="label-dim" style="margin-left:8px">↓</span><span id="netDn" class="net-dn">—</span>
+      </div>
+    </div>
+    <div class="proc-toolbar">
+      <input id="procSearch" class="path-input" placeholder="Filter…" style="flex:1;margin:0 4px;" />
+      <button class="btn btn-sm" id="btnProcKill" style="color:var(--red)">🔴 Kill</button>
+    </div>
+    <div class="proc-table-wrap">
+      <table class="proc-table">
+        <thead>
+          <tr>
+            <th class="col-name">Process</th>
+            <th class="col-num">PID</th>
+            <th class="col-num">CPU%</th>
+            <th class="col-num">MEM%</th>
+            <th class="col-status">Status</th>
+          </tr>
+        </thead>
+        <tbody id="procBody"></tbody>
+      </table>
+    </div>
+  </div>
+</aside>
+
+<!-- ══════════════════════ MODALS ══════════════════════ -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <p id="modalPrompt" class="modal-prompt"></p>
+    <input id="modalInput" class="input-field" type="text" />
+    <div class="modal-btns">
+      <button id="modalOk"     class="btn btn-accent">OK</button>
+      <button id="modalCancel" class="btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <h2>Settings</h2>
+      <button id="btnCloseSettings" class="btn-icon">✕</button>
+    </div>
+    <div class="settings-grid">
+      <div class="settings-section">
+        <h3>Interface</h3>
+        <label class="setting-row">
+          <span>Theme</span>
+          <select id="settingTheme" class="select-sm">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <label class="setting-row">
+          <span>Font size</span>
+          <select id="settingFontSize" class="select-sm">
+            <option value="13">Small (13px)</option>
+            <option value="14" selected>Default (14px)</option>
+            <option value="16">Large (16px)</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-section">
+        <h3>AI</h3>
+        <label class="setting-row">
+          <span>Default provider</span>
+          <select id="settingProvider" class="select-sm"></select>
+        </label>
+        <label class="setting-row">
+          <span>Tool calling</span>
+          <input type="checkbox" id="settingTools" checked />
+        </label>
+      </div>
+      <div class="settings-section">
+        <h3>About</h3>
+        <p class="setting-about">
+          AutoMoto AI is free and open-source software.<br/>
+          <a href="https://github.com/ymmiah/automotoai" target="_blank" rel="noopener" class="link-accent">
+            github.com/ymmiah/automotoai
+          </a>
+        </p>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button id="btnSaveSettings" class="btn btn-accent">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- hidden file input -->
+<input id="fileInput" type="file" multiple style="display:none"
+       accept=".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.py,.js,.ts,.html,.htm,.css,.json,.xml,.yaml,.yml" />
+
+<!-- ══════════════════════ DESIGN STUDIO ══════════════════════ -->
+<div id="designStudio" class="design-studio hidden">
+
+  <!-- Header -->
+  <div class="ds-header">
+    <div class="ds-brand">🎨 Design Studio</div>
+    <div class="ds-header-actions">
+      <button id="dsBtnGallery"  class="btn btn-sm">🖼 Gallery</button>
+      <button id="dsBtnClose"    class="btn-icon ds-close">✕</button>
+    </div>
+  </div>
+
+  <div class="ds-body">
+
+    <!-- ── Left controls column ── -->
+    <div class="ds-controls">
+
+      <!-- Prompt -->
+      <div class="ds-section">
+        <label class="ds-label">Prompt</label>
+        <textarea id="dsPrompt" class="ds-textarea"
+                  placeholder="Describe your design… e.g. 'A sleek electric car logo with blue lightning bolt on dark background'"
+                  rows="4"></textarea>
+      </div>
+
+      <!-- Style chips -->
+      <div class="ds-section">
+        <label class="ds-label">Style</label>
+        <div class="ds-chips" id="dsStyleChips">
+          <button class="ds-chip active" data-val="photo">📷 Photo</button>
+          <button class="ds-chip" data-val="logo">🏷 Logo</button>
+          <button class="ds-chip" data-val="poster">🎬 Poster</button>
+          <button class="ds-chip" data-val="social">📱 Social</button>
+          <button class="ds-chip" data-val="print">🖨 Print</button>
+          <button class="ds-chip" data-val="icon">💎 Icon</button>
+          <button class="ds-chip" data-val="product">📦 Product</button>
+          <button class="ds-chip" data-val="character">🧑 Character</button>
+          <button class="ds-chip" data-val="background">🌄 Background</button>
+          <button class="ds-chip" data-val="infographic">📊 Infographic</button>
+        </div>
+      </div>
+
+      <!-- Size chips -->
+      <div class="ds-section">
+        <label class="ds-label">Canvas Size</label>
+        <div class="ds-chips" id="dsSizeChips">
+          <button class="ds-chip active" data-val="square">⬛ Square 1:1</button>
+          <button class="ds-chip" data-val="landscape">🖥 Landscape 16:9</button>
+          <button class="ds-chip" data-val="portrait">📱 Portrait 9:16</button>
+        </div>
+      </div>
+
+      <!-- Quality -->
+      <div class="ds-section">
+        <label class="ds-label">Quality</label>
+        <select id="dsQuality" class="select-sm" style="width:100%">
+          <option value="hd" selected>HD (highest quality)</option>
+          <option value="standard">Standard (faster)</option>
+        </select>
+      </div>
+
+      <!-- Generate button -->
+      <button id="dsBtnGenerate" class="btn btn-accent ds-generate-btn">
+        ✨ Generate Image
+      </button>
+
+      <!-- Inpaint section (visible after image is generated) -->
+      <div id="dsInpaintSection" class="ds-section hidden">
+        <label class="ds-label">Fix Selected Area</label>
+        <div class="ds-tools">
+          <button class="ds-tool active" id="dsBtnBrush" title="Paint mask">🖌 Brush</button>
+          <button class="ds-tool" id="dsBtnEraser" title="Erase mask">⬜ Erase</button>
+          <button class="ds-tool" id="dsBtnClearMask" title="Clear all mask">🗑 Clear</button>
+        </div>
+        <div class="ds-brush-row">
+          <label class="ds-label-sm">Brush size</label>
+          <input type="range" id="dsBrushSize" min="5" max="80" value="20" class="ds-slider" />
+          <span id="dsBrushSizeVal" class="ds-label-sm">20px</span>
+        </div>
+        <textarea id="dsInpaintPrompt" class="ds-textarea" rows="2"
+                  placeholder="Describe what to generate in the selected area…"></textarea>
+        <button id="dsBtnInpaint" class="btn btn-accent ds-generate-btn">
+          🔧 Fix Selected Area
+        </button>
+      </div>
+
+      <!-- Export grid (visible after image is generated) -->
+      <div id="dsExportSection" class="ds-section hidden">
+        <label class="ds-label">Export</label>
+        <div class="ds-export-row">
+          <select id="dsExportUpscale" class="select-sm">
+            <option value="1x">No upscale (1×)</option>
+            <option value="2x">2× Upscale</option>
+            <option value="4x">4× Upscale (print)</option>
+          </select>
+        </div>
+        <div class="ds-export-grid">
+          <button class="ds-export-btn" data-fmt="png_web">🌐 PNG Web</button>
+          <button class="ds-export-btn" data-fmt="png_print">🖨 PNG Print</button>
+          <button class="ds-export-btn" data-fmt="webp">⚡ WebP</button>
+          <button class="ds-export-btn" data-fmt="svg">✏ SVG Vector</button>
+          <button class="ds-export-btn" data-fmt="pdf">📄 PDF</button>
+          <button class="ds-export-btn" data-fmt="tiff">🎨 TIFF/PS</button>
+          <button class="ds-export-btn" data-fmt="ai_pdf">💡 AI/PDF</button>
+        </div>
+      </div>
+
+    </div><!-- /ds-controls -->
+
+    <!-- ── Right canvas area ── -->
+    <div class="ds-canvas-area">
+      <div class="ds-canvas-wrap" id="dsCanvasWrap">
+        <!-- Placeholder shown before first generation -->
+        <div id="dsPlaceholder" class="ds-placeholder">
+          <div class="ds-placeholder-icon">🎨</div>
+          <div>Generate an image to begin</div>
+        </div>
+        <!-- Stacked canvases (image under, mask on top) -->
+        <canvas id="dsImageCanvas" class="ds-canvas"></canvas>
+        <canvas id="dsMaskCanvas"  class="ds-canvas ds-mask-canvas hidden"></canvas>
+      </div>
+      <div id="dsSpinner" class="ds-spinner hidden">
+        <div class="ds-spinner-ring"></div>
+        <div id="dsSpinnerMsg" class="ds-spinner-msg">Generating…</div>
+      </div>
+      <div id="dsStatus" class="ds-status"></div>
+    </div><!-- /ds-canvas-area -->
+
+  </div><!-- /ds-body -->
+
+  <!-- Gallery overlay -->
+  <div id="dsGallery" class="ds-gallery hidden">
+    <div class="ds-gallery-header">
+      <span>Recent Images</span>
+      <button id="dsBtnCloseGallery" class="btn-icon">✕</button>
+    </div>
+    <div id="dsGalleryGrid" class="ds-gallery-grid"></div>
+  </div>
+
+</div><!-- /designStudio -->
+
+<!-- Design Studio trigger (in sidebar footer) is added via JS -->
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,9 +1,46 @@
-openai
-google-generativeai
-anthropic
-requests
-python-dotenv
-pyttsx3
-speechrecognition
-pyautogui
-pywin32
+# ── Core ─────────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── AI Providers (install the ones you need) ──────────────────────────────────
+openai>=1.0.0               # OpenAI GPT-4
+google-generativeai>=0.8.0  # Google Gemini
+anthropic>=0.40.0           # Anthropic Claude
+requests>=2.31.0            # Blackbox AI (plain HTTP) + general HTTP
+
+# ── Desktop Automation (Windows) ─────────────────────────────────────────────
+pyautogui>=0.9.54           # Mouse/keyboard simulation + screenshots
+pygetwindow>=0.0.9          # Window management
+
+# ── Voice I/O ────────────────────────────────────────────────────────────────
+pyttsx3>=2.90               # Text-to-speech (offline)
+SpeechRecognition>=3.10.0   # Speech-to-text
+
+# ── Web Server ────────────────────────────────────────────────────────────────
+flask>=3.0.0
+
+# ── System monitoring ─────────────────────────────────────────────────────────
+psutil>=5.9.0
+
+# ── Document intelligence ─────────────────────────────────────────────────────
+pdfplumber>=0.10.0             # PDF reading
+python-docx>=1.1.0             # DOCX reading + writing
+python-pptx>=0.6.23            # PowerPoint reading
+openpyxl>=3.1.0                # Excel reading + writing
+pandas>=2.0.0                  # CSV / Excel tabular reading
+fpdf2>=2.7.0                   # PDF creation (no system dependencies)
+
+# ── Image / Design Studio ─────────────────────────────────────────────────────
+Pillow>=10.0.0              # Image processing: PNG/TIFF/WebP export, inpaint mask prep
+vtracer>=0.6.0              # Raster PNG → SVG vector conversion (optional, falls back to embedded SVG)
+
+# ── Security ──────────────────────────────────────────────────────────────────
+cryptography>=42.0.0        # Fernet encrypted secret store (AES-128-CBC + HMAC-SHA256)
+pyotp>=2.9.0                # TOTP two-factor authentication (RFC 6238)
+qrcode[pil]>=7.4.0          # QR code generation for 2FA setup (optional, requires Pillow)
+
+# ── Security / dependency audit (dev / CI use) ────────────────────────────────
+# pip-audit>=2.7.0            # scan dependencies for CVEs: pip-audit -r requirements.txt
+# safety>=3.0.0               # alternative CVE scanner: safety check
+#
+# Note: Pin all packages to exact versions (==) for production deployments.
+# Generate a pinned lockfile with: pip-compile requirements.txt --generate-hashes
