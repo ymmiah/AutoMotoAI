@@ -11,7 +11,7 @@ export async function run(): Promise<void> {
   assert.ok(ext, "extension not found");
   const api = await ext!.activate();
   const cmds = await vscode.commands.getCommands(true);
-  for (const c of ["automoto.askSelection", "automoto.fixDiagnostic", "automoto.explainFile", "automoto.runTask", "automoto.openWebUI", "automoto.status"]) {
+  for (const c of ["automoto.askSelection", "automoto.fixDiagnostic", "automoto.explainFile", "automoto.runTask", "automoto.createOffice", "automoto.openWebUI", "automoto.status"]) {
     assert.ok(cmds.includes(c), `missing command ${c}`);
   }
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), "am-none-"));

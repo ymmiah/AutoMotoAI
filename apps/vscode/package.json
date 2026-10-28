@@ -2,7 +2,7 @@
   "name": "automoto-ai",
   "displayName": "AutoMoto AI",
   "description": "Chat with your local AutoMoto AI agent in VS Code: ask about code, fix errors, explain files and run agent tasks on your project - every risky step asks you first.",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "publisher": "ymmiah",
   "author": {
     "name": "Yasin Mohammed Miah",
@@ -77,6 +77,11 @@
       {
         "command": "automoto.runTask",
         "title": "Run agent task on workspace\u2026",
+        "category": "AutoMoto"
+      },
+      {
+        "command": "automoto.createOffice",
+        "title": "Create document/spreadsheet/deck from prompt\u2026",
         "category": "AutoMoto"
       },
       {
@@ -169,7 +174,7 @@
     "test:unit": "npm run compile && mocha out/test/unit/*.test.js",
     "test:integration": "npm run compile && node out/test/integration/run.js",
     "test": "npm run test:unit",
-    "package": "vsce package --no-dependencies -o automoto-ai-5.2.0.vsix",
+    "package": "vsce package --no-dependencies -o automoto-ai-5.3.0.vsix",
     "vscode:prepublish": "npm run compile"
   },
   "devDependencies": {

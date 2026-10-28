@@ -215,6 +215,29 @@ export function activate(context: vscode.ExtensionContext): { getClient: typeof 
     await runPrompt(`${goal}\n\n(You are working in the user's VS Code project "${folder.name}". Use the vscode and bug-fixing skills.)`, { workspaceUri: folder.uri, title: goal });
   });
 
+  reg("automoto.createOffice", async () => {
+    type OfficeKind = vscode.QuickPickItem & { docKind: string; ext: string; skill: string; tool: string };
+    const kinds: OfficeKind[] = [
+      { label: "$(file-text) Word document (.docx)", docKind: "Word document", ext: "docx", skill: "word-documents", tool: "office_create_docx" },
+      { label: "$(table) Excel spreadsheet (.xlsx)", docKind: "Excel spreadsheet", ext: "xlsx", skill: "excel-spreadsheets", tool: "office_create_xlsx" },
+      { label: "$(preview) PowerPoint deck (.pptx)", docKind: "PowerPoint deck", ext: "pptx", skill: "powerpoint-decks", tool: "office_create_pptx" },
+    ];
+    const pick = await vscode.window.showQuickPick<OfficeKind>(kinds, { placeHolder: "What should AutoMoto create?" });
+    if (!pick) return;
+    const what = await vscode.window.showInputBox({
+      prompt: `Describe the ${pick.docKind}`,
+      placeHolder: pick.ext === "docx" ? "e.g. a 3-page report on renewable energy in the UK with a table and Harvard references"
+        : pick.ext === "xlsx" ? "e.g. a 12-month budget with income, costs, profit formulas and a chart"
+          : "e.g. a 6-slide pitch for a student app, with speaker notes",
+    });
+    if (!what) return;
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    const where = folder ? `in the project folder "${folder.name}" (an office/ subfolder)` : "in scratch/";
+    const prompt = `Create a ${pick.docKind}: ${what}\n\nLoad the ${pick.skill} skill first and follow it. Use ${pick.tool} to save it ${where}, ` +
+      "then export a PDF with office_convert, run office_check and fix every error, and tell me the file paths.";
+    await runPrompt(prompt, { workspaceUri: folder?.uri, title: `Create ${pick.docKind}: ${what}`.slice(0, 160) });
+  });
+
   reg("automoto.allowWorkspace", async () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) return vscode.window.showInformationMessage("Open a folder first.");

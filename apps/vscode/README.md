@@ -8,8 +8,8 @@ a thin, token-protected client for it.
 ## Setup
 1. Install AutoMoto AI (see the [main README](https://github.com/ymmiah/AutoMotoAI#quick-start)) and add at least one AI key to `.env`.
 2. Start it: `python -m automoto serve --no-browser`.
-3. Install the extension: **Extensions → … → Install from VSIX…** and pick `automoto-ai-5.2.0.vsix`
-   (or `code --install-extension automoto-ai-5.2.0.vsix`).
+3. Install the extension: **Extensions → … → Install from VSIX…** and pick `automoto-ai-5.3.0.vsix`
+   (or `code --install-extension automoto-ai-5.3.0.vsix`).
 4. Open the **AutoMoto AI** view in the activity bar.
 
 The extension finds the server through AutoMoto's private session file (`~/.automoto/session.json`,
