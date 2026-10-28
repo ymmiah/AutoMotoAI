@@ -308,3 +308,19 @@ input[type="color"] { width: 34px; height: 34px; border: 0; padding: 0; backgrou
 .pill.st-live { color: var(--ok); }
 .pill.st-unit { color: var(--warn); }
 .pill.st-untested { color: var(--bad); }
+
+/* files page + file chips */
+.filechip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; max-width: 240px; }
+.filechip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filechip button { border: 0; background: none; color: inherit; display: grid; place-items: center; padding: 2px; cursor: pointer; }
+.files-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.file-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; text-align: left; }
+.file-card.dir { flex-direction: row; align-items: center; cursor: pointer; font: inherit; color: inherit; }
+.fprev { aspect-ratio: 4 / 3; border-radius: 8px; background: var(--panel2); overflow: hidden; display: grid; place-items: center; border: 1px solid var(--line); }
+.fprev img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.fprev.none svg { width: 36px; height: 36px; opacity: .5; }
+.fmeta { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.fmeta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.factions { display: flex; gap: 6px; flex-wrap: wrap; }
+.factions .btn { font-size: 12px; padding: 4px 8px; }
+#fBreadcrumb a { color: inherit; }

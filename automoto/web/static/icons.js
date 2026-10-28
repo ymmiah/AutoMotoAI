@@ -37,6 +37,10 @@ const P = {
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   sparkle: '<path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  download: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+  slides: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M12 17v4M8 21h8"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
   monitorShot: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M7 8h4"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
@@ -57,5 +61,7 @@ export function hydrateIcons(root = document) {
 export const TOOL_ICONS = {
   list_dir: "folder", read_file: "file", write_file: "edit", run_shell: "terminal", web_search: "search",
   fetch_url: "globe", edit_file: "edit", search_files: "search", run_app: "cpu", run_app_script: "cpu", open_in_app: "monitor", list_apps: "cpu", service_api: "link", remember: "brain", recall: "brain", forget: "trash", load_skill: "book",
+  office_create_docx: "file", office_create_xlsx: "sheet", office_create_pptx: "slides", office_read: "file", office_edit: "edit",
+  office_convert: "refresh", office_recalc: "sheet", office_render: "image", office_check: "check", office_review: "image",
   system_info: "cpu", open_url: "globe", open_app: "monitor", type_text: "edit", hotkey: "key",
 };

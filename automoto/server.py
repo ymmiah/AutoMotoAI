@@ -698,6 +698,159 @@ def agent_info(request: Request) -> dict[str, Any]:
             "mcp_errors": MCP_ERRORS, "extra_roots": [str(p) for p in sandbox.extra_roots()]}
 
 
+# -- files (workspace only): upload Office files, preview, download ------------------------
+MAX_UPLOAD = 25 * 1024 * 1024
+_PREVIEW_EXT = {".pdf", ".docx", ".doc", ".odt", ".rtf", ".xlsx", ".xls", ".ods", ".pptx", ".ppt", ".odp"}
+_IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+_FILES_SKIP = {".git", "node_modules", "__pycache__", ".venv", "venv"}
+
+
+class UploadIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    data: str = Field(..., max_length=MAX_UPLOAD * 4 // 3 + 1024)  # base64
+    dir: str = Field("uploads", max_length=200)
+
+
+def _ws_path(path: str) -> Path:
+    """A path inside the default workspace (never extra roots, never sensitive names)."""
+    try:
+        return sandbox.resolve(path or ".", base=sandbox.default_root(), allow_outside=False)
+    except sandbox.SandboxError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+def _safe_name(name: str) -> str:
+    import re as _re
+
+    base = Path(name.replace("\\", "/")).name
+    if base.startswith("."):
+        raise HTTPException(400, "hidden files (names starting with '.') can't be uploaded")
+    base = _re.sub(r"[^\w.\- ()]+", "_", base).strip(" .")[:120]
+    if not base or base.startswith("."):
+        raise HTTPException(400, "bad file name")
+    return base
+
+
+@app.get("/api/files")
+def files_list(request: Request, dir: str = ".") -> dict[str, Any]:
+    _authorise(request)
+    root = sandbox.default_root()
+    root.mkdir(parents=True, exist_ok=True)
+    d = _ws_path(dir)
+    if not d.is_dir():
+        raise HTTPException(404, "no such folder")
+    items = []
+    for p in sorted(d.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))[:500]:
+        if p.name in _FILES_SKIP or sandbox.sensitive(p):
+            continue
+        st = p.stat()
+        items.append({"name": p.name, "path": p.relative_to(root).as_posix(), "dir": p.is_dir(),
+                      "size": st.st_size if p.is_file() else None, "mtime": int(st.st_mtime),
+                      "preview": p.suffix.lower() in _PREVIEW_EXT or p.suffix.lower() in _IMAGE_MIME})
+    rel_dir = d.relative_to(root.resolve()).as_posix() if d != root.resolve() else "."
+    from automoto import office
+
+    return {"dir": rel_dir, "items": items, "libreoffice": office.lo_available()}
+
+
+@app.post("/api/files/upload")
+def files_upload(request: Request, body: UploadIn) -> dict[str, Any]:
+    _authorise(request)
+    from automoto import office
+
+    try:
+        raw = base64.b64decode(body.data.split(",", 1)[-1], validate=True)
+    except ValueError:
+        raise HTTPException(400, "data must be base64") from None
+    if len(raw) > MAX_UPLOAD:
+        raise HTTPException(413, f"file too large (max {MAX_UPLOAD // 1048576} MB)")
+    d = _ws_path(body.dir)
+    d.mkdir(parents=True, exist_ok=True)
+    name = _safe_name(body.name)
+    dest = _ws_path((d / name).relative_to(sandbox.default_root().resolve()).as_posix())
+    if dest.exists():
+        stem, ext = dest.stem, dest.suffix
+        for i in range(2, 1000):
+            cand = dest.with_name(f"{stem} ({i}){ext}")
+            if not cand.exists():
+                dest = cand
+                break
+    # write under a hidden temporary name, check it, then publish it
+    probe = dest.with_name(".upload-" + secrets.token_hex(6) + dest.suffix)
+    probe.write_bytes(raw)
+    try:
+        info = office.inspect_file(probe)
+    except office.OfficeError as exc:
+        probe.unlink(missing_ok=True)
+        raise HTTPException(400, f"refused: {exc}") from None
+    probe.replace(dest)
+    notes: list[str] = []
+    if info and info.get("macros"):
+        notes.append("contains macros - AutoMoto never runs them")
+    if info and info.get("external_links"):
+        notes.append(f"{len(info['external_links'])} external link(s) - not followed")
+    return {"path": dest.relative_to(sandbox.default_root().resolve()).as_posix(), "size": len(raw), "notes": notes}
+
+
+@app.get("/api/files/download")
+def files_download(request: Request, path: str):
+    _authorise(request)
+    from fastapi.responses import FileResponse
+
+    p = _ws_path(path)
+    if not p.is_file():
+        raise HTTPException(404, "no such file")
+    return FileResponse(p, media_type="application/octet-stream", filename=p.name,
+                        headers={"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})
+
+
+@app.get("/api/files/preview")
+def files_preview(request: Request, path: str, page: int = 1):
+    _authorise(request)
+    import hashlib
+    import shutil as _sh
+    import tempfile as _tf
+
+    from fastapi.responses import FileResponse
+
+    from automoto import office
+
+    p = _ws_path(path)
+    if not p.is_file():
+        raise HTTPException(404, "no such file")
+    ext = p.suffix.lower()
+    headers = {"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'"}
+    if ext in _IMAGE_MIME:  # never SVG/HTML inline
+        return FileResponse(p, media_type=_IMAGE_MIME[ext], headers=headers)
+    if ext not in _PREVIEW_EXT:
+        raise HTTPException(415, "no preview for this file type")
+    page = max(1, min(int(page), 200))
+    st = p.stat()
+    key = hashlib.sha256(f"{p}|{st.st_mtime_ns}|{st.st_size}|{page}".encode()).hexdigest()[:24]
+    from automoto import home as _home
+
+    cache = _home.home() / "cache" / "previews"
+    cache.mkdir(parents=True, exist_ok=True)
+    png = cache / f"{key}.png"
+    if not png.exists():
+        if not _sh.which("pdftoppm"):
+            raise HTTPException(501, "previews need pdftoppm (poppler-utils)")
+        try:
+            with _tf.TemporaryDirectory(prefix="automoto-prev-") as tmp:
+                pdf = p if ext == ".pdf" else office.lo_convert(p, "pdf", Path(tmp), timeout=120)
+                import subprocess as _sp
+
+                _sp.run(["pdftoppm", "-png", "-r", "60", "-f", str(page), "-l", str(page), "-singlefile", str(pdf),
+                         str(Path(tmp) / "pv")], capture_output=True, timeout=120, check=False)
+                out = Path(tmp) / "pv.png"
+                if not out.exists():
+                    raise HTTPException(404, "no such page")
+                _sh.move(str(out), png)
+        except office.OfficeError as exc:
+            raise HTTPException(422, str(exc)) from None
+    return FileResponse(png, media_type="image/png", headers=headers)
+
+
 # -- local apps, services, connectors ----------------------------------------------
 @app.get("/api/apps")
 def apps_list(request: Request) -> dict[str, Any]:
