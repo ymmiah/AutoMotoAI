@@ -1,6 +1,9 @@
 ---
 name: project-scaffold
 description: Create a small new project (Python, web or Node) in the workspace with README and tests.
+category: coding
+tools: write_file, run_shell
+status: live
 ---
 # Project scaffold
 

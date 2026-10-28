@@ -1,6 +1,9 @@
 ---
 name: repo-health-check
 description: Check a code project in the workspace - layout, tests, obvious bugs - and report.
+category: coding
+tools: list_dir, read_file, run_shell
+status: live
 ---
 # Repo health check
 

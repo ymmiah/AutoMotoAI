@@ -1,6 +1,9 @@
 ---
 name: research-brief
 description: Research a topic on the web and write a short, sourced brief.
+category: research
+tools: web_search, fetch_url
+status: live
 ---
 # Research brief
 

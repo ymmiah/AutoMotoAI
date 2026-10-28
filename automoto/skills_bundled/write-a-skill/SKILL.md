@@ -1,6 +1,9 @@
 ---
 name: write-a-skill
 description: Turn a task you just finished into a reusable SKILL.md the user can keep.
+category: general
+tools: write_file
+status: unit
 ---
 # Write a skill
 
