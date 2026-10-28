@@ -163,7 +163,7 @@ SPEC_XLSX = ("JSON spec: {properties:{title,author}, theme:{header_fill, font}, 
              "with = are formulas), start:'A1', header:true, number_formats:{'B2:D20':'£#,##0.00'}, bold:['A20:D20'], "
              "col_widths:'auto'|{A:20}, freeze:'A2', autofilter:true, conditional:[{type:'color_scale'|'data_bar'|'cell_is'|'formula', "
              "range, operator, values, formula}], validation:[{range, values:[…]}], charts:[{type:'column'|'bar'|'line'|'pie'|'scatter', "
-             "data:'B1:C13' (row 1 = series names), categories:'A2:A13', title, x_title, y_title, anchor:'F2'}], tab_color, landscape}], "
+             "data:'B1:C13' or ['C1:C13','F1:F13'] for non-adjacent columns (row 1 = series names), categories:'A2:A13', title, x_title, y_title, anchor:'F2'}], tab_color, landscape}], "
              "names:[{name, ref:'Sheet!$B$2'}]}. Then run office_recalc to verify every formula.")
 SPEC_PPTX = ("JSON spec: {aspect:'16:9', theme:{primary, accent, text, background, font, heading_font}, footer, slide_numbers:true, "
              "slides:[{layout:'title'|'section'|'bullets'|'two_content'|'comparison'|'image'|'table'|'chart'|'statement'|'quote', "

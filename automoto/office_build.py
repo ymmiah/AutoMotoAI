@@ -716,20 +716,29 @@ def create_xlsx(spec: dict[str, Any], out: Path) -> str:
             chart.title = ch.get("title")
             chart.style = int(ch.get("style", 10))
             chart.height, chart.width = float(ch.get("height_cm", 7.5)), float(ch.get("width_cm", 15))
-            dm = _RANGE.match(ch["data"])
-            cm = _RANGE.match(ch["categories"]) if ch.get("categories") else None
-            if not dm:
-                raise OfficeError("chart data must be a range like B1:C6 (first row = series names)")
+            raw = ch.get("data")
+            ranges = [str(x).replace("$", "") for x in (raw if isinstance(raw, list) else str(raw or "").split(","))]
+            cm = _RANGE.match(str(ch.get("categories", "")).replace("$", "")) if ch.get("categories") else None
             col = openpyxl.utils.column_index_from_string
-            data = Reference(ws, min_col=col(dm.group(1)), min_row=int(dm.group(2)),
-                             max_col=col(dm.group(4) or dm.group(1)), max_row=int(dm.group(5) or dm.group(2)))
+            refs = []
+            for r in ranges:
+                dm = _RANGE.match(r.strip())
+                if not dm:
+                    raise OfficeError("chart data must be a range like B1:C6 or a list of ranges like "
+                                      "['C1:C13', 'F1:F13'] (first row = series names)")
+                refs.append(Reference(ws, min_col=col(dm.group(1)), min_row=int(dm.group(2)),
+                                      max_col=col(dm.group(4) or dm.group(1)), max_row=int(dm.group(5) or dm.group(2))))
             if kind == "scatter":
+                if not cm:
+                    raise OfficeError("scatter charts need categories (the x values range)")
                 xs = Reference(ws, min_col=col(cm.group(1)), min_row=int(cm.group(2)), max_row=int(cm.group(5)))
-                for c in range(data.min_col, data.max_col + 1):
-                    ys = Reference(ws, min_col=c, min_row=data.min_row, max_row=data.max_row)
-                    chart.series.append(Series(ys, xs, title_from_data=True))
+                for data in refs:
+                    for c in range(data.min_col, data.max_col + 1):
+                        ys = Reference(ws, min_col=c, min_row=data.min_row, max_row=data.max_row)
+                        chart.series.append(Series(ys, xs, title_from_data=True))
             else:
-                chart.add_data(data, titles_from_data=True)
+                for data in refs:  # non-adjacent columns are added one range at a time
+                    chart.add_data(data, titles_from_data=True)
                 if cm:
                     chart.set_categories(Reference(ws, min_col=col(cm.group(1)), min_row=int(cm.group(2)),
                                                    max_col=col(cm.group(4) or cm.group(1)), max_row=int(cm.group(5) or cm.group(2))))

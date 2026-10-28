@@ -528,3 +528,15 @@ def test_pptx_placeholders_keep_geometry(ws):
     body = [ph for ph in prs.slides[0].placeholders if ph.placeholder_format.idx == 1][0]
     assert body.height > 0 and body.top > 0 and body.left + body.width <= prs.slide_width
     assert "past the slide edge" not in office_check.check(str(out))
+
+
+def test_chart_with_non_adjacent_columns(ws):
+    out = ws / "na.xlsx"
+    rows = [["M", "Rev", "Cost", "Profit"], ["Jan", 10, 4, "=B2-C2"], ["Feb", 12, 5, "=B3-C3"]]
+    office_build.create_xlsx({"sheets": [{"name": "S", "rows": rows, "charts": [
+        {"type": "column", "data": ["B1:B3", "D1:D3"], "categories": "A2:A3"},
+        {"type": "line", "data": "$B$1:$B$3,$D$1:$D$3", "categories": "$A$2:$A$3"}]}]}, out)
+    import openpyxl
+
+    charts = openpyxl.load_workbook(out)["S"]._charts
+    assert len(charts) == 2 and all(len(c.series) == 2 for c in charts)
