@@ -900,6 +900,10 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
         top = Inches(1.65)
         return Inches(0.6), top, W - Inches(1.2), H - top - Inches(0.8)
 
+    # one title size for the whole deck (mixed sizes look inconsistent from slide to slide)
+    longest = max((len(str(x.get("title", ""))) for x in slides if isinstance(x, dict)
+                   and x.get("layout", "bullets") not in ("title", "section")), default=0)
+    title_pt = int(theme.get("title_size") or (34 if longest < 45 else 30 if longest < 60 else 26))
     report = []
     for i, s in enumerate(slides, 1):
         if not isinstance(s, dict):
@@ -920,7 +924,7 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
                 title.top, title.height = Inches(0.35), Inches(1.1)
                 title.left, title.width = Inches(0.6), W - Inches(1.2)
                 title.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
-                style_text(title.text_frame, 34 if len(str(s.get("title", ""))) < 45 else 28, primary, True, head_font)
+                style_text(title.text_frame, title_pt, primary, True, head_font)
             autofit(title.text_frame)
         phs = {p.placeholder_format.idx: p for p in slide.placeholders}
         if kind in ("title", "section"):
