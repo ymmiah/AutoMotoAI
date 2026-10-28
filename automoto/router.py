@@ -132,7 +132,7 @@ def plan_order(*, need_vision: bool, prefer: str | None, task: str,
 
 def ask(messages: list[dict[str, Any]] | str, *, need_vision: bool = False, prefer: str | None = None,
         task_hint: str | None = None, keys: dict[str, str] | None = None, system: str | None = None,
-        transport: Callable[..., str] = complete, **gen: Any) -> Answer:
+        transport: Callable[..., str] = complete, careful: bool = False, **gen: Any) -> Answer:
     """Send ``messages`` to the best available AI, failing over until one answers.
 
     ``keys`` lets a client pass per-request BYOK keys ({provider_id: key}); they are
@@ -166,6 +166,10 @@ def ask(messages: list[dict[str, Any]] | str, *, need_vision: bool = False, pref
         # Within one provider: try the task-specific model first, then its default
         # (e.g. a "strong" model that this key can't access) before moving on.
         models = [spec.model_for(vision=need_vision, strong=(task == "code"))]
+        if careful and need_vision:  # e.g. office_review: a stronger vision model first, if the provider has one
+            rm = (config.env(spec.review_env) if spec.review_env else None) or spec.review_model
+            if rm and rm not in models:
+                models.insert(0, rm)
         if not need_vision and models[0] != spec.model_for():
             models.append(spec.model_for())
         for model in models:

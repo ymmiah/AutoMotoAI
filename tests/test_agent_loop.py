@@ -172,3 +172,21 @@ def test_bad_key_provider_is_skipped_for_rest_of_run(monkeypatch):
     res = agent(t).run("x", prefer="groq")
     assert res.text == "done"
     assert log.count("groq") == 1  # one model tried, then skipped for the whole run
+
+
+def test_announced_step_without_tool_call_is_nudged_once():
+    log = []
+    t = scripted(("Now I'll build the Word document with the spec.", []),
+                 ("", [call("write_file", path="scratch/n.txt", content="x")]),
+                 ("Created scratch/n.txt.", []), log=log)
+    res = agent(t).run("make a file")
+    assert res.text == "Created scratch/n.txt." and res.steps == 3
+    assert any(m.get("role") == "user" and m["content"].startswith("Continue:") for m in log[1]["messages"])
+
+
+def test_nudge_is_limited_and_plain_answers_are_final():
+    t = scripted(("Let me create it now.", []), ("Let me create it now.", []), ("Let me create it now.", []))
+    res = agent(t).run("x")
+    assert res.steps == 3 and res.stopped == "done"
+    res = agent(scripted(("All done - the report is in scratch/r.docx.", []))).run("x")
+    assert res.steps == 1

@@ -40,6 +40,8 @@ class ProviderSpec:
     strong_env: str = ""
     agent_model: str | None = None  # model tried first for tool-calling agent steps
     agent_env: str = ""
+    review_model: str | None = None  # stronger vision model for careful page/layout reviews
+    review_env: str = ""
     signup_url: str = ""
     notes: str = ""
     extra_headers: dict[str, str] = field(default_factory=dict)
@@ -119,6 +121,8 @@ REGISTRY: dict[str, ProviderSpec] = {
             strong_env="NIM_STRONG_MODEL",
             agent_model="nvidia/nemotron-3.5-super-vl-120b-a12b",
             agent_env="NIM_AGENT_MODEL",
+            review_model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+            review_env="NIM_REVIEW_MODEL",
             signup_url="https://build.nvidia.com",
             notes="Free dev credits. Default Llama 3.2 11B Vision is verified live; it takes 1 image per request.",
         ),
@@ -429,15 +433,18 @@ def complete_turn(spec: ProviderSpec, messages, model: str, key: str, *, tools: 
                   timeout: float | None = None) -> tuple[str, list[dict[str, Any]]]:
     """One agent step on one provider -> (text, native_tool_calls). Raises ProviderError."""
     fn = TURN_TRANSPORTS[spec.kind]
-    try:
-        text, calls = fn(spec, messages, model, key, tools=tools, native=native,
-                         temperature=config.temperature() if temperature is None else temperature,
-                         max_tokens=config.max_tokens() if max_tokens is None else max_tokens,
-                         timeout=config.timeout_s() if timeout is None else timeout)
-    except ProviderError:
-        raise
-    except Exception as exc:
-        raise _classify(spec.id, exc) from None
-    if not text and not calls:
-        raise ProviderError(spec.id, "empty response")
-    return text, calls
+    for attempt in (1, 2):  # reasoning models occasionally return nothing: retry the same model once
+        try:
+            text, calls = fn(spec, messages, model, key, tools=tools, native=native,
+                             temperature=config.temperature() if temperature is None else temperature,
+                             max_tokens=config.agent_max_tokens() if max_tokens is None else max_tokens,
+                             timeout=config.timeout_s() if timeout is None else timeout)
+        except ProviderError as exc:
+            if attempt == 1 and "empty response" in str(exc):
+                continue
+            raise
+        except Exception as exc:
+            raise _classify(spec.id, exc) from None
+        if text or calls:
+            return text, calls
+    raise ProviderError(spec.id, "empty response")

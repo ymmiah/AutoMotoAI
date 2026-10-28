@@ -55,6 +55,14 @@ def max_tokens() -> int:
         return 1500
 
 
+def agent_max_tokens() -> int:
+    """Agent steps can carry a whole document spec in one tool call, so they get a bigger budget."""
+    try:
+        return int(env("AI_AGENT_MAX_TOKENS", "") or max(max_tokens(), 8000))
+    except ValueError:
+        return 8000
+
+
 def timeout_s() -> float:
     try:
         return float(env("AI_TIMEOUT", "45"))
