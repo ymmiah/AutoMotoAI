@@ -193,6 +193,7 @@ def test_cp437_name_redecoded_as_utf8(ws):
     z = ws / "names.zip"
     with zipfile.ZipFile(z, "w") as zf:
         zi = zipfile.ZipInfo("café.txt")
+        zi.create_system = 3  # same header bytes on every OS
         zf.writestr(zi, "x")
     raw = z.read_bytes()
     # clear the UTF-8 flag (general purpose bit 11) in local + central headers -> legacy tool behaviour

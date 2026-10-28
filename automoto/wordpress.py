@@ -146,6 +146,17 @@ def _php_files(top: Path) -> list[Path]:
                   and not any(x in f.relative_to(top).parts for x in ("vendor", "node_modules")))
 
 
+def _rtext(f: Path) -> str:
+    """Read keeping the file's own line endings (CRLF stays CRLF on every OS)."""
+    with f.open("r", encoding="utf-8", errors="surrogateescape", newline="") as fh:
+        return fh.read()
+
+
+def _wtext(f: Path, text: str) -> None:
+    with f.open("w", encoding="utf-8", errors="surrogateescape", newline="") as fh:
+        fh.write(text)
+
+
 def _read(f: Path, limit: int = 2_000_000) -> str:
     with f.open("rb") as fh:
         return fh.read(limit).decode("utf-8", errors="replace")
@@ -517,7 +528,7 @@ def next_version(cur: str, how: str) -> str:
 
 
 def _set_header(text: str, name: str, value: str) -> tuple[str, bool]:
-    rx = re.compile(r"^((?:[ \t]*<\?php)?[ \t/*#@]*" + re.escape(name) + r":[ \t]*)([^\r\n]*?)([ \t]*(?:\*/)?[ \t]*)$", re.M | re.I)
+    rx = re.compile(r"^((?:[ \t]*<\?php)?[ \t/*#@]*" + re.escape(name) + r":[ \t]*)([^\r\n]*?)([ \t]*(?:\*/)?[ \t]*)(?=\r?$)", re.M | re.I)
     head, tail = text[:8192], text[8192:]
     new, n = rx.subn(lambda m: m.group(1) + value + m.group(3), head, count=1)
     return new + tail, bool(n)
@@ -532,7 +543,7 @@ def bump_folder(top: Path, version: str = "patch", changelog: str | None = None)
         main = top / "style.css"
     else:
         raise ArchiveError("not a WordPress plugin or theme folder")
-    text = main.read_text(encoding="utf-8", errors="surrogateescape")
+    text = _rtext(main)
     old = file_headers(text, ["Version"]).get("Version", "")
     new = next_version(old or "0.0.0", version)
     text, ok = _set_header(text, "Version", new)
@@ -547,10 +558,12 @@ def bump_folder(top: Path, version: str = "patch", changelog: str | None = None)
         text, n = rx.subn(lambda m: m.group(1) + new + m.group(2), text)
         if n:
             changes.append(f"{main.name}: {n} VERSION constant(s) -> {new}")
-    main.write_text(text, encoding="utf-8", errors="surrogateescape")
+    if "\r\n" in text:
+        text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+    _wtext(main, text)
     rd = next((top / n for n in ("readme.txt", "README.txt") if (top / n).is_file()), None)
     if rd:
-        rt = rd.read_text(encoding="utf-8", errors="surrogateescape")
+        rt = _rtext(rd)
         rt2, n = re.subn(r"^(Stable tag:[ \t]*)\S+", lambda m: m.group(1) + new, rt, count=1, flags=re.M | re.I)
         if n:
             changes.append(f"{rd.name}: Stable tag -> {new}")
@@ -567,7 +580,9 @@ def bump_folder(top: Path, version: str = "patch", changelog: str | None = None)
             else:
                 rt2 = rt2.rstrip("\n") + "\n\n== Changelog ==\n\n" + entry
             changes.append(f"{rd.name}: changelog entry for {new}")
-        rd.write_text(rt2, encoding="utf-8", errors="surrogateescape")
+        if "\r\n" in rt:
+            rt2 = rt2.replace("\r\n", "\n").replace("\n", "\r\n")
+        _wtext(rd, rt2)
     return {"kind": kind, "old": old, "new": new, "changes": changes}
 
 
@@ -606,10 +621,12 @@ def add_guard_text(text: str, uninstall: bool = False) -> str | None:
 def add_guards(top: Path) -> list[str]:
     done = []
     for f in _php_files(top):
-        text = f.read_text(encoding="utf-8", errors="surrogateescape")
+        text = _rtext(f)
         new = add_guard_text(text, uninstall=f.name == "uninstall.php")
         if new is not None:
-            f.write_text(new, encoding="utf-8", errors="surrogateescape")
+            if "\r\n" in text:
+                new = new.replace("\r\n", "\n").replace("\n", "\r\n")
+            _wtext(f, new)
             done.append(f.relative_to(top).as_posix())
     return done
 

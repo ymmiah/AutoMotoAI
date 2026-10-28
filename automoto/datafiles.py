@@ -668,7 +668,7 @@ def _tk(k: str) -> str:
 
 # -- SQLite (read-only) ------------------------------------------------------------------------------
 def sqlite_connect(p: Path) -> sqlite3.Connection:
-    uri = "file:" + str(p).replace("?", "%3f").replace("#", "%23") + "?mode=ro&immutable=1"
+    uri = p.resolve().as_uri() + "?mode=ro&immutable=1"  # file:///C:/… on Windows, percent-encoded
     con = sqlite3.connect(uri, uri=True, timeout=5, check_same_thread=False)
     allowed = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION}
     pragma_ok = {"table_info", "table_list", "index_list", "index_info", "foreign_key_list", "table_xinfo"}

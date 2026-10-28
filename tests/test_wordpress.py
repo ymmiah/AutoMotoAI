@@ -258,3 +258,16 @@ def test_wp_policy(ws):
     assert policy.classify("wp_validate", "safe", {"path": "a.zip"})[0] == "safe"
     assert policy.classify("wp_package", "risky", {"src": "a", "out": "b.zip"})[0] == "risky"
     assert policy.classify("wp_package", "risky", {"src": "~/.ssh", "out": "b.zip"})[0] == "blocked"
+
+
+def test_crlf_files_keep_crlf(ws):
+    d = ws / "crlf-plugin"
+    d.mkdir()
+    (d / "crlf-plugin.php").write_bytes(b"<?php\r\n/*\r\nPlugin Name: CRLF\r\nVersion: 1.0.0\r\n*/\r\nfunction f() {}\r\n")
+    (d / "readme.txt").write_bytes(b"=== CRLF ===\r\nStable tag: 1.0.0\r\n\r\nShort.\r\n\r\n== Changelog ==\r\n\r\n= 1.0.0 =\r\n* x\r\n")
+    wordpress.bump_folder(d, "1.0.1", "Fix")
+    wordpress.add_guards(d)
+    main = (d / "crlf-plugin.php").read_bytes()
+    readme = (d / "readme.txt").read_bytes()
+    assert b"Version: 1.0.1\r\n" in main and b"ABSPATH" in main and b"\n" not in main.replace(b"\r\n", b"")
+    assert b"= 1.0.1 =\r\n* Fix\r\n" in readme and b"\n" not in readme.replace(b"\r\n", b"")
