@@ -1,5 +1,51 @@
 # AutoMoto AI - Version History & Changelog
 
+## Version 5.5.0 "Agent" - 28/10/2026
+**Let other people use AutoMoto: an opt-in hosted multi-user mode with a 1-hour daily limit you control, plus a release you can download.**
+
+### New
+- **Hosted multi-user mode** (`AUTOMOTO_MODE=multiuser`, `serve --hosted`). Single-user local mode stays the
+  default and is unchanged.
+  - **Accounts:** sign up / sign in with scrypt-hashed passwords. Sign-up is invite-only by default; the admin
+    can switch to open or closed. Invite links (`/?invite=am-…`) with a use count and expiry.
+  - **Sessions:** HttpOnly, SameSite=Strict (Secure on HTTPS) cookies stored as hashes, per-session CSRF
+    token plus Origin check, rate limits on sign-in/sign-up, 15-minute lockout after 5 wrong passwords.
+  - **Usage quota:** 60 minutes of active usage per day by default (`AUTOMOTO_DEFAULT_QUOTA_MINUTES`). Active
+    usage = model-call time + tool time (approval waits excluded). Daily reset at a configurable UTC hour, or
+    weekly. Optional request and estimated-token caps. Checked on the server before every model call; a run
+    that hits the limit stops with a friendly "limit reached, resets at …" card, and the sidebar shows a meter.
+  - **Admin (owner) control:** `automoto admin create` or `AUTOMOTO_ADMIN_USER`/`_PASSWORD`. Admin page and CLI
+    to list users and usage, set a personal limit or unlimited, give bonus minutes (expire at the next reset),
+    reset usage, suspend/unsuspend, delete (with their files), change defaults, toggle sign-up, create
+    invites, read the usage and audit logs. Role checks on the server, self-protection, audit log.
+  - **Hosted safety:** per-user workspace, memory, skills, conversations and tasks; tools limited to web,
+    memory, skills, Office, archive, WordPress and data; no shell, apps, desktop, folders, MCP or connector
+    secrets; approvals forced to ask; 20 MB uploads, 200 MB storage and 2 concurrent runs per user; a route
+    allow-list closes every endpoint not reviewed for hosted use.
+  - **Account page:** remaining time, limits and password change.
+- **Docker image** (`Dockerfile`, non-root, `/data` volume, poppler/PHP/7-Zip, optional LibreOffice) and a
+  Render blueprint. **docs/HOSTING.md** compares free hosts honestly (which keep data, which aren't free).
+  Public host names from Render / Koyeb / Hugging Face are allowed automatically.
+- **Publishing:** GitHub Release with the `.vsix`, wheel and sdist. A `Publish` workflow on version tags pushes
+  to the VS Code Marketplace / Open VSX when `VSCE_PAT` / `OVSX_PAT` exist (skips otherwise) and to PyPI by
+  trusted publishing when `PYPI_PUBLISH=true`. **docs/PUBLISHING.md** has the exact steps.
+- **Packaging:** SPDX license, project URLs and classifiers in `pyproject.toml`; the extension has gallery
+  banner, pricing and issue links for the stores.
+- `POST /api/files/delete` (both modes).
+
+### Tests
+- `tests/test_multiuser.py` (23 tests): hashing, sign-up modes and invites, cookie flags, lockout and rate
+  limits, CSRF/Origin, the route allow-list across every route, master tokens disabled, local mode has no
+  accounts API, admin role checks and actions, quota maths (bonus expiry, reset hour, weekly, caps), agent and
+  chat stopping on quota, per-user task limit, isolation of files/chats/memory/tasks, hosted tool set,
+  upload/storage limits, env bootstrap, CLI admin, platform host names.
+- CI: new `docker` job builds the image and smoke-tests hosted mode.
+
+### Live-tested
+- Multi-user server on the box with an admin and two users: one user ran NIM agent tasks until her
+  1-minute limit stopped her (limit card and meter); the admin gave the other user 30 bonus minutes from the
+  Admin page; the user saw the new allowance.
+
 ## Version 5.4.0 "Agent" - 28/10/2026
 **ZIP and other archives, WordPress plugins and themes, and CSV and other data files: extract, work on them and repack.**
 

@@ -8,7 +8,7 @@ Give it a goal. It picks the best free AI, searches the web, reads and writes fi
 sandbox, runs commands **after you approve**, remembers what matters, and keeps going until the
 job is done. If one AI is rate-limited or down, the next one carries on mid-task.
 
-[![Version](https://img.shields.io/badge/version-5.4.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.5.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Windows_·_macOS_·_Linux-555?style=for-the-badge)
@@ -131,8 +131,8 @@ server through AutoMoto's private session file (`~/.automoto/session.json`, mode
 
 ```bash
 python -m automoto serve --no-browser                   # 1. start AutoMoto
-cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.4.0.vsix (or download it from CI)
-code --install-extension automoto-ai-5.4.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
+cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.5.0.vsix (or download it from CI)
+code --install-extension automoto-ai-5.5.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
 ```
 
 | Command | What it does |
@@ -365,6 +365,11 @@ hand you links. AutoMoto never adds to a basket, bids, books, pays or enters car
 
 ## 🚀 Quick start
 
+**Download:** every release on [GitHub Releases](https://github.com/ymmiah/AutoMotoAI/releases) has the VS Code
+extension (`.vsix`) and the Python package (wheel + source). Install the package with
+`pip install automoto_ai-5.5.0-py3-none-any.whl` (add `"[office,data]"` extras from source for pandas, Parquet and 7z),
+then run `automoto serve`. Or from source:
+
 ```bash
 pip install -r requirements.txt
 cp .env.example .env            # add at least one key, e.g. NVIDIA_API_KEY (free: build.nvidia.com)
@@ -393,6 +398,36 @@ python -m automoto --workspace ~/code/app do "fix the failing test"   # folder m
 python -m automoto memory add "I prefer concise answers"
 python -m automoto routines add news --cron "0 8 * * 1-5" --prompt "Search the web for AI news and give me 5 bullets with links"
 ```
+
+---
+
+## 🌍 Host it for others (multi-user, with usage limits)
+
+Want classmates or friends to use your AutoMoto without giving them your computer? Run it in **hosted mode**.
+It's opt-in: plain `serve` stays single-user and nothing about local mode changes.
+
+```bash
+AUTOMOTO_MODE=multiuser python -m automoto admin create yasin    # you are the owner / admin
+AUTOMOTO_MODE=multiuser python -m automoto serve --hosted        # or: docker build -t automoto . && docker run …
+```
+
+<img src="docs/admin-panel.png" width="49%" alt="Admin panel: users, usage meters, bonus time"> <img src="docs/limit-reached.png" width="49%" alt="A user who reached the 1-hour limit">
+
+- **Accounts:** sign up with an invite code (default) or open sign-up — you choose. Passwords are scrypt-hashed;
+  sessions are HttpOnly cookies with CSRF tokens; wrong passwords lock the account for 15 minutes.
+- **Usage limit:** every user gets **60 minutes of active AI time per day** by default (model calls plus tool
+  runs; waiting for approval doesn't count). The sidebar shows a meter; when it runs out they see
+  *"You've reached your usage limit… resets at 00:00"*. Optional request and token caps.
+- **You stay in control** (Admin page or `automoto admin …`): give someone **bonus minutes** for today, set a
+  personal limit or **unlimited**, reset their usage, suspend or delete them, change the default for everyone,
+  open or close sign-up, make invite links, and read the usage and audit logs.
+- **Safe for the internet:** hosted users only get web research, memory, skills and the Office / archive /
+  WordPress / data tools in **their own sandbox**. No shell, no apps, no desktop, no access to your files or
+  connector keys, and every risky step still asks first.
+- **Where to host it for free:** honestly, most "free" container hosts wipe your data (Render, Koyeb) or aren't
+  free any more (Hugging Face Docker Spaces, Fly.io). The free options that keep accounts are **your own PC +
+  Cloudflare Tunnel** or an **Oracle Cloud Always Free** VM. Details, env vars and the Dockerfile:
+  **[docs/HOSTING.md](docs/HOSTING.md)**.
 
 ---
 
@@ -522,6 +557,8 @@ Full details and honest limits are in [SECURITY.md](SECURITY.md).
 | `POST /api/connectors/{id}/enable` · `/disable` · `POST /api/connectors-reload` | Manage MCP connectors (this computer only) |
 | `POST /api/session/launch` | Mint a one-time sign-in link (`automoto open`, VS Code) |
 | `POST /api/chat` · `GET/POST /api/status` · `POST /api/recommend` | v4 plain chat and provider status |
+| `POST /api/auth/login` · `/signup` · `/logout` · `/password` · `GET /api/me` | **Hosted mode only:** accounts, session cookie, the user's quota and limits |
+| `GET/POST /api/admin/users` · `PATCH/DELETE …/{id}` · `POST …/{id}/bonus` `/reset` `/password` · `GET/PUT /api/admin/settings` · `/api/admin/invites` · `/usage` · `/audit` | **Hosted mode, admins only:** users, quotas, bonus time, defaults, invites, logs |
 
 Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser cookie. Remote clients use
 `Authorization: Bearer $AUTOMOTO_API_TOKEN`. Interactive docs at `/docs` only with `AUTOMOTO_API_DOCS=1`.
@@ -542,6 +579,8 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 | MCP client (stdio) | 🟡 Working against a test server. Remote (HTTP) MCP is not supported |
 | v5.3 Office suite (Word, Excel, PowerPoint, PDF) | See the [Office status table](#-office-suite-word-excel-powerpoint-pdf) |
 | v5.4 archives, WordPress, data files | See the [archives status table](#-archives-wordpress-and-data-files) |
+| v5.5 hosted multi-user mode: accounts, sessions + CSRF, per-user quotas and bonus time, admin GUI + CLI, per-user sandboxes, Dockerfile | ✅ Unit-tested (23 tests) and live-tested on the box: an admin and two users, one user ran NIM agent tasks until her 1-minute limit stopped her, the admin gave the other 30 bonus minutes from the Admin page. Docker image built and smoke-tested. Not yet deployed to a public host |
+| Publishing: GitHub Release, Marketplace / Open VSX / PyPI workflow | ✅ Release assets built in CI. Store publishing is wired but waits for your tokens ([docs/PUBLISHING.md](docs/PUBLISHING.md)) |
 | Desktop app: Tauri 2 shell for Windows, macOS and Linux (`apps/desktop`) | 🧱 Scaffold. Wraps the same web UI and now signs its own window in with a random launch token. Not compiled here: Tauri 2.12 needs Rust ≥ 1.90 and the test box has 1.85 |
 | Mobile app: Flutter for Android and iOS (`apps/mobile`) | 🧱 Scaffold. Still uses the plain-chat API (agent mode on mobile is next). iOS needs Xcode |
 | Browser automation (Playwright tool) | ⏭ Planned. Left out rather than shipped half-working |
@@ -553,7 +592,7 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q          # 296 tests, no keys and no network needed
+python -m pytest -q          # 319 tests, no keys and no network needed
 cd apps/vscode && npm ci && npm test && xvfb-run -a npm run test:integration   # extension
 ```
 
@@ -579,9 +618,11 @@ automoto/
   apps.py        local app registry + official automation routes · services.py REST connectors
   conversations.py saved chats (SQLite) · settings.py GUI settings (no secrets)
   server.py      FastAPI API + web UI · cli.py terminal · desktop.py OS actions
+  accounts.py    hosted mode: users, scrypt, sessions, quotas, invites, audit · hosted.py auth/admin API + allow-lists · tenancy.py
   web/           index.html + static/ (app.js, app.css, icons, vendored marked / DOMPurify / highlight.js)
-  skills_bundled/ 33 bundled skills
+  skills_bundled/ 42 bundled skills
 apps/vscode      VS Code extension · apps/desktop Tauri 2 shell · apps/mobile Flutter app · tests/ pytest
+Dockerfile · render.yaml · docs/HOSTING.md · docs/PUBLISHING.md
 ```
 
 ---

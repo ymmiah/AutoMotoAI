@@ -772,8 +772,8 @@ PAGES.admin = async () => {
         <input class="input" name="quota" type="number" min="0" step="1" placeholder="minutes (blank = default)"><select class="input" name="role"><option value="user">user</option><option value="admin">admin</option></select>
         <button class="btn primary">Create</button></form></details></div>
     <div class="card"><h3>${icon("key")} Invite codes</h3><form id="admInv" class="grid-form">
-        <input class="input" name="label" placeholder="label (e.g. classmates)"><input class="input" name="uses" type="number" min="1" max="1000" value="5" aria-label="uses">
-        <input class="input" name="days" type="number" min="1" max="365" value="7" aria-label="days valid"><button class="btn primary">Create invite</button></form>
+        <label>Label<input class="input" name="label" placeholder="e.g. classmates"></label><label>Uses<input class="input" name="uses" type="number" min="1" max="1000" value="5"></label>
+        <label>Valid for (days)<input class="input" name="days" type="number" min="1" max="365" value="7"></label><button class="btn primary">Create invite</button></form>
       <div id="admCode"></div><div id="admInvites" class="muted small"></div></div>
     <div class="card"><h3>${icon("activity")} Usage log</h3><div class="tbl-wrap"><table class="tbl small" id="admUsage"></table></div></div>
     <div class="card"><h3>${icon("shield")} Audit log</h3><div class="tbl-wrap"><table class="tbl small" id="admAudit"></table></div></div>`);
