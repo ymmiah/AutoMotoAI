@@ -473,6 +473,11 @@ def query(df, *, columns: list[str] | None = None, filters: list[dict] | None = 
                 else:
                     row[f"{_col(df, col)}_{h}"] = getattr(df[_col(df, col)], h)()
         df = _pd().DataFrame([row])
+    if aggregate or group_by:
+        # sums of decimals carry binary noise (7786.6900000000005); 9 decimals keeps real precision
+        for c in df.columns:
+            if _pd().api.types.is_float_dtype(df[c]):
+                df[c] = df[c].round(9)
     if columns:
         df = df[[_col(df, c) for c in columns]]
     if dedupe:

@@ -222,3 +222,10 @@ def test_decimal_comma_dates_and_derived_columns(ws, t):
             dfm.derive(df, {"x": bad})
     out = call(t, "data_query", path="eu.csv", add_columns='{"Revenue": "[Units] * [Price (£)]"}', aggregate={"Revenue": "sum"})
     assert "35.0" in out
+
+
+def test_aggregates_drop_float_noise():
+    import pandas as pd
+    df = pd.DataFrame({"g": ["a", "a", "a"], "v": [0.1, 0.2, 7786.39]})
+    r = dfm.query(df, group_by=["g"], aggregate={"v": "sum"})
+    assert r["v_sum"].tolist() == [7786.69]
