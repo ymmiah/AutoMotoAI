@@ -324,7 +324,7 @@ def test_agent_run_stops_when_the_quota_runs_out(monkeypatch):
 
 def test_chat_is_metered(monkeypatch):
     s = Session("lena")
-    monkeypatch.setattr(server, "ask", lambda *a, **k: (time.sleep(0.05), router.Answer("hi", "gemini", "m", "chat", []))[1])
+    monkeypatch.setattr(server, "ask", lambda *a, **k: (time.sleep(0.2), router.Answer("hi", "gemini", "m", "chat", []))[1])
     r = s.post("/api/chat", {"messages": [{"role": "user", "content": "hello"}]})
     assert r.status_code == 200
     q = accounts.quota(accounts.get_user(s.user.id))
