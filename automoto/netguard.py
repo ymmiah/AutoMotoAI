@@ -37,6 +37,10 @@ class BlockedURL(ValueError):
     pass
 
 
+class SlowResponse(OSError):
+    """The server is sending far too slowly (throttled or stalled); retrying on a new connection may help."""
+
+
 def _embedded_v4(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
     if ip.ipv4_mapped:
         return ip.ipv4_mapped
@@ -160,9 +164,10 @@ SENSITIVE_HEADERS = {"authorization", "proxy-authorization", "cookie", "private-
 
 def request(url: str, *, method: str = "GET", data: bytes | None = None, headers: dict[str, str] | None = None,
             timeout: float = 20, max_redirects: int = 4, max_bytes: int = MAX_BYTES,
-            total_timeout: float | None = None) -> Response:
+            total_timeout: float | None = None, min_rate: int = 0) -> Response:
     # ``timeout`` is per socket operation; ``total_timeout`` caps the whole request so a server that
-    # trickles bytes (or stalls between reads) cannot hang the agent.
+    # trickles bytes (or stalls between reads) cannot hang the agent. ``min_rate`` (bytes/s, checked after a
+    # 15 s grace period) fails fast on a throttled connection so the caller can retry on a fresh one.
     start = time.monotonic()
     deadline = start + (total_timeout if total_timeout is not None else max(60.0, timeout * 4))
     for _ in range(max_redirects + 1):
@@ -188,8 +193,11 @@ def request(url: str, *, method: str = "GET", data: bytes | None = None, headers
                 if resp.status == 303:
                     method, data = "GET", None
                 continue
-            chunks, got = [], 0
+            chunks, got, t0 = [], 0, time.monotonic()
             while got <= max_bytes:
+                took = time.monotonic() - t0
+                if min_rate and took > 15 and got / took < min_rate:
+                    raise SlowResponse(f"too slow ({got // 1024} KB in {int(took)}s)")
                 if time.monotonic() > deadline:
                     raise BlockedURL(f"download took too long (> {int(deadline - start)}s)")
                 piece = resp.read(min(65536, max_bytes + 1 - got))

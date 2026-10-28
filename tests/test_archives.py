@@ -447,3 +447,22 @@ def test_download_has_a_total_deadline(monkeypatch):
     monkeypatch.setattr(netguard, "_PinnedHTTPS", Conn)
     with pytest.raises(netguard.BlockedURL, match="too long"):
         netguard.request("https://example.org/a.zip", timeout=5, total_timeout=0.3)
+
+
+def test_slow_download_is_retried_on_a_fresh_connection(ws, monkeypatch):
+    from automoto import archive_tools, netguard
+    calls = []
+
+    def fake(url, **kw):
+        calls.append(kw.get("min_rate"))
+        if len(calls) < 3:
+            raise netguard.SlowResponse("too slow (10 KB in 16s)")
+        return netguard.Response(url, 200, "application/zip", b"hello")
+
+    monkeypatch.setattr(netguard, "request", fake)
+    out = archive_tools.download_file(None, "https://example.org/x.bin", "downloads/x.bin")
+    assert "saved downloads/x.bin" in out and len(calls) == 3 and all(calls)
+    calls.clear()
+    monkeypatch.setattr(netguard, "request", lambda url, **kw: (_ for _ in ()).throw(netguard.SlowResponse("slow")))
+    with pytest.raises(Exception, match="3 tries"):
+        archive_tools.download_file(None, "https://example.org/x.bin", "downloads/y.bin")

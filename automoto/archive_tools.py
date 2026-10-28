@@ -104,12 +104,19 @@ def download_file(ctx: ToolContext, url: str, path: str = "", max_mb: int = 50) 
         raise ToolFailed(str(exc)) from None
     if out.is_dir():
         raise ToolFailed(f"{sandbox.rel(out)} is a folder - give a file path")
-    try:
-        r = netguard.request(url, timeout=60, total_timeout=600, max_bytes=cap + 1, headers={"Accept": "*/*"})
-    except netguard.BlockedURL as exc:
-        raise ToolFailed(f"blocked: {exc}") from None
-    except OSError as exc:
-        raise ToolFailed(f"download failed: {exc}") from None
+    r = None
+    for attempt in range(3):  # a throttled CDN connection is retried on a fresh one
+        try:
+            r = netguard.request(url, timeout=60, total_timeout=600, min_rate=32 * 1024, max_bytes=cap + 1,
+                                 headers={"Accept": "*/*"})
+            break
+        except netguard.SlowResponse as exc:
+            if attempt == 2:
+                raise ToolFailed(f"download failed after 3 tries: {exc}") from None
+        except netguard.BlockedURL as exc:
+            raise ToolFailed(f"blocked: {exc}") from None
+        except OSError as exc:
+            raise ToolFailed(f"download failed: {exc}") from None
     if r.status >= 400:
         raise ToolFailed(f"HTTP {r.status} for {r.url}")
     if len(r.body) > cap:
