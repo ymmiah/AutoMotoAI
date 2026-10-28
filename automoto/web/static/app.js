@@ -1,7 +1,8 @@
 // AutoMoto AI GUI - vanilla ES module, no build step, no CDN.
 import { icon, hydrateIcons, TOOL_ICONS } from "./icons.js";
 
-const TOKEN = document.querySelector('meta[name="automoto-token"]').content;
+// Auth: the HttpOnly session cookie set by the one-time launch link (the page never sees a token).
+const TOKEN = document.querySelector('meta[name="automoto-token"]')?.content || "";
 const VERSION = document.querySelector('meta[name="automoto-version"]').content;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -19,7 +20,8 @@ const keys = () => { try { return JSON.parse(sessionStorage.getItem("automoto_ke
 async function api(path, body, method) {
   const r = await fetch(path, {
     method: method || (body !== undefined ? "POST" : "GET"),
-    headers: { "Content-Type": "application/json", "X-AutoMoto-Token": TOKEN },
+    headers: { "Content-Type": "application/json", ...(TOKEN ? { "X-AutoMoto-Token": TOKEN } : {}) },
+    credentials: "same-origin",
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
@@ -773,15 +775,24 @@ async function watchRoutine(tid, reload) {
   }
 }
 
+const STATUS_LABEL = { live: "live-tested", unit: "unit-tested", untested: "untested" };
+const STATUS_TITLE = { live: "Run end-to-end against the real app or service", unit: "Covered by automated tests; not run against the real app", untested: "Written from official docs; not run (app not available to test)" };
+function reqChips(s) {
+  if (!s.checks?.length) return "";
+  const chip = (c) => `<span class="req ${c.ok ? "ok" : c.optional ? "opt" : "miss"}" title="${esc(c.kind)}${c.optional ? " (optional)" : ""}: ${c.ok ? "available" : "not set up"}">${c.ok ? "✓" : c.optional ? "○" : "✗"} ${esc(c.name)}</span>`;
+  return `<div class="reqs">${s.ready ? statusPill("ready") : '<span class="pill off">needs setup</span>'} ${s.checks.map(chip).join("")}</div>`;
+}
+
 PAGES.skills = async () => {
   page("Skills", "SKILL.md playbooks the agent reads when a task matches. Bundled skills are read-only; customise one to make your own copy.",
     `<div class="toolbar"><input class="input" id="skFilter" type="search" placeholder="Filter skills" aria-label="Filter skills" style="width:220px"><span class="spacer"></span><button class="btn primary" id="skNew">${icon("plus")} New skill</button></div><div class="grid" id="skList"></div>`);
   let skills = [];
   const draw = () => {
     const q = $("#skFilter").value.toLowerCase();
-    const f = skills.filter((s) => !q || (s.name + s.description).toLowerCase().includes(q));
-    $("#skList").innerHTML = f.map((s) => `<div class="card" data-name="${esc(s.name)}"><h3>${icon("book")}${esc(s.name)} ${statusPill(s.bundled ? "bundled" : "yours")}</h3>
-      <div class="muted" style="font-size:13px;margin-bottom:10px">${esc(s.description)}</div>
+    const f = skills.filter((s) => !q || (s.name + s.description + (s.category || "")).toLowerCase().includes(q));
+    $("#skList").innerHTML = f.map((s) => `<div class="card" data-name="${esc(s.name)}"><h3>${icon("book")}${esc(s.name)} ${statusPill(s.bundled ? "bundled" : "yours")} ${s.status ? `<span class="pill st-${esc(s.status)}" title="${esc(STATUS_TITLE[s.status] || "")}">${esc(STATUS_LABEL[s.status] || s.status)}</span>` : ""}</h3>
+      <div class="muted" style="font-size:13px;margin-bottom:8px">${esc(s.description)}</div>
+      ${reqChips(s)}
       <div class="row"><button class="btn sm" data-a="view">View</button><button class="btn sm" data-a="edit">${icon("edit")} ${s.bundled ? "Customise" : "Edit"}</button>${s.bundled ? "" : `<button class="btn sm danger" data-a="del">${icon("trash")}</button>`}</div></div>`).join("") || '<div class="card muted">No skills match.</div>';
     $$("#skList [data-a]").forEach((b) => b.onclick = async () => {
       const name = b.closest(".card").dataset.name;
@@ -829,7 +840,19 @@ PAGES.tools = async () => {
   $("#tlList").innerHTML = `<div class="card"><dl class="kv" style="margin:0"><dt>Approvals</dt><dd>${statusPill(d.approval_mode)}</dd><dt>Sandbox</dt><dd>${esc(d.sandbox)}</dd><dt>Workspace</dt><dd><code>${esc(d.workspace)}</code></dd></dl></div>` +
     Object.entries(groups).map(([g, ts]) => `<div class="toolbar" style="margin-top:16px"><b style="text-transform:capitalize">${esc(g)}</b><span class="muted">${ts.length}</span></div>
     <div class="grid">${ts.map((t) => `<div class="card"><h3>${icon(TOOL_ICONS[t.name] || "wrench")}<code>${esc(t.name)}</code>${statusPill(t.level)}</h3><div class="muted" style="font-size:13px">${esc(t.description)}</div></div>`).join("")}</div>`).join("") +
-    (d.mcp_errors?.length ? `<div class="card" style="margin-top:12px"><h3>${icon("alert")} MCP errors</h3><pre>${esc(d.mcp_errors.join("\n"))}</pre></div>` : "");
+    (d.mcp_errors?.length ? `<div class="card" style="margin-top:12px"><h3>${icon("alert")} MCP errors</h3><pre>${esc(d.mcp_errors.join("\n"))}</pre></div>` : "") +
+    '<div id="svcList"></div><div id="appList"></div>';
+  try {
+    const sv = (await api("/api/services")).services;
+    $("#svcList").innerHTML = `<div class="toolbar" style="margin-top:16px"><b>Services (service_api)</b><span class="muted">GET is safe, everything else asks first. Tokens come from .env or this tab's keys.</span></div>
+      <div class="grid">${sv.map((x) => `<div class="card"><h3>${icon("globe")}${esc(x.name)} ${x.configured ? statusPill("on") : x.public_reads ? '<span class="pill">public reads</span>' : '<span class="pill off">no token</span>'} <span class="pill st-${esc(x.status)}">${esc(STATUS_LABEL[x.status] || x.status)}</span></h3><div class="muted" style="font-size:13px">Token: <code>${esc(x.env.join(" or "))}</code> · <a href="${esc(x.docs)}" target="_blank" rel="noopener">API docs</a></div></div>`).join("")}</div>`;
+  } catch { /* optional */ }
+  try {
+    const ap = (await api("/api/apps")).apps;
+    const inst = ap.filter((a) => a.installed).length;
+    $("#appList").innerHTML = `<div class="toolbar" style="margin-top:16px"><b>Local apps</b><span class="muted">${inst} of ${ap.length} found on this computer. Every app call asks first.</span></div>
+      <div class="grid">${ap.map((a) => `<div class="card"><h3>${icon("cpu")}${esc(a.name)} ${a.installed ? statusPill("on") : '<span class="pill">not found</span>'} <span class="pill st-${esc(a.status)}">${esc(STATUS_LABEL[a.status] || a.status)}</span></h3><div class="muted" style="font-size:13px"><code>${esc(a.id)}</code> · ${esc(a.category)}${a.script ? " · scripts: " + esc(a.script) : ""}${a.note ? "<br>" + esc(a.note) : ""}</div></div>`).join("")}</div>`;
+  } catch { /* only on this computer */ }
 };
 
 const ACCENTS = ["#38f2a5", "#4da3ff", "#a78bfa", "#ff7ab6", "#ffb020", "#ff5d5d", "#22d3ee"];
@@ -851,6 +874,10 @@ PAGES.settings = async () => {
         ${[["", "Default (env AUTOMOTO_APPROVAL or ask)"], ["ask", "Ask: risky tools need my approval"], ["readonly", "Read-only: deny every risky tool"], ["auto", "Auto: run risky tools without asking"]].map(([v, l]) => `<option value="${v}" ${(s.approval_mode || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="field"><span>Default mode for new chats</span><select class="input" id="modeSel" style="max-width:420px"><option value="agent" ${s.default_mode === "agent" ? "selected" : ""}>Agent (tools)</option><option value="chat" ${s.default_mode === "chat" ? "selected" : ""}>Chat (no tools)</option></select></label>
       <p class="muted" style="font-size:12.5px;margin:0">Blocked commands (like <code>rm -rf /</code>) never run in any mode. Network tools refuse private and local addresses.</p></div>
+    <div class="card"><h3>${icon("folder")} Files &amp; folders</h3><p class="muted" style="font-size:13px;margin-top:0">The agent works in its sandbox folder by default. Add project folders it may also use (for example a VS Code project). Anything outside the sandbox always asks first, and secrets (<code>~/.ssh</code>, <code>.env</code> files, keychains, browser profiles, system folders) stay blocked.</p>
+      <div id="rootList"></div><form id="rootForm" class="row" style="margin-top:8px"><input class="input" name="p" placeholder="/home/me/code/project or C:\\Users\\me\\code\\project" aria-label="Folder path" style="flex:1;min-width:220px"><button class="btn sm primary">Add folder</button></form></div>
+    <div class="card"><h3>${icon("link")} Connectors (MCP)</h3><p class="muted" style="font-size:13px;margin-top:0">Official servers where they exist. Remote ones sign in with OAuth in your browser on first use; tokens go in <code>.env</code> and are never shown here. Every connector tool asks before it runs.</p>
+      <div id="connList" class="muted">Loading…</div><div class="row" style="margin-top:8px"><button class="btn sm" id="connReload">Reconnect now</button></div></div>
     <div class="card"><h3>${icon("cpu")} Provider order</h3><p class="muted" style="font-size:13px;margin-top:0">Auto tries providers top to bottom and fails over on errors.</p>
       <div id="orderList"></div><div class="row"><button class="btn primary sm" id="orderSave">Save order</button><button class="btn sm" id="orderReset">Reset to recommended</button></div></div>
     <div class="card"><h3>${icon("key")} Bring your own keys</h3><p class="muted" style="font-size:13px;margin-top:0">Kept only in this browser tab (sessionStorage) and wiped when you close it. Sent with each request, never saved on the server. Server keys from <code>.env</code> work without this.</p>
@@ -893,6 +920,33 @@ PAGES.settings = async () => {
     const obj = {}; for (const [n, v] of new FormData(e.target)) if (String(v).trim()) obj[n] = String(v).trim();
     sessionStorage.setItem("automoto_keys", JSON.stringify(obj));
     await refreshStatus(); toast(Object.keys(obj).length ? "Keys set for this tab only" : "No keys entered");
+  };
+  const roots = [...(s.allowed_roots || [])];
+  const drawRoots = () => {
+    $("#rootList").innerHTML = roots.length ? roots.map((r, i) => `<div class="order-item"><span class="nm"><code>${esc(r)}</code></span><button class="icon-btn sm" data-rm="${i}" aria-label="Remove ${esc(r)}">${icon("trash")}</button></div>`).join("") : '<div class="muted" style="font-size:13px">Only the sandbox folder.</div>';
+    $$("#rootList [data-rm]").forEach((b) => b.onclick = async () => { const keep = roots.filter((_, i) => i !== +b.dataset.rm); if (await saveSetting({ allowed_roots: keep })) { roots.splice(0, roots.length, ...keep); drawRoots(); toast("Folder removed"); } });
+  };
+  drawRoots();
+  $("#rootForm").onsubmit = async (e) => {
+    e.preventDefault(); const v = String(new FormData(e.target).get("p") || "").trim(); if (!v) return;
+    if (await saveSetting({ allowed_roots: [...roots, v] })) { const fresh = await api("/api/settings"); roots.splice(0, roots.length, ...(fresh.allowed_roots || [])); drawRoots(); e.target.reset(); toast("Folder added"); }
+  };
+  const drawConns = async () => {
+    try {
+      const d = await api("/api/connectors");
+      $("#connList").classList.remove("muted");
+      $("#connList").innerHTML = d.connectors.map((c) => `<div class="order-item"><span class="nm"><b>${esc(c.name)}</b> <span class="pill">${esc(c.vendor)}</span> <span class="pill">${esc(c.transport)}</span> ${c.enabled ? statusPill("on") : ""}<br><span class="muted" style="font-size:12.5px">${esc(c.note)}${c.missing_env.length ? ` Needs <code>${esc(c.missing_env.join(", "))}</code> in .env.` : ""} <a href="${esc(c.docs)}" target="_blank" rel="noopener">docs</a></span></span>
+        <button class="btn sm ${c.enabled ? "" : "primary"}" data-cid="${esc(c.id)}" data-act="${c.enabled ? "disable" : "enable"}">${c.enabled ? "Disable" : "Enable"}</button></div>`).join("") + (d.errors?.length ? `<pre class="muted">${esc(d.errors.join("\n"))}</pre>` : "");
+      $$("#connList [data-cid]").forEach((b) => b.onclick = async () => {
+        try { await api(`/api/connectors/${encodeURIComponent(b.dataset.cid)}/${b.dataset.act}`, {}); toast(b.dataset.act === "enable" ? "Enabled - press Reconnect now" : "Disabled"); drawConns(); } catch (err) { toast(err.message, "bad"); }
+      });
+    } catch (err) { $("#connList").textContent = err.message; }
+  };
+  drawConns();
+  $("#connReload").onclick = async () => {
+    $("#connReload").disabled = true;
+    try { const r = await api("/api/connectors-reload", {}); toast(`${r.connected_tools} connector tool(s) ready${r.errors.length ? `, ${r.errors.length} error(s)` : ""}`, r.errors.length ? "bad" : ""); drawConns(); }
+    catch (err) { toast(err.message, "bad"); } finally { $("#connReload").disabled = false; }
   };
   $("#forgetKeys").onclick = async () => { sessionStorage.removeItem("automoto_keys"); $$("#keyForm input").forEach((i) => i.value = ""); await refreshStatus(); toast("Keys forgotten"); };
 };

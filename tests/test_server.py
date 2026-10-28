@@ -24,9 +24,16 @@ def client():
 H = {"X-AutoMoto-Token": server.SESSION_TOKEN}
 
 
-def test_index_injects_token(client):
+def test_index_needs_launch_link_and_never_shows_token(client):
+    assert client.get("/").status_code == 401  # locked page without the session cookie
+    url = client.post("/api/session/launch", headers=H).json()["url"]
+    r = client.get("/?" + url.split("?", 1)[1], follow_redirects=False)
+    assert r.status_code == 303 and "httponly" in r.headers["set-cookie"].lower()
+    assert "samesite=strict" in r.headers["set-cookie"].lower()
     r = client.get("/")
-    assert r.status_code == 200 and server.SESSION_TOKEN in r.text and __version__ in r.text
+    assert r.status_code == 200 and __version__ in r.text and server.SESSION_TOKEN not in r.text
+    # the launch link is one-time
+    assert TestClient(server.app).get("/?" + url.split("?", 1)[1], follow_redirects=False).status_code == 403
 
 
 def test_api_requires_token(client):

@@ -33,6 +33,17 @@ _ALWAYS_BLOCKED = re.compile(
     re.I)
 
 
+# Shell commands that mention credential stores are never run (reading them is exfiltration).
+_SENSITIVE_SHELL = re.compile(
+    r"(\.ssh\b|\bid_(rsa|dsa|ecdsa|ed25519)\b|\.gnupg|\.aws[/\\]|\.azure[/\\]|gcloud[/\\]|\.kube[/\\]config|"
+    r"\.docker[/\\]config|\.git-credentials|\.netrc|\.npmrc|\.pypirc|\.password-store|keyrings?[/\\]|Keychains|"
+    r"\bsecurity\s+(find|dump)-|\bcmdkey\b|\bvaultcmd\b|Credentials[/\\]|Login Data|Cookies(\.sqlite)?\b|key4\.db|logins\.json|"
+    r"\.automoto[/\\](?!workspace)|(^|[\s/\\'\"=<>|;&(])\.env(?!\.(example|sample|template|dist)\b)(\.[\w.-]+)?($|[\s'\";&|)>])|"
+    r"\bgh\s+auth\s+(token|status\s+-t|status\s+--show-token)|\bgit\s+credential\b|"
+    r"(>>?|\btee\b)\s*\S*(\.bashrc|\.zshrc|\.profile|\.bash_profile|LaunchAgents|autostart))",
+    re.I)
+
+
 @dataclass
 class Decision:
     action: str  # allow | ask | deny
@@ -60,32 +71,66 @@ def mode() -> str:
 
 def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
     """Return (level, reason) for one call, looking at its arguments."""
-    if tool == "write_file":
+    if tool in ("write_file", "edit_file"):
         try:
-            p = sandbox.resolve(args.get("path", ""))
+            p = sandbox.resolve(args.get("path", ""), allow_outside=True)
         except sandbox.SandboxError as exc:
             return "blocked", str(exc)
+        if sandbox.is_outside(p):
+            return "risky", f"writes outside the workspace: {p}"
         if sandbox.in_scratch(p):
             return "safe", "write inside scratch/"
+        if tool == "edit_file":
+            return "risky", f"edits {sandbox.rel(p)}"
         if p.exists():
             return "risky", f"overwrites {sandbox.rel(p)}"
-        return "risky", f"creates {sandbox.rel(p)} outside scratch/"
-    if tool in ("read_file", "list_dir"):
+        return "risky", f"creates {sandbox.rel(p)}" + (" outside scratch/" if sandbox.is_default_root() else "")
+    if tool in ("read_file", "list_dir", "search_files"):
         try:
-            sandbox.resolve(args.get("path", "."))
+            p = sandbox.resolve(args.get("path", "."), allow_outside=True)
         except sandbox.SandboxError as exc:
             return "blocked", str(exc)
+        if sandbox.is_outside(p):
+            return "risky", f"reads outside the workspace: {p}"
+        return "safe", "read-only"
     if tool == "run_shell":
         cmd = str(args.get("command", ""))
         if _ALWAYS_BLOCKED.search(cmd):
             return "blocked", "command matches a never-allowed pattern (system/destructive/pipe-to-shell)"
+        if _SENSITIVE_SHELL.search(cmd):
+            return "blocked", "command touches credentials, keychains, browser data or AutoMoto's own settings"
         if sandbox.mode() != "docker" and _DESTRUCTIVE.search(cmd) and _OUTSIDE.search(cmd):
             return "blocked", "destructive command that may reach outside the workspace"
         return "risky", f"runs a shell command ({sandbox.mode()} sandbox)"
+    if tool in ("run_app", "open_in_app", "run_app_script"):
+        from automoto import apps
+
+        app = apps.BY_ID.get(str(args.get("app_id", "")).lower())
+        if not app:
+            return "risky", "runs a local app"
+        if tool == "run_app" and _SENSITIVE_SHELL.search(" ".join(str(a) for a in (args.get("args") or []))):
+            return "blocked", "arguments touch credentials, keychains, browser data or AutoMoto's own settings"
+        try:
+            if tool == "run_app":
+                apps.check_args(app, list(args.get("args") or []))
+            for k in ("path", "script", "target"):
+                if args.get(k):
+                    sandbox.resolve(args[k], allow_outside=True)
+        except (apps.AppError, sandbox.SandboxError) as exc:
+            return "blocked", str(exc)
+        what = {"run_app": f"runs {app.name}", "open_in_app": f"opens a file in {app.name}",
+                "run_app_script": f"runs a script inside {app.name} (the script can do anything the app can)"}[tool]
+        return "risky", what
+    if tool == "service_api":
+        from automoto import services
+
+        return services.classify(args)
     return base, {"safe": "read-only", "risky": "changes something", "blocked": "blocked"}.get(base, base)
 
 
-def decide(tool: str, base: str, args: dict[str, Any]) -> Decision:
+def decide(tool: str, base: str, args: dict[str, Any], *, tainted: bool = False) -> Decision:
+    """``tainted``: this run has read web / third-party content, so auto-approval is suspended
+    (a prompt injection in that content must never be able to run a risky tool unattended)."""
     level, reason = classify(tool, base, args)
     if tool in _csv("AUTOMOTO_BLOCK_TOOLS"):
         return Decision(DENY, "blocked", "blocked by AUTOMOTO_BLOCK_TOOLS")
@@ -97,5 +142,7 @@ def decide(tool: str, base: str, args: dict[str, Any]) -> Decision:
     if m == "readonly":
         return Decision(DENY, level, f"{reason} - AUTOMOTO_APPROVAL=readonly")
     if m == "auto" or tool in _csv("AUTOMOTO_AUTO_APPROVE"):
+        if tainted:
+            return Decision(ASK, level, f"{reason} - asking because this run read web or third-party content")
         return Decision(ALLOW, level, f"{reason} - auto-approved by config")
     return Decision(ASK, level, reason)

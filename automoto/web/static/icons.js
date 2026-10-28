@@ -29,6 +29,7 @@ const P = {
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
   key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
@@ -55,6 +56,6 @@ export function hydrateIcons(root = document) {
 }
 export const TOOL_ICONS = {
   list_dir: "folder", read_file: "file", write_file: "edit", run_shell: "terminal", web_search: "search",
-  fetch_url: "globe", remember: "brain", recall: "brain", forget: "trash", load_skill: "book",
+  fetch_url: "globe", edit_file: "edit", search_files: "search", run_app: "cpu", run_app_script: "cpu", open_in_app: "monitor", list_apps: "cpu", service_api: "link", remember: "brain", recall: "brain", forget: "trash", load_skill: "book",
   system_info: "cpu", open_url: "globe", open_app: "monitor", type_text: "edit", hotkey: "key",
 };

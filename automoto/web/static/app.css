@@ -299,3 +299,12 @@ input[type="color"] { width: 34px; height: 34px; border: 0; padding: 0; backgrou
 .approve.done { padding: 6px 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .approve.done .why, .approve.done pre { display: none; }
 .approve.done .ah { font-weight: 600; font-size: 13px; }
+
+.reqs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; align-items: center; }
+.req { font-size: 11.5px; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); color: var(--dim); font-family: var(--mono, ui-monospace, monospace); }
+.req.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.req.miss { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.pill.ready { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); border-color: transparent; }
+.pill.st-live { color: var(--ok); }
+.pill.st-unit { color: var(--warn); }
+.pill.st-untested { color: var(--bad); }

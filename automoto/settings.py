@@ -6,6 +6,8 @@ stay in the browser tab's sessionStorage.
 Settings that change behaviour:
   * ``approval_mode`` - ask | auto | readonly (overrides ``AUTOMOTO_APPROVAL`` when set)
   * ``provider_order`` - list of provider ids; reorders auto-mode failover priority
+  * ``allowed_roots`` - extra folders (absolute paths) the agent may reach with approval,
+    e.g. a VS Code project or ~/Documents. Sensitive folders are refused.
 UI-only: ``theme`` (dark | light | system), ``accent`` (#rrggbb), ``default_mode`` (agent | chat).
 """
 
@@ -21,7 +23,7 @@ from automoto import home
 
 _LOCK = threading.Lock()
 DEFAULTS: dict[str, Any] = {"theme": "dark", "accent": "#38f2a5", "default_mode": "agent",
-                            "approval_mode": None, "provider_order": []}
+                            "approval_mode": None, "provider_order": [], "allowed_roots": []}
 SECRETISH = re.compile(r"(key|token|secret|password)", re.I)
 
 
@@ -64,7 +66,30 @@ def validate(patch: dict[str, Any]) -> dict[str, Any]:
         if k == "provider_order":
             if not isinstance(v, list) or any(p not in REGISTRY for p in v) or len(set(v)) != len(v):
                 raise SettingsError("provider_order must be a list of distinct provider ids")
+        if k == "allowed_roots":
+            v = _roots(v)
         out[k] = v
+    return out
+
+
+def _roots(v: Any) -> list[str]:
+    from automoto import sandbox
+
+    if not isinstance(v, list) or len(v) > 20 or not all(isinstance(x, str) for x in v):
+        raise SettingsError("allowed_roots must be a list of up to 20 folder paths")
+    out: list[str] = []
+    for raw in v:
+        p = Path(raw).expanduser()
+        if not p.is_absolute():
+            raise SettingsError(f"'{raw}' must be an absolute path")
+        p = p.resolve()
+        if not p.is_dir():
+            raise SettingsError(f"'{raw}' is not an existing folder")
+        why = sandbox.sensitive(p)
+        if why or p == Path.home().resolve().parent:
+            raise SettingsError(f"'{raw}' can't be allowed: {why or 'too broad'}")
+        if str(p) not in out:
+            out.append(str(p))
     return out
 
 

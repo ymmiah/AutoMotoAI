@@ -10,4 +10,10 @@ def isolated_home(monkeypatch, tmp_path_factory):
               "AUTOMOTO_BLOCK_TOOLS", "AUTOMOTO_TOOL_MODE", "AUTOMOTO_ENABLE_DESKTOP", "AUTOMOTO_ALLOW_SHELL", "AUTOMOTO_MAX_STEPS", "AUTOMOTO_NET_ALLOW_CIDRS", "AUTOMOTO_MCP_CONFIG"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("AUTOMOTO_SANDBOX", "local")
+    monkeypatch.setenv("AUTOMOTO_ALLOWED_HOSTS", "testserver")  # FastAPI TestClient's Host header
+    monkeypatch.setenv("AUTOMOTO_RATE_LIMIT", "0")
+    for k in ("AUTOMOTO_ALLOWED_ROOTS", "AUTOMOTO_ALLOWED_ORIGINS", "AUTOMOTO_LAUNCH_TOKEN", "AUTOMOTO_API_TOKEN",
+              "GITHUB_TOKEN", "GH_TOKEN", "GITLAB_TOKEN", "GITLAB_URL", "VERCEL_TOKEN", "FIGMA_TOKEN", "NOTION_TOKEN",
+              "ZOTERO_API_KEY", "ZOTERO_USER_ID"):
+        monkeypatch.delenv(k, raising=False)
     return home

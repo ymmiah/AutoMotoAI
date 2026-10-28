@@ -12,6 +12,7 @@ import json
 import re
 import urllib.parse
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from automoto import config, netguard, sandbox
@@ -41,6 +42,7 @@ class Tool:
 class ToolContext:
     memory: Memory | None = None
     skills: dict[str, skills_mod.Skill] = field(default_factory=dict)
+    keys: dict[str, str] = field(default_factory=dict)  # per-run BYOK tokens (never logged or stored)
 
 
 def _obj(props: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -68,7 +70,7 @@ def _title(raw: str) -> str:
 
 # -- file tools -----------------------------------------------------------------
 def read_file(ctx: ToolContext, path: str, max_chars: int = 12000) -> str:
-    p = sandbox.resolve(path)
+    p = sandbox.resolve(path, allow_outside=True)
     if not p.is_file():
         raise ToolFailed(f"no such file: {sandbox.rel(p)}")
     data = p.read_bytes()
@@ -80,7 +82,7 @@ def read_file(ctx: ToolContext, path: str, max_chars: int = 12000) -> str:
 
 
 def write_file(ctx: ToolContext, path: str, content: str, append: bool = False) -> str:
-    p = sandbox.resolve(path)
+    p = sandbox.resolve(path, allow_outside=True)
     if p.is_dir():
         raise ToolFailed(f"{sandbox.rel(p)} is a folder")
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -93,8 +95,71 @@ def write_file(ctx: ToolContext, path: str, content: str, append: bool = False) 
     return f"wrote {len(content)} chars to {sandbox.rel(p)}"
 
 
+def edit_file(ctx: ToolContext, path: str, old: str, new: str, count: int = 1) -> str:
+    """Replace an exact snippet in a text file (safer than rewriting the whole file)."""
+    p = sandbox.resolve(path, allow_outside=True)
+    if not p.is_file():
+        raise ToolFailed(f"no such file: {sandbox.rel(p)}")
+    text = p.read_text(encoding="utf-8")
+    old, new = str(old), str(new)
+    if not old:
+        raise ToolFailed("old must not be empty")
+    found = text.count(old)
+    if found == 0:
+        raise ToolFailed("old text not found - read_file first and copy it exactly (including spaces)")
+    count = 1 if count is None else int(count)
+    if count < 0:
+        raise ToolFailed("count must be 0 (all) or a positive number")
+    if found > 1 and count == 1:
+        raise ToolFailed(f"old text appears {found} times - add surrounding lines so it is unique, or set count")
+    text = text.replace(old, new, count if count > 0 else -1)
+    p.write_text(text, encoding="utf-8")
+    return f"edited {sandbox.rel(p)}: replaced {min(found, count) if count > 0 else found} occurrence(s)"
+
+
+_SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build", ".next", "target", ".mypy_cache"}
+
+
+def search_files(ctx: ToolContext, pattern: str, path: str = ".", glob: str = "*", max_results: int = 50) -> str:
+    """Grep-like search (regex, case-insensitive) through text files under ``path``."""
+    import fnmatch
+    import os as _os
+
+    base = sandbox.resolve(path, allow_outside=True)
+    if not base.is_dir():
+        raise ToolFailed(f"not a folder: {sandbox.rel(base)}")
+    try:
+        rx = re.compile(str(pattern), re.I)
+    except re.error as exc:
+        raise ToolFailed(f"bad regex: {exc}") from None
+    max_results = max(1, min(int(max_results or 50), 200))
+    hits: list[str] = []
+    scanned = 0
+    for dirpath, dirnames, filenames in _os.walk(base):
+        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS and not d.startswith(".cache"))
+        for fn in sorted(filenames):
+            if not fnmatch.fnmatch(fn, glob or "*"):
+                continue
+            fp = Path(dirpath) / fn
+            if sandbox.sensitive(fp.resolve()) or scanned > 5000:
+                continue
+            scanned += 1
+            try:
+                if fp.stat().st_size > 2_000_000:
+                    continue
+                with fp.open("r", encoding="utf-8", errors="strict") as fh:
+                    for i, line in enumerate(fh, 1):
+                        if rx.search(line):
+                            hits.append(f"{sandbox.rel(fp)}:{i}: {line.rstrip()[:200]}")
+                            if len(hits) >= max_results:
+                                return "\n".join(hits) + "\n[…more results; narrow the pattern]"
+            except (UnicodeDecodeError, OSError):
+                continue
+    return "\n".join(hits) or f"no matches for /{pattern}/ in {sandbox.rel(base)}"
+
+
 def list_dir(ctx: ToolContext, path: str = ".") -> str:
-    p = sandbox.resolve(path)
+    p = sandbox.resolve(path, allow_outside=True)
     if not p.is_dir():
         raise ToolFailed(f"not a folder: {sandbox.rel(p)}")
     items = sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
@@ -191,6 +256,34 @@ def load_skill(ctx: ToolContext, name: str) -> str:
     return f"# Skill: {s.name}\n{s.body()}"
 
 
+# -- local apps (official CLI / scripting routes only) ------------------------------
+def _apps():
+    from automoto import apps
+
+    return apps
+
+
+def list_apps(ctx: ToolContext, category: str = "") -> str:
+    rows = [a for a in _apps().listing() if not category or category.lower() in a["category"]]
+    lines = []
+    for a in rows:
+        mark = "✓" if a["installed"] else "✗"
+        how = "cli" if a["cli"] else ("open + script" if a["script"] else "open")
+        lines.append(f"{mark} {a['id']} - {a['name']} [{a['category']}; {how}; {a['status']}]"
+                     + (f" - {a['note']}" if a["note"] else ""))
+    return "\n".join(lines) or "no apps in that category"
+
+
+def _app_call(fn_name: str) -> Callable[..., str]:
+    def fn(ctx: ToolContext, **kw: Any) -> str:
+        apps = _apps()
+        try:
+            return getattr(apps, fn_name)(**kw)
+        except apps.AppError as exc:
+            raise ToolFailed(str(exc)) from None
+    return fn
+
+
 # -- desktop bridge (v4 actions, now agent tools) ---------------------------------
 def _desktop(name: str) -> Callable[..., str]:
     def fn(ctx: ToolContext, **kw: Any) -> str:
@@ -208,6 +301,11 @@ CORE: list[Tool] = [
     Tool("read_file", "Read a text file from the workspace.", _obj({"path": S, "max_chars": I}, ["path"]), "safe", read_file),
     Tool("write_file", "Create or overwrite a text file in the workspace (scratch/ needs no approval). Set append=true to append.",
          _obj({"path": S, "content": S, "append": {"type": "boolean"}}, ["path", "content"]), "risky", write_file),
+    Tool("edit_file", "Replace an exact text snippet in a file (read_file first; old must match exactly and be unique unless count is set; count=0 replaces all).",
+         _obj({"path": S, "old": S, "new": S, "count": I}, ["path", "old", "new"]), "risky", edit_file),
+    Tool("search_files", "Search text files for a regex (like grep -rn). Skips .git, node_modules, build folders and secret files.",
+         _obj({"pattern": S, "path": S, "glob": {**S, "description": "file name filter, e.g. *.py"}, "max_results": I}, ["pattern"]),
+         "safe", search_files),
     Tool("run_shell", "Run a shell command inside the sandbox workspace (needs approval). Returns exit code and output.",
          _obj({"command": S, "timeout": {**I, "description": "seconds, default 60"}}, ["command"]), "risky", run_shell),
     Tool("web_search", "Search the web (DuckDuckGo). Returns titles, URLs and snippets.", _obj({"query": S, "max_results": I}, ["query"]), "safe", web_search, "web"),
@@ -219,6 +317,21 @@ CORE: list[Tool] = [
     Tool("load_skill", "Load the full instructions of a skill by name.", _obj({"name": S}, ["name"]), "safe", load_skill, "skills"),
 ]
 
+APPS: list[Tool] = [
+    Tool("list_apps", "List local apps AutoMoto can drive (ffmpeg, ImageMagick, LibreOffice, LaTeX, git, VS Code, Photoshop, AutoCAD…) and whether each is installed.",
+         _obj({"category": S}), "safe", list_apps, "apps"),
+    Tool("run_app", "Run an installed command-line app without a shell, inside the working folder (needs approval). "
+         "app = an id from list_apps (e.g. ffmpeg, imagemagick, libreoffice, tectonic, git, vscode); args = list of arguments.",
+         _obj({"app_id": S, "args": {"type": "array", "items": S}, "timeout": I}, ["app_id", "args"]), "risky",
+         _app_call("run_app"), "apps"),
+    Tool("open_in_app", "Open a file in a desktop app such as Photoshop, Illustrator, Premiere Pro, AutoCAD, GIMP, Blender or VS Code (needs approval).",
+         _obj({"app_id": S, "path": S}, ["app_id", "path"]), "risky", _app_call("open_in_app"), "apps"),
+    Tool("run_app_script", "Run a script file through an app's official scripting route (needs approval): Photoshop/Illustrator .jsx, "
+         "AutoCAD .scr (Windows, target=drawing.dwg), Blender .py, GIMP Script-Fu .scm. Write the script with write_file first.",
+         _obj({"app_id": S, "script": S, "target": S, "timeout": I}, ["app_id", "script"]), "risky",
+         _app_call("run_app_script"), "apps"),
+]
+
 DESKTOP: list[Tool] = [
     Tool("system_info", "OS, version and Python runtime of the user's computer.", _obj({}), "safe", _desktop("system_info"), "desktop"),
     Tool("open_url", "Open a web page in the user's browser.", _obj({"url": S}, ["url"]), "risky", _desktop("open_url"), "desktop"),
@@ -228,8 +341,15 @@ DESKTOP: list[Tool] = [
 ]
 
 
-def build(*, desktop: bool = False, extra: list[Tool] | None = None) -> dict[str, Tool]:
+def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps: bool = True,
+          services: bool = True) -> dict[str, Tool]:
     tools = list(CORE)
+    if local_apps:
+        tools += APPS
+    if services:
+        from automoto import services as services_mod
+
+        tools += services_mod.TOOLS
     if desktop and config.desktop_enabled():
         tools += DESKTOP
     tools += extra or []

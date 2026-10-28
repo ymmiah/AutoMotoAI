@@ -9,6 +9,14 @@ one-line description::
     ---
     1. web_search ...
 
+Skills can declare what they need (v5.2); ``automoto skills`` and the Skills page show
+whether this computer has it. ``a|b`` means either one::
+
+    apps: ffmpeg            # ids from automoto/apps.py (list_apps)
+    tools: run_app          # agent tools
+    env: GITHUB_TOKEN       # environment variables (only checked for presence)
+    status: live            # live | unit | untested - how well the procedure is verified
+
 Only the names + descriptions go into the system prompt; the agent calls
 ``load_skill`` to read the full text when a task matches. Your own skills live in
 ``~/.automoto/skills/<name>/SKILL.md`` and override bundled ones with the same name.
@@ -17,8 +25,9 @@ Only the names + descriptions go into the system prompt; the agent calls
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from automoto import home
 
@@ -32,6 +41,46 @@ class Skill:
     description: str
     path: Path
     bundled: bool
+    meta: dict[str, str] = field(default_factory=dict)
+
+    def needs(self, key: str) -> list[str]:
+        return [x.strip() for x in (self.meta.get(key) or "").split(",") if x.strip()]
+
+    def requirements(self, tool_names: set[str] | None = None) -> dict[str, Any]:
+        """What the skill needs and whether this computer has it."""
+        from automoto import apps, config
+
+        if tool_names is None:
+            from automoto import tools as tools_mod
+
+            tool_names = set(tools_mod.build(desktop=True))
+        found = apps.detect()
+        checks: list[dict[str, Any]] = []
+        for a in self.needs("apps"):
+            alts = [x.strip() for x in a.split("|")]
+            checks.append({"kind": "app", "name": a, "ok": any(found.get(x) for x in alts),
+                           "optional": False})
+        for a in self.needs("optional_apps"):
+            alts = [x.strip() for x in a.split("|")]
+            checks.append({"kind": "app", "name": a, "ok": any(found.get(x) for x in alts), "optional": True})
+        for t in self.needs("tools"):
+            checks.append({"kind": "tool", "name": t, "ok": t in tool_names or t.startswith("mcp__"), "optional": False})
+        for e in self.needs("env"):
+            alts = [x.strip() for x in e.split("|")]
+            checks.append({"kind": "env", "name": e, "ok": any(config.env(x) for x in alts), "optional": True})
+        for c in self.needs("connectors"):
+            from automoto import mcp_catalog
+
+            checks.append({"kind": "connector", "name": c, "ok": c in mcp_catalog.read_config()["servers"],
+                           "optional": True})
+        ready = all(c["ok"] for c in checks if not c["optional"])
+        if not any(c["kind"] in ("app", "tool") for c in checks):
+            # connector-only skills (Canva, Drive, OneDrive) need one of their connectors enabled
+            conns = [c for c in checks if c["kind"] == "connector"]
+            if conns and not any(c["ok"] for c in conns):
+                ready = False
+        return {"ready": ready, "checks": checks, "status": self.meta.get("status", "unit"),
+                "category": self.meta.get("category", "general")}
 
     def body(self) -> str:
         text = self.path.read_text(encoding="utf-8")
@@ -49,7 +98,7 @@ def _parse(path: Path, bundled: bool) -> Skill:
                 meta[k.strip().lower()] = v.strip().strip('"\'')
     body = FM_RE.sub("", text, count=1).strip()
     first = next((ln.strip("# ").strip() for ln in body.splitlines() if ln.strip()), "")
-    return Skill(meta.get("name") or path.parent.name, (meta.get("description") or first)[:200], path, bundled)
+    return Skill(meta.get("name") or path.parent.name, (meta.get("description") or first)[:200], path, bundled, meta)
 
 
 def discover(user_dir: Path | None = None) -> dict[str, Skill]:

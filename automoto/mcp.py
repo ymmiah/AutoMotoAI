@@ -7,6 +7,9 @@ List servers in ``~/.automoto/mcp.json`` (or ``AUTOMOTO_MCP_CONFIG``)::
                "env": {}, "trust": false}
     }}
 
+Values in ``args`` and ``env`` may use ``${VAR}`` to read a token from your environment, so
+secrets stay in ``.env`` (see ``mcp_catalog.py`` for ready-made entries).
+
 Each server's tools appear to the agent as ``mcp__<server>__<tool>``. They are **risky**
 (approval required) unless ``"trust": true``. Only stdio transport is supported.
 """
@@ -14,7 +17,6 @@ Each server's tools appear to the agent as ``mcp__<server>__<tool>``. They are *
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import threading
 from pathlib import Path
@@ -30,6 +32,15 @@ class MCPError(Exception):
     pass
 
 
+def _base_env() -> dict[str, str]:
+    """MCP servers get no API keys or tokens except the ones their own entry asks for."""
+    from automoto.sandbox import clean_env
+
+    env = clean_env()
+    env.pop("AUTOMOTO_SANDBOX", None)
+    return env
+
+
 class StdioServer:
     def __init__(self, name: str, command: str, args: list[str] | None = None, env: dict[str, str] | None = None,
                  timeout: float = 30):
@@ -39,7 +50,7 @@ class StdioServer:
         self._wlock = threading.Lock()
         self.proc = subprocess.Popen([command, *(args or [])], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1,
-                                     env={**os.environ, **(env or {})})
+                                     env={**_base_env(), **(env or {})})
         self._replies: dict[int, dict[str, Any]] = {}
         self._cv = threading.Condition()
         threading.Thread(target=self._read_loop, name=f"mcp-{name}", daemon=True).start()
@@ -133,7 +144,11 @@ def connect_all(path: Path | None = None) -> tuple[list[tools_mod.Tool], list[st
         try:
             srv = _SERVERS.get(name)
             if not srv or srv.proc.poll() is not None:
-                srv = StdioServer(name, cfg["command"], cfg.get("args"), cfg.get("env"))
+                from automoto.mcp_catalog import expand
+
+                env = {k: expand(str(v)) for k, v in (cfg.get("env") or {}).items()}
+                args = [expand(str(a)) for a in (cfg.get("args") or [])]
+                srv = StdioServer(name, cfg["command"], args, env)
                 _SERVERS[name] = srv
             for t in srv.list_tools():
                 out.append(wrap(srv, t, trusted=bool(cfg.get("trust"))))

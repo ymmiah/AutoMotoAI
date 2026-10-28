@@ -196,6 +196,7 @@ def test_routine_patch_and_run_records_result(c, monkeypatch):
 
 # -- static GUI ------------------------------------------------------------------------
 def test_gui_assets_and_csp(c):
+    c.get("/?launch=" + server.new_launch_token())
     r = c.get("/")
     csp = r.headers["content-security-policy"]
     assert "script-src 'self'" in csp and "unsafe-eval" not in csp and "frame-ancestors 'none'" in csp

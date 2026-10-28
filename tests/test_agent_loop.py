@@ -52,7 +52,8 @@ def test_native_tool_loop_runs_tools_and_feeds_results_back():
     assert res.text == "The file says hi." and res.steps == 3 and res.stopped == "done"
     assert (sandbox.root() / "scratch" / "a.txt").read_text() == "hi"
     tool_msgs = [m for m in log[-1]["messages"] if m.get("role") == "tool"]
-    assert [m["content"] for m in tool_msgs] == ["wrote 2 chars to scratch/a.txt", "hi"]
+    assert tool_msgs[0]["content"] == "wrote 2 chars to scratch/a.txt"
+    assert tool_msgs[1]["content"].startswith('<untrusted source="read_file">\nhi\n</untrusted>')  # file data is fenced
     assert all(entry["native"] for entry in log)
 
 

@@ -20,7 +20,9 @@ import base64
 import hmac
 import ipaddress
 import secrets
+import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -44,15 +46,25 @@ from automoto.router import AllProvidersFailed, NoProviderError, ask, classify_t
 from automoto.tasks import TaskManager
 
 WEB_DIR = Path(__file__).parent / "web"
-SESSION_TOKEN = secrets.token_urlsafe(24)
+SESSION_TOKEN = secrets.token_urlsafe(32)  # per launch; header X-AutoMoto-Token or the HttpOnly cookie
+COOKIE = "automoto_session"
+_LAUNCH: dict[str, float] = {}  # one-time launch tokens -> expiry
+_LAUNCH_LOCK = threading.Lock()
 MAX_IMAGES = 4
 
 MCP_TOOLS: list[tools_mod.Tool] = []
 MCP_ERRORS: list[str] = []
 
 
-def _agent_factory(desktop: bool = False, client: str = "web") -> Agent:
-    return Agent(desktop=desktop, extra_tools=MCP_TOOLS, client=client)
+def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | None = None,
+                   local_apps: bool = False) -> Agent:
+    tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS, local_apps=local_apps)
+    return Agent(tools=tl, desktop=desktop, client=client, workspace=workspace)
+
+
+def _local_apps_ok(request: Request, client: str) -> bool:
+    """Local apps (ffmpeg, Photoshop, …) only for clients on this computer, never the LAN/mobile app."""
+    return _is_loopback(request) and client not in ("mobile", "routine")
 
 
 TASKS = TaskManager(_agent_factory)
@@ -67,7 +79,111 @@ def routine_runner(prompt: str) -> dict[str, Any]:
     return {**res, "task_id": task.id}
 
 
-app = FastAPI(title=f"{APP_NAME} {CODENAME}", version=__version__, docs_url="/api/docs", redoc_url=None)
+# Swagger UI loads scripts from a CDN, so it is off unless you opt in (AUTOMOTO_API_DOCS=1).
+_DOCS = config.env("AUTOMOTO_API_DOCS", "") in ("1", "true", "yes")
+app = FastAPI(title=f"{APP_NAME} {CODENAME}", version=__version__, docs_url="/api/docs" if _DOCS else None,
+              redoc_url=None, openapi_url="/api/openapi.json" if _DOCS else None)
+
+
+# -- request guard: Host / Origin checks, rate limits, security headers ------------------
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
+EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/explain")
+_HITS: dict[tuple[str, str], deque] = {}
+_HITS_LOCK = threading.Lock()
+
+
+def new_launch_token(ttl: float = 600) -> str:
+    """A one-time token that turns into the session cookie when the UI is opened with ?launch=."""
+    tok = secrets.token_urlsafe(32)
+    with _LAUNCH_LOCK:
+        now = time.time()
+        for k in [k for k, exp in _LAUNCH.items() if exp < now]:
+            _LAUNCH.pop(k, None)
+        _LAUNCH[tok] = now + ttl
+    return tok
+
+
+def _use_launch_token(tok: str) -> bool:
+    fixed = config.env("AUTOMOTO_LAUNCH_TOKEN")  # set by the desktop shell; valid for this process only
+    if fixed and len(fixed) >= 24 and hmac.compare_digest(tok, fixed):
+        return True
+    with _LAUNCH_LOCK:
+        exp = _LAUNCH.pop(tok, None)
+    return bool(exp and exp >= time.time())
+
+
+def _allowed_hosts() -> set[str]:
+    extra = {h.strip().lower() for h in (config.env("AUTOMOTO_ALLOWED_HOSTS", "") or "").split(",") if h.strip()}
+    return LOCAL_HOSTS | extra
+
+
+def _host_name(hostport: str) -> str:
+    hp = (hostport or "").strip().lower()
+    if hp.startswith("["):
+        return hp.split("]")[0] + "]"
+    return hp.rsplit(":", 1)[0] if hp.count(":") == 1 else hp
+
+
+def _origin_ok(origin: str, host_header: str) -> bool:
+    origin = origin.strip().lower()
+    extra = {o.strip().lower() for o in (config.env("AUTOMOTO_ALLOWED_ORIGINS", "") or "").split(",") if o.strip()}
+    if origin in extra:
+        return True
+    if not origin.startswith("http://") and not origin.startswith("https://"):
+        return False
+    netloc = origin.split("://", 1)[1].rstrip("/")
+    return netloc == (host_header or "").strip().lower() and _host_name(netloc) in _allowed_hosts()
+
+
+def _bearer_ok(request: Request) -> bool:
+    api_tok = config.env("AUTOMOTO_API_TOKEN")
+    bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    return bool(api_tok and bearer and hmac.compare_digest(bearer, api_tok))
+
+
+def _rate_limited(client: str, path: str) -> bool:
+    try:
+        per_min = int(config.env("AUTOMOTO_RATE_LIMIT", "600") or 600)
+    except ValueError:
+        per_min = 600
+    if per_min <= 0:
+        return False
+    bucket, limit = ("expensive", max(5, per_min // 20)) if path.startswith(EXPENSIVE) or path.endswith("/run") \
+        else ("all", per_min)
+    now = time.monotonic()
+    with _HITS_LOCK:
+        q = _HITS.setdefault((client, bucket), deque())
+        while q and q[0] < now - 60:
+            q.popleft()
+        if len(q) >= limit:
+            return True
+        q.append(now)
+    return False
+
+
+@app.middleware("http")
+async def guard(request: Request, call_next):
+    host = request.headers.get("host", "")
+    # DNS rebinding: a web page that re-points its domain at 127.0.0.1 still sends its own Host header.
+    if _host_name(host) not in _allowed_hosts() and not _bearer_ok(request):
+        return JSONResponse({"detail": "unexpected Host header"}, status_code=421)
+    origin = request.headers.get("origin")
+    # CSRF / cross-site requests: only this server's own pages (or configured origins) may call it.
+    if origin is not None and not _origin_ok(origin, host) and not _bearer_ok(request):
+        return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
+    if request.url.path.startswith("/api/") and _rate_limited(request.client.host if request.client else "?",
+                                                               request.url.path):
+        return JSONResponse({"detail": "too many requests - slow down"}, status_code=429,
+                            headers={"Retry-After": "10"})
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 def _is_loopback(request: Request) -> bool:
@@ -80,14 +196,26 @@ def _is_loopback(request: Request) -> bool:
         return False
 
 
+def _session_ok(request: Request) -> bool:
+    tok = request.headers.get("x-automoto-token", "")
+    if tok and hmac.compare_digest(tok, SESSION_TOKEN):
+        return True
+    cookie = request.cookies.get(COOKIE, "")
+    if cookie and hmac.compare_digest(cookie, SESSION_TOKEN):
+        # Cookie auth is for the browser UI only: state-changing calls must come from our own page.
+        if request.method in ("GET", "HEAD"):
+            return True
+        origin = request.headers.get("origin")
+        return bool(origin) and _origin_ok(origin, request.headers.get("host", ""))
+    return False
+
+
 def _authorise(request: Request, *, local_only: bool = False) -> None:
     if _is_loopback(request):
-        tok = request.headers.get("x-automoto-token", "")
-        bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-        api_tok = config.env("AUTOMOTO_API_TOKEN")
-        if hmac.compare_digest(tok, SESSION_TOKEN) or (api_tok and hmac.compare_digest(bearer, api_tok)):
+        if _session_ok(request) or _bearer_ok(request):
             return
-        raise HTTPException(403, "missing session token (open the UI from this server)")
+        raise HTTPException(403, "missing session token (open the UI with the link `automoto serve` printed, "
+                                 "or run `python -m automoto open`)")
     if local_only:
         raise HTTPException(403, "desktop tools are only available on this computer")
     api_tok = config.env("AUTOMOTO_API_TOKEN")
@@ -146,6 +274,7 @@ def _run_chat(messages, *, prefer, need_vision, keys, client, desktop: bool) -> 
 
 class AgentIn(BaseModel):
     messages: list[dict[str, Any]] | None = Field(None, max_length=60)
+    workspace: str | None = Field(None, max_length=1024)  # an allowed folder to work in (VS Code project)
     conversation_id: str | None = None  # GUI: server keeps the history
     message: Any = None  # GUI: the new user message (str or content parts)
     prefer: str | None = None
@@ -204,13 +333,43 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
        "form-action 'self'")
 
 
+LOCKED_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>AutoMoto AI - locked</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font:16px system-ui;background:#0b0f14;
+color:#e6edf3;display:grid;place-items:center;min-height:100vh;margin:0}main{max-width:520px;padding:24px}
+code{background:#161b22;padding:2px 6px;border-radius:6px}</style></head><body><main><h1>🔒 AutoMoto is locked</h1>
+<p>For your safety this page only opens from the one-time link AutoMoto gives you.</p>
+<p>Use the link printed by <code>python -m automoto serve</code>, or run <code>python -m automoto open</code>.</p>
+</main></body></html>"""
+
+
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
+def index(request: Request, launch: str | None = None):
+    base_headers = {"Content-Security-Policy": CSP, "Cache-Control": "no-store"}
+    if launch is not None:
+        if not _is_loopback(request) or not _use_launch_token(launch):
+            return HTMLResponse(LOCKED_PAGE, status_code=403, headers=base_headers)
+        from fastapi.responses import RedirectResponse
+
+        resp = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
+        resp.set_cookie(COOKIE, SESSION_TOKEN, httponly=True, samesite="strict", path="/",
+                        secure=request.url.scheme == "https")
+        return resp
+    cookie = request.cookies.get(COOKIE, "")
+    if not (_is_loopback(request) and cookie and hmac.compare_digest(cookie, SESSION_TOKEN)):
+        return HTMLResponse(LOCKED_PAGE, status_code=401, headers=base_headers)
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
-    token = SESSION_TOKEN if _is_loopback(request) else ""
-    html = html.replace("__AUTOMOTO_TOKEN__", token).replace("__AUTOMOTO_VERSION__", __version__)
-    return HTMLResponse(html, headers={"Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff",
-                                       "Referrer-Policy": "no-referrer", "Cache-Control": "no-store"})
+    html = html.replace("__AUTOMOTO_TOKEN__", "").replace("__AUTOMOTO_VERSION__", __version__)
+    return HTMLResponse(html, headers=base_headers)
+
+
+@app.post("/api/session/launch")
+def session_launch(request: Request) -> dict[str, Any]:
+    """Mint a one-time browser launch URL (CLI ``automoto open`` and the VS Code extension use it)."""
+    _authorise(request, local_only=True)
+    if not _is_loopback(request):
+        raise HTTPException(403, "local only")
+    host = request.headers.get("host", "127.0.0.1")
+    return {"url": f"http://{host}/?launch={new_launch_token()}"}
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
@@ -276,8 +435,17 @@ def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
         msgs = [m for m in body.messages if m.get("role") in ("user", "assistant")]
     if _count_images(msgs) > MAX_IMAGES:
         raise HTTPException(413, f"max {MAX_IMAGES} images per request")
+    workspace = None
+    if body.workspace:
+        if not _is_loopback(request):
+            raise HTTPException(403, "choosing a workspace folder is only allowed on this computer")
+        try:
+            workspace = str(sandbox.check_root(body.workspace))
+        except sandbox.SandboxError as exc:
+            raise HTTPException(400, str(exc)) from None
     task = TASKS.start(msgs, source=body.client, keys=body.keys, prefer=body.prefer, max_steps=body.max_steps,
-                       agent_kwargs={"desktop": desktop, "client": body.client},
+                       agent_kwargs={"desktop": desktop, "client": body.client, "workspace": workspace,
+                                     "local_apps": _local_apps_ok(request, body.client)},
                        conversation_id=conv_id, on_done=on_done)
     return {"task_id": task.id, "status": task.status, "conversation_id": conv_id}
 
@@ -415,8 +583,9 @@ def settings_put(body: dict[str, Any], request: Request) -> dict[str, Any]:
 @app.get("/api/skills")
 def skills_list(request: Request) -> dict[str, Any]:
     _authorise(request)
-    return {"skills": [{"name": s.name, "description": s.description, "bundled": s.bundled}
-                       for s in skills_mod.discover().values()]}
+    names = set(tools_mod.build(desktop=config.desktop_enabled(), extra=MCP_TOOLS))
+    return {"skills": [{"name": s.name, "description": s.description, "bundled": s.bundled,
+                        **s.requirements(names)} for s in skills_mod.discover().values()]}
 
 
 @app.get("/api/skills/{name}")
@@ -425,7 +594,8 @@ def skills_get(name: str, request: Request) -> dict[str, Any]:
     s = skills_mod.discover().get(name)
     if not s:
         raise HTTPException(404, "no such skill")
-    return {"name": s.name, "description": s.description, "bundled": s.bundled, "body": s.body()}
+    return {"name": s.name, "description": s.description, "bundled": s.bundled, "body": s.body(),
+            **s.requirements()}
 
 
 @app.put("/api/skills/{name}")
@@ -519,13 +689,65 @@ def routines_run(name: str, request: Request) -> dict[str, Any]:
 def agent_info(request: Request) -> dict[str, Any]:
     _authorise(request)
     desktop = config.desktop_enabled() and _is_loopback(request)
-    tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS)
+    tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS, local_apps=_is_loopback(request))
     return {"tools": [{"name": t.name, "level": t.level, "group": t.group, "description": t.description}
                       for t in tl.values()],
             "skills": [{"name": s.name, "description": s.description, "bundled": s.bundled}
                        for s in skills_mod.discover().values()],
             "approval_mode": policy.mode(), "sandbox": sandbox.mode(), "workspace": str(sandbox.root()),
-            "mcp_errors": MCP_ERRORS}
+            "mcp_errors": MCP_ERRORS, "extra_roots": [str(p) for p in sandbox.extra_roots()]}
+
+
+# -- local apps, services, connectors ----------------------------------------------
+@app.get("/api/apps")
+def apps_list(request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    from automoto import apps as apps_mod
+
+    return {"apps": apps_mod.listing()}
+
+
+@app.get("/api/services")
+def services_list(request: Request) -> dict[str, Any]:
+    _authorise(request)
+    from automoto import services as services_mod
+
+    return {"services": services_mod.status_list()}  # token presence only, never values
+
+
+@app.get("/api/connectors")
+def connectors_list(request: Request) -> dict[str, Any]:
+    _authorise(request)
+    from automoto import mcp_catalog
+
+    return {"connectors": mcp_catalog.listing(), "connected_tools": len(MCP_TOOLS), "errors": MCP_ERRORS}
+
+
+@app.post("/api/connectors/{cid}/{action}")
+def connectors_toggle(cid: str, action: str, request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    from automoto import mcp_catalog
+
+    if action == "enable":
+        try:
+            mcp_catalog.enable(cid)
+        except KeyError:
+            raise HTTPException(404, "no such connector") from None
+    elif action == "disable":
+        mcp_catalog.disable(cid)
+    else:
+        raise HTTPException(404, "unknown action")
+    return {"ok": True, "connectors": mcp_catalog.listing(), "note": "reload connectors or restart to apply"}
+
+
+@app.post("/api/connectors-reload")
+def connectors_reload(request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    mcp_mod.close_all()
+    tools, errors = mcp_mod.connect_all()
+    MCP_TOOLS[:] = tools
+    MCP_ERRORS[:] = errors
+    return {"connected_tools": len(tools), "errors": errors}
 
 
 @app.post("/api/actions/execute")
@@ -562,7 +784,10 @@ def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) ->
         raise SystemExit("Refusing to listen on a network interface without AUTOMOTO_API_TOKEN set.")
     global SCHEDULER
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"
+    launch = f"{url}?launch={new_launch_token(ttl=3600)}"
+    write_session_file(url, port)
     print(f"{APP_NAME} v{__version__} \"{CODENAME}\" -> {url}", flush=True)
+    print(f"Open (one-time link): {launch}", flush=True)
     tools, errors = mcp_mod.connect_all()
     MCP_TOOLS[:] = tools
     MCP_ERRORS[:] = errors
@@ -574,5 +799,42 @@ def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) ->
     SCHEDULER.start()
     print(f"Workspace: {sandbox.root()}  ·  sandbox: {sandbox.mode()}  ·  approvals: {policy.mode()}  ·  routines: on", flush=True)
     if open_browser:
-        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+        threading.Timer(1.2, lambda: webbrowser.open(launch)).start()
+    try:
+        uvicorn.run(app, host=host, port=port, log_level="warning", server_header=False)
+    finally:
+        remove_session_file()
+
+
+def session_file() -> Path:
+    from automoto import home
+
+    return home.home() / "session.json"
+
+
+def write_session_file(url: str, port: int) -> None:
+    """Let local clients (VS Code extension, ``automoto open``) find this server and its token.
+    The file is readable by this user only (0600 on macOS/Linux; the user profile ACL on Windows)."""
+    import json
+    import os
+
+    p = session_file()
+    data = json.dumps({"url": url, "port": port, "token": SESSION_TOKEN, "pid": os.getpid(), "version": __version__})
+    fd = os.open(str(p), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(data)
+    try:
+        os.chmod(p, 0o600)
+    except OSError:  # pragma: no cover
+        pass
+
+
+def remove_session_file() -> None:
+    import json
+
+    p = session_file()
+    try:
+        if json.loads(p.read_text(encoding="utf-8")).get("token") == SESSION_TOKEN:
+            p.unlink()
+    except (OSError, ValueError):
+        pass

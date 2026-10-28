@@ -6,6 +6,14 @@
   written - there is no tool that could do it.
 * Shell commands run with ``cwd`` = workspace, a timeout, and an environment with
   every API key / token / secret variable stripped.
+* **Extra roots** (v5.2): folders you add in Settings (``allowed_roots``) or
+  ``AUTOMOTO_ALLOWED_ROOTS`` (``os.pathsep``-separated), e.g. a VS Code project or
+  ``~/Documents``. Absolute or ``~`` paths inside them are reachable, but every access
+  outside the workspace needs approval. A task can also *use* one of them as its root
+  (the VS Code extension does this for the open folder).
+* **Sensitive paths are never reachable**, even inside an extra root: SSH/GPG/cloud
+  credentials, keychains, browser profiles, shell start-up files, ``.env`` and key files,
+  system folders and AutoMoto's own settings and databases.
 * ``AUTOMOTO_SANDBOX=docker`` (or ``auto`` with Docker available) runs commands in a
   throwaway container (``--network none``, workspace mounted at ``/workspace``,
   memory/CPU/pid limits). ``local`` uses a subprocess.
@@ -13,13 +21,18 @@
 
 from __future__ import annotations
 
+import contextvars
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+from contextlib import contextmanager
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePath
+from typing import Iterator
 
 from automoto import config, home
 
@@ -31,42 +44,178 @@ class SandboxError(Exception):
     pass
 
 
-def root() -> Path:
+_ROOT: contextvars.ContextVar[Path | None] = contextvars.ContextVar("automoto_root", default=None)
+
+
+def default_root() -> Path:
     return home.workspace()
 
 
-def resolve(path: str | os.PathLike | None, *, base: Path | None = None) -> Path:
-    """Map a user/model supplied path into the workspace or raise SandboxError."""
+def root() -> Path:
+    """The current task's working root: the workspace, or an allowed folder the task chose."""
+    return _ROOT.get() or default_root()
+
+
+def is_default_root() -> bool:
+    return _ROOT.get() is None
+
+
+def _under(p: Path, base: Path) -> bool:
+    try:
+        p.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
+# -- sensitive paths ------------------------------------------------------------------
+_HOME_SENSITIVE = [
+    ".automoto", ".ssh", ".gnupg", ".aws", ".azure", ".config/gcloud", ".kube", ".docker", ".config/gh", ".password-store",
+    ".local/share/keyrings", ".mozilla", ".thunderbird", ".config/google-chrome", ".config/chromium",
+    ".config/BraveSoftware", ".config/microsoft-edge", ".config/autostart", ".vscode/extensions",
+    ".bashrc", ".bash_profile", ".bash_login", ".profile", ".zshrc", ".zprofile", ".zshenv", ".config/fish",
+    "Library/Keychains", "Library/Cookies", "Library/Safari", "Library/LaunchAgents", "Library/Mail",
+    "Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
+    "Library/Application Support/Microsoft Edge", "Library/Application Support/BraveSoftware",
+    "AppData/Local/Google/Chrome", "AppData/Local/Microsoft/Edge", "AppData/Roaming/Mozilla",
+    "AppData/Local/BraveSoftware", "AppData/Roaming/Microsoft/Credentials", "AppData/Local/Microsoft/Credentials",
+    "AppData/Roaming/Microsoft/Protect", "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup",
+]
+_SYSTEM_DIRS = ["/etc", "/bin", "/sbin", "/usr", "/boot", "/dev", "/proc", "/sys", "/var", "/root", "/lib",
+                "/lib64", "/opt/homebrew/etc", "/System", "/Library", "/private/etc", "/private/var",
+                "C:/Windows", "C:/Program Files", "C:/Program Files (x86)", "C:/ProgramData"]
+_SECRET_NAME = re.compile(
+    r"^(\.env(?!\.(example|sample|template|dist)$)(\..+)?|id_(rsa|dsa|ecdsa|ed25519)(\.pub)?|\.netrc|\.pgpass|\.git-credentials|\.npmrc|\.pypirc|"
+    r"(credentials|secrets?|service[-_]account)(\.[\w-]+)?\.(json|ya?ml|toml|ini)|.*\.(pem|key|p12|pfx|kdbx|keychain|keychain-db|ovpn))$",
+    re.I)
+
+
+def _norm(p: PurePath) -> str:
+    s = str(p).replace("\\", "/")
+    return s.lower() if sys.platform in ("win32", "darwin") else s
+
+
+def sensitive(p: Path) -> str | None:
+    """Why ``p`` must never be touched by the agent, or None. ``p`` should be resolved."""
+    if _SECRET_NAME.match(p.name):
+        # everywhere, even in the sandbox: a cloned project's .env or key file is still a secret
+        return f"'{p.name}' looks like a secret or key file"
+    ws = default_root()
+    if _under(p, ws):
+        return None  # the agent's own sandbox
+    try:
+        data = home.home().resolve()
+    except OSError:  # pragma: no cover
+        data = None
+    if data and _under(p, data):
+        return "AutoMoto's own settings, memory and conversations"
+    sp, hp = _norm(p), _norm(Path.home().resolve())
+    for rel_ in _HOME_SENSITIVE:
+        q = f"{hp}/{_norm(PurePath(rel_))}"
+        if sp == q or sp.startswith(q + "/"):
+            return f"~/{rel_} holds credentials, browser data or start-up scripts"
+    for d in _SYSTEM_DIRS:
+        q = _norm(PurePath(d))
+        if sp == q or sp.startswith(q + "/"):
+            if sp.startswith(hp + "/") or sp.startswith(_norm(Path(tempfile.gettempdir()).resolve()) + "/"):
+                break  # home under /var/home or /root, or the temp folder (/private/var/folders on macOS)
+            return f"{d} is a system folder"
+    if p.parent == p:
+        return "the filesystem root"
+    return None
+
+
+def extra_roots() -> list[Path]:
+    """Folders outside the workspace the user allowed (Settings ``allowed_roots`` + env)."""
+    raw: list[str] = []
+    try:
+        from automoto import settings
+
+        raw += list(settings.get("allowed_roots") or [])
+    except Exception:
+        pass
+    raw += [x for x in (config.env("AUTOMOTO_ALLOWED_ROOTS", "") or "").split(os.pathsep) if x.strip()]
+    out: list[Path] = []
+    for r in raw:
+        try:
+            p = Path(r).expanduser().resolve()
+        except OSError:
+            continue
+        if p.is_dir() and not sensitive(p) and p != Path.home().resolve().parent and p not in out:
+            out.append(p)
+    return out
+
+
+def check_root(path: str | os.PathLike) -> Path:
+    """Validate a folder a task wants to use as its root (must be an allowed extra root or inside one)."""
+    p = Path(path).expanduser().resolve()
+    if not p.is_dir():
+        raise SandboxError(f"not a folder: {p}")
+    why = sensitive(p)
+    if why:
+        raise SandboxError(f"{p} is off limits: {why}")
+    if _under(p, default_root()):
+        return p
+    if not any(_under(p, r) for r in extra_roots()):
+        raise SandboxError(f"{p} is not in your allowed folders (Settings → Files)")
+    return p
+
+
+@contextmanager
+def use_root(path: str | os.PathLike | None) -> Iterator[Path]:
+    """Run a block with ``path`` (an allowed folder) as the working root."""
+    if not path:
+        yield root()
+        return
+    p = check_root(path)
+    tok = _ROOT.set(p)
+    try:
+        yield p
+    finally:
+        _ROOT.reset(tok)
+
+
+def resolve(path: str | os.PathLike | None, *, base: Path | None = None, allow_outside: bool = False) -> Path:
+    """Map a user/model supplied path into the working root or raise SandboxError.
+
+    With ``allow_outside`` absolute and ``~`` paths inside an allowed extra root are accepted too
+    (callers must then treat the access as risky - see ``is_outside``). Sensitive paths are always refused.
+    """
     base = (base or root()).resolve()
     raw = str(path or ".").strip()
     if raw.startswith("~"):
-        raise SandboxError("home-relative paths are outside the workspace")
-    p = Path(raw)
-    if p.is_absolute():
-        # Allow absolute paths only if they already point inside the workspace.
-        candidate = p.resolve()
+        if not allow_outside:
+            raise SandboxError("home-relative paths are outside the workspace")
+        candidate = Path(raw).expanduser().resolve()
     else:
-        candidate = (base / p).resolve()
-    try:
-        candidate.relative_to(base)
-    except ValueError:
-        raise SandboxError(f"'{raw}' is outside the AutoMoto workspace ({base})") from None
-    return candidate
+        p = Path(raw)
+        candidate = p.resolve() if p.is_absolute() else (base / p).resolve()
+    why = sensitive(candidate)
+    if why:
+        raise SandboxError(f"'{raw}' is off limits: {why}")
+    if _under(candidate, base):
+        return candidate
+    if allow_outside and any(_under(candidate, r) for r in extra_roots()):
+        return candidate
+    hint = " (add the folder in Settings → Files to allow it)" if allow_outside else ""
+    raise SandboxError(f"'{raw}' is outside the AutoMoto workspace ({base}){hint}")
+
+
+def is_outside(p: Path) -> bool:
+    """True when ``p`` is outside the current working root (an extra-root access)."""
+    return not _under(p, root().resolve())
 
 
 def rel(p: Path) -> str:
     try:
-        return p.relative_to(root()).as_posix() or "."  # forward slashes on every OS
-    except ValueError:  # pragma: no cover
-        return str(p)
+        return p.relative_to(root().resolve()).as_posix() or "."  # forward slashes on every OS
+    except ValueError:
+        return p.as_posix()
 
 
 def in_scratch(p: Path) -> bool:
-    try:
-        p.relative_to(root() / "scratch")
-        return True
-    except ValueError:
-        return False
+    """Writes here never ask. Only the default workspace has a scratch area."""
+    return is_default_root() and _under(p, default_root() / "scratch")
 
 
 def clean_env() -> dict[str, str]:

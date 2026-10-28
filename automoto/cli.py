@@ -7,7 +7,10 @@
     python -m automoto routines add NAME --every 1h --prompt "..."   (or --cron "0 8 * * 1-5")
     python -m automoto routines list | remove NAME | run NAME
     python -m automoto memory [list | add "fact" | forget ID]
-    python -m automoto skills | tools
+    python -m automoto skills | tools | apps
+    python -m automoto mcp [catalog | enable ID | disable ID]
+    python -m automoto open            # open the running web UI with a fresh one-time sign-in link
+    python -m automoto --workspace ~/code/proj do "fix the failing test"   (folder must be in allowed roots)
     python -m automoto status          # which AIs are configured + vision matrix
     python -m automoto ask "question" [--image shot.png] [--prefer groq]
     python -m automoto recommend "read this receipt"
@@ -226,7 +229,15 @@ def _agent(args, desktop: bool):
         extra, errors = mcp.connect_all()
         for e in errors:
             _print(_console(), f"MCP: {e}", "yellow")
-    return Agent(desktop=desktop, extra_tools=extra, client="cli")
+    workspace = None
+    if getattr(args, "workspace", None):
+        from automoto import sandbox
+
+        try:
+            workspace = str(sandbox.check_root(args.workspace))
+        except sandbox.SandboxError as exc:
+            raise SystemExit(f"--workspace: {exc}") from None
+    return Agent(desktop=desktop, extra_tools=extra, client="cli", workspace=workspace)
 
 
 def _show_final(console, res) -> None:
@@ -364,11 +375,77 @@ def cmd_memory(args) -> int:
     return 0
 
 
-def cmd_skills(_args) -> int:
-    from automoto import skills
+STATUS_MARK = {"live": "✅ live-tested", "unit": "🟡 unit-tested", "untested": "🔴 untested"}
 
+
+def cmd_skills(_args) -> int:
+    from automoto import skills, tools
+
+    names = set(tools.build(desktop=config.desktop_enabled()))
     for s in skills.discover().values():
-        print(f"• {s.name}{' (bundled)' if s.bundled else ''}: {s.description}")
+        r = s.requirements(names)
+        missing = [c["name"] for c in r["checks"] if not c["ok"] and not c["optional"]]
+        optional = [c["name"] for c in r["checks"] if not c["ok"] and c["optional"]]
+        ready = "ready" if r["ready"] else "needs " + ", ".join(missing or ["a connector"])
+        extra = f" (optional, not set up: {', '.join(optional)})" if optional else ""
+        print(f"• {s.name}{' (bundled)' if s.bundled else ''} [{r['category']}] - {ready} - "
+              f"{STATUS_MARK.get(r['status'], r['status'])}{extra}\n    {s.description}")
+    return 0
+
+
+def cmd_apps(_args) -> int:
+    from automoto import apps
+
+    for a in apps.listing():
+        where = a.get("path") or "not found"
+        print(f"• {a['id']:<12} {a['name']:<22} {STATUS_MARK.get(a['status'], a['status']):<16} {where}")
+    return 0
+
+
+def cmd_mcp(args) -> int:
+    from automoto import mcp_catalog
+
+    if args.action == "enable" and args.id:
+        try:
+            entry = mcp_catalog.enable(args.id)
+        except KeyError:
+            print(f"unknown connector '{args.id}'")
+            return 1
+        print(f"enabled {args.id}: {entry.get('command')} {' '.join(entry.get('args', []))}")
+        print("Restart `automoto serve` (or Settings → Connectors → Reload) to connect.")
+        return 0
+    if args.action == "disable" and args.id:
+        print("disabled" if mcp_catalog.disable(args.id) else "was not enabled")
+        return 0
+    for c in mcp_catalog.listing():
+        miss = f"  needs env: {', '.join(c['missing_env'])}" if c["missing_env"] else ""
+        print(f"{'●' if c['enabled'] else '○'} {c['id']:<14} {c['name']:<24} {c['transport']:<7}{miss}\n    {c['note']}")
+    return 0
+
+
+def cmd_open(_args) -> int:
+    """Ask the running server for a fresh one-time link and open it (the token never appears in a URL you keep)."""
+    import json
+    import urllib.request
+    import webbrowser
+
+    from automoto import home
+
+    try:
+        info = json.loads((home.home() / "session.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        print("No running AutoMoto server found - start it with `automoto serve`.")
+        return 1
+    req = urllib.request.Request(info["url"].rstrip("/") + "/api/session/launch", method="POST", data=b"{}",
+                                 headers={"X-AutoMoto-Token": info["token"], "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:  # noqa: S310 - loopback URL from our own session file
+            url = json.loads(r.read())["url"]
+    except OSError as exc:
+        print(f"Server not reachable at {info['url']}: {exc}")
+        return 1
+    print(f"Opening {info['url']} …")
+    webbrowser.open(url)
     return 0
 
 
@@ -393,6 +470,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--plain", action="store_true", help="plain chat without tools (v4 behaviour)")
     ap.add_argument("--max-steps", type=int, default=None, help="agent step limit (default AUTOMOTO_MAX_STEPS or 12)")
     ap.add_argument("--no-mcp", action="store_true", help="don't start MCP servers from mcp.json")
+    ap.add_argument("--workspace", help="work in this folder (must be listed in allowed roots)")
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("chat", help="interactive agent chat (default)")
     d = sub.add_parser("do", help="one-shot agent task")
@@ -409,6 +487,11 @@ def main(argv: list[str] | None = None) -> int:
     mm.add_argument("text", nargs="*")
     sub.add_parser("skills", help="list skills")
     sub.add_parser("tools", help="list agent tools and their safety level")
+    sub.add_parser("apps", help="local apps AutoMoto can drive and whether they're installed")
+    mc = sub.add_parser("mcp", help="connector catalog (GitHub, Notion, Figma, Canva, Drive, OneDrive, …)")
+    mc.add_argument("action", nargs="?", default="catalog", choices=["catalog", "enable", "disable"])
+    mc.add_argument("id", nargs="?")
+    sub.add_parser("open", help="open the running web UI (fresh one-time sign-in link)")
     s = sub.add_parser("serve", help="local web UI + API")
     s.add_argument("--host", default=config.env("AUTOMOTO_HOST", "127.0.0.1"))
     s.add_argument("--port", type=int, default=int(config.env("AUTOMOTO_PORT", "8765")))
@@ -422,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     handlers = {"serve": cmd_serve, "status": cmd_status, "ask": cmd_ask, "recommend": cmd_recommend,
                 "do": cmd_do, "routines": cmd_routines, "memory": cmd_memory, "skills": cmd_skills,
-                "tools": cmd_tools}
+                "tools": cmd_tools, "apps": cmd_apps, "mcp": cmd_mcp, "open": cmd_open}
     if args.cmd in handlers:
         return handlers[args.cmd](args)
     return cmd_chat(args) if args.plain else cmd_agent_chat(args)

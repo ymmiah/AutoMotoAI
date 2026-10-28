@@ -153,6 +153,10 @@ class Response:
         return self.body.decode(charset, errors="replace")
 
 
+SENSITIVE_HEADERS = {"authorization", "proxy-authorization", "cookie", "private-token", "zotero-api-key",
+                     "x-api-key", "x-automoto-token", "x-figma-token"}
+
+
 def request(url: str, *, method: str = "GET", data: bytes | None = None, headers: dict[str, str] | None = None,
             timeout: float = 20, max_redirects: int = 4, max_bytes: int = MAX_BYTES) -> Response:
     for _ in range(max_redirects + 1):
@@ -167,7 +171,12 @@ def request(url: str, *, method: str = "GET", data: bytes | None = None, headers
             conn.request(method, path, body=data, headers=hdrs)
             resp = conn.getresponse()
             if resp.status in (301, 302, 303, 307, 308) and resp.getheader("Location"):
-                url = urllib.parse.urljoin(url, resp.getheader("Location"))
+                new_url = urllib.parse.urljoin(url, resp.getheader("Location"))
+                if urllib.parse.urlsplit(new_url).hostname != parts.hostname or \
+                        urllib.parse.urlsplit(new_url).scheme != parts.scheme:
+                    # never forward credentials to another host (or downgrade them to http)
+                    headers = {k: v for k, v in (headers or {}).items() if k.lower() not in SENSITIVE_HEADERS}
+                url = new_url
                 if resp.status == 303:
                     method, data = "GET", None
                 continue
