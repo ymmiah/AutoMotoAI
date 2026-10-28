@@ -1,362 +1,84 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AutoMoto AI v__AUTOMOTO_VERSION__ · Agent</title>
-<style>
-  :root { --bg:#0b0f14; --panel:#121821; --panel2:#0f141c; --line:#1f2a37; --text:#e6edf3; --dim:#8b98a5; --acc:#38f2a5; --acc2:#7c5cff; --bad:#ff6b6b; --warn:#ffc857; }
-  * { box-sizing:border-box; }
-  body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:radial-gradient(1200px 600px at 10% -10%,#12233a 0,var(--bg) 60%); color:var(--text); height:100vh; display:flex; flex-direction:column; }
-  header { display:flex; gap:10px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-  .logo { font-weight:800; letter-spacing:.3px; } .logo b { color:var(--acc); }
-  .tag { color:var(--dim); font-size:12px; }
-  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
-  .chip { font-size:12px; padding:3px 9px; border-radius:999px; border:1px solid var(--line); color:var(--dim); user-select:none; }
-  .chip.on { color:#04110b; background:var(--acc); border-color:var(--acc); font-weight:600; }
-  select, button, input, textarea { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; }
-  button { padding:7px 13px; cursor:pointer; } button:hover { border-color:#33465c; }
-  button.primary { background:linear-gradient(90deg,var(--acc),#2bd1ff); color:#04110b; border:0; font-weight:700; }
-  button.ok { background:var(--acc); color:#04110b; border:0; font-weight:700; } button.no { border-color:var(--bad); color:#ffd0d0; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  .toggle { display:flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-  .toggle button { border:0; border-radius:0; background:transparent; color:var(--dim); }
-  .toggle button.sel { background:var(--acc2); color:#fff; }
-  .wrap { flex:1; display:flex; min-height:0; }
-  .chatcol { flex:1; display:flex; flex-direction:column; min-width:0; }
-  main { flex:1; overflow:auto; padding:16px; }
-  .inner { max-width:900px; margin:0 auto; }
-  aside { width:330px; border-left:1px solid var(--line); background:var(--panel2); display:flex; flex-direction:column; min-height:0; }
-  aside.hidden { display:none; }
-  .tabs { display:flex; border-bottom:1px solid var(--line); } .tabs button { flex:1; border:0; border-radius:0; background:transparent; color:var(--dim); font-size:13px; padding:9px 4px; }
-  .tabs button.sel { color:var(--text); box-shadow:inset 0 -2px 0 var(--acc); }
-  .pane { flex:1; overflow:auto; padding:12px; font-size:13px; }
-  .item { border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-bottom:8px; background:var(--panel); }
-  .item .x { float:right; padding:1px 7px; font-size:12px; }
-  .msg { padding:12px 14px; border-radius:14px; margin:10px 0; border:1px solid var(--line); background:var(--panel); word-wrap:break-word; }
-  .msg .body { white-space:pre-wrap; }
-  .msg.user { background:#16202d; border-color:#24344a; margin-left:12%; white-space:pre-wrap; }
-  .msg.err { border-color:var(--bad); color:#ffd0d0; }
-  .meta { font-size:12px; color:var(--dim); margin-top:6px; }
-  .msg pre { background:#0a0e13; padding:10px; border-radius:8px; overflow:auto; white-space:pre; }
-  code { background:#0a0e13; padding:1px 5px; border-radius:5px; font-size:13px; }
-  .steps { margin:4px 0 8px; }
-  details.step { border-left:2px solid var(--line); padding:2px 0 2px 10px; margin:4px 0; font-size:13px; }
-  details.step.ok { border-color:var(--acc); } details.step.bad { border-color:var(--bad); } details.step.wait { border-color:var(--warn); }
-  details.step summary { cursor:pointer; color:var(--dim); list-style:none; } details.step summary::-webkit-details-marker { display:none; }
-  details.step summary b { color:var(--text); font-weight:600; }
-  details.step pre { background:#0a0e13; padding:8px; border-radius:8px; max-height:280px; overflow:auto; white-space:pre-wrap; margin:6px 0; font-size:12px; }
-  .lvl { font-size:11px; padding:0 6px; border-radius:6px; margin-left:4px; }
-  .lvl.safe { background:#0d3324; color:var(--acc); } .lvl.risky { background:#3a2e00; color:var(--warn); } .lvl.blocked { background:#3a0b0b; color:var(--bad); }
-  .approve { border:1px solid var(--warn); background:#1d1806; border-radius:12px; padding:10px 12px; margin:8px 0; }
-  .approve .row2 { display:flex; gap:8px; margin-top:8px; }
-  .think { color:var(--dim); font-size:13px; } .think::after { content:"▍"; animation:blink 1s steps(1) infinite; } @keyframes blink { 50% { opacity:0; } }
-  .action { border:1px dashed var(--warn); border-radius:10px; padding:8px 10px; margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .msg img.thumb { max-height:120px; border-radius:8px; display:block; margin-top:6px; }
-  footer { border-top:1px solid var(--line); padding:10px 16px; }
-  .row { display:flex; gap:8px; max-width:900px; margin:0 auto; align-items:flex-end; }
-  textarea { flex:1; resize:vertical; min-height:48px; max-height:240px; padding:10px 12px; }
-  .att { max-width:900px; margin:0 auto 6px; color:var(--dim); font-size:12px; }
-  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; max-width:520px; width:92%; }
-  dialog input { width:100%; padding:8px; margin:4px 0 10px; }
-  .hello { color:var(--dim); text-align:center; margin-top:7vh; } .hello h1 { color:var(--text); margin:0 0 6px; }
-  .ideas { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:14px; } .ideas button { font-size:13px; color:var(--dim); }
-  .pane input, .pane textarea { width:100%; padding:6px 8px; margin:3px 0; font-size:13px; }
-  .st { font-size:11px; padding:0 6px; border-radius:6px; background:#1b2532; } .st.running, .st.waiting_approval { background:#3a2e00; color:var(--warn); } .st.done { background:#0d3324; color:var(--acc); } .st.error { background:#3a0b0b; color:var(--bad); }
-  a { color:#7cc4ff; }
-  @media (max-width: 860px) { aside { position:fixed; right:0; top:52px; bottom:0; z-index:5; width:92%; } }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="automoto-token" content="__AUTOMOTO_TOKEN__" />
+<meta name="automoto-version" content="__AUTOMOTO_VERSION__" />
+<meta name="color-scheme" content="dark light" />
+<title>AutoMoto AI</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2338f2a5'/%3E%3Cpath d='M9 22l7-13 7 13M12 17h8' stroke='%230b0f14' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/static/app.css?v=__AUTOMOTO_VERSION__" />
+<link rel="stylesheet" id="hljsTheme" href="/static/vendor/hljs-dark.css" />
+<script src="/static/theme-boot.js?v=__AUTOMOTO_VERSION__"></script>
 </head>
 <body>
-<header>
-  <div><div class="logo">🤖 AutoMoto <b>AI</b> v__AUTOMOTO_VERSION__</div><div class="tag">"Agent" · your AI cousin · tools · approvals · memory · routines</div></div>
-  <div class="toggle" title="Agent uses tools step by step; Chat is a plain answer">
-    <button id="mAgent" class="sel">🛠 Agent</button><button id="mChat">💬 Chat</button>
-  </div>
-  <select id="mode" title="Which AI answers first"><option value="auto">Auto (best available)</option></select>
-  <button id="keysBtn" title="Bring your own key - kept in this tab only">🔑 Keys</button>
-  <button id="sideBtn" title="Tasks, memory, routines, tools">☰ Panel</button>
-  <div class="chips" id="chips"></div>
-</header>
-<div class="wrap">
-  <div class="chatcol">
-    <main id="log"><div class="inner" id="inner">
-      <div class="hello" id="hello">
-        <h1>Hey, cousin 👋</h1>
-        <div>Give me a goal. I'll search the web, read and write files in my sandbox, run commands (after you approve), remember what matters and report back.</div>
-        <div id="os" style="margin-top:6px"></div>
-        <div class="ideas">
-          <button data-idea="Search the web for what's new with NVIDIA NIM this month and give me 5 bullets with links.">🔎 Research with sources</button>
-          <button data-idea="Create a tiny Python project in scratch/hello-cli with a README and a test, then run the test.">🧪 Build &amp; test a mini project</button>
-          <button data-idea="Remember that I prefer concise answers with bullet points.">🧠 Remember a preference</button>
-        </div>
-      </div>
-    </div></main>
-    <footer>
-      <div class="att" id="att"></div>
-      <div class="row">
-        <input type="file" id="file" accept="image/*" multiple hidden />
-        <button id="attach" title="Attach image (or paste / drop)">📎</button>
-        <button id="screen" title="Capture my screen and explain it (asks first)">🖥️</button>
-        <textarea id="input" placeholder="Tell AutoMoto what to do… (Enter to send, Shift+Enter for newline)"></textarea>
-        <button class="primary" id="send">Send</button>
-      </div>
-    </footer>
-  </div>
-  <aside id="side" class="hidden">
-    <div class="tabs">
-      <button data-tab="tasks" class="sel">Tasks</button><button data-tab="memory">Memory</button><button data-tab="routines">Routines</button><button data-tab="tools">Tools</button>
+<a class="skip" href="#composerInput">Skip to message box</a>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <div class="side-head">
+      <a class="brand" href="#/new" aria-label="AutoMoto AI home"><span class="logo" aria-hidden="true">A</span><span>AutoMoto <b>AI</b></span></a>
+      <button class="icon-btn only-mobile" id="closeSide" aria-label="Close sidebar" data-icon="x"></button>
     </div>
-    <div class="pane" id="pane"></div>
+    <button class="new-chat" id="newChat" title="New chat (Ctrl+N or Ctrl+Shift+O)"><span data-icon="plus"></span>New chat<kbd>⌘N</kbd></button>
+    <label class="search">
+      <span data-icon="search"></span>
+      <input id="convSearch" type="search" placeholder="Search chats" aria-label="Search conversations" autocomplete="off" />
+      <kbd>⌘K</kbd>
+    </label>
+    <nav class="nav" aria-label="Pages">
+      <a href="#/tasks" data-page="tasks"><span data-icon="activity"></span>Tasks<span class="badge" id="taskBadge" hidden></span></a>
+      <a href="#/memory" data-page="memory"><span data-icon="brain"></span>Memory</a>
+      <a href="#/routines" data-page="routines"><span data-icon="clock"></span>Routines</a>
+      <a href="#/skills" data-page="skills"><span data-icon="book"></span>Skills</a>
+      <a href="#/tools" data-page="tools"><span data-icon="wrench"></span>Tools</a>
+      <a href="#/settings" data-page="settings"><span data-icon="settings"></span>Settings</a>
+    </nav>
+    <div class="conv-head">Chats</div>
+    <div class="conv-list" id="convList" role="list" aria-label="Saved conversations"></div>
+    <div class="side-foot">
+      <span id="verLabel">v</span> · <a href="https://github.com/ymmiah/AutoMotoAI" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <main class="main" id="main">
+    <header class="topbar">
+      <button class="icon-btn" id="toggleSide" aria-label="Toggle sidebar (Ctrl+B)" title="Toggle sidebar (Ctrl+B)" data-icon="menu"></button>
+      <h1 class="title" id="pageTitle">New chat</h1>
+      <div class="top-actions">
+        <div class="seg" role="radiogroup" aria-label="Mode" id="modeSeg">
+          <button role="radio" data-mode="agent" aria-checked="true" title="Agent: uses tools step by step"><span data-icon="bolt"></span><span class="lbl">Agent</span></button>
+          <button role="radio" data-mode="chat" aria-checked="false" title="Chat: plain answer, no tools"><span data-icon="chat"></span><span class="lbl">Chat</span></button>
+        </div>
+        <label class="picker" title="Which AI answers first">
+          <span class="sr">AI provider</span>
+          <select id="providerPick" aria-label="AI provider"><option value="auto">Auto</option></select>
+        </label>
+        <button class="icon-btn" id="toggleInfo" aria-label="Toggle info panel" title="Info panel" data-icon="panel"></button>
+      </div>
+    </header>
+    <section class="view" id="view" tabindex="-1"></section>
+  </main>
+
+  <aside class="info" id="info" aria-label="Task info" hidden>
+    <div class="info-head"><b>Run info</b><button class="icon-btn" id="closeInfo" aria-label="Close info panel" data-icon="x"></button></div>
+    <div class="info-body" id="infoBody"><p class="muted">Start an agent run to see the provider, model and every step here.</p></div>
   </aside>
 </div>
 
-<dialog id="keysDlg">
-  <form method="dialog">
-    <h3 style="margin-top:0">🔑 Bring your own keys</h3>
-    <p class="tag">Optional — keys in your local <code>.env</code> already work. Keys typed here live only in this tab (<code>sessionStorage</code>), go only to your local AutoMoto server for the request / agent task that uses them, and vanish when you close the tab.</p>
-    <div id="keyFields"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button value="forget" id="forget">Forget keys</button>
-      <button value="save" class="primary">Save for this tab</button>
-    </div>
-  </form>
-</dialog>
+<div class="palette" id="palette" hidden role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="palette-box">
+    <label class="palette-input"><span data-icon="search"></span><input id="paletteInput" placeholder="Search chats or type a command…" aria-label="Command" autocomplete="off" /><kbd>Esc</kbd></label>
+    <div class="palette-list" id="paletteList" role="listbox"></div>
+  </div>
+</div>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true"></div>
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script>
-const TOKEN = "__AUTOMOTO_TOKEN__";
-const $ = (id) => document.getElementById(id);
-const history = [];
-let pending = [], providers = [], desktop = false, agentMode = true, tab = "tasks", busy = false;
-
-const keys = () => { try { return JSON.parse(sessionStorage.getItem("automoto_keys") || "{}"); } catch { return {}; } };
-const api = async (path, body, method) => {
-  const r = await fetch(path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json", "X-AutoMoto-Token": TOKEN }, body: body ? JSON.stringify(body) : undefined });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(typeof data.detail === "string" ? data.detail : (data.error || r.statusText)), { data });
-  return data;
-};
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-function md(s) {
-  let h = esc(s);
-  h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, c) => `<pre><code>${c}</code></pre>`);
-  h = h.replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
-  h = h.replace(/^#{1,4} (.+)$/gm, "<b>$1</b>");
-  h = h.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  h = h.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
-  return h;
-}
-function add(role, html, meta) {
-  $("hello")?.remove();
-  const d = document.createElement("div");
-  d.className = "msg " + role;
-  d.innerHTML = html + (meta ? `<div class="meta">${meta}</div>` : "");
-  $("inner").appendChild(d); scrollDown();
-  return d;
-}
-const scrollDown = () => { $("log").scrollTop = 1e9; };
-async function refresh() {
-  const st = await api("/api/status", { keys: keys() });
-  const full = await api("/api/status");
-  providers = st.providers; desktop = full.desktop;
-  const info = await api("/api/agent/info").catch(() => ({}));
-  $("os") && ($("os").textContent = `Running on ${full.os} · sandbox: ${info.sandbox || "?"} · approvals: ${info.approval_mode || "ask"} · desktop tools ${desktop ? "on" : "off"}`);
-  const mode = $("mode"), cur = mode.value;
-  mode.innerHTML = '<option value="auto">Auto (best available)</option>' + providers.map(p => `<option value="${p.id}" ${p.configured ? "" : "disabled"}>${p.label}${p.supports_vision ? " 👁" : ""}${p.configured ? "" : " (no key)"}</option>`).join("");
-  mode.value = cur || st.mode || "auto";
-  $("chips").innerHTML = providers.map(p => `<span class="chip ${p.configured ? "on" : ""}" title="${esc(p.label)}: ${p.configured ? "ready" : "add " + p.env_keys[0]} · agent ${esc(p.agent_model)}${p.vision_model ? " · vision " + esc(p.vision_model) : ""}${p.supports_tools ? " · native tools" : " · text tools"}">${esc(p.label.split(" ")[0])}${p.supports_vision ? " 👁" : ""}</span>`).join("");
-  if (!providers.some(p => p.configured)) add("err", "No AI keys yet. Add one to <code>.env</code> (free: NVIDIA NIM, Gemini, Groq, OpenRouter) or click 🔑 Keys.");
-}
-
-// ---------- agent mode ----------
-function stepEl(container, ev) {
-  const d = document.createElement("details");
-  d.className = "step"; d.dataset.id = ev.id;
-  const lvl = ev.decision?.level || "safe";
-  d.innerHTML = `<summary>🔧 <b>${esc(ev.name)}</b><span class="lvl ${lvl}">${lvl}</span> <span class="tag">${esc(JSON.stringify(ev.args)).slice(0, 140)}</span> <span class="res"></span></summary><pre>${esc(JSON.stringify(ev.args, null, 2))}</pre>`;
-  container.appendChild(d); return d;
-}
-function approvalCard(container, taskId, ev) {
-  const c = document.createElement("div");
-  c.className = "approve";
-  c.innerHTML = `<b>⚠ Approve ${esc(ev.name)}?</b> <span class="tag">${esc(ev.reason)}</span><pre style="white-space:pre-wrap;margin:6px 0 0">${esc(JSON.stringify(ev.args, null, 2))}</pre><div class="row2"><button class="ok">Approve</button><button class="no">Deny</button></div>`;
-  const [ok, no] = c.querySelectorAll("button");
-  const answer = async (yes) => {
-    ok.disabled = no.disabled = true;
-    try { await api(`/api/tasks/${taskId}/approve`, { call_id: ev.id, approve: yes }); c.querySelector(".row2").innerHTML = `<span class="tag">${yes ? "✅ approved" : "🚫 denied"}</span>`; }
-    catch (e) { c.querySelector(".row2").innerHTML = `<span class="tag" style="color:var(--bad)">${esc(e.message)}</span>`; }
-  };
-  ok.onclick = () => answer(true); no.onclick = () => answer(false);
-  container.appendChild(c); scrollDown(); return c;
-}
-async function runAgent(content) {
-  const r = await api("/api/agent", { messages: history.slice(-20), prefer: $("mode").value, keys: keys(), client: "web" });
-  const box = add("", `<div class="steps"></div><div class="think">working</div><div class="body"></div>`);
-  const steps = box.querySelector(".steps"), think = box.querySelector(".think"), body = box.querySelector(".body");
-  const cards = {}, els = {};
-  let next = 0, last = null;
-  while (true) {
-    await new Promise(res => setTimeout(res, 600));
-    let st;
-    try { st = await api(`/api/tasks/${r.task_id}?since=${next}`); } catch (e) { think.remove(); body.innerHTML = "✗ " + esc(e.message); break; }
-    next = st.next;
-    for (const ev of st.events) {
-      if (ev.type === "model") { last = ev; think.textContent = `step ${ev.step} · ${ev.provider}`; if (ev.switched?.length) steps.insertAdjacentHTML("beforeend", `<div class="tag">↪ switched AI → ${esc(ev.provider)} (${esc(ev.switched.join("; ")).slice(0, 200)})</div>`); }
-      else if (ev.type === "say" && ev.text) steps.insertAdjacentHTML("beforeend", `<div class="tag">💭 ${esc(ev.text).slice(0, 400)}</div>`);
-      else if (ev.type === "tool_call") { els[ev.id] = stepEl(steps, ev); if (ev.decision.action === "ask") els[ev.id].classList.add("wait"); }
-      else if (ev.type === "approval_needed") cards[ev.id] = approvalCard(steps, r.task_id, ev);
-      else if (ev.type === "approval") { const c = cards[ev.id]; if (c) c.querySelector(".row2").innerHTML = `<span class="tag">${ev.approved ? "✅ approved" : "🚫 denied"}</span>`; }
-      else if (ev.type === "tool_result") {
-        const d = els[ev.id] || stepEl(steps, { id: ev.id, name: ev.name, args: {} });
-        d.classList.remove("wait"); d.classList.add(ev.ok ? "ok" : "bad");
-        d.querySelector(".res").textContent = ev.ok ? "✓" : "✗ " + String(ev.output).slice(0, 60);
-        d.insertAdjacentHTML("beforeend", `<pre>${esc(ev.output)}</pre>`);
-      }
-      else if (ev.type === "max_steps") steps.insertAdjacentHTML("beforeend", `<div class="tag">⏹ step limit reached</div>`);
-      else if (ev.type === "error") { body.innerHTML = "✗ " + esc(ev.error) + (ev.tried?.length ? "<br>" + ev.tried.map(t => `${esc(t.provider)}: ${esc(t.error || "")}`).join("<br>") : ""); box.classList.add("err"); }
-    }
-    scrollDown();
-    if (["done", "error", "cancelled"].includes(st.status)) {
-      think.remove();
-      if (st.status !== "error" || !body.innerHTML) body.innerHTML = md(st.result?.text || "");
-      box.insertAdjacentHTML("beforeend", `<div class="meta">${esc(st.result?.provider || "")} · ${esc(st.result?.model || "")} · ${st.steps} step(s)${st.status === "cancelled" ? " · cancelled" : ""}</div>`);
-      return st.result?.text || "";
-    }
-    think.textContent = st.status === "waiting_approval" ? "waiting for your approval" : think.textContent;
-  }
-  return "";
-}
-
-// ---------- plain chat (v4) ----------
-function renderActions(el, actions) {
-  for (const a of actions) {
-    const row = document.createElement("div");
-    row.className = "action";
-    row.innerHTML = `<span class="lvl risky">${esc(a.risk)}</span><code>${esc(a.tool)}(${esc(Object.entries(a.args).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", "))})</code><span class="tag">${esc(a.why || "")}</span>`;
-    const run = document.createElement("button"); run.textContent = "Run";
-    const skip = document.createElement("button"); skip.textContent = "Skip";
-    run.onclick = async () => {
-      if (a.risk === "danger" && !confirm("This runs a shell command on your computer. Continue?")) return;
-      run.disabled = skip.disabled = true;
-      try { const r = await api("/api/actions/execute", { action: a, confirmed: true }); row.insertAdjacentHTML("beforeend", `<span class="tag">→ ${esc(String(r.result || r.error))}</span>`); }
-      catch (e) { row.insertAdjacentHTML("beforeend", `<span class="tag" style="color:var(--bad)">→ ${esc(e.message)}</span>`); }
-    };
-    skip.onclick = () => { row.style.opacity = .4; run.disabled = skip.disabled = true; };
-    row.append(run, skip); el.appendChild(row);
-  }
-}
-function metaOf(r) {
-  const hops = (r.tried || []).map(t => t.ok ? `${t.provider}` : `<s>${t.provider}</s>`).join(" → ");
-  return `${esc(r.provider)} · ${esc(r.model)} · ${esc(r.task)}${(r.tried || []).length > 1 ? " · switched: " + hops : ""}`;
-}
-async function runChat() {
-  const thinking = add("", '<span class="think">thinking</span>');
-  try {
-    const r = await api("/api/chat", { messages: history.slice(-20), prefer: $("mode").value, keys: keys(), client: "web" });
-    thinking.remove();
-    const el = add("", `<div class="body">${md(r.text)}</div>`, metaOf(r));
-    if (r.actions?.length) renderActions(el, r.actions);
-    return r.text;
-  } catch (e) { thinking.remove(); throw e; }
-}
-
-async function send() {
-  const text = $("input").value.trim();
-  if ((!text && !pending.length) || busy) return;
-  const content = pending.length ? [{ type: "text", text: text || "Describe this image." }, ...pending.map(u => ({ type: "image_url", image_url: { url: u } }))] : text;
-  add("user", esc(text) + pending.map(u => `<img class="thumb" src="${u}">`).join(""));
-  history.push({ role: "user", content });
-  $("input").value = ""; pending = []; $("att").textContent = "";
-  busy = true; $("send").disabled = true;
-  try {
-    const answer = agentMode ? await runAgent(content) : await runChat();
-    history.push({ role: "assistant", content: answer });
-  } catch (e) {
-    history.pop();
-    const tried = e.data?.tried ? "<br>" + e.data.tried.map(t => `${esc(t.provider)}: ${esc(t.error || "")}`).join("<br>") : "";
-    add("err", "✗ " + esc(e.message) + tried);
-  } finally { busy = false; $("send").disabled = false; $("input").focus(); if (tab === "tasks") renderPane(); }
-}
-
-// ---------- side panel ----------
-async function renderPane() {
-  if ($("side").classList.contains("hidden")) return;
-  const p = $("pane");
-  try {
-    if (tab === "tasks") {
-      const { tasks } = await api("/api/tasks");
-      p.innerHTML = tasks.length ? tasks.map(t => `<div class="item"><span class="st ${t.status}">${t.status.replace("_", " ")}</span> <span class="tag">${t.source} · ${t.steps} step(s) · ${new Date(t.created * 1000).toLocaleTimeString()}</span>${["running", "waiting_approval"].includes(t.status) ? `<button class="x" data-cancel="${t.id}">stop</button>` : ""}<div>${esc(t.title)}</div>${t.result?.text ? `<div class="tag">${esc(t.result.text).slice(0, 160)}</div>` : ""}</div>`).join("") : '<div class="tag">No tasks yet. Every agent run is a background task — the chat stays responsive and you can stop it here.</div>';
-      p.querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => { await api(`/api/tasks/${b.dataset.cancel}/cancel`, {}); renderPane(); });
-    } else if (tab === "memory") {
-      const m = await api("/api/memory");
-      p.innerHTML = `<div class="tag">Stored on this computer in ~/.automoto/memory.db and shown to the agent each run.</div><input id="newFact" placeholder="Add a fact, e.g. I prefer TypeScript"><button id="addFact">Remember</button><h4>Facts</h4>` +
-        (m.facts.map(f => `<div class="item"><button class="x" data-forget="${f.id}">✕</button>#${f.id} ${esc(f.text)}</div>`).join("") || '<div class="tag">Nothing yet.</div>') +
-        `<h4>Journal</h4>` + (m.journal.map(j => `<div class="item"><span class="tag">${new Date(j.ts * 1000).toLocaleString()} · ${esc(j.kind)}</span><div>${esc(j.text).slice(0, 240)}</div></div>`).join("") || '<div class="tag">Empty.</div>');
-      $("addFact").onclick = async () => { const v = $("newFact").value.trim(); if (v) { await api("/api/memory", { text: v }); renderPane(); } };
-      p.querySelectorAll("[data-forget]").forEach(b => b.onclick = async () => { await api(`/api/memory/${b.dataset.forget}`, null, "DELETE"); renderPane(); });
-    } else if (tab === "routines") {
-      const r = await api("/api/routines");
-      p.innerHTML = `<div class="tag">Scheduled agent prompts. Scheduler: ${r.scheduler ? "✅ running" : "off (start with <code>python -m automoto serve</code>)"}. Risky tools are auto-denied in routines.</div>
-        <input id="rName" placeholder="name, e.g. morning-news"><input id="rSched" placeholder="every 1h  ·  or cron: 0 8 * * 1-5"><textarea id="rPrompt" rows="3" placeholder="What should the agent do?"></textarea><button id="rAdd">Add routine</button><h4>Routines</h4>` +
-        (r.routines.map(x => `<div class="item"><button class="x" data-del="${esc(x.name)}">✕</button><button class="x" data-run="${esc(x.name)}">▶</button><b>${esc(x.name)}</b> <span class="tag">${esc(x.schedule)}</span><div class="tag">${esc(x.prompt).slice(0, 140)}</div><div class="tag">last: ${x.last_run ? new Date(x.last_run * 1000).toLocaleString() + " · " + esc(x.last_status) : "never"}</div>${x.last_result ? `<div class="tag">${esc(x.last_result).slice(0, 160)}</div>` : ""}</div>`).join("") || '<div class="tag">None yet.</div>');
-      $("rAdd").onclick = async () => { try { await api("/api/routines", { name: $("rName").value, schedule: $("rSched").value, prompt: $("rPrompt").value }); renderPane(); } catch (e) { alert(e.message); } };
-      p.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { await api(`/api/routines/${encodeURIComponent(b.dataset.del)}`, null, "DELETE"); renderPane(); });
-      p.querySelectorAll("[data-run]").forEach(b => b.onclick = async () => { await api(`/api/routines/${encodeURIComponent(b.dataset.run)}/run`, {}); tab = "tasks"; selTab(); renderPane(); });
-    } else {
-      const i = await api("/api/agent/info");
-      p.innerHTML = `<div class="tag">Workspace: <code>${esc(i.workspace)}</code><br>Sandbox: ${esc(i.sandbox)} · approvals: ${esc(i.approval_mode)}</div><h4>Tools</h4>` +
-        i.tools.map(t => `<div class="item"><b>${esc(t.name)}</b><span class="lvl ${t.level}">${t.level}</span><div class="tag">${esc(t.description)}</div></div>`).join("") +
-        `<h4>Skills</h4>` + (i.skills.map(s => `<div class="item"><b>${esc(s.name)}</b>${s.bundled ? ' <span class="tag">bundled</span>' : ""}<div class="tag">${esc(s.description)}</div></div>`).join("") || '<div class="tag">None.</div>') +
-        (i.mcp_errors?.length ? `<h4>MCP errors</h4>${i.mcp_errors.map(e => `<div class="tag">${esc(e)}</div>`).join("")}` : "");
-    }
-  } catch (e) { p.innerHTML = `<div class="tag" style="color:var(--bad)">${esc(e.message)}</div>`; }
-}
-function selTab() { document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("sel", b.dataset.tab === tab)); }
-document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; selTab(); renderPane(); });
-$("sideBtn").onclick = () => { $("side").classList.toggle("hidden"); renderPane(); };
-setInterval(() => { if (tab === "tasks") renderPane(); }, 4000);
-
-// ---------- wiring ----------
-const setMode = (a) => { agentMode = a; $("mAgent").classList.toggle("sel", a); $("mChat").classList.toggle("sel", !a); $("input").placeholder = a ? "Tell AutoMoto what to do… (Enter to send)" : "Chat with AutoMoto… (Enter to send)"; };
-$("mAgent").onclick = () => setMode(true); $("mChat").onclick = () => setMode(false);
-document.querySelectorAll("[data-idea]").forEach(b => b.onclick = () => { $("input").value = b.dataset.idea; $("input").focus(); });
-function addFiles(files) {
-  for (const f of files) {
-    if (!f.type.startsWith("image/")) continue;
-    if (f.size > 6e6) { alert(f.name + " is over 6 MB"); continue; }
-    const rd = new FileReader();
-    rd.onload = () => { pending.push(rd.result); $("att").textContent = `📎 ${pending.length} image(s) attached — a vision AI will answer`; };
-    rd.readAsDataURL(f);
-  }
-}
-$("send").onclick = send;
-$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
-$("attach").onclick = () => $("file").click();
-$("file").onchange = (e) => addFiles(e.target.files);
-document.addEventListener("paste", (e) => addFiles([...(e.clipboardData?.files || [])]));
-document.addEventListener("dragover", (e) => e.preventDefault());
-document.addEventListener("drop", (e) => { e.preventDefault(); addFiles([...e.dataTransfer.files]); });
-$("screen").onclick = async () => {
-  if (!desktop) return alert("Screen capture works only when AutoMoto runs on this computer with desktop tools on.");
-  if (!confirm("Take a screenshot of your screen and send it to a vision AI?")) return;
-  const t = add("", '<span class="think">capturing screen</span>');
-  try { const r = await api("/api/screen/explain", { confirmed: true, prefer: $("mode").value, keys: keys() }); t.remove(); add("", `<div class="body">${md(r.text)}</div>`, metaOf(r)); }
-  catch (e) { t.remove(); add("err", "✗ " + esc(e.message)); }
-};
-$("keysBtn").onclick = () => {
-  const k = keys();
-  $("keyFields").innerHTML = providers.map(p => `<label>${esc(p.label)} <span class="tag">(${p.env_keys[0]}${p.free_tier ? ", free tier" : ""} · <a href="${p.signup_url}" target="_blank" rel="noopener">get key</a>)</span><input type="password" autocomplete="off" data-id="${p.id}" value="${esc(k[p.id] || "")}" placeholder="${p.configured && !k[p.id] ? "set in .env" : "paste key"}"></label>`).join("");
-  $("keysDlg").showModal();
-};
-$("keysDlg").addEventListener("close", () => {
-  if ($("keysDlg").returnValue === "forget") sessionStorage.removeItem("automoto_keys");
-  else if ($("keysDlg").returnValue === "save") {
-    const k = {}; document.querySelectorAll("#keyFields input").forEach(i => { if (i.value.trim()) k[i.dataset.id] = i.value.trim(); });
-    sessionStorage.setItem("automoto_keys", JSON.stringify(k));
-  }
-  refresh();
-});
-refresh().catch(e => add("err", "Can't reach AutoMoto server: " + esc(e.message)));
-</script>
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/purify.min.js"></script>
+<script src="/static/vendor/highlight.min.js"></script>
+<script type="module" src="/static/app.js?v=__AUTOMOTO_VERSION__"></script>
 </body>
 </html>
