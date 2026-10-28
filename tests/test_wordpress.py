@@ -206,13 +206,13 @@ def test_bump_guard_and_package_zip_via_tools(ws):
 def test_bump_folder_constants_and_semver(ws):
     d = ws / "my-plugin"
     d.mkdir()
-    (d / "my-plugin.php").write_text("<?php\n/**\n * Plugin Name: My Plugin\n * Version:     2.3.4\n */\n"
+    (d / "my-plugin.php").write_text("<?php\n/**\n * @version 2.3.4\n */\n/**\n * Plugin Name: My Plugin\n * Version:     2.3.4\n */\n"
                                      "define( 'MY_PLUGIN_VERSION', '2.3.4' );\n")
     (d / "readme.txt").write_text("=== My Plugin ===\nStable tag: 2.3.4\n\nShort.\n")
     r = wordpress.bump_folder(d, "minor", "New feature")
     assert r["new"] == "2.4.0"
     txt = (d / "my-plugin.php").read_text()
-    assert " * Version:     2.4.0\n" in txt and "'MY_PLUGIN_VERSION', '2.4.0'" in txt
+    assert " * @version 2.4.0\n" in txt and " * Version:     2.4.0\n" in txt and "'MY_PLUGIN_VERSION', '2.4.0'" in txt
     assert "== Changelog ==\n\n= 2.4.0 =\n* New feature" in (d / "readme.txt").read_text()
     assert wordpress.next_version("1.9", "patch") == "1.9.1" and wordpress.next_version("1.2.3", "major") == "2.0.0"
     with pytest.raises(ArchiveError):

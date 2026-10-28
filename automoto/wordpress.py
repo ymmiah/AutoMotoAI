@@ -558,6 +558,12 @@ def bump_folder(top: Path, version: str = "patch", changelog: str | None = None)
         text, n = rx.subn(lambda m: m.group(1) + new + m.group(2), text)
         if n:
             changes.append(f"{main.name}: {n} VERSION constant(s) -> {new}")
+    if old:
+        # phpDoc / CSS-comment tags that repeat the old version, e.g. " * @version 1.7.2"
+        text, n = re.subn(r"^([ \t/*]*@version[ \t]+)" + re.escape(old) + r"(?=\s)",
+                          lambda m: m.group(1) + new, text, flags=re.M)
+        if n:
+            changes.append(f"{main.name}: {n} @version tag(s) -> {new}")
     if "\r\n" in text:
         text = text.replace("\r\n", "\n").replace("\n", "\r\n")
     _wtext(main, text)
