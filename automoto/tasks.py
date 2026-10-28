@@ -33,6 +33,7 @@ class Task:
     events: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] | None = None
     pending: dict[str, Any] | None = None
+    conversation_id: str | None = None
     cancel: threading.Event = field(default_factory=threading.Event)
     _answers: dict[str, bool] = field(default_factory=dict)
     _cv: threading.Condition = field(default_factory=threading.Condition)
@@ -41,6 +42,7 @@ class Task:
         return {"id": self.id, "title": self.title, "source": self.source, "status": self.status,
                 "created": self.created, "finished": self.finished, "pending": self.pending,
                 "steps": sum(1 for e in self.events if e.get("type") == "model"),
+                "conversation_id": self.conversation_id,
                 "result": self.result}
 
 
@@ -52,10 +54,12 @@ class TaskManager:
 
     def start(self, messages: list[dict[str, Any]], *, title: str = "", source: str = "web",
               keys: dict[str, str] | None = None, prefer: str | None = None, max_steps: int | None = None,
-              agent_kwargs: dict[str, Any] | None = None, auto_deny: bool = False) -> Task:
+              agent_kwargs: dict[str, Any] | None = None, auto_deny: bool = False,
+              conversation_id: str | None = None, on_done: Callable[[Task], None] | None = None) -> Task:
         last = next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), "")
         text = last if isinstance(last, str) else " ".join(p.get("text", "") for p in last if isinstance(p, dict))
-        task = Task(id=uuid.uuid4().hex[:10], title=(title or text or "task")[:120], source=source)
+        task = Task(id=uuid.uuid4().hex[:10], title=(title or text or "task")[:120], source=source,
+                    conversation_id=conversation_id)
         with self._lock:
             self.tasks[task.id] = task
             if len(self.tasks) > MAX_TASKS:
@@ -91,6 +95,11 @@ class TaskManager:
                 task.status = "error"
             finally:
                 keys = None  # noqa: F841 - drop BYOK keys as soon as the run ends
+                if on_done:
+                    try:
+                        on_done(task)
+                    except Exception:
+                        pass
                 task.finished = time.time()
 
         threading.Thread(target=run, name=f"automoto-task-{task.id}", daemon=True).start()

@@ -4,7 +4,7 @@ Base levels come from each tool (``safe`` / ``risky`` / ``blocked``) and some ca
 re-classified by their arguments (e.g. ``write_file`` into ``scratch/`` is safe, anywhere
 else in the workspace is risky; obviously destructive shell commands are blocked).
 
-Configure in ``.env``:
+Configure in ``.env`` (or the GUI's Settings page, which takes precedence):
 
     AUTOMOTO_APPROVAL=ask        # ask (default) | auto | readonly
     AUTOMOTO_AUTO_APPROVE=write_file,run_shell   # tools that never ask
@@ -48,7 +48,13 @@ def _csv(name: str) -> set[str]:
 
 
 def mode() -> str:
-    m = (config.env("AUTOMOTO_APPROVAL", "ask") or "ask").lower()
+    try:
+        from automoto import settings
+
+        saved = settings.get("approval_mode")
+    except Exception:
+        saved = None
+    m = (saved or config.env("AUTOMOTO_APPROVAL", "ask") or "ask").lower()
     return m if m in ("ask", "auto", "readonly") else "ask"
 
 

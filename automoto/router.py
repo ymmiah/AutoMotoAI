@@ -99,20 +99,32 @@ class Answer:
                 "task": self.task, "tried": self.tried}
 
 
+def _order_index(pid: str) -> int:
+    """Position in the user's saved provider order (Settings page); unknown = after."""
+    try:
+        from automoto import settings
+
+        order = settings.get("provider_order") or []
+    except Exception:
+        order = []
+    return order.index(pid) if pid in order else len(order) + 100
+
+
 def plan_order(*, need_vision: bool, prefer: str | None, task: str,
                keys: dict[str, str] | None = None) -> list[ProviderSpec]:
     configured = [p for p in REGISTRY.values() if p.key(keys)]
     if need_vision:
         configured = [p for p in configured if p.supports_vision]
-    by_priority = sorted(configured, key=lambda p: p.priority)
+    by_priority = sorted(configured, key=lambda p: (_order_index(p.id), p.priority))
     order: list[ProviderSpec] = []
 
     pref = (prefer or config.ai_provider() or "auto").lower()
     if pref != "auto" and pref in REGISTRY and REGISTRY[pref] in configured:
         order.append(REGISTRY[pref])
 
+    custom = any(_order_index(p.id) < 100 for p in configured)
     rec_pool = sorted(configured, key=lambda p: _rank(p, task))
-    if rec_pool and rec_pool[0] not in order:
+    if rec_pool and rec_pool[0] not in order and not custom:  # a saved provider order wins over the heuristic
         order.append(rec_pool[0])
     order += [p for p in by_priority if p not in order]
     return order

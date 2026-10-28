@@ -20,16 +20,20 @@ import base64
 import hmac
 import ipaddress
 import secrets
+import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from automoto import APP_NAME, CODENAME, __version__, config, policy, sandbox
 from automoto import mcp as mcp_mod
 from automoto import routines as routines_mod
+from automoto import settings as settings_mod
+from automoto.conversations import Conversations
 from automoto import skills as skills_mod
 from automoto import tools as tools_mod
 from automoto.agent import split_actions, system_prompt
@@ -141,11 +145,42 @@ def _run_chat(messages, *, prefer, need_vision, keys, client, desktop: bool) -> 
 
 
 class AgentIn(BaseModel):
-    messages: list[dict[str, Any]] = Field(..., min_length=1, max_length=60)
+    messages: list[dict[str, Any]] | None = Field(None, max_length=60)
+    conversation_id: str | None = None  # GUI: server keeps the history
+    message: Any = None  # GUI: the new user message (str or content parts)
     prefer: str | None = None
     keys: dict[str, str] | None = None  # BYOK, kept only for the task's lifetime
     client: str = "web"
     max_steps: int | None = Field(None, ge=1, le=50)
+
+
+class ChatConvIn(BaseModel):
+    conversation_id: str
+    message: Any
+    prefer: str | None = None
+    keys: dict[str, str] | None = None
+    client: str = "web"
+
+
+class ConvIn(BaseModel):
+    title: str = "New chat"
+    mode: str = "agent"
+
+
+class ConvPatch(BaseModel):
+    title: str | None = None
+    mode: str | None = None
+
+
+class SkillIn(BaseModel):
+    body: str = Field(..., min_length=1, max_length=50_000)
+    description: str = ""
+
+
+class RoutinePatch(BaseModel):
+    schedule: str | None = None
+    prompt: str | None = None
+    enabled: bool | None = None
 
 
 class ApproveIn(BaseModel):
@@ -164,11 +199,21 @@ class RoutineIn(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=4000)
 
 
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+       "connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; "
+       "form-action 'self'")
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
     token = SESSION_TOKEN if _is_loopback(request) else ""
-    return HTMLResponse(html.replace("__AUTOMOTO_TOKEN__", token).replace("__AUTOMOTO_VERSION__", __version__))
+    html = html.replace("__AUTOMOTO_TOKEN__", token).replace("__AUTOMOTO_VERSION__", __version__)
+    return HTMLResponse(html, headers={"Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff",
+                                       "Referrer-Policy": "no-referrer", "Cache-Control": "no-store"})
+
+
+app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
 
 @app.get("/api/health")
@@ -212,13 +257,50 @@ def chat(body: ChatIn, request: Request):
 @app.post("/api/agent")
 def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
     _authorise(request)
-    if _count_images(body.messages) > MAX_IMAGES:
-        raise HTTPException(413, f"max {MAX_IMAGES} images per request")
     desktop = config.desktop_enabled() and _is_loopback(request) and body.client != "mobile"
-    msgs = [m for m in body.messages if m.get("role") in ("user", "assistant")]
+    conv_id, on_done = None, None
+    if body.conversation_id:
+        convs = Conversations()
+        if not convs.get(body.conversation_id, with_messages=False):
+            raise HTTPException(404, "no such conversation")
+        if body.message is None:
+            raise HTTPException(422, "message is required with conversation_id")
+        _check_message(body.message)
+        convs.add_message(body.conversation_id, "user", body.message)
+        msgs = convs.history(body.conversation_id)
+        conv_id = body.conversation_id
+        on_done = _saver(conv_id)
+    else:
+        if not body.messages:
+            raise HTTPException(422, "messages or conversation_id is required")
+        msgs = [m for m in body.messages if m.get("role") in ("user", "assistant")]
+    if _count_images(msgs) > MAX_IMAGES:
+        raise HTTPException(413, f"max {MAX_IMAGES} images per request")
     task = TASKS.start(msgs, source=body.client, keys=body.keys, prefer=body.prefer, max_steps=body.max_steps,
-                       agent_kwargs={"desktop": desktop, "client": body.client})
-    return {"task_id": task.id, "status": task.status}
+                       agent_kwargs={"desktop": desktop, "client": body.client},
+                       conversation_id=conv_id, on_done=on_done)
+    return {"task_id": task.id, "status": task.status, "conversation_id": conv_id}
+
+
+def _check_message(message: Any) -> None:
+    if isinstance(message, str):
+        if not message.strip():
+            raise HTTPException(422, "empty message")
+        return
+    if not isinstance(message, list) or not message:
+        raise HTTPException(422, "message must be text or a list of content parts")
+    if _count_images([{"content": message}]) > MAX_IMAGES:
+        raise HTTPException(413, f"max {MAX_IMAGES} images per request")
+
+
+def _saver(conv_id: str):
+    def save(task) -> None:
+        res = task.result or {}
+        meta = {"provider": res.get("provider"), "model": res.get("model"), "steps": res.get("steps"),
+                "stopped": res.get("stopped") or task.status, "task_id": task.id, "mode": "agent",
+                "events": list(task.events)}
+        Conversations().add_message(conv_id, "assistant", res.get("text") or "(no answer)", meta)
+    return save
 
 
 @app.get("/api/tasks")
@@ -251,6 +333,115 @@ def task_cancel(task_id: str, request: Request) -> dict[str, Any]:
     if not TASKS.cancel(task_id):
         raise HTTPException(404, "no such task")
     return {"ok": True}
+
+
+# -- conversations (GUI) --------------------------------------------------------------
+@app.get("/api/conversations")
+def conv_list(request: Request, q: str = "") -> dict[str, Any]:
+    _authorise(request)
+    return {"conversations": Conversations().list(q)}
+
+
+@app.post("/api/conversations")
+def conv_create(body: ConvIn, request: Request) -> dict[str, Any]:
+    _authorise(request)
+    return Conversations().create(body.title, body.mode)
+
+
+@app.get("/api/conversations/{cid}")
+def conv_get(cid: str, request: Request) -> dict[str, Any]:
+    _authorise(request)
+    conv = Conversations().get(cid)
+    if not conv:
+        raise HTTPException(404, "no such conversation")
+    return conv
+
+
+@app.patch("/api/conversations/{cid}")
+def conv_patch(cid: str, body: ConvPatch, request: Request) -> dict[str, Any]:
+    _authorise(request)
+    convs = Conversations()
+    if not convs.get(cid, with_messages=False):
+        raise HTTPException(404, "no such conversation")
+    if body.title is not None and not convs.rename(cid, body.title):
+        raise HTTPException(422, "title is empty")
+    if body.mode is not None and not convs.set_mode(cid, body.mode):
+        raise HTTPException(422, "mode must be agent or chat")
+    return convs.get(cid, with_messages=False)  # type: ignore[return-value]
+
+
+@app.delete("/api/conversations/{cid}")
+def conv_delete(cid: str, request: Request) -> dict[str, Any]:
+    _authorise(request)
+    return {"ok": Conversations().delete(cid)}
+
+
+@app.post("/api/conversations/chat")
+def conv_chat(body: ChatConvIn, request: Request):
+    """Plain (no tools) chat turn inside a saved conversation."""
+    _authorise(request)
+    convs = Conversations()
+    if not convs.get(body.conversation_id, with_messages=False):
+        raise HTTPException(404, "no such conversation")
+    _check_message(body.message)
+    convs.add_message(body.conversation_id, "user", body.message)
+    desktop = config.desktop_enabled() and _is_loopback(request) and body.client != "mobile"
+    msgs = convs.history(body.conversation_id)
+    res = _run_chat(msgs, prefer=body.prefer, need_vision=False, keys=body.keys, client=body.client, desktop=desktop)
+    if isinstance(res, JSONResponse):
+        return res
+    convs.add_message(body.conversation_id, "assistant", res["text"],
+                      {"provider": res["provider"], "model": res["model"], "tried": res["tried"], "mode": "chat",
+                       "actions": res.get("actions", [])})
+    return res
+
+
+# -- settings & skills (GUI) ----------------------------------------------------------
+@app.get("/api/settings")
+def settings_get(request: Request) -> dict[str, Any]:
+    _authorise(request)
+    return {**settings_mod.load(), "effective_approval_mode": policy.mode()}
+
+
+@app.put("/api/settings")
+def settings_put(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    try:
+        return {**settings_mod.update(body), "effective_approval_mode": policy.mode()}
+    except settings_mod.SettingsError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.get("/api/skills")
+def skills_list(request: Request) -> dict[str, Any]:
+    _authorise(request)
+    return {"skills": [{"name": s.name, "description": s.description, "bundled": s.bundled}
+                       for s in skills_mod.discover().values()]}
+
+
+@app.get("/api/skills/{name}")
+def skills_get(name: str, request: Request) -> dict[str, Any]:
+    _authorise(request)
+    s = skills_mod.discover().get(name)
+    if not s:
+        raise HTTPException(404, "no such skill")
+    return {"name": s.name, "description": s.description, "bundled": s.bundled, "body": s.body()}
+
+
+@app.put("/api/skills/{name}")
+def skills_put(name: str, body: SkillIn, request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    try:
+        s = skills_mod.save(name, body.body, body.description)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return {"name": s.name, "description": s.description, "bundled": False, "body": s.body()}
+
+
+@app.delete("/api/skills/{name}")
+def skills_delete(name: str, request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    return {"ok": skills_mod.delete(name)}
 
 
 @app.get("/api/memory")
@@ -288,6 +479,18 @@ def routines_add(body: RoutineIn, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from None
 
 
+@app.patch("/api/routines/{name}")
+def routines_patch(name: str, body: RoutinePatch, request: Request) -> dict[str, Any]:
+    _authorise(request)
+    try:
+        return routines_mod.RoutineStore().update(name, schedule=body.schedule, prompt=body.prompt,
+                                                  enabled=body.enabled).__dict__
+    except KeyError:
+        raise HTTPException(404, "no such routine") from None
+    except routines_mod.ScheduleError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
 @app.delete("/api/routines/{name}")
 def routines_remove(name: str, request: Request) -> dict[str, Any]:
     _authorise(request)
@@ -300,8 +503,15 @@ def routines_run(name: str, request: Request) -> dict[str, Any]:
     r = routines_mod.RoutineStore().load().get(name)
     if not r:
         raise HTTPException(404, "no such routine")
+    started = time.time()
+
+    def record(task) -> None:
+        res = task.result or {}
+        routines_mod.RoutineStore().record(name, task.status if task.status != "done" else (res.get("stopped") or "done"),
+                                           res.get("text") or "", started)
+
     task = TASKS.start([{"role": "user", "content": r.prompt}], title=f"routine: {name}", source="routine",
-                       auto_deny=True, agent_kwargs={"desktop": False, "client": "routine"})
+                       auto_deny=True, agent_kwargs={"desktop": False, "client": "routine"}, on_done=record)
     return {"task_id": task.id}
 
 

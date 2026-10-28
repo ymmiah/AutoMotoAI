@@ -142,6 +142,25 @@ class RoutineStore:
             self.save(rs)
         return rs[name]
 
+    def update(self, name: str, *, schedule: str | None = None, prompt: str | None = None,
+               enabled: bool | None = None) -> Routine:
+        with _LOCK:
+            rs = self.load()
+            if name not in rs:
+                raise KeyError(name)
+            r = rs[name]
+            if schedule is not None:
+                validate(schedule)
+                r.schedule = schedule.strip()
+            if prompt is not None:
+                if not prompt.strip():
+                    raise ScheduleError("prompt is empty")
+                r.prompt = prompt.strip()
+            if enabled is not None:
+                r.enabled = bool(enabled)
+            self.save(rs)
+            return r
+
     def remove(self, name: str) -> bool:
         with _LOCK:
             rs = self.load()

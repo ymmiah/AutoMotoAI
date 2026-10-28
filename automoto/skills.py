@@ -73,3 +73,45 @@ def prompt_block(skills: dict[str, Skill] | None = None) -> str:
     lines = ["## Skills (call load_skill(name) before following one)"]
     lines += [f"- {s.name}: {s.description}" for s in skills.values()]
     return "\n".join(lines)
+
+
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,59}$")
+
+
+def save(name: str, body: str, description: str = "", user_dir: Path | None = None) -> Skill:
+    """Create or overwrite a *user* skill (bundled skills are read-only; saving one with the
+    same name creates your own override)."""
+    name = (name or "").strip().lower()
+    if not NAME_RE.match(name):
+        raise ValueError("skill name must be kebab-case: a-z, 0-9 and '-' (max 60)")
+    body = (body or "").strip()
+    if not body:
+        raise ValueError("skill body is empty")
+    if len(body) > 50_000:
+        raise ValueError("skill is too long (max 50k chars)")
+    base = user_dir or home.skills_dir()
+    d = base / name
+    d.mkdir(parents=True, exist_ok=True)
+    if FM_RE.match(body + "\n"):
+        text = body + "\n"
+    else:
+        desc = re.sub(r"\s+", " ", description or "").strip()[:200]
+        text = f"---\nname: {name}\ndescription: {desc}\n---\n{body}\n"
+    (d / "SKILL.md").write_text(text, encoding="utf-8")
+    return _parse(d / "SKILL.md", False)
+
+
+def delete(name: str, user_dir: Path | None = None) -> bool:
+    """Delete a user skill (never a bundled one)."""
+    if not NAME_RE.match(name or ""):
+        return False
+    d = (user_dir or home.skills_dir()) / name
+    f = d / "SKILL.md"
+    if not f.is_file():
+        return False
+    f.unlink()
+    try:
+        d.rmdir()
+    except OSError:
+        pass
+    return True
