@@ -351,9 +351,9 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
 
         tools += office_tools.TOOLS
     if files:
-        from automoto import archive_tools
+        from automoto import archive_tools, wp_tools
 
-        tools += archive_tools.TOOLS
+        tools += archive_tools.TOOLS + wp_tools.TOOLS
     if services:
         from automoto import services as services_mod
 
