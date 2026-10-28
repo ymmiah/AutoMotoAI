@@ -342,7 +342,7 @@ DESKTOP: list[Tool] = [
 
 
 def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps: bool = True,
-          services: bool = True, office: bool = True) -> dict[str, Tool]:
+          services: bool = True, office: bool = True, files: bool = True) -> dict[str, Tool]:
     tools = list(CORE)
     if local_apps:
         tools += APPS
@@ -350,6 +350,10 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
         from automoto import office_tools
 
         tools += office_tools.TOOLS
+    if files:
+        from automoto import archive_tools
+
+        tools += archive_tools.TOOLS
     if services:
         from automoto import services as services_mod
 

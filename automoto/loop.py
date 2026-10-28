@@ -32,9 +32,20 @@ MAX_RESULT_CHARS = 12000
 # Outputs of these tools are data from outside sources: they are fenced as untrusted in the
 # prompt, and reading web / third-party content "taints" the run (see policy.decide).
 UNTRUSTED_TOOLS = {"fetch_url", "web_search", "read_file", "search_files", "list_dir", "run_shell", "run_app",
-                   "office_read", "office_check", "office_review", "office_recalc"}
-TAINTING_TOOLS = {"fetch_url", "web_search"}
+                   "office_read", "office_check", "office_review", "office_recalc",
+                   "archive_list", "archive_inspect", "archive_read", "archive_extract", "download_file"}
+TAINTING_TOOLS = {"fetch_url", "web_search", "download_file"}
 UNTRUSTED_GROUPS = ("mcp:", "services")
+
+
+SECRET_ARGS = {"password", "passphrase"}
+
+
+def mask_args(args: Any) -> Any:
+    """Archive passwords etc. are never written to events, logs or the GUI."""
+    if isinstance(args, dict) and SECRET_ARGS & set(args):
+        return {k: ("••••••" if k in SECRET_ARGS and v else v) for k, v in args.items()}
+    return args
 
 
 def is_untrusted(tool: tools_mod.Tool) -> bool:
@@ -212,10 +223,11 @@ class Agent:
                   "output": f"unknown tool '{name}'"})
             return {**base, "content": f"ERROR: unknown tool '{name}'. Available: {', '.join(self.tools)}"}
         decision = policy.decide(name, tool.level, args, tainted=self.tainted)
-        emit({"type": "tool_call", "step": step, "id": base["tool_call_id"], "name": name, "args": args,
+        shown = mask_args(args)
+        emit({"type": "tool_call", "step": step, "id": base["tool_call_id"], "name": name, "args": shown,
               "decision": decision.as_dict()})
         if decision.action == policy.ASK:
-            emit({"type": "approval_needed", "step": step, "id": base["tool_call_id"], "name": name, "args": args,
+            emit({"type": "approval_needed", "step": step, "id": base["tool_call_id"], "name": name, "args": shown,
                   "reason": decision.reason})
             ok = False
             try:

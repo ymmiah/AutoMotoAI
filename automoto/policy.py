@@ -113,6 +113,36 @@ def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
         else:
             dest = args.get("out") or str(sp.with_suffix("." + str(args.get("to", "pdf")).lower().lstrip(".")))
         return classify("write_file", base, {"path": dest})
+    if tool in ("archive_list", "archive_inspect", "archive_read"):
+        return classify("read_file", base, {"path": args.get("path", "")})
+    if tool in ("archive_extract", "archive_create", "archive_repack"):
+        srcs = args.get("sources") if tool == "archive_create" else [args.get("path", "")]
+        if isinstance(srcs, str):
+            srcs = [x.strip() for x in srcs.strip("[]").replace('"', "").split(",") if x.strip()]
+        for src in srcs or [""]:
+            lvl, why = classify("read_file", base, {"path": src})
+            if lvl == "blocked":
+                return lvl, why
+        dest = args.get("dest" if tool == "archive_extract" else "out", "")
+        lvl, why = classify("write_file", base, {"path": dest})
+        if lvl == "blocked":
+            return lvl, why
+        verb = {"archive_extract": "extracts into", "archive_create": "packs into", "archive_repack": "re-packs into"}[tool]
+        return lvl, f"{verb} {dest}" + ("" if lvl == "safe" else f" ({why})")
+    if tool == "download_file":
+        from automoto import netguard
+
+        try:
+            netguard.check_url(str(args.get("url", "")))
+        except netguard.BlockedURL as exc:
+            return "blocked", f"blocked URL: {exc}"
+        except Exception as exc:  # DNS failure etc. - the tool reports it
+            return "risky", f"downloads {args.get('url', '')} ({exc.__class__.__name__})"
+        dest = args.get("path") or "downloads/file"
+        lvl, why = classify("write_file", base, {"path": dest})
+        if lvl == "blocked":
+            return lvl, why
+        return "risky", f"downloads {str(args.get('url', ''))[:120]} into {dest}"
     if tool in ("office_read", "office_check", "office_render", "office_review"):
         return classify("read_file", base, {"path": args.get("path", "")})
     if tool in ("read_file", "list_dir", "search_files"):
