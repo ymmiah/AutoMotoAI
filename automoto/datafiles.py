@@ -99,6 +99,18 @@ def detect_encoding(p: Path, sample: int = 1024 * 1024) -> str:
     except UnicodeDecodeError as exc:
         if exc.start > len(raw) - 4:  # a multibyte char cut by the sample boundary
             return "utf-8"
+    # Western European text (Excel's "CSV" on Windows) is by far the most common non-UTF-8 case:
+    # accept cp1252 when its non-ASCII characters look like letters, currency or punctuation.
+    import unicodedata
+
+    try:
+        text = raw.decode("cp1252")
+        odd = [c for c in text if ord(c) > 127]
+        good = sum(unicodedata.category(c)[0] in "LSP" or c in "\u00a0" for c in odd)
+        if not odd or good / len(odd) > 0.95:
+            return "cp1252"
+    except UnicodeDecodeError:
+        pass
     try:
         from charset_normalizer import from_bytes
 
@@ -107,11 +119,7 @@ def detect_encoding(p: Path, sample: int = 1024 * 1024) -> str:
             return best.encoding
     except ImportError:
         pass
-    try:
-        raw.decode("cp1252")
-        return "cp1252"
-    except UnicodeDecodeError:
-        return "latin-1"
+    return "latin-1"
 
 
 def sniff_csv(p: Path, encoding: str | None = None) -> dict:
@@ -139,7 +147,10 @@ def sniff_csv(p: Path, encoding: str | None = None) -> dict:
             header = csv.Sniffer().has_header(sample)
         except csv.Error:
             header = False
-    return {"encoding": enc, "delimiter": delim, "header": header}
+    decimal = "."
+    if delim in (";", "\t", "|") and re.search(r"(^|[;\t|])\s*-?\d{1,3}(\.\d{3})*,\d+\s*(?=[;\t|]|$)", sample, re.M):
+        decimal = ","  # European numbers: 1.234,5
+    return {"encoding": enc, "delimiter": delim, "header": header, "decimal": decimal}
 
 
 def count_lines(p: Path, limit: int | None = None) -> tuple[int, bool]:
@@ -179,7 +190,9 @@ def load_table(path: str | os.PathLike, *, sheet: str | None = None, encoding: s
             d["delimiter"] = "\t" if delimiter in ("\\t", "tab") else delimiter
         info.update(d)
         df = pd.read_csv(p, sep=d["delimiter"], encoding=d["encoding"], nrows=cap + 1, encoding_errors="replace",
-                         header=0 if d["header"] else None, on_bad_lines="skip", low_memory=False)
+                         header=0 if d["header"] else None, on_bad_lines="skip", low_memory=False,
+                         decimal=d["decimal"], thousands="." if d["decimal"] == "," else None)
+        df = parse_dates(df, info)
         if not d["header"]:
             df.columns = [f"col{i + 1}" for i in range(len(df.columns))]
     elif k == "excel":
@@ -238,6 +251,115 @@ def load_table(path: str | os.PathLike, *, sheet: str | None = None, encoding: s
         df = df.head(cap)
         info["truncated_at_rows"] = cap
     return df, info
+
+
+_DATE = re.compile(r"^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?\s*$")
+_ISO = re.compile(r"^\s*\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?\s*$")
+
+
+def parse_dates(df, info: dict | None = None):
+    """Turn text columns that are clearly dates into datetimes (dd/mm/yyyy unless the data says mm/dd)."""
+    pd = _pd()
+    done = {}
+    for c in df.columns:
+        s = df[c]
+        if not (s.dtype == object or pd.api.types.is_string_dtype(s)):
+            continue
+        sample = s.dropna().astype(str).head(500)
+        if sample.empty:
+            continue
+        if sample.map(lambda v: bool(_ISO.match(v))).mean() > 0.9:
+            df[c] = pd.to_datetime(s, errors="coerce", utc=False, format="mixed")
+            done[str(c)] = "ISO"
+            continue
+        m = sample.map(lambda v: _DATE.match(v))
+        if m.map(bool).mean() < 0.9:
+            continue
+        firsts = [int(x.group(1)) for x in m if x]
+        seconds = [int(x.group(2)) for x in m if x]
+        dayfirst = not (max(seconds, default=0) > 12 and max(firsts, default=0) <= 12)
+        df[c] = pd.to_datetime(s, errors="coerce", dayfirst=dayfirst, format="mixed")
+        done[str(c)] = "dd/mm/yyyy" if dayfirst else "mm/dd/yyyy"
+    if info is not None and done:
+        info["dates_parsed"] = done
+    return df
+
+
+# -- derived columns (a tiny safe expression language, no eval) ------------------------------------
+_FUNCS = {"month", "year", "day", "quarter", "weekday", "yearmonth", "date", "round", "abs", "upper", "lower",
+          "strip", "len", "int", "float", "str"}
+
+
+def derive(df, columns: dict):
+    """{'Revenue': '[Units] * [Unit Price]', 'Month': 'yearmonth([Order Date])'} - columns in [brackets] or bare
+    names; + - * / // % **, numbers, strings and the functions above. Parsed with ``ast``; nothing is executed."""
+    import ast
+
+    pd = _pd()
+    if not isinstance(columns, dict):
+        raise DataError("add_columns must be {name: expression}")
+    for name, expr in columns.items():
+        expr = str(expr)
+        if len(expr) > 300:
+            raise DataError("expression too long")
+        refs: dict[str, str] = {}
+
+        def sub(m):
+            key = f"__c{len(refs)}"
+            refs[key] = _col(df, m.group(1))
+            return key
+        code = re.sub(r"\[([^\]]+)\]", sub, expr)
+        try:
+            tree = ast.parse(code, mode="eval")
+        except SyntaxError as exc:
+            raise DataError(f"bad expression {expr!r}: {exc.msg}") from None
+
+        def ev(node):
+            if isinstance(node, ast.Expression):
+                return ev(node.body)
+            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str)):
+                return node.value
+            if isinstance(node, ast.Name):
+                if node.id in refs:
+                    return df[refs[node.id]]
+                return df[_col(df, node.id)]
+            if isinstance(node, ast.BinOp):
+                a, b = ev(node.left), ev(node.right)
+                ops = {ast.Add: lambda: a + b, ast.Sub: lambda: a - b, ast.Mult: lambda: a * b, ast.Div: lambda: a / b,
+                       ast.FloorDiv: lambda: a // b, ast.Mod: lambda: a % b, ast.Pow: lambda: a ** b}
+                f = ops.get(type(node.op))
+                if not f:
+                    raise DataError("operator not allowed")
+                try:
+                    return f()
+                except TypeError as exc:
+                    raise DataError(f"type error in {expr!r}: {exc} (numbers stored as text? check the delimiter/decimal)") from None
+            if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+                v = ev(node.operand)
+                return -v if isinstance(node.op, ast.USub) else v
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _FUNCS and not node.keywords:
+                args = [ev(a) for a in node.args]
+                fn = node.func.id
+                x = args[0] if args else None
+                if fn in ("month", "year", "day", "quarter", "weekday", "yearmonth", "date"):
+                    x = pd.to_datetime(x, errors="coerce", dayfirst=True)
+                    return {"month": lambda: x.dt.month, "year": lambda: x.dt.year, "day": lambda: x.dt.day,
+                            "quarter": lambda: x.dt.quarter, "weekday": lambda: x.dt.day_name(),
+                            "yearmonth": lambda: x.dt.strftime("%Y-%m"), "date": lambda: x.dt.date}[fn]()
+                if fn == "round":
+                    return x.round(int(args[1]) if len(args) > 1 else 0) if hasattr(x, "round") else round(x, int(args[1]) if len(args) > 1 else 0)
+                if fn == "abs":
+                    return x.abs() if hasattr(x, "abs") else abs(x)
+                if fn in ("upper", "lower", "strip", "len"):
+                    st = x.astype("string").str
+                    return getattr(st, fn)()
+                if fn in ("int", "float"):
+                    return pd.to_numeric(x, errors="coerce")
+                if fn == "str":
+                    return x.astype("string")
+            raise DataError(f"not allowed in an expression: {ast.dump(node)[:60]}")
+        df = df.assign(**{str(name): ev(tree)})
+    return df
 
 
 # -- queries ---------------------------------------------------------------------------------------
@@ -318,7 +440,10 @@ def apply_filters(df, filters: Iterable[dict] | None):
 
 
 def query(df, *, columns: list[str] | None = None, filters: list[dict] | None = None, group_by: list[str] | None = None,
-          aggregate: dict | None = None, sort: list | None = None, limit: int | None = None, dedupe: bool = False):
+          aggregate: dict | None = None, sort: list | None = None, limit: int | None = None, dedupe: bool = False,
+          add_columns: dict | None = None):
+    if add_columns:
+        df = derive(df, add_columns)
     df = apply_filters(df, filters)
     if group_by:
         gb = [_col(df, g) for g in group_by]

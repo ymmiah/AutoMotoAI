@@ -206,3 +206,19 @@ def test_parquet_roundtrip(ws, t):
     assert "5 rows x 4 columns" in out
     out = call(t, "data_query", path="s.parquet", filters=[{"column": "Product", "op": "==", "value": "Gadget"}])
     assert out.startswith("5 rows in → 2 rows out")
+
+
+def test_decimal_comma_dates_and_derived_columns(ws, t):
+    (ws / "eu.csv").write_bytes("Order;Date;Units;Price (£)\nA;27/02/2026;2;14,5\nB;13/03/2026;;1.234,5\nC;03/03/2026;3;2,0\n"
+                                .encode("cp1252"))
+    df, info = dfm.load_table("eu.csv")
+    assert info["decimal"] == "," and info["dates_parsed"] == {"Date": "dd/mm/yyyy"}
+    assert df["Price (£)"].tolist() == [14.5, 1234.5, 2.0] and str(df["Date"].dtype).startswith("datetime64")
+    r = dfm.query(df, add_columns={"Revenue": "[Units] * [Price (£)]", "Month": "yearmonth(Date)"},
+                  group_by=["Month"], aggregate={"Revenue": "sum"}, sort=["Month"])
+    assert r.to_dict("records") == [{"Month": "2026-02", "Revenue_sum": 29.0}, {"Month": "2026-03", "Revenue_sum": 6.0}]
+    for bad in ("__import__('os').system('x')", "Units.__class__", "[Units] if 1 else 2", "open('x')", "lambda: 1"):
+        with pytest.raises(dfm.DataError):
+            dfm.derive(df, {"x": bad})
+    out = call(t, "data_query", path="eu.csv", add_columns='{"Revenue": "[Units] * [Price (£)]"}', aggregate={"Revenue": "sum"})
+    assert "35.0" in out

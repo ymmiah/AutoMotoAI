@@ -90,7 +90,8 @@ def data_inspect(ctx: ToolContext, path: str, sheet: str = "", table: str = "", 
 @_wrap
 def data_query(ctx: ToolContext, path: str, columns: Any = None, filters: Any = None, group_by: Any = None,
                aggregate: Any = None, sort: Any = None, limit: int = 0, dedupe: bool = False, out: str = "",
-               sheet: str = "", table: str = "", delimiter: str = "", encoding: str = "", show: int = 25) -> str:
+               sheet: str = "", table: str = "", delimiter: str = "", encoding: str = "", show: int = 25,
+               add_columns: Any = None) -> str:
     df, info = dfm.load_table(path, sheet=sheet or None, table=table or None, delimiter=delimiter or None,
                               encoding=encoding or None)
     filters = _json_arg(filters, "filters")
@@ -98,7 +99,8 @@ def data_query(ctx: ToolContext, path: str, columns: Any = None, filters: Any = 
         filters = [filters]
     aggregate = _json_arg(aggregate, "aggregate")
     sort = _json_arg(sort, "sort")
-    res = dfm.query(df, columns=_list(columns), filters=filters, group_by=_list(group_by),
+    add_columns = _json_arg(add_columns, "add_columns")
+    res = dfm.query(df, add_columns=add_columns if isinstance(add_columns, dict) else None, columns=_list(columns), filters=filters, group_by=_list(group_by),
                     aggregate=aggregate if isinstance(aggregate, dict) else None,
                     sort=sort if isinstance(sort, list) else _list(sort), limit=int(limit or 0) or None,
                     dedupe=bool(dedupe))
@@ -197,8 +199,11 @@ TOOLS: list[Tool] = [
          _obj({"path": S, "sheet": S, "table": S, "rows": I}, ["path"]), "safe", data_inspect, "data"),
     Tool("data_query", "Filter, select, group, aggregate, sort and de-duplicate a table (CSV/TSV/xlsx/JSON/JSONL/Parquet/"
          "SQLite table) with pandas; optional out= writes the result (csv, tsv, xlsx, json, jsonl, parquet, md, html, sqlite). "
-         "aggregate={'Revenue':'sum','*':'count'} or {'Price':['mean','max']}; sort=['-Revenue','Region'].",
-         _obj({"path": S, "columns": ARR, "filters": FILTERS, "group_by": ARR, "aggregate": OBJ,
+         "aggregate={'Revenue':'sum','*':'count'} or {'Price':['mean','max']}; sort=['-Revenue','Region']. "
+         "add_columns={'Revenue':'[Units] * [Unit Price]', 'Month':'yearmonth([Order Date])'} derives columns first "
+         "(+ - * / and month/year/quarter/yearmonth/weekday/round/abs/upper/lower - no code runs). "
+         "Dates like 28/10/2026 and decimal commas (14,5) are detected automatically.",
+         _obj({"path": S, "add_columns": OBJ, "columns": ARR, "filters": FILTERS, "group_by": ARR, "aggregate": OBJ,
                "sort": ARR, "limit": I, "dedupe": B, "out": S, "sheet": S, "table": S, "delimiter": S,
                "encoding": S, "show": I}, ["path"]), "safe", data_query, "data"),
     Tool("data_convert", "Convert between csv, tsv, xlsx, json, jsonl, parquet, md, html, sqlite (tables) and json, yaml, "
