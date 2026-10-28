@@ -30,9 +30,9 @@ See our [Code of Conduct](CODE_OF_CONDUCT.md) for more details.
 
 ### Prerequisites
 - Python 3.10 or higher
-- Windows 10/11 (for testing desktop automation)
+- Windows, macOS or Linux (desktop tools are OS-aware)
 - Git for version control
-- At least one AI provider API key (for testing)
+- No API keys needed for tests (all AI calls are mocked); one free key for manual testing
 
 ### Quick Setup
 ```bash
@@ -49,10 +49,10 @@ venv\Scripts\activate
 pip install -r requirements.txt
 
 # Run tests
-python test_installation.py
+python -m pytest -q
 
 # Start development
-python main.py
+python -m automoto
 ```
 
 ## 💡 How to Contribute
@@ -127,12 +127,12 @@ python main.py
 
 5. **Run tests:**
    ```bash
-   python test_installation.py
+   python -m pytest -q
    ```
 
 6. **Start development:**
    ```bash
-   python main.py
+   python -m automoto
    ```
 
 ### Development Tools
@@ -171,10 +171,10 @@ python main.py
 3. **Test Your Changes:**
    ```bash
    # Run installation tests
-   python test_installation.py
+   python -m pytest -q
 
    # Test your specific changes
-   python main.py
+   python -m automoto
    ```
 
 4. **Commit Your Changes:**
@@ -218,7 +218,7 @@ Types:
 
 Examples:
 ```
-feat: add BLACKBOX AI provider support
+feat: add a new AI provider to the router
 fix: resolve PyAutoGUI compatibility issue
 docs: update installation guide
 ```
@@ -267,10 +267,10 @@ For feature requests, please include:
 
 ```bash
 # Run installation verification
-python test_installation.py
+python -m pytest -q
 
 # Test specific functionality
-python main.py
+python -m automoto
 ```
 
 ### Writing Tests

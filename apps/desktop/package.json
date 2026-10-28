@@ -1,0 +1,15 @@
+{
+  "name": "automoto-desktop",
+  "private": true,
+  "version": "4.0.0",
+  "description": "AutoMoto AI v4 desktop shell (Tauri 2) for Windows, macOS and Linux",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:win": "tauri build --target x86_64-pc-windows-msvc",
+    "build:mac": "tauri build --target universal-apple-darwin"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

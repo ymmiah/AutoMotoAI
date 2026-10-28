@@ -1,506 +1,241 @@
 <div align="center">
 
-# 🤖 AutoMoto AI
+# 🤖 AutoMoto AI v4 — “Cousin”
 
-**Open-Source AI Desktop Automation · Document Intelligence · Design Studio · Voice I/O**
+**One assistant, every free AI. If one AI is down, the next one answers.**
 
-*Transform natural language into desktop actions, document exports, professional AI-generated artwork, and spoken responses — all from a single browser tab.*
+*Multi-provider AI router with auto-failover, smart vision routing, a local web UI and
+confirmed desktop actions — plus desktop (Tauri) and mobile (Flutter) app scaffolds.*
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/ymmiah/automotoai)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ymmiah/automotoai/pulls)
-[![Security](https://img.shields.io/badge/security-v3.1-success.svg)](SECURITY.md)
+[![Version](https://img.shields.io/badge/version-4.0.0-38f2a5?style=for-the-badge)](CHANGELOG.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-412991.svg)](https://platform.openai.com)
-[![Google](https://img.shields.io/badge/Google-Gemini_1.5-4285F4.svg)](https://ai.google.dev)
-[![Anthropic](https://img.shields.io/badge/Anthropic-Claude_Opus_4.8-191919.svg)](https://anthropic.com)
-[![BLACKBOX](https://img.shields.io/badge/BLACKBOX-AI-000000.svg)](https://blackbox.ai)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Rich](https://img.shields.io/badge/Rich_CLI-000000?style=for-the-badge&logo=gnometerminal&logoColor=white)
+![Tauri](https://img.shields.io/badge/Tauri_2-24C8D8?style=for-the-badge&logo=tauri&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
+
+![NVIDIA NIM](https://img.shields.io/badge/NVIDIA_NIM-76B900?style=for-the-badge&logo=nvidia&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)
+![Groq](https://img.shields.io/badge/Groq-F55036?style=for-the-badge&logoColor=white)
+![OpenRouter](https://img.shields.io/badge/OpenRouter-6566F1?style=for-the-badge&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
+![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=anthropic&logoColor=white)
 
 </div>
 
 ---
 
-## What is AutoMoto AI?
+## What it is
 
-AutoMoto AI is a **free, open-source** AI assistant that runs in your browser and connects to your real desktop — Windows, macOS, and Linux. It combines four AI providers in one unified interface:
+AutoMoto AI is a practical “cousin” assistant for **any project** — coding, debugging,
+writing, planning, reading screenshots and photos, and (on your own computer) doing simple
+desktop jobs after you confirm them.
 
-- 🎨 **AI Design Studio** — generate professional images, inpaint regions with a brush, export to Photoshop / Illustrator / print formats
-- 📄 **Document Intelligence** — read, summarise, combine, and export PDF · DOCX · PPTX · XLSX · CSV · Markdown
-- 🎙️ **Voice I/O** — text-to-speech AI responses with auto-speak, real-time speech recognition, audio file transcription
-- ⚡ **Desktop Automation** — open apps, type text, manage windows, take screenshots, show GUI dialogs — **real Linux support** via xdotool / wmctrl
-- 🔒 **Production Security** — encrypted API key storage, TOTP 2FA, tamper-evident audit logs, sandboxed execution, automatic update checks
-- 📊 **System Monitor** — real-time CPU / RAM / disk / network metrics and process manager
-- 🤖 **Multi-AI Chat** — streaming responses with tool-calling across GPT-4o, Gemini, Claude, or BLACKBOX AI
+You bring one or more API keys (four providers have free tiers). AutoMoto:
 
----
+1. **Picks the best AI for the task** — vision for images/screens, strongest model for code
+   and long reasoning, fastest model for quick chat.
+2. **Auto-switches** to the next available AI on rate limits, 5xx errors, bad keys, timeouts
+   or a model your key can't use — and tells you which AI answered and what it skipped.
+3. **Never sends an image to an AI that can't see.**
 
-## ✨ Unique Implemented Features
+### What ships in v4 (and what doesn't)
 
-### 🎙️ Voice I/O *(new in v3.1)*
-
-Real text-to-speech and speech-to-text — no cloud lock-in, works offline.
-
-| Capability | Detail |
+| Part | Status |
 |---|---|
-| **Text-to-speech** | pyttsx3 → espeak → flite → festival (automatic fallback chain) |
-| **Speech-to-WAV file** | Server generates a WAV file served at `/api/voice/audio/<file>` |
-| **Speech Recognition (browser)** | Web Speech API — real-time interim results shown while speaking, auto-sends on recognition end |
-| **Microphone transcription (server)** | SpeechRecognition + PyAudio with dynamic energy calibration |
-| **Audio file transcription** | OpenAI Whisper API → local whisper model → Google STT fallback |
-| **Auto-speak toggle** | 🔇/🔊 button in topbar — AI replies read aloud automatically via browser TTS |
-| **Voice settings** | Language (10 locales), speed (0.75× – 1.5×), auto-speak — all persisted in localStorage |
-| **Multi-language** | en-US, en-GB, fr, de, es, it, pt-BR, ja, zh-CN, ar |
-| **AI tool integration** | `speak` and `transcribe_audio` tools let the AI synthesize and transcribe directly |
-
-**Linux setup:**
-```bash
-sudo apt install espeak          # TTS (offline, no internet needed)
-sudo apt install flite           # lightweight TTS alternative
-sudo apt install python3-pyaudio portaudio19-dev && pip install pyaudio  # microphone
-```
+| Python AI router (`automoto/router.py`, `providers.py`) | ✅ Working, tested (mocked) + live-tested on NVIDIA NIM |
+| CLI (`python -m automoto`) — chat, ask, status, recommend | ✅ Working |
+| Local web UI (`python -m automoto serve`) — chat, provider chips, auto mode, image paste/drop, screen explain, BYOK | ✅ Working |
+| Desktop tools (open app/URL, files/folders, screenshot, type, hotkey, optional shell) with confirmation | ✅ Working on Windows/macOS/Linux (GUI tools need a desktop session) |
+| Desktop app — Tauri 2 shell for Windows / macOS / Linux (`apps/desktop`) | 🧱 Scaffold — build locally with Rust + Tauri CLI |
+| Mobile app — Flutter for Android / iOS (`apps/mobile`) | 🧱 Scaffold — needs Flutter SDK; iOS needs Xcode; not store-ready |
+| Voice I/O, image generation “Design Studio”, document export, 2FA | ❌ Not in v4 (they were listed in old v3.x docs but never existed in code) |
 
 ---
 
-### 🎨 AI Design Studio *(new in v3.0)*
+## 👁 Provider & vision matrix
 
-A full-screen design environment powered by DALL-E 3 and DALL-E 2.
+Defaults chosen in Oct 2026 from each provider's model catalogue. Every model can be overridden in `.env`.
 
-| Capability | Detail |
-|---|---|
-| **Text-to-image generation** | DALL-E 3 HD quality — 10 style presets injected into prompts automatically |
-| **Style presets** | Photo · Logo · Poster · Social · Print · Icon · Product · Character · Background · Infographic |
-| **Canvas sizes** | Square 1:1 · Landscape 16:9 · Portrait 9:16 |
-| **Canvas inpainting** | Paint a mask with a brush directly on the generated image, re-prompt only that area (DALL-E 2 edit) |
-| **Accurate brush coordinates** | Pointer events with `scaleX/scaleY` correction — works even when the canvas is CSS-scaled |
-| **SVG vector export** | vtracer raster→vector conversion; falls back to embedded-PNG SVG if vtracer not installed |
-| **TIFF / Photoshop export** | TIFF at 300 DPI with LZW compression — drag straight into Photoshop |
-| **AI / Illustrator export** | PDF/X-compatible file with embedded image — opens in Adobe Illustrator |
-| **PNG print export** | PNG at 300 DPI — won't break when zoomed or printed large-format |
-| **WebP export** | 90-quality WebP for optimised web delivery |
-| **Lanczos upscaling** | 1× / 2× / 4× upscale applied before any export format |
-| **Image gallery** | Browse and reload all generated images; click to re-open in the editor |
-| **AI tool integration** | The chatbot can call `generate_image` directly when asked |
+| Provider | Key | Free tier | Vision | Default text model | Vision model | Strong model (code/reasoning) | Auto priority |
+|---|---|---|---|---|---|---|---|
+| **NVIDIA NIM** | `NVIDIA_API_KEY` | ✅ | ✅ (1 image/request) | `meta/llama-3.2-11b-vision-instruct` | same | opt-in via `NIM_STRONG_MODEL` | 1 |
+| **Google Gemini** | `GEMINI_API_KEY` | ✅ | ✅ | `gemini-flash-latest` | `gemini-flash-latest` | `gemini-pro-latest` | 2 |
+| **Groq** | `GROQ_API_KEY` | ✅ | ✅ (preview model) | `openai/gpt-oss-20b` | `qwen/qwen3.8-27b` | `openai/gpt-oss-120b` | 3 |
+| **OpenRouter** | `OPENROUTER_API_KEY` | ✅ `:free` | ✅ | `openrouter/free` | `google/gemma-4-31b-it:free` | `nvidia/nemotron-3-ultra-550b-a55b:free` | 4 |
+| **OpenAI** | `OPENAI_API_KEY` | paid | ✅ | `gpt-5.4-mini` | `gpt-5.4-mini` | `gpt-5.5` | 5 |
+| **Anthropic Claude** | `ANTHROPIC_API_KEY` | paid | ✅ | `claude-haiku-4-5` | `claude-haiku-4-5` | `claude-sonnet-4-6` | 6 |
 
----
+Notes
+- When a request has an image, AutoMoto switches that provider to its **vision** model (e.g. Groq's
+  text model `gpt-oss-20b` is text-only, so Groq uses `qwen3.8-27b` for images). A provider with
+  `supports_vision=False` is skipped entirely for image requests.
+- If a strong model fails (e.g. your free key can't access it), the same provider's default
+  model is tried before moving to the next provider.
+- **BLACKBOX** (v2/v3) was removed: there is no documented public chat API to integrate honestly.
 
-### 📄 Document Intelligence *(new in v3.0)*
+### How “auto” picks (task heuristic)
 
-| Capability | Detail |
-|---|---|
-| **Multi-format reading** | PDF · DOCX · PPTX · XLSX / XLS · CSV · Markdown · plain text · all code files |
-| **Metadata extraction** | Page count · word count · row/column count · author · creation date |
-| **Concurrent reading** | Up to 20 files read in parallel threads |
-| **AI context injection** | Attach files in chat — full text injected as context blocks |
-| **Document creation** | Generate TXT · MD · HTML · DOCX · PDF · XLSX · CSV from AI output |
-| **Format conversion** | Convert any supported input to any output format |
-| **Multi-file combine** | Merge multiple documents into one output file |
-| **Download endpoint** | Path-sandboxed download — output restricted to `~/Documents/AutoMotoAI_Documents/` |
+`recommend_provider(task_hint)` / `classify_task()` in `automoto/router.py`:
 
----
-
-### 🔒 Production Security *(new in v3.1)*
-
-Five security modules fully implemented — not placeholders.
-
-| Feature | Module | How it works |
+| Task | Detected by | Ranking |
 |---|---|---|
-| **Encrypted API key storage** | `src/core/secret_store.py` | Fernet (AES-128-CBC + HMAC-SHA256) with PBKDF2-HMAC-SHA256 (200 000 iter) key derived from machine fingerprint; stored at `~/.automotoai/secrets.enc` |
-| **Two-factor authentication** | `src/core/totp.py` | TOTP RFC 6238 via pyotp; protects `/api/monitor/kill`, `/api/files/delete`, `/api/apps/launch`; 30-minute sensitive token TTL |
-| **Tamper-evident audit log** | `src/core/audit.py` | HMAC-SHA256 chain at `logs/audit.jsonl` — every entry's MAC covers content + previous MAC; verifiable offline with `python -m src.core.audit --verify` |
-| **Sandboxed tool execution** | `src/core/sandbox.py` | ThreadPoolExecutor with configurable timeout (60 s default); per-session `ResourceGuard` (200 file writes / 500 MB); path allowlist; subprocess env stripping |
-| **Automatic update checks** | `src/core/updater.py` | Background daemon polls PyPI JSON API every 24 hours; critical packages flagged at WARNING; results at `GET /api/security/status` |
+| **vision** | an attached image, or words like *screenshot, on my screen, photo, OCR, receipt, design, UI, diagram* | vision-capable only, strongest first |
+| **code / deep** | *code, bug, traceback, refactor, SQL, architecture, plan, analyse…* or a long prompt (>600 chars) | strongest first (Claude/OpenAI → Gemini → NIM/Groq/OpenRouter), uses strong model |
+| **chat** | everything else | fastest first (Groq → Gemini/OpenAI → NIM/Claude → OpenRouter) |
 
-**Quick security setup:**
-```bash
-pip install cryptography pyotp qrcode[pil]
-
-# Migrate existing .env keys to encrypted store
-python -c "
-from dotenv import load_dotenv; load_dotenv()
-from src.core.secret_store import secret_store
-secret_store.migrate_from_env(['OPENAI_API_KEY','GEMINI_API_KEY','ANTHROPIC_API_KEY','BLACKBOX_API_KEY'])
-"
-
-# Enable 2FA
-curl -X POST http://127.0.0.1:5000/api/auth/2fa/setup \
-  -H "X-Requested-With: XMLHttpRequest" -H "Content-Type: application/json" -d '{}'
-```
-
-See [SECURITY.md](SECURITY.md) for full documentation.
+Order of attempts: your `prefer` / `AI_PROVIDER` (if it has a key) → the recommended provider → every other configured provider by priority.
 
 ---
 
-### ⚡ Desktop Automation — Real Linux Support *(upgraded in v3.1)*
-
-Full cross-platform automation — **no mocking, no stubs**.
-
-#### Window Management
-
-| Platform | Backend |
-|---|---|
-| Windows | pygetwindow |
-| Linux (X11) | wmctrl primary → xdotool fallback |
-| Linux (Wayland) | ydotool |
-| macOS | AppleScript via `osascript` |
+## 🚀 Quick start
 
 ```bash
-# Linux one-time setup
-sudo apt install wmctrl xdotool          # window management
-sudo apt install ydotool                 # Wayland support
-```
-
-#### Screenshots — 6 backends tried in order
-
-```
-pyautogui → scrot → gnome-screenshot → maim → ImageMagick import → xwd+convert
-```
-
-```bash
-sudo apt install scrot         # lightweight, fastest
-sudo apt install maim          # modern scrot replacement
-```
-
-#### Keyboard & Mouse — 3-tier fallback
-
-```
-pyautogui  →  xdotool  →  ydotool (Wayland)
-```
-
-New actions: `scroll()`, `drag()`, `click()` all with xdotool fallback.
-
-#### GUI Dialogs — Real native dialogs
-
-| Backend | Trigger |
-|---|---|
-| tkinter | Built-in Python; used when `DISPLAY`/`WAYLAND_DISPLAY` is set |
-| zenity | GNOME fallback (`sudo apt install zenity`) |
-| kdialog | KDE fallback |
-| Log fallback | Headless servers: action is logged instead of crashing |
-
-```bash
-sudo apt install zenity        # GNOME dialog fallback
-```
-
-#### Installed App Discovery
-
-| Platform | Source |
-|---|---|
-| Linux | XDG `.desktop` files → dpkg → rpm → flatpak → snap |
-| Windows | Registry (HKLM + HKCU Uninstall keys) |
-| macOS | `/Applications` + Homebrew |
-
----
-
-### 🤖 Multi-AI Chat with Tool Calling
-
-33 AI tools the assistant can call autonomously:
-
-| Category | Tools |
-|---|---|
-| **Desktop** | `open_application`, `take_screenshot`, `list_directory`, `create_file`, `create_directory`, `open_in_file_manager` |
-| **Input** | `type_text`, `press_key`, `run_hotkey`, `mouse_click`, `mouse_scroll`, `mouse_drag` |
-| **Windows** | `list_windows`, `focus_window`, `minimize_window`, `maximize_window`, `close_window` |
-| **Dialogs** | `show_dialog`, `ask_yes_no`, `ask_input_dialog`, `open_file_dialog`, `save_file_dialog` |
-| **Voice** | `speak`, `listen`, `transcribe_audio` |
-| **Monitor** | `get_system_info`, `list_processes` |
-| **Documents** | `read_file`, `read_multiple_files`, `summarize_files`, `combine_files`, `create_document`, `convert_document` |
-| **Design** | `generate_image` |
-
-| Provider | Default Model | Strengths |
-|---|---|---|
-| **OpenAI** | `gpt-4o` | Best reasoning, image generation (DALL-E) |
-| **Google Gemini** | `gemini-1.5-flash` | Fast, cost-effective, long context |
-| **Anthropic Claude** | `claude-opus-4-8` | Nuanced reasoning, coding, analysis |
-| **BLACKBOX AI** | `blackboxai` | Developer-focused |
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.10+
-- At least one AI provider API key
-
-### Installation
-
-```bash
-git clone https://github.com/ymmiah/automotoai.git
-cd automotoai
-
-python -m venv venv
-source venv/bin/activate      # Linux / macOS
-# venv\Scripts\activate       # Windows
-
+git clone https://github.com/ymmiah/AutoMotoAI.git
+cd AutoMotoAI
+python -m venv venv && source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env
-# Edit .env — add your API keys
-
-python main.py
+cp .env.example .env                                  # Windows: copy .env.example .env
+# add at least one key, e.g. NVIDIA_API_KEY=nvapi-...  (free: https://build.nvidia.com)
 ```
 
-Open **http://127.0.0.1:5000** in your browser.
-
-### Optional Linux dependencies
+Or just run `./setup.sh` (macOS/Linux) / `setup.bat` (Windows).
 
 ```bash
-# Window management
-sudo apt install wmctrl xdotool
-
-# Screenshots
-sudo apt install scrot maim
-
-# TTS / voice
-sudo apt install espeak
-sudo apt install python3-pyaudio portaudio19-dev && pip install pyaudio
-
-# GUI dialogs
-sudo apt install python3-tk zenity
-
-# Security extras
-pip install cryptography pyotp qrcode[pil]
+python -m automoto serve      # web UI → http://127.0.0.1:8765  (or ./run.sh / run.bat)
+python -m automoto            # terminal chat (/image <path> to attach, /status, /exit)
+python -m automoto status     # which AIs are ready + vision matrix
+python -m automoto ask "Explain this error" --image screenshot.png
+python -m automoto recommend "what's on my screen?"
 ```
 
-### .env configuration
+No keys? You get a clear message telling you which env vars to set. One key → chat works.
+Two or more → if the first fails, the next answers automatically (the UI shows
+`switched: groq → nim`).
 
-```env
-# AI providers — add the ones you have
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-ANTHROPIC_API_KEY=sk-ant-...
-BLACKBOX_API_KEY=...
+### Use it from Python
 
-# Defaults
-DEFAULT_AI_PROVIDER=openai
-OPENAI_MODEL=gpt-4o
-GEMINI_MODEL=gemini-1.5-flash
-CLAUDE_MODEL=claude-opus-4-8
+```python
+from automoto.router import ask, recommend_provider
 
-# Security
-SECURITY_CHECK_INTERVAL_HOURS=24
-SANDBOX_TOOL_TIMEOUT=60
-SANDBOX_MAX_FILES=200
-SANDBOX_MAX_BYTES=524288000
+ans = ask("Write a SQL query for monthly signups", prefer="auto")
+print(ans.text, ans.provider, ans.model, ans.tried)
 
-# Server
-WEB_HOST=127.0.0.1
-WEB_PORT=5000
+ans = ask([{"role": "user", "content": [
+    {"type": "text", "text": "Read this receipt"},
+    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+]}])                                  # routed to a vision-capable AI only
+print(recommend_provider("refactor my python class"))
 ```
 
----
+### HTTP API (shared brain for web, desktop and mobile)
 
-## 🏗️ Project Structure
-
-```
-AutoMotoAI/
-├── main.py
-├── requirements.txt
-├── SECURITY.md                          # Full security documentation
-│
-├── src/
-│   ├── ai/
-│   │   ├── base.py                      # AIProvider ABC + Message dataclass
-│   │   ├── registry.py                  # Multi-provider router + tool-call loop
-│   │   ├── openai_provider.py           # GPT-4o chat + streaming
-│   │   ├── gemini_provider.py           # Gemini multi-turn (role/parts format)
-│   │   ├── claude_provider.py           # Claude streaming
-│   │   ├── blackbox_provider.py         # BLACKBOX HTTP API
-│   │   ├── image_generator.py           # DALL-E 3 generation + DALL-E 2 inpaint
-│   │   └── tools.py                     # 33 tool definitions + registry
-│   │
-│   ├── automation/
-│   │   ├── desktop.py                   # App launch · window mgmt · screenshots (cross-platform)
-│   │   ├── files.py                     # File-system CRUD
-│   │   ├── input_sim.py                 # Keyboard / mouse · xdotool / ydotool fallbacks
-│   │   ├── monitor.py                   # CPU / RAM / disk / process monitor
-│   │   ├── voice.py                     # 🆕 TTS (pyttsx3/espeak/flite) + STT (Whisper/Google)
-│   │   ├── dialog.py                    # 🆕 GUI dialogs (tkinter / zenity / kdialog)
-│   │   ├── document_reader.py           # Multi-format document reading
-│   │   ├── document_writer.py           # Multi-format document writing
-│   │   └── image_exporter.py            # PNG/WebP/SVG/PDF/TIFF/AI export engine
-│   │
-│   ├── core/
-│   │   ├── config.py                    # Env config + encrypted secret store integration
-│   │   ├── exceptions.py                # Custom exception hierarchy
-│   │   ├── secret_store.py              # 🔒 Fernet encrypted API key storage
-│   │   ├── audit.py                     # 🔒 HMAC-SHA256 tamper-evident audit log
-│   │   ├── totp.py                      # 🔒 TOTP 2FA for sensitive operations
-│   │   ├── sandbox.py                   # 🔒 Tool execution sandbox + resource limits
-│   │   └── updater.py                   # 🔒 Background PyPI security update checker
-│   │
-│   └── ui/web/
-│       ├── server.py                    # Flask REST API + SSE streaming (60+ endpoints)
-│       └── static/
-│           ├── index.html               # SPA shell + Design Studio + voice controls
-│           ├── app.js                   # Frontend logic (~1 350 lines)
-│           └── style.css                # Catppuccin Mocha/Latte theme
-```
-
----
-
-## 🎨 Design Studio Walkthrough
-
-1. Click **🎨 Design Studio** in the sidebar
-2. Enter a prompt — e.g. *"Sleek electric car logo, blue lightning bolt, dark background"*
-3. Choose **Style** (Logo), **Canvas Size** (Square), **Quality** (HD)
-4. Click **✨ Generate Image** — DALL-E 3 creates the image
-5. **Paint a mask** over any area you want to change
-6. Enter an inpaint prompt — *"Add gold trim around the lightning bolt"*
-7. Click **🔧 Fix Selected Area** — DALL-E 2 regenerates only that region
-8. Export:
-   - **PNG Print** (300 DPI) — for offset printing / large-format
-   - **SVG Vector** — infinitely scalable
-   - **TIFF/PS** (300 DPI) — drag into Photoshop
-   - **AI/PDF** — drag into Adobe Illustrator
-   - **4× Upscale** for maximum resolution
-
----
-
-## 🔒 Security API Reference
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/auth/2fa/setup` | POST | Generate TOTP secret + QR code URI |
-| `/api/auth/2fa/verify` | POST | Verify TOTP code → get sensitive token |
-| `/api/auth/2fa/status` | GET | Check if 2FA is enabled |
-| `/api/security/status` | GET | Sandbox config + update report |
-| `/api/security/audit/verify` | GET | Verify audit log integrity chain |
-| `/api/security/secrets/migrate` | POST | Migrate `.env` keys to encrypted store |
-| `/api/voice/status` | GET | TTS / STT backend availability |
-| `/api/voice/speak` | POST | Synthesize text → WAV file |
-| `/api/voice/transcribe` | POST | Transcribe uploaded audio file |
-| `/api/window/list` | GET | List open windows |
-| `/api/window/focus` | POST | Focus window by title |
-| `/api/dialog/message` | POST | Show native GUI message dialog |
-| `/api/desktop/status` | GET | Desktop automation capability map |
-
----
-
-## 📋 System Requirements
-
-| Component | Minimum |
+| Endpoint | What |
 |---|---|
-| OS | Windows 10/11 · macOS 12+ · Ubuntu 20.04+ |
-| Python | 3.10 or higher |
-| RAM | 4 GB (8 GB recommended) |
-| Disk | 1 GB free |
-| Network | Required for AI API calls |
-| Display | Optional — headless servers supported (voice + file ops work without display) |
+| `GET /api/health` | version + OS |
+| `GET/POST /api/status` | providers, keys present (never the keys), vision flags, models |
+| `POST /api/chat` | `{messages, prefer, need_vision, keys?, client}` → `{text, provider, model, task, tried, actions}` |
+| `POST /api/recommend` | `{task}` → which AI would handle it |
+| `POST /api/actions/execute` | run one proposed action (`confirmed: true` required, this computer only) |
+| `POST /api/screen/explain` | screenshot → vision AI (confirmed, this computer only) |
+
+Interactive docs at `/api/docs` while the server runs.
 
 ---
 
-## 🐛 Troubleshooting
+## 🖥 Desktop actions (Windows · macOS · Linux)
 
-**No AI providers available**
-Add at least one `*_API_KEY` to your `.env` file.
+Ask things like *“open notepad”*, *“create a folder called invoices”*, *“open ymmiah.com”*.
+The AI proposes actions; you click **Run** (web) or type **y** (CLI). Nothing that changes your
+machine runs without that.
 
-**Image generation fails**
-Requires `OPENAI_API_KEY` — DALL-E is an OpenAI product.
+| Tool | Risk | Notes |
+|---|---|---|
+| `system_info`, `list_dir` | safe | read-only |
+| `open_url`, `open_app`, `create_folder`, `create_file` | confirm | `open_app` uses `start` / `open -a` / PATH + `gtk-launch`; files never overwrite |
+| `screenshot`, `type_text`, `hotkey` | confirm | need `pyautogui` + a desktop session |
+| `run_command` | danger | off unless `AUTOMOTO_ALLOW_SHELL=1` |
 
-**Voice recognition not working (browser)**
-Use Chrome or Edge — Web Speech API is not supported in Firefox.
-
-**TTS has no audio (server)**
-Install espeak: `sudo apt install espeak` — or `pip install pyttsx3`.
-
-**Microphone not working**
-Install PyAudio: `sudo apt install python3-pyaudio portaudio19-dev && pip install pyaudio`.
-
-**Window management fails on Linux**
-Install wmctrl or xdotool: `sudo apt install wmctrl xdotool`.
-
-**Screenshots fail on Linux**
-Install scrot: `sudo apt install scrot`. Make sure `DISPLAY` is set.
-
-**GUI dialogs don't appear**
-Install tkinter (`sudo apt install python3-tk`) or zenity (`sudo apt install zenity`). Set `DISPLAY=:0` if running remotely.
-
-**No display / headless server**
-Desktop automation, screenshots, and GUI dialogs need `DISPLAY` set. All other features (AI chat, documents, voice synthesis to file, security, monitoring) work headless.
-
-**SVG export has no vector conversion**
-Install vtracer: `pip install vtracer`. Without it, export wraps the PNG inside an SVG envelope.
-
-**2FA setup fails**
-Install `pip install pyotp qrcode[pil]`.
-
-**Security / encryption errors**
-Install `pip install cryptography`.
+Phones never get desktop tools — the mobile app is chat + camera/photos only.
 
 ---
 
-## 🤝 Contributing
+## 📱 Apps
 
-Contributions are welcome — bug fixes, new AI providers, additional export formats, UI improvements.
+### Desktop (Windows · macOS · Linux) — `apps/desktop` (Tauri 2)
+A ~10 MB native window around the same web UI. It starts `python -m automoto serve` for you
+and stops it when you close the window. See [apps/desktop/README.md](apps/desktop/README.md).
 
 ```bash
-git clone https://github.com/ymmiah/automotoai.git
-cd automotoai
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python main.py
+cd apps/desktop && npm install && npm run dev        # needs Rust + the Tauri prerequisites
+npm run build                                        # .msi/.exe on Windows, .dmg/.app on macOS
+```
+
+### Mobile (Android · iOS) — `apps/mobile` (Flutter)
+Chat, provider status, BYOK keys in Keychain/Keystore, camera/photo attach for vision. Talks to
+your AutoMoto server over your LAN/VPN. See [apps/mobile/README.md](apps/mobile/README.md).
+
+```bash
+# on your PC
+AUTOMOTO_API_TOKEN=$(python -c "import secrets;print(secrets.token_urlsafe(24))") \
+  python -m automoto serve --host 0.0.0.0 --no-browser
+# in apps/mobile
+./tool/bootstrap.sh && flutter run
+```
+
+These are honest scaffolds: they compile from source with the usual SDKs, but signing, store
+listings and production builds need your own Xcode / Android Studio setup.
+
+---
+
+## 🔒 Security
+
+- **BYOK** — no keys in the repo; `.env` is git-ignored; web UI keys live in `sessionStorage` (gone on tab close); mobile keys in Keychain/Keystore.
+- Keys are never logged or returned by the API.
+- Local server binds `127.0.0.1`, uses a per-launch session token, and refuses network binding without `AUTOMOTO_API_TOKEN`.
+- Desktop actions: fixed tool list, explicit confirmation, local-only, no delete tool, shell off by default.
+
+Details in [SECURITY.md](SECURITY.md).
+
+---
+
+## 🧪 Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+All AI calls are mocked — no keys needed. Covers registry vision flags, failover when the first
+provider raises, vision requests skipping non-vision providers, strong→default model fallback,
+BYOK keys, key masking, action confirmation and the web API token. CI runs on Windows, macOS and Linux.
+
+## 🗂 Layout
+
+```
+automoto/
+  providers.py   provider registry (vision flags, models, priority) + transports
+  router.py      ask(), auto-failover, classify_task(), recommend_provider()
+  agent.py       Cousin system prompt + action parsing
+  desktop.py     OS-aware desktop tools with risk levels
+  server.py      FastAPI API + web UI
+  cli.py         Rich CLI
+  web/index.html browser UI
+apps/desktop     Tauri 2 shell (Windows/macOS/Linux)
+apps/mobile      Flutter app (Android/iOS)
+tests/           pytest (mocked)
 ```
 
 ---
 
-## 📄 License
+## 👤 Developer
 
-MIT — see [LICENSE](LICENSE) for details.
+**Yasin Mohammed Miah** — Student of BCU, BSc Computing Top-Up (Hons) · [@ymmiah](https://github.com/ymmiah) · [ymmiah.com](https://ymmiah.com)
 
----
+Other projects: [GhostWires](https://github.com/ymmiah/GhostWires) (OSINT recon, [live](https://ghostwires.onrender.com)) ·
+[AegisSec](https://github.com/ymmiah/AegisSec) (security problem registry) · [OpenSecGate](https://github.com/ymmiah/OpenSecGate)
 
-## 📞 Support
-
-- 🐛 [Issues](https://github.com/ymmiah/automotoai/issues)
-- 💬 [Discussions](https://github.com/ymmiah/automotoai/discussions)
-- 🔒 [Security](SECURITY.md)
-- 📧 ymmiah96@gmail.com
-
----
-
-## 📊 Version History
-
-### v3.1.0 — Current
-- 🆕 **Voice I/O** — TTS (pyttsx3 / espeak / flite fallback chain) + STT (Whisper API / Google)
-- 🆕 **Auto-speak** — 🔇/🔊 toggle reads every AI reply aloud via browser Speech Synthesis
-- 🆕 **Speech Recognition** — real-time interim results, multi-language, auto-send on end
-- 🆕 **GUI dialogs** — tkinter / zenity / kdialog with graceful headless fallback
-- 🆕 **Linux window management** — wmctrl + xdotool: focus, minimize, maximize, close, move/resize
-- 🆕 **Multi-backend screenshots** — pyautogui → scrot → gnome-screenshot → maim → ImageMagick
-- 🆕 **Linux app discovery** — XDG .desktop files + dpkg/rpm/flatpak/snap
-- 🆕 **xdotool / ydotool input fallback** — keyboard/mouse work without pyautogui when DISPLAY is set
-- 🆕 **15 new AI tools** — voice, window, dialog, mouse click/scroll/drag
-- 🆕 **Encrypted API key storage** — Fernet AES-128 + PBKDF2 (200k iterations)
-- 🆕 **TOTP 2FA** — protects kill/delete/launch operations
-- 🆕 **Tamper-evident audit log** — HMAC-SHA256 chain
-- 🆕 **Sandboxed tool execution** — timeout + resource limits + path allowlist
-- 🆕 **Automatic security update checks** — background PyPI daemon
-
-### v3.0.0
-- 🆕 AI Design Studio (DALL-E 3 generation + DALL-E 2 inpainting + 7 export formats)
-- 🆕 Document Intelligence (read/write/convert 10+ formats)
-- 🆕 18 AI tools including `generate_image`
-- 🆕 Gemini multi-turn content format with system instruction
-- 🆕 Updated all provider model defaults to latest 2025/2026 versions
-- 🆕 Security hardening: CSRF, path sandboxing, upload limits, app allowlist
-
-### v2.1.0
-- Added BLACKBOX AI as 4th provider
-
-### v2.0.0
-- Multi-provider architecture (OpenAI · Gemini · Claude)
-
-### v1.0.0
-- Initial release — OpenAI GPT-4 + core desktop automation
-
----
-
-<div align="center">
-
-**Built with ❤️ by Yasin Mohammed Miah**
-
-[Back to Top](#-automoto-ai) · [Issues](https://github.com/ymmiah/automotoai/issues) · [Security](SECURITY.md) · [Discussions](https://github.com/ymmiah/automotoai/discussions)
-
-</div>
+MIT licensed — see [LICENSE](LICENSE). Contributions welcome: [CONTRIBUTING.md](CONTRIBUTING.md).

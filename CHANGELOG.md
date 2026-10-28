@@ -1,6 +1,42 @@
 # AutoMoto AI - Version History & Changelog
 
-## Version 2.1.0 (Current) - 11/10/2025
+## Version 4.0.0 "Cousin" - 27/10/2026
+**Rebuild: the code now matches the README.**
+
+### Fixed (what was broken in 2.1 / "3.1")
+- `openai.ChatCompletion` (removed in openai>=1.0) replaced with the current client.
+- `gemini-pro` (retired) replaced; Gemini now uses Google's OpenAI-compatible endpoint.
+- Failover only happened when a provider *wasn't configured*; real errors (429, 5xx, bad key,
+  timeout) were returned to the user as text. Now every failure moves to the next AI.
+- `VERSION` still said 2.1.0 while the README advertised 3.1.0.
+- System prompt claimed "Windows assistant"; tools now work on Windows, macOS and Linux.
+- `.gitignore` ignored `test_*.py`, so tests could never be committed.
+- README/SECURITY described a browser UI, voice I/O, Design Studio, 33 tools, TOTP 2FA and
+  encrypted vaults that did not exist in code. Those claims are removed.
+
+### New
+- `automoto/` package: provider registry with vision flags, priority, text/vision/strong models.
+- Providers: NVIDIA NIM, Google Gemini, Groq, OpenRouter (free), OpenAI, Anthropic Claude.
+- `ask()` with auto-failover, `need_vision` routing, per-request BYOK keys, `tried` trail.
+- Task heuristic: `classify_task()` / `recommend_provider()` (vision / code / chat).
+- FastAPI local web UI with provider chips, auto mode, image paste/drop, screen explain,
+  BYOK dialog (sessionStorage), and Run/Skip cards for proposed desktop actions.
+- Rich CLI: chat, `ask --image`, `status`, `recommend`, `serve`.
+- Desktop tools with risk levels and mandatory confirmation; shell off by default.
+- `apps/desktop` Tauri 2 shell (Windows/macOS/Linux) and `apps/mobile` Flutter app
+  (Android/iOS) scaffolds.
+- pytest suite (mocked HTTP) + CI on Windows/macOS/Linux.
+
+### Removed
+- BLACKBOX provider (no documented public chat API).
+- Legacy docs that described non-existent features (INDEX, PROJECT_SUMMARY, DOCUMENTATION,
+  ARCHITECTURE.txt, setup_guide.txt, AI_PROVIDERS_GUIDE, QUICKSTART) - replaced by README.
+
+---
+
+> Note: README "v3.0/v3.1" entries were documentation-only; no v3 code was ever released.
+
+## Version 2.1.0 - 11/10/2025
 **Major Update: BLACKBOX AI Integration & Complete HTML Documentation**
 
 ### 🆕 New Features

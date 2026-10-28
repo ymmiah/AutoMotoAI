@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "No native commands are exposed to the web UI; it talks only to the local AutoMoto API.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

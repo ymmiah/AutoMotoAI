@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AutoMoto AI v__AUTOMOTO_VERSION__ · Cousin</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --line:#1f2a37; --text:#e6edf3; --dim:#8b98a5; --acc:#38f2a5; --acc2:#7c5cff; --bad:#ff6b6b; --warn:#ffc857; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:radial-gradient(1200px 600px at 10% -10%,#12233a 0,var(--bg) 60%); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; gap:12px; align-items:center; padding:12px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .logo { font-weight:800; letter-spacing:.3px; }
+  .logo b { color:var(--acc); }
+  .tag { color:var(--dim); font-size:12px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .chip { font-size:12px; padding:3px 9px; border-radius:999px; border:1px solid var(--line); color:var(--dim); cursor:pointer; user-select:none; }
+  .chip.on { color:#04110b; background:var(--acc); border-color:var(--acc); font-weight:600; }
+  .chip.sel { outline:2px solid var(--acc2); }
+  select, button, input, textarea { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; }
+  button { padding:8px 14px; cursor:pointer; }
+  button.primary { background:linear-gradient(90deg,var(--acc),#2bd1ff); color:#04110b; border:0; font-weight:700; }
+  button:disabled { opacity:.5; cursor:wait; }
+  main { flex:1; overflow:auto; padding:18px; max-width:980px; width:100%; margin:0 auto; }
+  .msg { padding:12px 14px; border-radius:14px; margin:10px 0; border:1px solid var(--line); background:var(--panel); white-space:pre-wrap; word-wrap:break-word; }
+  .msg.user { background:#16202d; border-color:#24344a; margin-left:12%; }
+  .msg.err { border-color:var(--bad); color:#ffd0d0; }
+  .meta { font-size:12px; color:var(--dim); margin-top:6px; }
+  .msg pre { background:#0a0e13; padding:10px; border-radius:8px; overflow:auto; white-space:pre; }
+  .msg code { background:#0a0e13; padding:1px 5px; border-radius:5px; }
+  .action { border:1px dashed var(--warn); border-radius:10px; padding:8px 10px; margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .action .risk { font-size:11px; padding:1px 7px; border-radius:6px; background:#3a2e00; color:var(--warn); }
+  .action .risk.danger { background:#3a0b0b; color:var(--bad); }
+  .msg img.thumb { max-height:120px; border-radius:8px; display:block; margin-top:6px; }
+  footer { border-top:1px solid var(--line); padding:12px 18px; }
+  .row { display:flex; gap:8px; max-width:980px; margin:0 auto; align-items:flex-end; }
+  textarea { flex:1; resize:vertical; min-height:48px; max-height:240px; padding:10px 12px; }
+  .att { max-width:980px; margin:0 auto 6px; color:var(--dim); font-size:12px; }
+  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; max-width:520px; width:92%; }
+  dialog input { width:100%; padding:8px; margin:4px 0 10px; }
+  .hello { color:var(--dim); text-align:center; margin-top:8vh; }
+  .hello h1 { color:var(--text); margin:0 0 6px; }
+  a { color:#7cc4ff; }
+</style>
+</head>
+<body>
+<header>
+  <div><div class="logo">🤖 AutoMoto <b>AI</b> v__AUTOMOTO_VERSION__</div><div class="tag">"Cousin" · multi-AI · auto-failover · vision routing</div></div>
+  <select id="mode" title="Which AI answers first">
+    <option value="auto">Auto (best available)</option>
+  </select>
+  <button id="keysBtn" title="Bring your own key - kept in this tab only">🔑 Keys</button>
+  <div class="chips" id="chips"></div>
+</header>
+<main id="log">
+  <div class="hello" id="hello">
+    <h1>Hey, cousin 👋</h1>
+    <div>Ask anything — code, plans, writing, or drop a screenshot. I pick the best AI and switch automatically if one fails.</div>
+    <div id="os" style="margin-top:6px"></div>
+  </div>
+</main>
+<footer>
+  <div class="att" id="att"></div>
+  <div class="row">
+    <input type="file" id="file" accept="image/*" multiple hidden />
+    <button id="attach" title="Attach image (or paste / drop)">📎</button>
+    <button id="screen" title="Capture my screen and explain it (asks first)">🖥️</button>
+    <textarea id="input" placeholder="Message AutoMoto… (Enter to send, Shift+Enter for newline)"></textarea>
+    <button class="primary" id="send">Send</button>
+  </div>
+</footer>
+
+<dialog id="keysDlg">
+  <form method="dialog">
+    <h3 style="margin-top:0">🔑 Bring your own keys</h3>
+    <p class="tag">Optional — keys in your local <code>.env</code> already work. Keys typed here live only in this tab (<code>sessionStorage</code>), are sent only to your local AutoMoto server for that request, and vanish when you close the tab.</p>
+    <div id="keyFields"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button value="forget" id="forget">Forget keys</button>
+      <button value="save" class="primary">Save for this tab</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const TOKEN = "__AUTOMOTO_TOKEN__";
+const $ = (id) => document.getElementById(id);
+const history = [];
+let pending = [];
+let providers = [];
+let desktop = false;
+
+const keys = () => { try { return JSON.parse(sessionStorage.getItem("automoto_keys") || "{}"); } catch { return {}; } };
+const api = async (path, body) => {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json", "X-AutoMoto-Token": TOKEN }, body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.detail || data.error || r.statusText), { data });
+  return data;
+};
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function md(s) {
+  let h = esc(s);
+  h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, c) => `<pre><code>${c}</code></pre>`);
+  h = h.replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  h = h.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return h;
+}
+function add(role, html, meta) {
+  $("hello")?.remove();
+  const d = document.createElement("div");
+  d.className = "msg " + role;
+  d.innerHTML = html + (meta ? `<div class="meta">${meta}</div>` : "");
+  $("log").appendChild(d);
+  $("log").scrollTop = 1e9;
+  return d;
+}
+async function refresh() {
+  const st = await api("/api/status", { keys: keys() });
+  const full = await api("/api/status");
+  providers = st.providers; desktop = full.desktop;
+  $("os").textContent = `Running on ${full.os} · desktop tools ${desktop ? "on (confirm before run)" : "off"}`;
+  const mode = $("mode"), cur = mode.value;
+  mode.innerHTML = '<option value="auto">Auto (best available)</option>' + providers.map(p => `<option value="${p.id}" ${p.configured ? "" : "disabled"}>${p.label}${p.supports_vision ? " 👁" : ""}${p.configured ? "" : " (no key)"}</option>`).join("");
+  mode.value = cur || st.mode || "auto";
+  $("chips").innerHTML = providers.map(p => `<span class="chip ${p.configured ? "on" : ""}" data-id="${p.id}" title="${p.label}: ${p.configured ? "ready" : "add " + p.env_keys[0]} · text ${p.text_model}${p.vision_model ? " · vision " + p.vision_model : " · no vision"}">${p.label.split(" ")[0]}${p.supports_vision ? " 👁" : ""}</span>`).join("");
+  if (!providers.some(p => p.configured)) add("err", "No AI keys yet. Add one to <code>.env</code> (free: NVIDIA NIM, Gemini, Groq, OpenRouter) or click 🔑 Keys.");
+}
+function renderActions(el, actions) {
+  for (const a of actions) {
+    const row = document.createElement("div");
+    row.className = "action";
+    row.innerHTML = `<span class="risk ${a.risk}">${a.risk}</span><code>${esc(a.tool)}(${esc(Object.entries(a.args).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", "))})</code><span class="tag">${esc(a.why || "")}</span>`;
+    const run = document.createElement("button"); run.textContent = "Run";
+    const skip = document.createElement("button"); skip.textContent = "Skip";
+    run.onclick = async () => {
+      if (a.risk === "danger" && !confirm("This runs a shell command on your computer. Continue?")) return;
+      run.disabled = skip.disabled = true;
+      try { const r = await api("/api/actions/execute", { action: a, confirmed: true }); row.insertAdjacentHTML("beforeend", `<span class="tag">→ ${esc(String(r.result || r.error))}</span>`); }
+      catch (e) { row.insertAdjacentHTML("beforeend", `<span class="tag" style="color:var(--bad)">→ ${esc(e.message)}</span>`); }
+    };
+    skip.onclick = () => { row.style.opacity = .4; run.disabled = skip.disabled = true; };
+    row.append(run, skip);
+    el.appendChild(row);
+  }
+}
+function metaOf(r) {
+  const hops = (r.tried || []).map(t => t.ok ? `${t.provider}` : `<s>${t.provider}</s>`).join(" → ");
+  return `${r.provider} · ${r.model} · ${r.task}${(r.tried || []).length > 1 ? " · switched: " + hops : ""}`;
+}
+async function send() {
+  const text = $("input").value.trim();
+  if (!text && !pending.length) return;
+  const content = pending.length ? [{ type: "text", text: text || "Describe this image." }, ...pending.map(u => ({ type: "image_url", image_url: { url: u } }))] : text;
+  add("user", esc(text) + pending.map(u => `<img class="thumb" src="${u}">`).join(""));
+  history.push({ role: "user", content });
+  $("input").value = ""; pending = []; $("att").textContent = "";
+  $("send").disabled = true;
+  const thinking = add("", "…thinking");
+  try {
+    const r = await api("/api/chat", { messages: history.slice(-20), prefer: $("mode").value, keys: keys(), client: "web" });
+    thinking.remove();
+    history.push({ role: "assistant", content: r.text });
+    const el = add("", md(r.text), metaOf(r));
+    if (r.actions?.length) renderActions(el, r.actions);
+  } catch (e) {
+    thinking.remove(); history.pop();
+    const tried = e.data?.tried ? "<br>" + e.data.tried.map(t => `${t.provider}: ${esc(t.error || "")}`).join("<br>") : "";
+    add("err", "✗ " + esc(e.message) + tried);
+  } finally { $("send").disabled = false; $("input").focus(); }
+}
+function addFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) continue;
+    if (f.size > 6e6) { alert(f.name + " is over 6 MB"); continue; }
+    const rd = new FileReader();
+    rd.onload = () => { pending.push(rd.result); $("att").textContent = `📎 ${pending.length} image(s) attached — a vision AI will answer`; };
+    rd.readAsDataURL(f);
+  }
+}
+$("send").onclick = send;
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("attach").onclick = () => $("file").click();
+$("file").onchange = (e) => addFiles(e.target.files);
+document.addEventListener("paste", (e) => addFiles([...(e.clipboardData?.files || [])]));
+document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("drop", (e) => { e.preventDefault(); addFiles([...e.dataTransfer.files]); });
+$("screen").onclick = async () => {
+  if (!desktop) return alert("Screen capture works only when AutoMoto runs on this computer with desktop tools on.");
+  if (!confirm("Take a screenshot of your screen and send it to a vision AI?")) return;
+  const t = add("", "…capturing screen");
+  try { const r = await api("/api/screen/explain", { confirmed: true, prefer: $("mode").value, keys: keys() }); t.remove(); add("", md(r.text), metaOf(r)); }
+  catch (e) { t.remove(); add("err", "✗ " + esc(e.message)); }
+};
+$("keysBtn").onclick = () => {
+  const k = keys();
+  $("keyFields").innerHTML = providers.map(p => `<label>${p.label} <span class="tag">(${p.env_keys[0]}${p.free_tier ? ", free tier" : ""} · <a href="${p.signup_url}" target="_blank" rel="noopener">get key</a>)</span><input type="password" autocomplete="off" data-id="${p.id}" value="${esc(k[p.id] || "")}" placeholder="${p.configured && !k[p.id] ? "set in .env" : "paste key"}"></label>`).join("");
+  $("keysDlg").showModal();
+};
+$("keysDlg").addEventListener("close", () => {
+  if ($("keysDlg").returnValue === "forget") sessionStorage.removeItem("automoto_keys");
+  else if ($("keysDlg").returnValue === "save") {
+    const k = {}; document.querySelectorAll("#keyFields input").forEach(i => { if (i.value.trim()) k[i.dataset.id] = i.value.trim(); });
+    sessionStorage.setItem("automoto_keys", JSON.stringify(k));
+  }
+  refresh();
+});
+refresh().catch(e => add("err", "Can't reach AutoMoto server: " + esc(e.message)));
+</script>
+</body>
+</html>
