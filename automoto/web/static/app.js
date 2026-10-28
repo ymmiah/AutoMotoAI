@@ -307,7 +307,7 @@ function renderChat(conv) {
         <label class="sr" for="composerInput">Message</label>
         <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? "Give AutoMoto a goal…" : "Message AutoMoto…"}"></textarea>
         <div class="bar">
-          <input type="file" id="fileInput" accept="image/*,.docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.pptx,.ppt,.odp,.pdf,.md,.txt" multiple hidden>
+          <input type="file" id="fileInput" accept="image/*,.docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.tsv,.pptx,.ppt,.odp,.pdf,.md,.txt,.log,.json,.jsonl,.yaml,.yml,.toml,.xml,.parquet,.sqlite,.db,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar" multiple hidden>
           <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach image or file" title="Attach an image, Word, Excel, PowerPoint or PDF file (or paste / drop)">${icon("clip")}</button>
           <span class="hint">Enter to send · Shift+Enter new line · ${isMac ? "⌘" : "Ctrl"}+K commands</span>
           <span class="spacer"></span>
@@ -588,7 +588,7 @@ async function shrink(dataUrl) {
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.85);
 }
-const MAX_UPLOAD_MB = 25;
+const MAX_UPLOAD_MB = 50;
 async function uploadFile(f, dir = "uploads") {
   if (f.size > MAX_UPLOAD_MB * 1048576) throw new Error(`${f.name} is larger than ${MAX_UPLOAD_MB} MB`);
   const data = await readAsDataURL(f);
@@ -873,9 +873,9 @@ PAGES.tools = async () => {
 };
 
 PAGES.files = async () => {
-  page("Files", "Your AutoMoto workspace. Upload Word, Excel, PowerPoint or PDF files for the agent, preview pages and download what it made. Uploaded files are checked (size, zip bombs, XXE) and macros are never run.",
+  page("Files", "Your AutoMoto workspace. Upload Office files, PDFs, CSV/JSON/YAML data, logs and ZIP/tar archives (for example WordPress plugins and themes) for the agent; preview, extract, re-pack and download what it made. Uploads are checked (size, zip-slip, symlinks, zip bombs, XXE) and macros are never run.",
     `<div class="toolbar"><span id="fBreadcrumb" class="muted"></span><span style="flex:1"></span>
-      <input type="file" id="fUpload" multiple hidden accept=".docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.pptx,.ppt,.odp,.pdf,.md,.txt,image/*">
+      <input type="file" id="fUpload" multiple hidden accept=".docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.tsv,.pptx,.ppt,.odp,.pdf,.md,.txt,.log,.json,.jsonl,.yaml,.yml,.toml,.xml,.parquet,.sqlite,.db,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar,image/*">
       <button class="btn" id="fRefresh">${icon("refresh")} Refresh</button>
       <button class="btn primary" id="fUploadBtn">${icon("upload")} Upload</button></div>
      <div id="fNote" class="muted" style="font-size:13px;margin:6px 0 12px"></div><div class="grid files-grid" id="fList"></div>`);
@@ -892,15 +892,55 @@ PAGES.files = async () => {
     $("#fBreadcrumb").innerHTML = [`<a href="#" data-dir=".">workspace</a>`, ...crumbs.map((c, i) => `<a href="#" data-dir="${esc(crumbs.slice(0, i + 1).join("/"))}">${esc(c)}</a>`)].join(" / ");
     $("#fNote").textContent = d.libreoffice ? "Previews are rendered with LibreOffice (macros disabled)." : "Install LibreOffice (free) for Word/Excel/PowerPoint previews and PDF export.";
     $("#fList").innerHTML = d.items.length ? d.items.map((it) => it.dir
-      ? `<button class="card file-card dir" data-dir="${esc(it.path)}">${icon("folder")}<b>${esc(it.name)}</b></button>`
+      ? `<div class="card file-card dir"><button class="linkish" data-dir="${esc(it.path)}">${icon("folder")}<b>${esc(it.name)}</b></button>
+          <button class="btn sm" data-pack="${esc(it.path)}" title="Make ${esc(it.name)}.zip (deterministic, .git/node_modules/.env left out)">${icon("archive")} Zip</button></div>`
       : `<div class="card file-card">${it.preview ? `<div class="fprev"><img loading="lazy" src="${prevUrl(it.path)}" alt="First page of ${esc(it.name)}"></div>` : `<div class="fprev none">${icon("file")}</div>`}
           <div class="fmeta"><b title="${esc(it.path)}">${esc(it.name)}</b><span class="muted">${fmt(it.size)}</span></div>
           <div class="factions"><a class="btn" href="${dlUrl(it.path)}" download>${icon("download")} Download</a>
-          <button class="btn" data-ask="${esc(it.path)}">${icon("chat")} Ask agent</button></div></div>`).join("")
+          <button class="btn" data-ask="${esc(it.path)}">${icon("chat")} Ask agent</button>
+          ${it.view ? `<button class="btn" data-view="${esc(it.path)}">${icon("eye")} View</button>` : ""}
+          ${it.view === "archive" ? `<button class="btn" data-extract="${esc(it.path)}">${icon("folder")} Extract</button><button class="btn" data-repack="${esc(it.path)}" title="Re-pack as a clean zip (drops __MACOSX, .DS_Store, .git, .env…)">${icon("archive")} Clean zip</button>` : ""}</div></div>`).join("")
       : '<div class="card muted">Empty folder. Upload a file or ask the agent to create a document.</div>';
     $$(".fprev img").forEach((im) => im.addEventListener("error", () => { im.parentNode.classList.add("none"); im.parentNode.innerHTML = icon("file"); }));
     $$("[data-dir]").forEach((a) => a.onclick = (e) => { e.preventDefault(); dir = a.dataset.dir; draw(); });
     $$("[data-ask]").forEach((b) => b.onclick = () => { state.files = [b.dataset.ask]; location.hash = "#/new"; setTimeout(renderAttachments, 50); });
+    $$("[data-view]").forEach((b) => b.onclick = () => viewFile(b.dataset.view));
+    const act = async (action, path, verb) => {
+      try { const r = await api("/api/files/archive", { action, path }); toast(`${verb} ${r.path}${r.files != null ? ` (${r.files} files)` : ""}`); draw(); }
+      catch (e) { toast(e.message, "bad"); }
+    };
+    $$("[data-extract]").forEach((b) => b.onclick = () => act("extract", b.dataset.extract, "Extracted to"));
+    $$("[data-repack]").forEach((b) => b.onclick = () => act("repack", b.dataset.repack, "Wrote"));
+    $$("[data-pack]").forEach((b) => b.onclick = () => act("pack", b.dataset.pack, "Wrote"));
+  }
+  async function viewFile(path) {
+    let d;
+    try { d = await api(`/api/files/inspect?path=${encodeURIComponent(path)}`); } catch (e) { toast(e.message, "bad"); return; }
+    let body = "";
+    if (d.kind === "archive") {
+      const r = d.report;
+      const verdict = r.safe ? '<span class="pill st-live">safe to extract</span>' : '<span class="pill bad">unsafe</span>';
+      const tree = d.entries.map((e) => {
+        const depth = e.name.split("/").length - (e.kind === "dir" ? 2 : 1);
+        const label = e.name.split("/").filter(Boolean).pop() + (e.kind === "dir" ? "/" : "");
+        return `<div class="tree-row${e.problem ? " bad" : ""}" style="padding-left:${Math.max(0, depth) * 16}px">${icon(e.kind === "dir" ? "folder" : "file")}<span>${esc(label)}</span><span class="muted">${e.kind === "dir" ? "" : fmt(e.size)}${e.encrypted ? " · encrypted" : ""}${e.problem ? " · " + esc(e.problem) : ""}</span></div>`;
+      }).join("");
+      body = `<p>${verdict} ${esc(r.format)} · ${r.files} files · ${fmt(r.unpacked_bytes)} unpacked${r.encrypted ? ` · ${r.encrypted} encrypted` : ""}</p>
+        ${[...r.problems, ...r.warnings].map((x) => `<div class="muted">• ${esc(x)}</div>`).join("")}
+        <div class="tree">${tree}${d.truncated ? '<div class="muted">… more entries</div>' : ""}</div>`;
+    } else if (d.kind === "table") {
+      const info = d.info || {};
+      body = `<p class="muted">${d.total_rows.toLocaleString()} rows · ${d.columns.length} columns${info.delimiter ? ` · delimiter <code>${esc(info.delimiter === "\t" ? "tab" : info.delimiter)}</code>` : ""}${info.encoding ? ` · ${esc(info.encoding)}` : ""} · first ${d.rows.length} shown</p>
+        <div class="table-wrap"><table class="data"><thead><tr>${d.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+        <tbody>${d.rows.map((r) => `<tr>${r.map((v) => `<td>${v == null ? '<span class="muted">-</span>' : esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    } else if (d.kind === "data") {
+      body = `<pre class="code">${esc(d.outline.join("\n"))}</pre>`;
+    } else {
+      body = `<p class="muted">Last 200 lines</p><pre class="code">${esc(d.text)}</pre>`;
+    }
+    openModal(`<h3>${icon("eye")} ${esc(path.split("/").pop())}</h3><div class="viewer">${body}</div>
+      <div class="toolbar" style="margin-top:12px"><span style="flex:1"></span><a class="btn" href="${dlUrl(path)}" download>${icon("download")} Download</a><button class="btn primary" data-close>Close</button></div>`,
+      { label: `View ${path}`, onMount: (m, close) => { $("[data-close]", m).onclick = close; } });
   }
   $("#fRefresh").onclick = draw;
   $("#fUploadBtn").onclick = () => $("#fUpload").click();

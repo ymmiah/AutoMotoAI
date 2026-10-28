@@ -316,6 +316,21 @@ input[type="color"] { width: 34px; height: 34px; border: 0; padding: 0; backgrou
 .files-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .file-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; text-align: left; }
 .file-card.dir { flex-direction: row; align-items: center; cursor: pointer; font: inherit; color: inherit; }
+.file-card.dir { justify-content: space-between; }
+.file-card.dir .linkish { display: flex; align-items: center; gap: 8px; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; text-align: left; min-width: 0; }
+.btn.sm { padding: 4px 8px; font-size: 12px; }
+.viewer { max-height: 62vh; overflow: auto; }
+.tree { font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 6px; margin-top: 8px; }
+.tree-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; white-space: nowrap; }
+.tree-row svg { width: 14px; height: 14px; flex: none; opacity: .7; }
+.tree-row .muted { margin-left: auto; padding-left: 12px; font-size: 12px; }
+.tree-row.bad { color: var(--bad, #ff5d5d); }
+.table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+table.data { border-collapse: collapse; font-size: 12.5px; width: max-content; min-width: 100%; }
+table.data th, table.data td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.data th { position: sticky; top: 0; background: var(--panel2); }
+pre.code { font-size: 12px; white-space: pre-wrap; word-break: break-word; background: var(--panel2); padding: 10px; border-radius: 8px; border: 1px solid var(--line); }
+.pill.bad { background: rgba(255, 93, 93, .15); color: var(--bad, #ff5d5d); }
 .fprev { aspect-ratio: 4 / 3; border-radius: 8px; background: var(--panel2); overflow: hidden; display: grid; place-items: center; border: 1px solid var(--line); }
 .fprev img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
 .fprev.none svg { width: 36px; height: 36px; opacity: .5; }

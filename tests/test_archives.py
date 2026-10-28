@@ -350,3 +350,66 @@ def test_download_file_saves_and_checks(ws, monkeypatch):
     monkeypatch.setattr(netguard, "request", lambda url, **kw: netguard.Response(url, 200, "x", b"x" * (2 * 1024 * 1024 + 2)))
     with pytest.raises(tools.ToolFailed, match="larger than"):
         archive_tools.download_file(tools.ToolContext(), "https://e.org/big.bin", max_mb=2)
+
+
+@pytest.fixture
+def client():
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    from automoto import server
+
+    return TestClient(server.app), {"X-AutoMoto-Token": server.SESSION_TOKEN}
+
+
+def _b64(b: bytes) -> str:
+    import base64
+    return base64.b64encode(b).decode()
+
+
+def test_server_upload_inspect_extract_pack(client, ws):
+    c, H = client
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("hello-dolly/hello.php", "<?php\n/* Plugin Name: Hello */\n")
+        zf.writestr("hello-dolly/readme.txt", "=== Hello ===\n")
+        zf.writestr("__MACOSX/hello-dolly/._hello.php", "x")
+    r = c.post("/api/files/upload", json={"name": "hello-dolly.zip", "data": _b64(buf.getvalue())}, headers=H)
+    assert r.status_code == 200, r.text
+    assert any("zip archive, 3 file(s)" in n for n in r.json()["notes"])
+    lst = c.get("/api/files?dir=uploads", headers=H).json()["items"]
+    assert lst[0]["view"] == "archive"
+    v = c.get("/api/files/inspect", params={"path": "uploads/hello-dolly.zip"}, headers=H).json()
+    assert v["kind"] == "archive" and v["report"]["safe"] and any(e["name"] == "hello-dolly/hello.php" for e in v["entries"])
+    r = c.post("/api/files/archive", json={"action": "extract", "path": "uploads/hello-dolly.zip"}, headers=H)
+    assert r.status_code == 200 and r.json()["path"] == "uploads/hello-dolly"
+    assert (ws / "uploads" / "hello-dolly" / "hello-dolly" / "hello.php").exists()
+    r = c.post("/api/files/archive", json={"action": "repack", "path": "uploads/hello-dolly.zip"}, headers=H)
+    assert r.status_code == 200 and r.json()["path"] == "uploads/hello-dolly-repacked.zip"
+    assert zipfile.ZipFile(ws / "uploads" / "hello-dolly-repacked.zip").namelist() == [
+        "hello-dolly/", "hello-dolly/hello.php", "hello-dolly/readme.txt"]
+    r = c.post("/api/files/archive", json={"action": "pack", "path": "uploads/hello-dolly/hello-dolly"}, headers=H)
+    assert r.status_code == 200 and r.json()["path"] == "uploads/hello-dolly/hello-dolly.zip"
+    assert c.post("/api/files/archive", json={"action": "pack", "path": "."}, headers=H).status_code == 400
+    assert c.post("/api/files/archive", json={"action": "rm", "path": "x"}, headers=H).status_code == 422
+    assert c.post("/api/files/archive", json={"action": "extract", "path": "../../x.zip"}, headers=H).status_code == 400
+
+
+def test_server_refuses_unsafe_archive_and_previews_csv(client, ws):
+    c, H = client
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("../../evil.php", "<?php")
+    r = c.post("/api/files/upload", json={"name": "evil.zip", "data": _b64(buf.getvalue())}, headers=H)
+    assert r.status_code == 400 and "unsafe archive" in r.text
+    assert not list((ws / "uploads").glob("*evil*")) if (ws / "uploads").exists() else True
+    pytest.importorskip("pandas")
+    r = c.post("/api/files/upload", json={"name": "sales.csv", "data": _b64(b"region;units\nNorth;3\nSouth;4\n")}, headers=H)
+    assert r.status_code == 200
+    v = c.get("/api/files/inspect", params={"path": "uploads/sales.csv"}, headers=H).json()
+    assert v["kind"] == "table" and v["columns"] == ["region", "units"] and v["rows"][1] == ["South", "4"]
+    assert v["info"]["delimiter"] == ";" and v["total_rows"] == 3
+    (ws / "conf.yaml").write_text("a:\n  b: 1\n")
+    assert "b: int" in " ".join(c.get("/api/files/inspect", params={"path": "conf.yaml"}, headers=H).json()["outline"])
+    assert c.get("/api/files/inspect", params={"path": "uploads/sales.csv"}, headers={"X-AutoMoto-Token": "x"}).status_code == 403

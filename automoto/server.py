@@ -699,7 +699,10 @@ def agent_info(request: Request) -> dict[str, Any]:
 
 
 # -- files (workspace only): upload Office files, preview, download ------------------------
-MAX_UPLOAD = 25 * 1024 * 1024
+MAX_UPLOAD = 50 * 1024 * 1024
+_TABLE_EXT = {".csv", ".tsv", ".tab", ".psv", ".jsonl", ".ndjson", ".parquet", ".pq"}
+_DATA_EXT = {".json", ".geojson", ".yaml", ".yml", ".toml", ".xml", ".sqlite", ".sqlite3", ".db"}
+_TEXT_EXT = {".log", ".txt", ".md", ".markdown", ".ini", ".cfg", ".conf", ".php", ".css", ".js", ".html"}
 _PREVIEW_EXT = {".pdf", ".docx", ".doc", ".odt", ".rtf", ".xlsx", ".xls", ".ods", ".pptx", ".ppt", ".odp"}
 _IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 _FILES_SKIP = {".git", "node_modules", "__pycache__", ".venv", "venv"}
@@ -731,6 +734,21 @@ def _safe_name(name: str) -> str:
     return base
 
 
+def _view_kind(p: Path) -> str | None:
+    from automoto import archives
+
+    n, ext = p.name.lower(), p.suffix.lower()
+    if archives.is_archive_name(n) and ext not in (".docx", ".xlsx", ".pptx"):
+        return "archive"
+    if ext in _TABLE_EXT or ext in (".xlsx", ".xls", ".ods"):
+        return "table"
+    if ext in _DATA_EXT:
+        return "data"
+    if ext in _TEXT_EXT:
+        return "text"
+    return None
+
+
 @app.get("/api/files")
 def files_list(request: Request, dir: str = ".") -> dict[str, Any]:
     _authorise(request)
@@ -746,7 +764,8 @@ def files_list(request: Request, dir: str = ".") -> dict[str, Any]:
         st = p.stat()
         items.append({"name": p.name, "path": p.relative_to(root).as_posix(), "dir": p.is_dir(),
                       "size": st.st_size if p.is_file() else None, "mtime": int(st.st_mtime),
-                      "preview": p.suffix.lower() in _PREVIEW_EXT or p.suffix.lower() in _IMAGE_MIME})
+                      "preview": p.suffix.lower() in _PREVIEW_EXT or p.suffix.lower() in _IMAGE_MIME,
+                      "view": _view_kind(p) if p.is_file() else None})
     rel_dir = d.relative_to(root.resolve()).as_posix() if d != root.resolve() else "."
     from automoto import office
 
@@ -783,8 +802,23 @@ def files_upload(request: Request, body: UploadIn) -> dict[str, Any]:
     except office.OfficeError as exc:
         probe.unlink(missing_ok=True)
         raise HTTPException(400, f"refused: {exc}") from None
+    arch = None
+    from automoto import archives
+
+    if archives.is_archive_name(dest.name) and dest.suffix.lower() not in (".docx", ".xlsx", ".pptx"):
+        try:
+            arch = archives.inspect_path(probe)
+        except (archives.ArchiveError, OSError) as exc:
+            probe.unlink(missing_ok=True)
+            raise HTTPException(400, f"refused: {exc}") from None
+        if not arch["safe"]:
+            probe.unlink(missing_ok=True)
+            raise HTTPException(400, "refused: unsafe archive - " + "; ".join(arch["problems"]))
     probe.replace(dest)
     notes: list[str] = []
+    if arch:
+        notes.append(f"{arch['format']} archive, {arch['files']} file(s), {arch['unpacked_bytes']:,} bytes unpacked")
+        notes += arch["warnings"][:3]
     if info and info.get("macros"):
         notes.append("contains macros - AutoMoto never runs them")
     if info and info.get("external_links"):
@@ -849,6 +883,94 @@ def files_preview(request: Request, path: str, page: int = 1):
         except office.OfficeError as exc:
             raise HTTPException(422, str(exc)) from None
     return FileResponse(png, media_type="image/png", headers=headers)
+
+
+@app.get("/api/files/inspect")
+def files_inspect(request: Request, path: str, rows: int = 50) -> dict[str, Any]:
+    """Archive tree, table preview, structured outline or the tail of a text file (all read-only)."""
+    _authorise(request)
+    from automoto import archives
+    from automoto import datafiles as dfm
+
+    p = _ws_path(path)
+    if not p.is_file():
+        raise HTTPException(404, "no such file")
+    kind = _view_kind(p)
+    rows = max(1, min(int(rows), 200))
+    try:
+        if kind == "archive":
+            rep = archives.inspect_path(p)
+            _, ms, _ = archives.members_path(p)
+            entries = [m.as_dict() for m in sorted(ms, key=lambda m: m.name)[:3000]]
+            return {"kind": "archive", "report": rep, "entries": entries, "truncated": len(ms) > 3000}
+        if kind == "table":
+            df, info = dfm.load_table(p, nrows=max(rows, 1000))
+            head = df.head(rows)
+            cells = [[None if v is None or (isinstance(v, float) and v != v) else str(v)[:200] for v in r]
+                     for r in head.itertuples(index=False)]
+            lines = dfm.count_lines(p, 5_000_000)[0] if info["kind"] == "csv" else len(df)
+            return {"kind": "table", "columns": [str(c) for c in df.columns], "rows": cells, "total_rows": lines,
+                    "info": {k: v for k, v in info.items() if k in ("encoding", "delimiter", "header", "sheet", "kind")}}
+        if kind == "data":
+            if dfm.kind_of(p) == "sqlite":
+                return {"kind": "data", "outline": [f"{t['type']} {t['name']} ({t['rows']} rows): {', '.join(t['columns'][:20])}"
+                                                    for t in dfm.sqlite_schema(p)]}
+            return {"kind": "data", "outline": dfm.outline(dfm.load_structured(p), max_depth=4)[:400]}
+        if kind == "text":
+            return {"kind": "text", "text": dfm.tail(p, 200)}
+    except (archives.ArchiveError, dfm.DataError) as exc:
+        raise HTTPException(422, str(exc)) from None
+    raise HTTPException(415, "no inspector for this file type")
+
+
+class ArchiveActionIn(BaseModel):
+    action: str = Field(..., pattern="^(extract|pack|repack)$")
+    path: str = Field(..., min_length=1, max_length=400)
+
+
+@app.post("/api/files/archive")
+def files_archive(request: Request, body: ArchiveActionIn) -> dict[str, Any]:
+    """Extract an archive to a new sibling folder, zip a folder, or clean-repack an archive (workspace only)."""
+    _authorise(request)
+    from automoto import archives
+
+    p = _ws_path(body.path)
+    root = sandbox.default_root().resolve()
+
+    def unique(cand: Path) -> Path:
+        if not cand.exists():
+            return cand
+        for i in range(2, 1000):
+            c = cand.with_name(f"{cand.stem} ({i}){cand.suffix}" if cand.suffix else f"{cand.name} ({i})")
+            if not c.exists():
+                return c
+        raise HTTPException(409, "too many copies")
+    try:
+        if body.action == "extract":
+            if not p.is_file():
+                raise HTTPException(404, "no such file")
+            stem = p.name
+            for ext in sorted(archives.ARCHIVE_EXTS, key=len, reverse=True):
+                if stem.lower().endswith(ext):
+                    stem = stem[: -len(ext)]
+                    break
+            dest = unique(p.with_name(stem or "extracted"))
+            r = archives._extract(p, dest)
+            return {"path": dest.relative_to(root).as_posix(), "files": r["files"]}
+        if body.action == "pack":
+            if not p.is_dir() or p == root:
+                raise HTTPException(400, "choose a folder inside the workspace")
+            out = unique(p.with_name(p.name + ".zip"))
+            r = archives._create([p], out)
+        else:
+            if not p.is_file():
+                raise HTTPException(404, "no such file")
+            out = unique(p.with_name(p.name.rsplit(".", 1)[0].removesuffix(".tar") + "-repacked.zip"))
+            r = archives.repack(p, out)
+        return {"path": out.relative_to(root).as_posix(), "files": r["files"], "bytes": r["bytes_out"],
+                "sha256": r["sha256"], "skipped": r["skipped_count"]}
+    except archives.ArchiveError as exc:
+        raise HTTPException(422, str(exc)) from None
 
 
 # -- local apps, services, connectors ----------------------------------------------
