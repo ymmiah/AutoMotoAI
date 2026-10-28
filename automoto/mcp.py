@@ -20,7 +20,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from automoto import home
+from automoto import __version__, home
 from automoto import tools as tools_mod
 
 PROTOCOL = "2025-06-18"
@@ -44,7 +44,7 @@ class StdioServer:
         self._cv = threading.Condition()
         threading.Thread(target=self._read_loop, name=f"mcp-{name}", daemon=True).start()
         self._request("initialize", {"protocolVersion": PROTOCOL, "capabilities": {},
-                                     "clientInfo": {"name": "automoto", "version": "5.0.0"}})
+                                     "clientInfo": {"name": "automoto", "version": __version__}})
         self._notify("notifications/initialized")
 
     def _send(self, msg: dict[str, Any]) -> None:

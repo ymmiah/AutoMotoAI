@@ -1,7 +1,7 @@
 {
   "name": "automoto-desktop",
   "private": true,
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "AutoMoto AI v4 desktop shell (Tauri 2) for Windows, macOS and Linux",
   "scripts": {
     "dev": "tauri dev",

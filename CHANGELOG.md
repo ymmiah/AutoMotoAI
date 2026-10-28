@@ -1,5 +1,64 @@
 # AutoMoto AI - Version History & Changelog
 
+## Version 5.1.0 "Agent" - 28/10/2026
+**A real app: AutoMoto's web UI is rebuilt as a full chat app.**
+
+### New
+- **App-style GUI** (`automoto/web/`): a sidebar with new chat, search and saved conversations (grouped by date,
+  with rename and delete) and navigation to the pages. Next to it are the chat pane and an optional run-info pane
+  showing status, provider, model, steps and failovers. The frontend is vanilla ES modules with no build step;
+  marked, DOMPurify and highlight.js are vendored under `web/static/vendor/`, so nothing loads from a CDN.
+- **Chat:** markdown with highlighted code and copy buttons, live tool-step cards (icons, arguments, results,
+  timing), inline Approve / Deny cards (A / D keys), a Stop button, image paste, drag-drop and attach (shrunk in
+  the browser, max 4), an Agent / Chat toggle, an Auto-first provider picker, and an answer footer with the
+  provider, model, steps and failovers. Runs keep going in the background and pick up again when you reopen the
+  chat.
+- **Pages:**
+  - Memory: add, filter and forget facts, and a journal timeline.
+  - Routines: create, edit, pause or resume, run now, delete, and the last result.
+  - Skills: list, view, create, edit and customise.
+  - Tasks: live, with stop.
+  - Tools: safety badges.
+  - Settings: theme (dark, light or system), accent colour, approval mode, default mode, provider order, and
+    BYOK keys kept in sessionStorage only.
+- **Saved conversations** (`conversations.py`): SQLite in `AUTOMOTO_DATA_DIR`. Titles come from the first message.
+  Agent runs started with `conversation_id` take their history from the database and save the answer with its
+  provider, model and steps. Thinking events, oversized tool outputs and keys are never stored.
+- **Settings** (`settings.py`, `GET/PUT /api/settings`): `approval_mode` overrides `AUTOMOTO_APPROVAL`, and
+  `provider_order` reorders Auto failover. The API refuses anything that looks like a key, token, secret or
+  password.
+- **API:**
+  - `/api/conversations` (list, search, create, read, rename, delete) and `/api/conversations/chat`
+  - `PUT/DELETE /api/skills/{name}` (user skills only, from this computer only)
+  - `PATCH /api/routines/{name}`
+  - "Run now" for a routine records its last result
+- **UX:**
+  - Ctrl/⌘+K command palette, Ctrl/⌘+N or Ctrl/⌘+Shift+O for a new chat, Ctrl/⌘+B for the sidebar, Esc to stop
+  - an empty state with suggestion chips, and toasts
+  - a mobile layout (off-canvas sidebar below 760 px)
+  - reduced-motion support, ARIA labels and live regions
+
+### Security
+- The index page sends a strict CSP (`script-src 'self'`, no inline scripts, `frame-ancestors 'none'`,
+  `object-src 'none'`), plus `nosniff`, `no-referrer` and `no-store`. The session token moved into a meta tag.
+- Model output is rendered through DOMPurify, and links open with `noopener noreferrer`.
+- Everything from 5.0 is unchanged: the SSRF guard, sandbox, approvals and loopback-only desktop tools.
+
+### Tests
+- 12 new tests:
+  - conversations: titles, search, history and meta slimming
+  - the conversation chat and agent endpoints, checking that no BYOK key leaks into storage
+  - settings validation, the approval-mode override and provider order
+  - skill save and delete
+  - routine PATCH and run-now recording
+  - static assets and the CSP header
+- 112 in total.
+
+### Notes
+- Live updates use polling (`/api/tasks/{id}?since=`), not SSE.
+- The v4 screen-capture button is not in the new GUI. `/api/screen/explain` still works.
+- Chrome reserves Ctrl+N for itself, so use Ctrl+Shift+O there.
+
 ## Version 5.0.0 "Agent" - 28/10/2026
 **AutoMoto becomes an agent: it uses tools step by step until the job is done.**
 

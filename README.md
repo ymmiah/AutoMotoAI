@@ -8,7 +8,7 @@ Give it a goal. It picks the best free AI, searches the web, reads and writes fi
 sandbox, runs commands **after you approve**, remembers what matters, and keeps going until the
 job is done. If one AI is rate-limited or down, the next one carries on mid-task.
 
-[![Version](https://img.shields.io/badge/version-5.0.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.1.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Windows_·_macOS_·_Linux-555?style=for-the-badge)
@@ -27,13 +27,15 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
 ![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=anthropic&logoColor=white)
 
-<img src="docs/agent-ui.png" alt="AutoMoto agent mode: tool steps, approval cards and the task panel" width="860">
+<img src="docs/gui-approval-dark.png" alt="AutoMoto app: sidebar of saved chats, an agent run waiting on an Approve / Deny card, and the run info panel" width="860">
 
 </div>
 
 ---
 
 ## ✨ What it can do
+
+- **🖥 Feel like a real app.** A full chat app at `python -m automoto serve` (and inside the desktop shell): saved conversations, live tool-step cards, inline approvals, image attach, Memory / Routines / Skills / Tasks / Tools / Settings pages, dark and light themes, a command palette and a layout that works on a phone. [See the GUI](#-the-app).
 
 - **🛠 Work like an agent, not a chat box.** It plans, calls tools, reads the results and repeats until the goal is met (with a step limit so it can't loop forever).
 - **🔀 Use every AI you have a key for.** NVIDIA NIM, Gemini, Groq, OpenRouter (free tiers) plus OpenAI and Claude. It picks the best one for each step and **fails over mid-task** on rate limits, 5xx errors, bad keys or timeouts.
@@ -76,6 +78,40 @@ Every step goes back through the router, so if NIM rate-limits you on step 4, Gr
 picks up the same history on step 5. The agent keeps one provider-neutral history and renders
 it per provider (OpenAI tool messages, Claude `tool_use` blocks, or plain text for models
 without native tool calling).
+
+---
+
+## 🖥 The app
+
+`python -m automoto serve` opens a full app in your browser (the Tauri desktop shell shows the same one).
+Everything ships inside the Python package, with no build step and no CDN: the libraries are vendored and the page runs under a strict Content-Security-Policy (`script-src 'self'`, no inline scripts).
+
+<div align="center">
+<img src="docs/gui-light.png" alt="Light theme: a finished agent run with run_shell and write_file steps, both approved" width="640">
+&nbsp;
+<img src="docs/gui-mobile.png" alt="Phone width: chat mode answering a question about an attached image" width="190">
+</div>
+
+- **💬 Chats that stick around.** Every conversation is saved in SQLite (`~/.automoto/conversations.db`) and listed in the sidebar by Today / Yesterday / Previous 7 days / Older. You can search titles and message text, rename and delete. Titles come from your first message.
+- **⚡ Agent or 💭 Chat.** Use the toggle to switch: **Agent** uses tools step by step, **Chat** gives a plain answer. The provider picker defaults to **Auto** and the footer of every answer shows which AI answered, the model, the step count and any failovers.
+- **🧩 Live steps.** Each tool call is a collapsible card with an icon, its arguments, the result and its timing. Risky calls show an inline **Approve / Deny** card (keys **A** / **D**). **Stop** cancels between steps or while a run waits for approval. Runs keep going in the background if you switch chats, and the sidebar marks running chats.
+- **🖼 Images.** Paste, drag and drop, or use the 📎 button (up to 4 per message). Big photos are shrunk in the browser first, and images only go to vision-capable models.
+- **📝 Nice answers.** Markdown rendering (sanitised with DOMPurify), syntax-highlighted code blocks with copy buttons, and a copy button on every answer.
+- **📄 Pages.**
+  - **Memory:** add, filter and forget facts, plus a journal timeline.
+  - **Routines:** create, edit, pause or resume, run now, delete, and see the last result.
+  - **Skills:** browse, view, create and edit `SKILL.md` files. Bundled skills are read-only; **Customise** makes your own copy.
+  - **Tasks:** every run, live, with a stop button.
+  - **Tools:** every tool with a safe / risky / blocked badge.
+  - **Settings:** theme (dark, light or system), accent colour, approval mode, default mode, provider order, and bring-your-own keys.
+- **🔑 Keys stay in the tab.** BYOK keys live in `sessionStorage` only. They are sent with each request, never saved on the server (the settings API rejects anything that looks like a key), and they are wiped when you close the tab.
+- **⌨ Keyboard.**
+  - <kbd>Ctrl/⌘ K</kbd>: command palette (commands and chats)
+  - <kbd>Ctrl/⌘ N</kbd>: new chat. Chrome keeps Ctrl+N for itself, so use <kbd>Ctrl/⌘ Shift O</kbd> there.
+  - <kbd>Ctrl/⌘ B</kbd>: toggle the sidebar
+  - <kbd>Enter</kbd> sends, <kbd>Shift Enter</kbd> adds a new line
+  - <kbd>Esc</kbd> stops a run or closes a dialog
+- **♿ Accessible and responsive.** Built with landmarks, ARIA labels, a live region for the chat, visible focus rings and a skip link, and it honours `prefers-reduced-motion`. Below 760 px wide the sidebar slides in from the side.
 
 ---
 
@@ -197,11 +233,15 @@ Full details and honest limits are in [SECURITY.md](SECURITY.md).
 
 | Endpoint | What |
 |---|---|
-| `POST /api/agent` | Start an agent task: `{messages, prefer?, keys?, max_steps?}` → `{task_id}` |
+| `POST /api/agent` | Start an agent task: `{messages, prefer?, keys?, max_steps?}`, or `{conversation_id, message, …}` to continue a saved chat (the answer is saved when the run ends) → `{task_id, conversation_id}` |
+| `GET/POST /api/conversations?q=` · `GET/PATCH/DELETE /api/conversations/{id}` | Saved chats: list or search, create, read with messages, rename or change mode, delete |
+| `POST /api/conversations/chat` | Plain (no tools) turn in a saved chat: `{conversation_id, message, prefer?, keys?}` |
+| `GET/PUT /api/settings` | Theme, accent, default mode, approval mode, provider order (PUT only from this computer; keys are rejected) |
+| `GET /api/skills` · `GET/PUT/DELETE /api/skills/{name}` | List, read, save and delete user skills (writes only from this computer) |
 | `GET /api/tasks` · `GET /api/tasks/{id}?since=n` | Task list, and a task's status plus new events (steps, tool calls, results, approvals) |
 | `POST /api/tasks/{id}/approve` · `/cancel` | `{call_id, approve}`, or stop the task |
 | `GET/POST /api/memory` · `DELETE /api/memory/{id}` | Memory facts and journal |
-| `GET/POST /api/routines` · `DELETE /api/routines/{name}` · `POST …/{name}/run` | Routines |
+| `GET/POST /api/routines` · `PATCH/DELETE /api/routines/{name}` · `POST …/{name}/run` | Routines (PATCH changes the schedule or prompt, or pauses or resumes) |
 | `GET /api/agent/info` | Tools with safety levels, skills, sandbox and approval mode |
 | `POST /api/chat` · `GET/POST /api/status` · `POST /api/recommend` | v4 plain chat and provider status |
 
@@ -214,7 +254,7 @@ Interactive docs are at `/api/docs` while the server runs.
 | Part | Status |
 |---|---|
 | Agent loop, router with mid-task failover, tools, approvals, memory, skills, routines, background tasks | ✅ Working. Unit-tested and live-tested on NVIDIA NIM (native and text tool modes, vision, web search, approvals, a routine run) |
-| Web UI agent mode (steps, approval cards, tasks, memory, routines, tools) | ✅ Working. Tested end-to-end in headless Chrome |
+| Web app (v5.1): saved chats, agent and chat modes, approvals, images, all pages, themes, mobile layout | ✅ Working. Tested end-to-end in headless Chrome against NVIDIA NIM at desktop and phone widths |
 | Native tool calling on Gemini, Groq, OpenAI and Claude | 🟡 Implemented and unit-tested with fakes, not yet live-tested |
 | Docker sandbox runner | 🟡 Implemented, not yet tested on a machine with Docker. Falls back to the local sandbox |
 | MCP client (stdio) | 🟡 Working against a test server. Remote (HTTP) MCP is not supported |
@@ -229,10 +269,10 @@ Interactive docs are at `/api/docs` while the server runs.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q          # 100 tests, no keys and no network needed
+python -m pytest -q          # 112 tests, no keys and no network needed
 ```
 
-The tests cover: the agent loop (native, text fallback, native→text retry, mid-loop failover, bad-key skip, max steps, approvals, blocked calls), the sandbox path jail and symlink escapes, the shell timeout, policy modes, the SSRF guard (mapped/NAT64/6to4 cases), memory, skills, cron and interval scheduling, background-task approvals and cancel, the MCP stdio client, the API, and the v4 router. CI runs on Windows, macOS and Linux with Python 3.10 and 3.13.
+The tests cover: the agent loop (native, text fallback, native→text retry, mid-loop failover, bad-key skip, max steps, approvals, blocked calls), the sandbox path jail and symlink escapes, the shell timeout, policy modes, the SSRF guard (mapped/NAT64/6to4 cases), memory, skills, cron and interval scheduling, background-task approvals and cancel, the MCP stdio client, the API (including saved conversations, settings, skill editing, routine editing, and the GUI's static files and CSP), and the v4 router. CI runs on Windows, macOS and Linux with Python 3.10 and 3.13.
 
 ## 🗂 Layout
 
@@ -246,8 +286,10 @@ automoto/
   netguard.py    SSRF guard + pinned HTTP client
   memory.py      SQLite memory · skills.py SKILL.md loader · routines.py scheduler
   tasks.py       background tasks · mcp.py stdio MCP client
+  conversations.py saved chats (SQLite) · settings.py GUI settings (no secrets)
   server.py      FastAPI API + web UI · cli.py terminal · desktop.py OS actions
-  web/index.html browser UI · skills_bundled/ example skills
+  web/           index.html + static/ (app.js, app.css, icons, vendored marked / DOMPurify / highlight.js)
+  skills_bundled/ example skills
 apps/desktop     Tauri 2 shell · apps/mobile Flutter app · tests/ pytest
 ```
 
