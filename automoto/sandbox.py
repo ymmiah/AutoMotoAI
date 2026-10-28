@@ -56,7 +56,7 @@ def resolve(path: str | os.PathLike | None, *, base: Path | None = None) -> Path
 
 def rel(p: Path) -> str:
     try:
-        return str(p.relative_to(root())) or "."
+        return p.relative_to(root()).as_posix() or "."  # forward slashes on every OS
     except ValueError:  # pragma: no cover
         return str(p)
 
