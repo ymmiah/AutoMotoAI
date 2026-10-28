@@ -107,3 +107,7 @@ keys.json
 # GitHub
 .github/ISSUE_TEMPLATE/*.md.backup
 .github/PULL_REQUEST_TEMPLATE.md.backup
+
+# the desktop shell loading page is source, not build output
+!apps/desktop/dist/
+!apps/desktop/dist/index.html

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AutoMoto AI</title>
+<style>
+  body { margin:0; height:100vh; display:grid; place-items:center; background:#0b0f14; color:#e6edf3; font:15px system-ui,sans-serif; }
+  .box { text-align:center; max-width:460px; }
+  b { color:#38f2a5; }
+  code { background:#121821; padding:2px 6px; border-radius:6px; }
+  .dim { color:#8b98a5; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>🤖 AutoMoto <b>AI</b></h2>
+  <p id="msg">Starting your local AutoMoto server…</p>
+  <p class="dim" id="hint"></p>
+</div>
+<script>
+  // The Tauri shell spawns `python -m automoto serve` and this page waits for it,
+  // then hands the window over to the real web UI served on 127.0.0.1.
+  const URL_ = "http://127.0.0.1:8765/";
+  let tries = 0;
+  async function poll() {
+    tries++;
+    try {
+      await fetch(URL_ + "api/health", { mode: "no-cors", cache: "no-store" });
+      const t = window.__AUTOMOTO_LAUNCH;
+      location.replace(t ? URL_ + "?launch=" + encodeURIComponent(t) : URL_);
+      return;
+    } catch (_) {}
+    if (tries === 15) {
+      document.getElementById("msg").textContent = "Still waiting for the AutoMoto server…";
+      document.getElementById("hint").innerHTML =
+        "Make sure Python deps are installed (<code>pip install -r requirements.txt</code>) " +
+        "or start it yourself: <code>python -m automoto serve --no-browser</code>. " +
+        "Set <code>AUTOMOTO_HOME</code> to the repo folder and <code>AUTOMOTO_PYTHON</code> to your venv python.";
+    }
+    setTimeout(poll, 700);
+  }
+  poll();
+</script>
+</body>
+</html>
