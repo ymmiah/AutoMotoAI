@@ -105,7 +105,7 @@ def download_file(ctx: ToolContext, url: str, path: str = "", max_mb: int = 50) 
     if out.is_dir():
         raise ToolFailed(f"{sandbox.rel(out)} is a folder - give a file path")
     try:
-        r = netguard.request(url, timeout=120, max_bytes=cap + 1, headers={"Accept": "*/*"})
+        r = netguard.request(url, timeout=60, total_timeout=600, max_bytes=cap + 1, headers={"Accept": "*/*"})
     except netguard.BlockedURL as exc:
         raise ToolFailed(f"blocked: {exc}") from None
     except OSError as exc:

@@ -17,6 +17,7 @@ import http.client
 import ipaddress
 import socket
 import ssl
+import time
 import urllib.parse
 from dataclasses import dataclass
 
@@ -158,8 +159,15 @@ SENSITIVE_HEADERS = {"authorization", "proxy-authorization", "cookie", "private-
 
 
 def request(url: str, *, method: str = "GET", data: bytes | None = None, headers: dict[str, str] | None = None,
-            timeout: float = 20, max_redirects: int = 4, max_bytes: int = MAX_BYTES) -> Response:
+            timeout: float = 20, max_redirects: int = 4, max_bytes: int = MAX_BYTES,
+            total_timeout: float | None = None) -> Response:
+    # ``timeout`` is per socket operation; ``total_timeout`` caps the whole request so a server that
+    # trickles bytes (or stalls between reads) cannot hang the agent.
+    start = time.monotonic()
+    deadline = start + (total_timeout if total_timeout is not None else max(60.0, timeout * 4))
     for _ in range(max_redirects + 1):
+        if time.monotonic() > deadline:
+            raise BlockedURL("request took too long")
         parts, ip = check_url(url)
         port = parts.port or (443 if parts.scheme == "https" else 80)
         cls = _PinnedHTTPS if parts.scheme == "https" else _PinnedHTTP
@@ -180,7 +188,16 @@ def request(url: str, *, method: str = "GET", data: bytes | None = None, headers
                 if resp.status == 303:
                     method, data = "GET", None
                 continue
-            body = resp.read(max_bytes + 1)[:max_bytes]
+            chunks, got = [], 0
+            while got <= max_bytes:
+                if time.monotonic() > deadline:
+                    raise BlockedURL(f"download took too long (> {int(deadline - start)}s)")
+                piece = resp.read(min(65536, max_bytes + 1 - got))
+                if not piece:
+                    break
+                chunks.append(piece)
+                got += len(piece)
+            body = b"".join(chunks)[:max_bytes]
             return Response(url, resp.status, resp.getheader("Content-Type") or "", body)
         finally:
             conn.close()

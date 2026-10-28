@@ -413,3 +413,37 @@ def test_server_refuses_unsafe_archive_and_previews_csv(client, ws):
     (ws / "conf.yaml").write_text("a:\n  b: 1\n")
     assert "b: int" in " ".join(c.get("/api/files/inspect", params={"path": "conf.yaml"}, headers=H).json()["outline"])
     assert c.get("/api/files/inspect", params={"path": "uploads/sales.csv"}, headers={"X-AutoMoto-Token": "x"}).status_code == 403
+
+
+def test_download_has_a_total_deadline(monkeypatch):
+    """A server that trickles bytes must not hang the agent: the whole request has a deadline."""
+    import time as _t
+    from automoto import netguard
+
+    class Slow:
+        status = 200
+
+        def getheader(self, k, d=None):
+            return "application/zip" if k == "Content-Type" else d
+
+        def read(self, n):
+            _t.sleep(0.05)
+            return b"x"
+
+    class Conn:
+        def __init__(self, *a):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            return Slow()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(netguard, "check_url", lambda u: (__import__("urllib.parse").parse.urlsplit(u), "93.184.216.34"))
+    monkeypatch.setattr(netguard, "_PinnedHTTPS", Conn)
+    with pytest.raises(netguard.BlockedURL, match="too long"):
+        netguard.request("https://example.org/a.zip", timeout=5, total_timeout=0.3)
