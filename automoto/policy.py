@@ -59,6 +59,10 @@ def _csv(name: str) -> set[str]:
 
 
 def mode() -> str:
+    from automoto import tenancy
+
+    if tenancy.current() is not None:
+        return "ask"  # hosted users: risky steps always ask (inside their own sandbox)
     try:
         from automoto import settings
 

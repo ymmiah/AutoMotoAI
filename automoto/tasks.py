@@ -10,6 +10,7 @@ when the run ends; they are never stored in the task record or its events.
 
 from __future__ import annotations
 
+import contextvars
 import threading
 import time
 import uuid
@@ -34,6 +35,7 @@ class Task:
     result: dict[str, Any] | None = None
     pending: dict[str, Any] | None = None
     conversation_id: str | None = None
+    owner: str | None = None  # hosted mode: the user id that started it
     cancel: threading.Event = field(default_factory=threading.Event)
     _answers: dict[str, bool] = field(default_factory=dict)
     _cv: threading.Condition = field(default_factory=threading.Condition)
@@ -55,11 +57,12 @@ class TaskManager:
     def start(self, messages: list[dict[str, Any]], *, title: str = "", source: str = "web",
               keys: dict[str, str] | None = None, prefer: str | None = None, max_steps: int | None = None,
               agent_kwargs: dict[str, Any] | None = None, auto_deny: bool = False,
-              conversation_id: str | None = None, on_done: Callable[[Task], None] | None = None) -> Task:
+              conversation_id: str | None = None, on_done: Callable[[Task], None] | None = None,
+              owner: str | None = None) -> Task:
         last = next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), "")
         text = last if isinstance(last, str) else " ".join(p.get("text", "") for p in last if isinstance(p, dict))
         task = Task(id=uuid.uuid4().hex[:10], title=(title or text or "task")[:120], source=source,
-                    conversation_id=conversation_id)
+                    conversation_id=conversation_id, owner=owner)
         with self._lock:
             self.tasks[task.id] = task
             if len(self.tasks) > MAX_TASKS:
@@ -102,17 +105,27 @@ class TaskManager:
                         pass
                 task.finished = time.time()
 
-        threading.Thread(target=run, name=f"automoto-task-{task.id}", daemon=True).start()
+        # the run keeps the caller's context (hosted mode: the user's tenant -> their own sandbox and memory)
+        ctx = contextvars.copy_context()
+        threading.Thread(target=ctx.run, args=(run,), name=f"automoto-task-{task.id}", daemon=True).start()
         return task
 
-    def get(self, task_id: str) -> Task | None:
-        return self.tasks.get(task_id)
+    def get(self, task_id: str, owner: str | None = None) -> Task | None:
+        t = self.tasks.get(task_id)
+        if t is not None and owner is not None and t.owner != owner:
+            return None
+        return t
 
-    def list(self) -> list[dict[str, Any]]:
-        return [t.summary() for t in sorted(self.tasks.values(), key=lambda t: -t.created)]
+    def list(self, owner: str | None = None) -> list[dict[str, Any]]:
+        return [t.summary() for t in sorted(self.tasks.values(), key=lambda t: -t.created)
+                if owner is None or t.owner == owner]
 
-    def approve(self, task_id: str, call_id: str, yes: bool) -> bool:
-        task = self.tasks.get(task_id)
+    def running(self, owner: str) -> int:
+        return sum(1 for t in self.tasks.values() if t.owner == owner and t.status in ("queued", "running",
+                                                                                         "waiting_approval"))
+
+    def approve(self, task_id: str, call_id: str, yes: bool, owner: str | None = None) -> bool:
+        task = self.get(task_id, owner)
         if not task or not task.pending or task.pending.get("id") != call_id:
             return False
         with task._cv:
@@ -120,8 +133,8 @@ class TaskManager:
             task._cv.notify_all()
         return True
 
-    def cancel(self, task_id: str) -> bool:
-        task = self.tasks.get(task_id)
+    def cancel(self, task_id: str, owner: str | None = None) -> bool:
+        task = self.get(task_id, owner)
         if not task:
             return False
         task.cancel.set()

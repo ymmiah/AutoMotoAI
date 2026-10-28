@@ -127,6 +127,10 @@ def sensitive(p: Path) -> str | None:
 
 def extra_roots() -> list[Path]:
     """Folders outside the workspace the user allowed (Settings ``allowed_roots`` + env)."""
+    from automoto import tenancy
+
+    if tenancy.current() is not None:
+        return []  # hosted users only ever get their own workspace
     raw: list[str] = []
     try:
         from automoto import settings

@@ -459,9 +459,176 @@ def cmd_tools(args) -> int:
 
 
 def cmd_serve(args) -> int:
+    if getattr(args, "hosted", False):
+        import os
+
+        os.environ["AUTOMOTO_MODE"] = "multiuser"
     from automoto.server import run
 
     run(host=args.host, port=args.port, open_browser=not args.no_browser)
+    return 0
+
+
+def _admin_parser(sub) -> None:
+    ad = sub.add_parser("admin", help="hosted mode: users, quotas, bonus time, invites, usage and audit log")
+    asub = ad.add_subparsers(dest="admin_cmd")
+    c = asub.add_parser("create", help="create a user (the first one should be you, --role admin)")
+    c.add_argument("username")
+    c.add_argument("--role", choices=["admin", "user"], default="admin")
+    c.add_argument("--password-env", metavar="VAR", help="read the password from this env var instead of a prompt")
+    asub.add_parser("list", help="users with their usage this period")
+    q = asub.add_parser("quota", help="set a user's allowance")
+    q.add_argument("username")
+    g = q.add_mutually_exclusive_group(required=True)
+    g.add_argument("--minutes", type=float, help="minutes per period")
+    g.add_argument("--unlimited", action="store_true")
+    g.add_argument("--default", action="store_true", help="back to the default quota")
+    q.add_argument("--requests", type=int, help="AI request cap per period (0 = none)")
+    q.add_argument("--tokens", type=int, help="estimated token cap per period (0 = none)")
+    b = asub.add_parser("bonus", help="give extra minutes (until the period ends, or for --days)")
+    b.add_argument("username")
+    b.add_argument("minutes", type=float)
+    b.add_argument("--days", type=float)
+    b.add_argument("--note", default="")
+    for name, hlp in (("reset", "reset a user's usage for this period"), ("suspend", "suspend a user"),
+                      ("unsuspend", "re-activate a user"), ("delete", "delete a user and their files"),
+                      ("passwd", "set a user's password")):
+        x = asub.add_parser(name, help=hlp)
+        x.add_argument("username")
+        if name == "delete":
+            x.add_argument("--yes", action="store_true")
+        if name == "passwd":
+            x.add_argument("--password-env", metavar="VAR")
+    st = asub.add_parser("settings", help="show or change defaults")
+    st.add_argument("--default-minutes", type=float)
+    st.add_argument("--signup", choices=["open", "invite", "closed"])
+    st.add_argument("--reset-hour", type=int, help="UTC hour the day starts (0-23)")
+    st.add_argument("--period-days", type=int, help="1 = daily, 7 = weekly")
+    st.add_argument("--request-cap", type=int)
+    st.add_argument("--token-cap", type=int)
+    st.add_argument("--storage-mb", type=float)
+    st.add_argument("--max-tasks", type=int)
+    iv = asub.add_parser("invite", help="create an invite code")
+    iv.add_argument("--uses", type=int, default=1)
+    iv.add_argument("--days", type=float, default=7)
+    iv.add_argument("--label", default="")
+    u = asub.add_parser("usage", help="usage log")
+    u.add_argument("username", nargs="?")
+    u.add_argument("--limit", type=int, default=50)
+    a = asub.add_parser("audit", help="admin audit log")
+    a.add_argument("--limit", type=int, default=50)
+
+
+def _read_password(args, prompt: str = "Password: ") -> str:
+    import getpass
+    import os
+
+    var = getattr(args, "password_env", None)
+    if var:
+        pw = os.environ.get(var, "")
+        if not pw:
+            raise SystemExit(f"{var} is empty")
+        return pw
+    pw = getpass.getpass(prompt)
+    if pw != getpass.getpass("Again: "):
+        raise SystemExit("passwords don't match")
+    return pw
+
+
+def cmd_admin(args) -> int:
+    import datetime as _dt
+
+    from automoto import accounts
+
+    actor = "cli"
+    cmd = getattr(args, "admin_cmd", None)
+
+    def need(name: str) -> accounts.User:
+        u = accounts.find_user(name)
+        if not u:
+            raise SystemExit(f"no such user: {name}")
+        return u
+
+    def show(u: accounts.User) -> None:
+        q = accounts.quota(u)
+        allow = "unlimited" if q["unlimited"] else f"{q['used_minutes']:.1f}/{q['allowance_minutes']:g} min"
+        bonus = f" (+{q['bonus_minutes']:g} bonus)" if q["bonus_minutes"] else ""
+        print(f"{u.username:<20} {u.role:<6} {u.status:<10} {allow}{bonus}  requests {q['requests']}"
+              f"{'/' + str(q['request_cap']) if q['request_cap'] else ''}"
+              f"{'  BLOCKED: ' + q['reason'] if q['blocked'] and u.status == 'active' else ''}")
+
+    try:
+        if cmd == "create":
+            u = accounts.create_user(args.username, _read_password(args), role=args.role, actor=actor)
+            print(f"created {u.role} '{u.username}'")
+        elif cmd == "list" or cmd is None:
+            users = accounts.list_users()
+            if not users:
+                print("no users yet - `automoto admin create <you>`")
+            for u in users:
+                show(u)
+            r = accounts.period_end()
+            print(f"period resets {_dt.datetime.fromtimestamp(r, _dt.timezone.utc):%Y-%m-%d %H:%M} UTC")
+        elif cmd == "quota":
+            u = need(args.username)
+            f: dict = {}
+            if args.unlimited:
+                f["unlimited"] = True
+            elif args.default:
+                f.update(unlimited=False, quota_minutes=None)
+            else:
+                f.update(unlimited=False, quota_minutes=args.minutes)
+            if args.requests is not None:
+                f["request_cap"] = args.requests
+            if args.tokens is not None:
+                f["token_cap"] = args.tokens
+            show(accounts.update_user(u.id, actor, **f))
+        elif cmd == "bonus":
+            u = need(args.username)
+            import time as _t
+
+            accounts.add_bonus(u.id, args.minutes, actor, expires=_t.time() + args.days * 86400 if args.days else None,
+                               note=args.note)
+            show(need(args.username))
+        elif cmd == "reset":
+            u = need(args.username)
+            accounts.reset_usage(u.id, actor)
+            show(need(args.username))
+        elif cmd in ("suspend", "unsuspend"):
+            u = need(args.username)
+            show(accounts.update_user(u.id, actor, status="suspended" if cmd == "suspend" else "active"))
+        elif cmd == "delete":
+            u = need(args.username)
+            if not args.yes:
+                raise SystemExit("add --yes to delete the user and all their files")
+            accounts.delete_user(u.id, actor)
+            print(f"deleted {u.username}")
+        elif cmd == "passwd":
+            u = need(args.username)
+            accounts.set_password(u.id, _read_password(args, "New password: "), actor)
+            print("password changed; their sessions were signed out")
+        elif cmd == "settings":
+            st = accounts.set_settings(actor, default_quota_minutes=args.default_minutes, signup=args.signup,
+                                       reset_hour=args.reset_hour, period_days=args.period_days,
+                                       default_request_cap=args.request_cap, default_token_cap=args.token_cap,
+                                       storage_mb=args.storage_mb, max_tasks_per_user=args.max_tasks)
+            for k, v in st.items():
+                print(f"{k:<24} {v}")
+        elif cmd == "invite":
+            code = accounts.create_invite(actor, uses=args.uses, days=args.days, label=args.label)
+            print(f"invite code (shown once): {code}")
+        elif cmd == "usage":
+            uid = need(args.username).id if args.username else None
+            for r in accounts.usage_log(uid, args.limit):
+                t = _dt.datetime.fromtimestamp(r["ts"], _dt.timezone.utc)
+                print(f"{t:%Y-%m-%d %H:%M:%S}Z {r['user']:<16} {r['kind']:<6} {r['seconds']:>7.1f}s {r['detail']}")
+        elif cmd == "audit":
+            for r in accounts.audit_log(args.limit):
+                t = _dt.datetime.fromtimestamp(r["ts"], _dt.timezone.utc)
+                print(f"{t:%Y-%m-%d %H:%M:%S}Z {r['actor']:<12} {r['action']:<14} {r['target']} {r['detail']}")
+    except accounts.AccountError as exc:
+        print(f"✗ {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -501,8 +668,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("open", help="open the running web UI (fresh one-time sign-in link)")
     s = sub.add_parser("serve", help="local web UI + API")
     s.add_argument("--host", default=config.env("AUTOMOTO_HOST", "127.0.0.1"))
-    s.add_argument("--port", type=int, default=int(config.env("AUTOMOTO_PORT", "8765")))
+    s.add_argument("--port", type=int, default=int(config.env("AUTOMOTO_PORT") or config.env("PORT") or "8765"))
     s.add_argument("--no-browser", action="store_true")
+    s.add_argument("--hosted", action="store_true", help="multi-user mode with accounts and quotas "
+                                                          "(same as AUTOMOTO_MODE=multiuser)")
+    _admin_parser(sub)
     sub.add_parser("status", help="show providers and vision support")
     a = sub.add_parser("ask", help="one-shot question")
     a.add_argument("question")
@@ -512,7 +682,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     handlers = {"serve": cmd_serve, "status": cmd_status, "ask": cmd_ask, "recommend": cmd_recommend,
                 "do": cmd_do, "routines": cmd_routines, "memory": cmd_memory, "skills": cmd_skills,
-                "tools": cmd_tools, "apps": cmd_apps, "mcp": cmd_mcp, "open": cmd_open}
+                "tools": cmd_tools, "apps": cmd_apps, "mcp": cmd_mcp, "open": cmd_open,
+                "admin": cmd_admin}
     if args.cmd in handlers:
         return handlers[args.cmd](args)
     return cmd_chat(args) if args.plain else cmd_agent_chat(args)

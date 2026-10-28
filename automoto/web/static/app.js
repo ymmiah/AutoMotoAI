@@ -4,6 +4,9 @@ import { icon, hydrateIcons, TOOL_ICONS } from "./icons.js";
 // Auth: the HttpOnly session cookie set by the one-time launch link (the page never sees a token).
 const TOKEN = document.querySelector('meta[name="automoto-token"]')?.content || "";
 const VERSION = document.querySelector('meta[name="automoto-version"]').content;
+// Hosted (multi-user) mode: a per-session CSRF token is put in the page; the session itself is an HttpOnly cookie.
+const CSRF = document.querySelector('meta[name="automoto-csrf"]')?.content || "";
+const HOSTED = document.querySelector('meta[name="automoto-mode"]')?.content === "multiuser";
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -13,21 +16,23 @@ const MAX_IMAGES = 4;
 const state = {
   convs: [], cur: null, mode: localStorage.getItem("automoto_mode") || "agent",
   providers: [], desktop: false, settings: null, attachments: [], files: [], running: new Map(),
-  route: "", pageTimer: null, busy: false,
+  route: "", pageTimer: null, busy: false, me: null, quota: null,
 };
 
 const keys = () => { try { return JSON.parse(sessionStorage.getItem("automoto_keys") || "{}"); } catch { return {}; } };
 async function api(path, body, method) {
   const r = await fetch(path, {
     method: method || (body !== undefined ? "POST" : "GET"),
-    headers: { "Content-Type": "application/json", ...(TOKEN ? { "X-AutoMoto-Token": TOKEN } : {}) },
+    headers: { "Content-Type": "application/json", ...(TOKEN ? { "X-AutoMoto-Token": TOKEN } : {}), ...(CSRF ? { "X-CSRF-Token": CSRF } : {}) },
     credentials: "same-origin",
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const d = data.detail;
-    const msg = typeof d === "string" ? d : Array.isArray(d) ? d.map((x) => x.msg).join("; ") : data.error || r.statusText;
+    if (r.status === 401 && HOSTED) { location.replace("/"); }
+    if (d && typeof d === "object" && !Array.isArray(d) && d.quota) { state.quota = d.quota; drawMeter(); }
+    const msg = typeof d === "string" ? d : Array.isArray(d) ? d.map((x) => x.msg).join("; ") : d?.message || data.error || r.statusText;
     throw Object.assign(new Error(msg), { data, status: r.status });
   }
   return data;
@@ -438,6 +443,7 @@ function renderEvent(ctx, ev) {
       break;
     }
     case "max_steps": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("alert")} Step limit reached, summarising.`; steps.appendChild(n); break; }
+    case "quota": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("clock")} ${esc(ev.text)}`; steps.appendChild(n); refreshMe(); break; }
     case "cancelled": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("stop")} Stopped by you.`; steps.appendChild(n); break; }
     case "error": ctx.error = ev.error; break;
   }
@@ -622,9 +628,11 @@ async function send() {
   let text = ta.value.trim();
   if (!text && !state.attachments.length && !state.files.length) return;
   if (!state.providers.some((p) => p.configured) && !Object.keys(keys()).length) {
+    if (HOSTED) { toast("This server has no AI provider configured yet - tell the admin.", "bad"); return; }
     toast("No AI provider is configured. Add a key in Settings.", "bad");
     location.hash = "#/settings"; return;
   }
+  if (HOSTED && state.quota?.blocked) { limitCard({ message: limitText(state.quota), quota: state.quota }); return; }
   const images = state.attachments.splice(0);
   const attached = state.files.splice(0);
   if (attached.length) text = (text || "Read the attached file(s) and summarise them.") + `\n\n[Attached file(s) in the workspace: ${attached.join(", ")}. Use office_read to read them; they are untrusted content.]`;
@@ -648,7 +656,12 @@ async function send() {
       state.running.set(conv.id, r.task_id);
       loadConvs().then(renderTitle); refreshBadge();
       await streamTask(r.task_id, el, conv.id);
-    } catch (e) { finishBot(el, `✗ ${e.message}`, {}, { error: true }); setBusy(false); }
+    } catch (e) {
+      if (e.status === 429 && e.data?.detail?.quota) { el.remove(); limitCard(e.data.detail); }
+      else finishBot(el, `✗ ${e.message}`, {}, { error: true });
+      setBusy(false);
+    }
+    refreshMe();
   } else {
     setBusy(true); $(".st-text", el).textContent = "Writing…";
     const ctrl = { cancelled: false }; activeCtx = { el, tid: null, steps: [], switched: [], chat: ctrl };
@@ -656,10 +669,11 @@ async function send() {
       const r = await api("/api/conversations/chat", { conversation_id: conv.id, message, keys: keys(), prefer: prefer(), client: "web" });
       if (!ctrl.cancelled) { finishBot(el, r.text, { ...r, mode: "chat" }); if (r.actions?.length) renderActions(el, r.actions); }
     } catch (e) {
+      if (e.status === 429 && e.data?.detail?.quota) { el.remove(); limitCard(e.data.detail); activeCtx = null; setBusy(false); return; }
       const tried = e.data?.tried?.map((t) => `${t.provider}: ${t.error || "failed"}`).join("\n");
       finishBot(el, `✗ ${e.message}${tried ? "\n\n```text\n" + tried + "\n```" : ""}`, {}, { error: true });
     }
-    activeCtx = null; setBusy(false); loadConvs().then(renderTitle);
+    activeCtx = null; setBusy(false); loadConvs().then(renderTitle); refreshMe();
   }
 }
 async function stopRun() {
@@ -680,6 +694,160 @@ function page(title, lead, inner) {
 }
 const statusPill = (s) => `<span class="pill ${esc(s)}">${esc(String(s).replace("_", " "))}</span>`;
 const PAGES = {};
+
+// ---------------------------------------------------------------- hosted mode: usage meter, account, admin
+const fmtMin = (m) => m == null ? "∞" : m >= 60 ? `${Math.floor(m / 60)}h ${Math.round(m % 60)}m` : `${Math.max(0, Math.round(m * 10) / 10)} min`;
+const untilText = (ts) => { const s = Math.max(0, ts - Date.now() / 1000); return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
+const resetText = (ts) => new Date(ts * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+function limitText(q) { return `Usage limit reached: ${q.reason || "no time left"}. It resets ${resetText(q.resets_at)} (in ${untilText(q.resets_at)}).`; }
+function limitCard(detail) {
+  const q = detail.quota || {};
+  const box = document.createElement("div");
+  box.className = "limit-card"; box.setAttribute("role", "alert");
+  box.innerHTML = `<div class="limit-icon">${icon("clock")}</div><div><h3>You've reached your usage limit</h3>
+    <p>${esc(q.reason ? q.reason.charAt(0).toUpperCase() + q.reason.slice(1) : "No time left")}. Your allowance resets <b>${esc(resetText(q.resets_at))}</b> (in ${esc(untilText(q.resets_at))}).</p>
+    <div class="meter big" aria-hidden="true"><span style="width:100%"></span></div>
+    <p class="muted small">Used ${esc(fmtMin(q.used_minutes))} of ${esc(fmtMin(q.allowance_minutes))}${q.bonus_minutes ? ` (incl. ${esc(fmtMin(q.bonus_minutes))} bonus)` : ""}. Need more? Ask the admin for bonus time.</p></div>`;
+  ($("#thread") || $("#view")).appendChild(box);
+  box.scrollIntoView({ block: "end", behavior: "smooth" });
+}
+async function refreshMe() {
+  if (!HOSTED) return;
+  try { const d = await api("/api/me"); state.me = d.user; state.quota = d.quota; state.limits = d.limits; } catch { return; }
+  drawMeter();
+}
+function drawMeter() {
+  const box = $("#usageMeter"); if (!box || !state.quota) return;
+  const q = state.quota;
+  if (q.unlimited) { box.innerHTML = `<div class="meter-row"><span>${icon("clock")} Unlimited</span><span class="muted">${esc(state.me?.role || "")}</span></div>`; return; }
+  const pct = q.allowance_minutes > 0 ? Math.min(100, (q.used_minutes / q.allowance_minutes) * 100) : 100;
+  box.className = "usage" + (q.blocked ? " out" : pct > 80 ? " low" : "");
+  box.innerHTML = `<div class="meter-row"><span>${icon("clock")} ${q.blocked ? "Limit reached" : `${esc(fmtMin(q.left_minutes))} left`}</span><span class="muted">resets in ${esc(untilText(q.resets_at))}</span></div>
+    <div class="meter" role="progressbar" aria-label="Usage today" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><span style="width:${pct}%"></span></div>
+    <div class="meter-row muted"><span>${esc(fmtMin(q.used_minutes))} of ${esc(fmtMin(q.allowance_minutes))}${q.bonus_minutes ? ` · +${esc(fmtMin(q.bonus_minutes))} bonus` : ""}</span></div>`;
+}
+async function logout() { try { await api("/api/auth/logout", {}); } catch { /* ignore */ } location.replace("/"); }
+function setupHosted() {
+  document.body.classList.add("hosted");
+  ["routines", "settings"].forEach((p) => { const a = $(`.nav a[data-page="${p}"]`); if (a) a.remove(); });
+  const nav = $(".nav");
+  nav.insertAdjacentHTML("beforeend", `<a href="#/account" data-page="account"><span data-icon="user"></span>Account</a>` +
+    (state.me?.role === "admin" ? `<a href="#/admin" data-page="admin"><span data-icon="shield"></span>Admin</a>` : ""));
+  $(".side-foot").insertAdjacentHTML("beforebegin", `<div class="usage" id="usageMeter" aria-live="polite"></div>`);
+  $(".side-foot").insertAdjacentHTML("afterbegin", `<button class="linkish" id="logoutBtn">Sign out ${esc(state.me?.username || "")}</button> · `);
+  $("#logoutBtn").onclick = logout;
+  hydrateIcons($(".sidebar"));
+  drawMeter();
+  setInterval(refreshMe, 30000);
+}
+
+PAGES.account = async () => {
+  await refreshMe();
+  const q = state.quota || {}, u = state.me || {};
+  const root = page("Account", `Signed in as <b>${esc(u.username)}</b> (${esc(u.role)}). Your chats, memory and files are private to you.`, `
+    <div class="card"><h3>${icon("clock")} Usage this period</h3><div id="acctMeter"></div>
+      <p class="muted small">Usage time counts while the AI is working for you (model replies and tool runs), not while you read, type or approve.
+      It resets ${esc(resetText(q.resets_at))}.${q.request_cap ? ` Request cap: ${q.requests}/${q.request_cap}.` : ""}${q.token_cap ? ` Token cap (estimated): ${q.tokens.toLocaleString()}/${q.token_cap.toLocaleString()}.` : ""}</p></div>
+    <div class="card"><h3>${icon("folder")} Limits</h3><p class="muted small">Uploads up to ${esc(state.limits?.max_upload_mb)} MB · storage ${esc(state.limits?.storage_mb)} MB · ${esc(state.limits?.max_tasks)} runs at a time.
+      On this shared server the agent can research the web and work on Office, archive and data files in your own workspace. It can't run shell commands or control a computer.</p></div>
+    <div class="card"><h3>${icon("lock")} Change password</h3><form id="pwForm" class="stack">
+      <input class="input" type="password" name="current" placeholder="Current password" autocomplete="current-password" required>
+      <input class="input" type="password" name="new" placeholder="New password (10+ characters)" autocomplete="new-password" required>
+      <div class="row"><button class="btn primary">Change password</button></div></form></div>`);
+  const m = $("#usageMeter"); if (m) $("#acctMeter").innerHTML = m.innerHTML;
+  $("#pwForm", root).onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    try { await api("/api/auth/password", { current: f.get("current"), new: f.get("new") }); toast("Password changed - other sessions were signed out"); setTimeout(() => location.reload(), 900); }
+    catch (err) { toast(err.message, "bad"); }
+  };
+};
+
+PAGES.admin = async () => {
+  if (state.me?.role !== "admin") { page("Admin", "Admins only.", ""); return; }
+  const root = page("Admin", "Users, usage limits, bonus time, invites and the audit log for this hosted server.", `
+    <div class="card"><h3>${icon("settings")} Defaults</h3><form id="admSet" class="grid-form"></form></div>
+    <div class="card"><h3>${icon("user")} Users</h3><div class="tbl-wrap"><table class="tbl" id="admUsers"></table></div>
+      <details class="mt"><summary>Add a user</summary><form id="admNew" class="grid-form">
+        <input class="input" name="username" placeholder="username" required><input class="input" name="password" type="password" placeholder="password (10+)" required autocomplete="new-password">
+        <input class="input" name="quota" type="number" min="0" step="1" placeholder="minutes (blank = default)"><select class="input" name="role"><option value="user">user</option><option value="admin">admin</option></select>
+        <button class="btn primary">Create</button></form></details></div>
+    <div class="card"><h3>${icon("key")} Invite codes</h3><form id="admInv" class="grid-form">
+        <input class="input" name="label" placeholder="label (e.g. classmates)"><input class="input" name="uses" type="number" min="1" max="1000" value="5" aria-label="uses">
+        <input class="input" name="days" type="number" min="1" max="365" value="7" aria-label="days valid"><button class="btn primary">Create invite</button></form>
+      <div id="admCode"></div><div id="admInvites" class="muted small"></div></div>
+    <div class="card"><h3>${icon("activity")} Usage log</h3><div class="tbl-wrap"><table class="tbl small" id="admUsage"></table></div></div>
+    <div class="card"><h3>${icon("shield")} Audit log</h3><div class="tbl-wrap"><table class="tbl small" id="admAudit"></table></div></div>`);
+  const ts = (t) => new Date(t * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+  const load = async () => {
+    const [u, inv, us, au] = await Promise.all([api("/api/admin/users"), api("/api/admin/invites"), api("/api/admin/usage?limit=40"), api("/api/admin/audit?limit=40")]);
+    const st = u.settings;
+    $("#admSet").innerHTML = `
+      <label>Default minutes / period<input class="input" name="default_quota_minutes" type="number" min="0" step="1" value="${st.default_quota_minutes}"></label>
+      <label>Period<select class="input" name="period_days"><option value="1" ${st.period_days == 1 ? "selected" : ""}>daily</option><option value="7" ${st.period_days == 7 ? "selected" : ""}>weekly</option></select></label>
+      <label>Resets at (UTC hour)<input class="input" name="reset_hour" type="number" min="0" max="23" value="${st.reset_hour}"></label>
+      <label>Sign-up<select class="input" name="signup">${["open", "invite", "closed"].map((m) => `<option ${st.signup === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+      <label>AI requests cap (0 = none)<input class="input" name="default_request_cap" type="number" min="0" value="${st.default_request_cap}"></label>
+      <label>Storage per user (MB)<input class="input" name="storage_mb" type="number" min="0" value="${st.storage_mb}"></label>
+      <button class="btn primary">Save defaults</button>`;
+    $("#admUsers").innerHTML = `<thead><tr><th>User</th><th>Status</th><th>Used / allowance</th><th>Resets</th><th>Actions</th></tr></thead><tbody>${u.users.map((x) => {
+      const q = x.quota; const pct = q.unlimited ? 0 : Math.min(100, q.allowance_minutes ? q.used_minutes / q.allowance_minutes * 100 : 100);
+      return `<tr data-id="${esc(x.id)}" data-name="${esc(x.username)}"><td><b>${esc(x.username)}</b><div class="muted small">${esc(x.role)}${x.running_tasks ? ` · ${x.running_tasks} running` : ""}${x.last_login ? ` · seen ${esc(timeAgo(x.last_login))}` : ""}</div></td>
+        <td>${statusPill(x.status === "active" ? (q.blocked ? "limit" : "active") : "suspended")}</td>
+        <td>${q.unlimited ? "unlimited" : `${esc(fmtMin(q.used_minutes))} / ${esc(fmtMin(q.allowance_minutes))}${q.bonus_minutes ? ` <span class="muted">(+${esc(fmtMin(q.bonus_minutes))})</span>` : ""}`}
+          ${q.unlimited ? "" : `<div class="meter sm${q.blocked ? " out" : ""}"><span style="width:${pct}%"></span></div>`}<div class="muted small">${x.quota_minutes == null ? "default quota" : `custom ${x.quota_minutes} min`} · ${q.requests} requests</div></td>
+        <td class="muted small">${esc(untilText(q.resets_at))}</td>
+        <td class="actions"><button class="btn sm" data-a="bonus">+ Bonus</button><button class="btn sm" data-a="quota">Quota</button><button class="btn sm" data-a="reset">Reset</button>
+          ${x.id === state.me.id ? "" : `<button class="btn sm" data-a="${x.status === "active" ? "suspend" : "unsuspend"}">${x.status === "active" ? "Suspend" : "Unsuspend"}</button><button class="btn sm danger" data-a="delete">Delete</button>`}</td></tr>`;
+    }).join("")}</tbody>`;
+    $("#admInvites").innerHTML = inv.invites.length ? "Active invites: " + inv.invites.map((i) => `${esc(i.label)} (${i.uses_left} left, until ${esc(ts(i.expires))}) <button class="linkish" data-inv="${esc(i.id)}">revoke</button>`).join(" · ") : "No active invites.";
+    $("#admUsage").innerHTML = `<thead><tr><th>When</th><th>User</th><th>Kind</th><th>Seconds</th><th>Detail</th></tr></thead><tbody>${us.usage.map((r) => `<tr><td>${esc(ts(r.ts))}</td><td>${esc(r.user)}</td><td>${esc(r.kind)}</td><td>${r.seconds}</td><td>${esc(r.detail)}</td></tr>`).join("") || '<tr><td colspan="5" class="muted">No usage yet.</td></tr>'}</tbody>`;
+    $("#admAudit").innerHTML = `<thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody>${au.audit.map((r) => `<tr><td>${esc(ts(r.ts))}</td><td>${esc(r.actor)}</td><td>${esc(r.action)}</td><td>${esc(r.target)}</td><td class="muted">${esc(r.detail)}</td></tr>`).join("")}</tbody>`;
+    $$("[data-inv]", root).forEach((b) => b.onclick = async () => { await api(`/api/admin/invites/${b.dataset.inv}`, undefined, "DELETE"); toast("Invite revoked"); load(); });
+  };
+  $("#admSet").onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const body = { default_quota_minutes: +f.get("default_quota_minutes"), period_days: +f.get("period_days"), reset_hour: +f.get("reset_hour"), signup: f.get("signup"), default_request_cap: +f.get("default_request_cap"), storage_mb: +f.get("storage_mb") };
+    try { await api("/api/admin/settings", body, "PUT"); toast("Defaults saved"); load(); refreshMe(); } catch (err) { toast(err.message, "bad"); }
+  };
+  $("#admNew").onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    try { await api("/api/admin/users", { username: f.get("username"), password: f.get("password"), role: f.get("role"), quota_minutes: f.get("quota") === "" ? null : +f.get("quota") }); e.target.reset(); toast("User created"); load(); }
+    catch (err) { toast(err.message, "bad"); }
+  };
+  $("#admInv").onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    try {
+      const r = await api("/api/admin/invites", { label: f.get("label"), uses: +f.get("uses"), days: +f.get("days") });
+      const link = `${location.origin}/?invite=${encodeURIComponent(r.code)}`;
+      $("#admCode").innerHTML = `<div class="note ok">Invite code (shown once): <code>${esc(r.code)}</code> · link: <code>${esc(link)}</code> <button class="btn sm" id="cpInv">Copy link</button></div>`;
+      $("#cpInv").onclick = (ev) => copyText(link, ev.currentTarget); load();
+    } catch (err) { toast(err.message, "bad"); }
+  };
+  $("#admUsers").onclick = async (e) => {
+    const b = e.target.closest("button[data-a]"); if (!b) return;
+    const tr = b.closest("tr"), id = tr.dataset.id, name = tr.dataset.name, a = b.dataset.a;
+    try {
+      if (a === "bonus") {
+        const v = await promptDialog(`Bonus minutes for ${name} (until the period ends)`, "30", { ok: "Give bonus" });
+        if (!v) return; await api(`/api/admin/users/${id}/bonus`, { minutes: +v }); toast(`Gave ${name} ${v} bonus minutes`);
+      } else if (a === "quota") {
+        const v = await promptDialog(`Minutes per period for ${name} (number, "default" or "unlimited")`, "60", { ok: "Set quota" });
+        if (!v) return;
+        const body = v === "unlimited" ? { unlimited: true } : v === "default" ? { default_quota: true, unlimited: false } : { quota_minutes: +v, unlimited: false };
+        await api(`/api/admin/users/${id}`, body, "PATCH"); toast(`Quota for ${name} updated`);
+      } else if (a === "reset") {
+        await api(`/api/admin/users/${id}/reset`, {}); toast(`Usage reset for ${name}`);
+      } else if (a === "suspend" || a === "unsuspend") {
+        await api(`/api/admin/users/${id}`, { status: a === "suspend" ? "suspended" : "active" }, "PATCH"); toast(`${name} ${a}ed`);
+      } else if (a === "delete") {
+        if (!(await confirmDialog(`Delete ${name} and all their chats and files?`))) return;
+        await api(`/api/admin/users/${id}`, undefined, "DELETE"); toast(`Deleted ${name}`);
+      }
+      load();
+    } catch (err) { toast(err.message, "bad"); }
+  };
+  await load();
+};
 
 PAGES.tasks = async () => {
   const root = page("Tasks", "Every agent run in this session, live. Runs keep going if you switch chats.", '<div id="taskList"></div>');
@@ -1134,6 +1302,7 @@ async function refreshBadge() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "AutoMoto AI"; });
 
 async function boot() {
+  if (HOSTED) { await refreshMe(); setupHosted(); }
   hydrateIcons(document);
   $("#verLabel").textContent = `v${VERSION}`;
   if (!isMac) $$("kbd").forEach((k) => (k.textContent = k.textContent.replace("⌘", "Ctrl+")));

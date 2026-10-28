@@ -31,7 +31,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from automoto import APP_NAME, CODENAME, __version__, config, policy, sandbox
+from automoto import APP_NAME, CODENAME, __version__, accounts, config, hosted, policy, sandbox, tenancy
 from automoto import mcp as mcp_mod
 from automoto import routines as routines_mod
 from automoto import settings as settings_mod
@@ -57,14 +57,41 @@ MCP_ERRORS: list[str] = []
 
 
 def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | None = None,
-                   local_apps: bool = False) -> Agent:
+                   local_apps: bool = False, meter: Any = None) -> Agent:
+    if tenancy.current() is not None:  # hosted user: the safe tool set in their own sandbox, metered
+        return Agent(tools=hosted.hosted_tools(), desktop=False, client="web", workspace=None, meter=meter)
     tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS, local_apps=local_apps)
-    return Agent(tools=tl, desktop=desktop, client=client, workspace=workspace)
+    return Agent(tools=tl, desktop=desktop, client=client, workspace=workspace, meter=meter)
+
+
+def _local(request: Request) -> bool:
+    """A client on this computer in single-user mode (hosted mode never trusts loopback)."""
+    return not tenancy.multiuser() and _is_loopback(request)
 
 
 def _local_apps_ok(request: Request, client: str) -> bool:
     """Local apps (ffmpeg, Photoshop, …) only for clients on this computer, never the LAN/mobile app."""
-    return _is_loopback(request) and client not in ("mobile", "routine")
+    return _local(request) and client not in ("mobile", "routine")
+
+
+def _owner(request: Request) -> str | None:
+    """Hosted mode: the signed-in user's id (tasks are filtered by it). Local mode: None (all tasks)."""
+    if tenancy.multiuser():
+        return request.state.user.id
+    return None
+
+
+def _hosted_gate(request: Request) -> Any:
+    """Hosted mode: refuse to start AI work when the user is over quota or running too many tasks."""
+    if not tenancy.multiuser():
+        return None
+    user = request.state.user
+    q = accounts.quota(user)
+    if q["blocked"]:
+        raise HTTPException(429, {"message": accounts.limit_message(q), "quota": q})
+    if TASKS.running(user.id) >= int(accounts.get_setting("max_tasks_per_user")):
+        raise HTTPException(429, "you already have the maximum number of runs going - wait or stop one")
+    return accounts.Meter(user.id)
 
 
 TASKS = TaskManager(_agent_factory)
@@ -83,6 +110,7 @@ def routine_runner(prompt: str) -> dict[str, Any]:
 _DOCS = config.env("AUTOMOTO_API_DOCS", "") in ("1", "true", "yes")
 app = FastAPI(title=f"{APP_NAME} {CODENAME}", version=__version__, docs_url="/api/docs" if _DOCS else None,
               redoc_url=None, openapi_url="/api/openapi.json" if _DOCS else None)
+app.include_router(hosted.router)  # hosted-mode auth/admin API (only reachable when AUTOMOTO_MODE=multiuser)
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
@@ -136,6 +164,8 @@ def _origin_ok(origin: str, host_header: str) -> bool:
 
 
 def _bearer_ok(request: Request) -> bool:
+    if tenancy.multiuser():
+        return False  # hosted mode: people sign in with accounts, there is no master token
     api_tok = config.env("AUTOMOTO_API_TOKEN")
     bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     return bool(api_tok and bearer and hmac.compare_digest(bearer, api_tok))
@@ -163,6 +193,12 @@ def _rate_limited(client: str, path: str) -> bool:
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
+    tenancy.set_current(None)  # never inherit a tenant; _authorise sets it per request
+    if tenancy.multiuser():
+        if not hosted.path_allowed(request.method, request.url.path):
+            return JSONResponse({"detail": "not available on this hosted AutoMoto server"}, status_code=404)
+    elif hosted.is_hosted_only(request.url.path):  # local mode has no accounts
+        return JSONResponse({"detail": "only in hosted mode (AUTOMOTO_MODE=multiuser)"}, status_code=404)
     host = request.headers.get("host", "")
     # DNS rebinding: a web page that re-points its domain at 127.0.0.1 still sends its own Host header.
     if _host_name(host) not in _allowed_hosts() and not _bearer_ok(request):
@@ -211,6 +247,11 @@ def _session_ok(request: Request) -> bool:
 
 
 def _authorise(request: Request, *, local_only: bool = False) -> None:
+    if tenancy.multiuser():
+        if local_only:
+            raise HTTPException(403, "not available on a hosted AutoMoto server")
+        hosted.authenticate(request)
+        return
     if _is_loopback(request):
         if _session_ok(request) or _bearer_ok(request):
             return
@@ -259,15 +300,21 @@ def _count_images(messages: list[dict[str, Any]]) -> int:
     return n
 
 
-def _run_chat(messages, *, prefer, need_vision, keys, client, desktop: bool) -> dict[str, Any]:
+def _run_chat(messages, *, prefer, need_vision, keys, client, desktop: bool, meter: Any = None) -> dict[str, Any]:
     msgs = [m for m in messages if m.get("role") in ("user", "assistant")]
+    t0 = time.monotonic()
     try:
         ans = ask(msgs, need_vision=need_vision, prefer=prefer, keys=keys,
                   system=system_prompt(desktop=desktop, client=client))
     except NoProviderError as exc:
         raise HTTPException(400, str(exc)) from None
     except AllProvidersFailed as exc:
+        if meter:
+            meter.add(time.monotonic() - t0, requests=1, kind="chat", detail="failed")
         return JSONResponse(status_code=502, content={"error": str(exc), "tried": exc.tried})  # type: ignore[return-value]
+    if meter:
+        chars = sum(len(m["content"]) if isinstance(m.get("content"), str) else 2000 for m in msgs) + len(ans.text)
+        meter.add(time.monotonic() - t0, requests=1, tokens=chars // 4, kind="chat", detail=f"{ans.provider}/{ans.model}")
     text, actions = split_actions(ans.text) if desktop else (ans.text, [])
     return {**ans.as_dict(), "text": text, "actions": actions}
 
@@ -345,6 +392,16 @@ code{background:#161b22;padding:2px 6px;border-radius:6px}</style></head><body><
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, launch: str | None = None):
     base_headers = {"Content-Security-Policy": CSP, "Cache-Control": "no-store"}
+    if tenancy.multiuser():
+        got = hosted.current_user(request)
+        if not got:
+            html = (WEB_DIR / "login.html").read_text(encoding="utf-8").replace("__AUTOMOTO_VERSION__", __version__)
+            return HTMLResponse(html, headers=base_headers)
+        html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+        meta = (f'<meta name="automoto-csrf" content="{got[1]}" />\n'
+                '<meta name="automoto-mode" content="multiuser" />\n')
+        html = html.replace("__AUTOMOTO_VERSION__", __version__).replace("</title>", "</title>\n" + meta, 1)
+        return HTMLResponse(html, headers=base_headers)
     if launch is not None:
         if not _is_loopback(request) or not _use_launch_token(launch):
             return HTMLResponse(LOCKED_PAGE, status_code=403, headers=base_headers)
@@ -360,6 +417,13 @@ def index(request: Request, launch: str | None = None):
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace("__AUTOMOTO_TOKEN__", "").replace("__AUTOMOTO_VERSION__", __version__)
     return HTMLResponse(html, headers=base_headers)
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/api/session/launch")
@@ -384,14 +448,15 @@ def health() -> dict[str, Any]:
 def get_status(request: Request) -> dict[str, Any]:
     _authorise(request)
     return {**status(), "version": __version__, "os": OS_LABEL,
-            "desktop": config.desktop_enabled() and _is_loopback(request),
-            "tools": [{"name": t.name, "risk": t.risk, "args": list(t.args)} for t in TOOLS.values()]}
+            "desktop": config.desktop_enabled() and _local(request),
+            "tools": [] if tenancy.multiuser() else [{"name": t.name, "risk": t.risk, "args": list(t.args)}
+                                                      for t in TOOLS.values()]}
 
 
 @app.post("/api/status")
 def post_status(body: RecommendIn, request: Request) -> dict[str, Any]:
     _authorise(request)
-    return {**status(body.keys), "version": __version__}
+    return {**status(None if tenancy.multiuser() else body.keys), "version": __version__}
 
 
 @app.post("/api/recommend")
@@ -407,16 +472,18 @@ def chat(body: ChatIn, request: Request):
     _authorise(request)
     if _count_images(body.messages) > MAX_IMAGES:
         raise HTTPException(413, f"max {MAX_IMAGES} images per request")
-    desktop = config.desktop_enabled() and _is_loopback(request) and body.client != "mobile"
+    meter = _hosted_gate(request)
+    desktop = config.desktop_enabled() and _local(request) and body.client != "mobile"
     return _run_chat(body.messages, prefer=body.prefer, need_vision=body.need_vision,
-                     keys=body.keys, client=body.client, desktop=desktop)
+                     keys=None if meter else body.keys, client=body.client, desktop=desktop, meter=meter)
 
 
 # -- v5 agent --------------------------------------------------------------------
 @app.post("/api/agent")
 def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
     _authorise(request)
-    desktop = config.desktop_enabled() and _is_loopback(request) and body.client != "mobile"
+    meter = _hosted_gate(request)
+    desktop = config.desktop_enabled() and _local(request) and body.client != "mobile"
     conv_id, on_done = None, None
     if body.conversation_id:
         convs = Conversations()
@@ -437,16 +504,17 @@ def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
         raise HTTPException(413, f"max {MAX_IMAGES} images per request")
     workspace = None
     if body.workspace:
-        if not _is_loopback(request):
+        if not _local(request):
             raise HTTPException(403, "choosing a workspace folder is only allowed on this computer")
         try:
             workspace = str(sandbox.check_root(body.workspace))
         except sandbox.SandboxError as exc:
             raise HTTPException(400, str(exc)) from None
-    task = TASKS.start(msgs, source=body.client, keys=body.keys, prefer=body.prefer, max_steps=body.max_steps,
+    task = TASKS.start(msgs, source="web" if meter else body.client, keys=None if meter else body.keys,
+                       prefer=body.prefer, max_steps=body.max_steps,
                        agent_kwargs={"desktop": desktop, "client": body.client, "workspace": workspace,
-                                     "local_apps": _local_apps_ok(request, body.client)},
-                       conversation_id=conv_id, on_done=on_done)
+                                     "local_apps": _local_apps_ok(request, body.client), "meter": meter},
+                       conversation_id=conv_id, on_done=on_done, owner=_owner(request))
     return {"task_id": task.id, "status": task.status, "conversation_id": conv_id}
 
 
@@ -474,13 +542,13 @@ def _saver(conv_id: str):
 @app.get("/api/tasks")
 def tasks_list(request: Request) -> dict[str, Any]:
     _authorise(request)
-    return {"tasks": TASKS.list()}
+    return {"tasks": TASKS.list(_owner(request))}
 
 
 @app.get("/api/tasks/{task_id}")
 def task_get(task_id: str, request: Request, since: int = 0) -> dict[str, Any]:
     _authorise(request)
-    t = TASKS.get(task_id)
+    t = TASKS.get(task_id, _owner(request))
     if not t:
         raise HTTPException(404, "no such task")
     events = t.events[max(0, since):]
@@ -490,7 +558,7 @@ def task_get(task_id: str, request: Request, since: int = 0) -> dict[str, Any]:
 @app.post("/api/tasks/{task_id}/approve")
 def task_approve(task_id: str, body: ApproveIn, request: Request) -> dict[str, Any]:
     _authorise(request)
-    if not TASKS.approve(task_id, body.call_id, body.approve):
+    if not TASKS.approve(task_id, body.call_id, body.approve, _owner(request)):
         raise HTTPException(409, "nothing waiting for that approval")
     return {"ok": True}
 
@@ -498,7 +566,7 @@ def task_approve(task_id: str, body: ApproveIn, request: Request) -> dict[str, A
 @app.post("/api/tasks/{task_id}/cancel")
 def task_cancel(task_id: str, request: Request) -> dict[str, Any]:
     _authorise(request)
-    if not TASKS.cancel(task_id):
+    if not TASKS.cancel(task_id, _owner(request)):
         raise HTTPException(404, "no such task")
     return {"ok": True}
 
@@ -552,10 +620,12 @@ def conv_chat(body: ChatConvIn, request: Request):
     if not convs.get(body.conversation_id, with_messages=False):
         raise HTTPException(404, "no such conversation")
     _check_message(body.message)
+    meter = _hosted_gate(request)
     convs.add_message(body.conversation_id, "user", body.message)
-    desktop = config.desktop_enabled() and _is_loopback(request) and body.client != "mobile"
+    desktop = config.desktop_enabled() and _local(request) and body.client != "mobile"
     msgs = convs.history(body.conversation_id)
-    res = _run_chat(msgs, prefer=body.prefer, need_vision=False, keys=body.keys, client=body.client, desktop=desktop)
+    res = _run_chat(msgs, prefer=body.prefer, need_vision=False, keys=None if meter else body.keys,
+                    client=body.client, desktop=desktop, meter=meter)
     if isinstance(res, JSONResponse):
         return res
     convs.add_message(body.conversation_id, "assistant", res["text"],
@@ -568,6 +638,8 @@ def conv_chat(body: ChatConvIn, request: Request):
 @app.get("/api/settings")
 def settings_get(request: Request) -> dict[str, Any]:
     _authorise(request)
+    if tenancy.multiuser():  # never the host's settings (allowed folders etc.)
+        return {"theme": "dark", "default_mode": "agent", "hosted": True, "effective_approval_mode": "ask"}
     return {**settings_mod.load(), "effective_approval_mode": policy.mode()}
 
 
@@ -583,7 +655,8 @@ def settings_put(body: dict[str, Any], request: Request) -> dict[str, Any]:
 @app.get("/api/skills")
 def skills_list(request: Request) -> dict[str, Any]:
     _authorise(request)
-    names = set(tools_mod.build(desktop=config.desktop_enabled(), extra=MCP_TOOLS))
+    names = set(hosted.hosted_tools() if tenancy.multiuser() else
+                tools_mod.build(desktop=config.desktop_enabled(), extra=MCP_TOOLS))
     return {"skills": [{"name": s.name, "description": s.description, "bundled": s.bundled,
                         **s.requirements(names)} for s in skills_mod.discover().values()]}
 
@@ -688,14 +761,18 @@ def routines_run(name: str, request: Request) -> dict[str, Any]:
 @app.get("/api/agent/info")
 def agent_info(request: Request) -> dict[str, Any]:
     _authorise(request)
-    desktop = config.desktop_enabled() and _is_loopback(request)
-    tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS, local_apps=_is_loopback(request))
+    desktop = config.desktop_enabled() and _local(request)
+    hosted_mode = tenancy.multiuser()
+    tl = hosted.hosted_tools() if hosted_mode else tools_mod.build(desktop=desktop, extra=MCP_TOOLS,
+                                                                  local_apps=_local(request))
     return {"tools": [{"name": t.name, "level": t.level, "group": t.group, "description": t.description}
                       for t in tl.values()],
             "skills": [{"name": s.name, "description": s.description, "bundled": s.bundled}
                        for s in skills_mod.discover().values()],
-            "approval_mode": policy.mode(), "sandbox": sandbox.mode(), "workspace": str(sandbox.root()),
-            "mcp_errors": MCP_ERRORS, "extra_roots": [str(p) for p in sandbox.extra_roots()]}
+            "approval_mode": policy.mode(), "sandbox": "hosted (per-user)" if hosted_mode else sandbox.mode(),
+            "workspace": "your private workspace" if hosted_mode else str(sandbox.root()),
+            "mcp_errors": [] if hosted_mode else MCP_ERRORS,
+            "extra_roots": [] if hosted_mode else [str(p) for p in sandbox.extra_roots()]}
 
 
 # -- files (workspace only): upload Office files, preview, download ------------------------
@@ -712,6 +789,30 @@ class UploadIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     data: str = Field(..., max_length=MAX_UPLOAD * 4 // 3 + 1024)  # base64
     dir: str = Field("uploads", max_length=200)
+
+
+def max_upload() -> int:
+    if tenancy.multiuser():
+        try:
+            mb = float(config.env("AUTOMOTO_HOSTED_MAX_UPLOAD_MB", "20") or 20)
+        except ValueError:
+            mb = 20
+        return int(max(1, min(mb, MAX_UPLOAD / 1048576)) * 1048576)
+    return MAX_UPLOAD
+
+
+def _dir_size(root: Path, cap: int = 200_000) -> int:
+    total, n = 0, 0
+    for p in root.rglob("*"):
+        n += 1
+        if n > cap:
+            break
+        try:
+            if p.is_file() and not p.is_symlink():
+                total += p.stat().st_size
+        except OSError:
+            pass
+    return total
 
 
 def _ws_path(path: str) -> Path:
@@ -781,8 +882,13 @@ def files_upload(request: Request, body: UploadIn) -> dict[str, Any]:
         raw = base64.b64decode(body.data.split(",", 1)[-1], validate=True)
     except ValueError:
         raise HTTPException(400, "data must be base64") from None
-    if len(raw) > MAX_UPLOAD:
-        raise HTTPException(413, f"file too large (max {MAX_UPLOAD // 1048576} MB)")
+    cap = max_upload()
+    if len(raw) > cap:
+        raise HTTPException(413, f"file too large (max {cap // 1048576} MB)")
+    if tenancy.multiuser():
+        limit = float(accounts.get_setting("storage_mb")) * 1048576
+        if _dir_size(sandbox.default_root()) + len(raw) > limit:
+            raise HTTPException(413, f"your storage is full ({limit / 1048576:g} MB) - delete some files first")
     d = _ws_path(body.dir)
     d.mkdir(parents=True, exist_ok=True)
     name = _safe_name(body.name)
@@ -836,6 +942,27 @@ def files_download(request: Request, path: str):
         raise HTTPException(404, "no such file")
     return FileResponse(p, media_type="application/octet-stream", filename=p.name,
                         headers={"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})
+
+
+class FileDeleteIn(BaseModel):
+    path: str = Field(..., min_length=1, max_length=400)
+
+
+@app.post("/api/files/delete")
+def files_delete(request: Request, body: FileDeleteIn) -> dict[str, Any]:
+    """Delete a file or folder inside the workspace (never the workspace itself)."""
+    _authorise(request)
+    import shutil as _sh
+
+    p = _ws_path(body.path)
+    root = sandbox.default_root().resolve()
+    if p == root or p == root / "scratch" or not p.exists():
+        raise HTTPException(404, "no such file")
+    if p.is_dir() and not p.is_symlink():
+        _sh.rmtree(p)
+    else:
+        p.unlink()
+    return {"ok": True}
 
 
 @app.get("/api/files/preview")
@@ -1059,6 +1186,8 @@ def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) ->
 
     import uvicorn
 
+    if tenancy.multiuser():
+        return run_hosted(host, port)
     if host not in ("127.0.0.1", "localhost", "::1") and not config.env("AUTOMOTO_API_TOKEN"):
         raise SystemExit("Refusing to listen on a network interface without AUTOMOTO_API_TOKEN set.")
     global SCHEDULER
@@ -1083,6 +1212,30 @@ def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) ->
         uvicorn.run(app, host=host, port=port, log_level="warning", server_header=False)
     finally:
         remove_session_file()
+
+
+def run_hosted(host: str, port: int) -> None:
+    """Hosted mode: accounts and quotas, no launch link, no MCP servers, no routines, no desktop."""
+    import uvicorn
+
+    made = accounts.bootstrap_admin_from_env()
+    accounts.prune()
+    hosts = sorted(_allowed_hosts() - LOCAL_HOSTS)
+    print(f"{APP_NAME} v{__version__} \"{CODENAME}\" - HOSTED (multi-user) mode on {host}:{port}", flush=True)
+    if made:
+        print(f"Created the first admin '{made}' from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD.", flush=True)
+    if accounts.admin_count() == 0:
+        print("No admin yet: run `python -m automoto admin create <name>` (or set AUTOMOTO_ADMIN_USER and "
+              "AUTOMOTO_ADMIN_PASSWORD) before inviting people.", flush=True)
+    st = accounts.settings()
+    print(f"Sign-up: {st['signup']}  ·  default quota: {st['default_quota_minutes']:g} min per "
+          f"{'day' if st['period_days'] == 1 else str(st['period_days']) + ' days'}  ·  allowed hosts: "
+          f"{', '.join(hosts) or '(local only - set AUTOMOTO_ALLOWED_HOSTS=your.domain)'}", flush=True)
+    if config.env("AUTOMOTO_NET_ALLOW_CIDRS"):
+        print("WARNING: AUTOMOTO_NET_ALLOW_CIDRS is set - hosted users can reach those private networks.", flush=True)
+    fwd = config.env("AUTOMOTO_FORWARDED_ALLOW_IPS", "127.0.0.1") or "127.0.0.1"
+    uvicorn.run(app, host=host, port=port, log_level="warning", server_header=False, proxy_headers=True,
+                forwarded_allow_ips=fwd)
 
 
 def session_file() -> Path:

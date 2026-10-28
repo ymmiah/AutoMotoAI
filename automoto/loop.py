@@ -111,7 +111,7 @@ class Agent:
     def __init__(self, *, tools: dict[str, tools_mod.Tool] | None = None, memory: Memory | None = None,
                  skills: dict[str, skills_mod.Skill] | None = None, desktop: bool = False,
                  extra_tools: list[tools_mod.Tool] | None = None, transport: Callable | None = None,
-                 client: str = "cli", workspace: str | None = None):
+                 client: str = "cli", workspace: str | None = None, meter: Any = None):
         self.memory = memory if memory is not None else Memory()
         self.skills = skills if skills is not None else skills_mod.discover()
         self.tools = tools if tools is not None else tools_mod.build(desktop=desktop, extra=extra_tools)
@@ -121,6 +121,7 @@ class Agent:
         self.desktop = desktop
         self.workspace = workspace  # an allowed folder to use as the working root (e.g. a VS Code project)
         self.tainted = False
+        self.meter = meter  # hosted mode: usage quota (accounts.Meter) - checked before every model call
 
     def system(self) -> str:
         from automoto.agent import agent_system_prompt
@@ -173,7 +174,13 @@ class Agent:
             if cancel is not None and cancel.is_set():
                 emit({"type": "cancelled", "step": step})
                 return AgentResult("Cancelled.", step - 1, *last, stopped="cancelled", events=events, history=history)
+            if self.meter is not None:
+                why = self.meter.check()
+                if why:
+                    emit({"type": "quota", "step": step, "text": why})
+                    return AgentResult(why, step - 1, *last, stopped="quota", events=events, history=history)
             emit({"type": "thinking", "step": step})
+            t_model = time.monotonic()
             try:
                 kw: dict[str, Any] = {"known": known, "prefer": prefer, "keys": keys, "task_hint": goal_text,
                                       "exclude": dead}
@@ -181,10 +188,12 @@ class Agent:
                     kw["transport"] = self.transport
                 turn = router.ask_turn(history, schemas, **kw)
             except (router.NoProviderError, router.AllProvidersFailed) as exc:
+                self._meter(time.monotonic() - t_model, history, "", "model", "failed")
                 emit({"type": "error", "step": step, "error": str(exc),
                       "tried": getattr(exc, "tried", [])})
                 return AgentResult(f"✗ {exc}", step - 1, *last, stopped="error", events=events, history=history)
             last = (turn.provider, turn.model)
+            self._meter(time.monotonic() - t_model, history, turn.text, "model", f"{turn.provider}/{turn.model}")
             failed = [t for t in turn.tried if not t.get("ok")]
             dead |= {t["provider"] for t in failed if t.get("status") in (401, 403)}
             emit({"type": "model", "step": step, "provider": turn.provider, "model": turn.model, "mode": turn.mode,
@@ -210,7 +219,13 @@ class Agent:
                 history.append(self._run_call(call, step, approver, emit))
         # Out of steps: ask once more for a summary without tools.
         emit({"type": "max_steps", "step": max_steps})
+        why = self.meter.check() if self.meter is not None else None
+        if why:
+            emit({"type": "quota", "step": max_steps, "text": why})
+            return AgentResult(why, max_steps, *last, stopped="quota", events=events, history=history)
+        t_sum = time.monotonic()
         summary = self._summarise(history, keys=keys, prefer=prefer)
+        self._meter(time.monotonic() - t_sum, history, summary, "model", "summary")
         emit({"type": "final", "step": max_steps, "text": summary})
         self._journal(goal_text, summary, max_steps)
         return AgentResult(summary, max_steps, *last, stopped="max_steps", events=events, history=history)
@@ -248,6 +263,11 @@ class Agent:
             return {**base, "content": f"BLOCKED by safety policy: {decision.reason}"}
         t0 = time.monotonic()
         ok, out = tools_mod.call(tool, self.ctx, args)
+        if self.meter is not None:
+            try:
+                self.meter.add(time.monotonic() - t0, kind="tool", detail=name)
+            except Exception:
+                pass
         if len(out) > MAX_RESULT_CHARS:
             out = out[:MAX_RESULT_CHARS] + f"\n[…{len(out) - MAX_RESULT_CHARS} more chars]"
         emit({"type": "tool_result", "step": step, "id": base["tool_call_id"], "name": name, "ok": ok,
@@ -259,6 +279,16 @@ class Agent:
         if is_untrusted(tool):
             content = fence_untrusted(name, content)
         return {**base, "content": content}
+
+    def _meter(self, seconds: float, history: list, reply: str, kind: str, detail: str) -> None:
+        if self.meter is None:
+            return
+        try:  # tokens are an estimate (~4 characters per token) - providers don't all report usage
+            chars = sum(len(m.get("content") if isinstance(m.get("content"), str) else json.dumps(m.get("content")))
+                        for m in history) + len(reply or "")
+            self.meter.add(seconds, requests=1, tokens=chars // 4, kind=kind, detail=detail)
+        except Exception:
+            pass
 
     def _summarise(self, history: list[dict[str, Any]], *, keys, prefer) -> str:
         from automoto import toolcalls as tc
