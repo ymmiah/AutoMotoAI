@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "automoto-ai"
-version = "4.0.0"
-description = "AutoMoto AI v4 'Cousin' - multi-AI assistant with auto-failover, vision routing and confirmed desktop actions"
+version = "5.0.0"
+description = "AutoMoto AI v5 'Agent' - your AI cousin: an autonomous agent with tools, approvals, memory, skills and routines over a multi-AI router with auto-failover"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -31,7 +31,7 @@ automoto = "automoto.cli:main"
 packages = ["automoto"]
 
 [tool.setuptools.package-data]
-automoto = ["web/*.html"]
+automoto = ["web/*.html", "skills_bundled/*/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

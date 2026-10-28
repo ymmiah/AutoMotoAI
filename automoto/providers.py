@@ -38,6 +38,8 @@ class ProviderSpec:
     model_env: str = ""
     vision_env: str = ""
     strong_env: str = ""
+    agent_model: str | None = None  # model tried first for tool-calling agent steps
+    agent_env: str = ""
     signup_url: str = ""
     notes: str = ""
     extra_headers: dict[str, str] = field(default_factory=dict)
@@ -63,6 +65,15 @@ class ProviderSpec:
                 return s
         return (config.env(self.model_env) if self.model_env else None) or self.text_model
 
+    def agent_models(self, *, vision: bool = False) -> list[str]:
+        """Models to try, in order, for an agent (tool-calling) step."""
+        first = (config.env(self.agent_env) if self.agent_env else None) or self.agent_model
+        order = [self.model_for(vision=True)] if vision and self.supports_vision else []
+        if not vision and first:
+            order.append(first)
+        order.append(self.model_for())
+        return list(dict.fromkeys(m for m in order if m))
+
     def public(self, overrides: dict[str, str] | None = None) -> dict[str, Any]:
         """Status dict that is safe to send to a UI (no key material)."""
         return {
@@ -78,6 +89,7 @@ class ProviderSpec:
             "text_model": self.model_for(),
             "vision_model": self.model_for(vision=True) if self.supports_vision else None,
             "strong_model": self.model_for(strong=True) if self.model_for(strong=True) != self.model_for() else None,
+            "agent_model": self.agent_models()[0],
             "signup_url": self.signup_url,
             "notes": self.notes,
         }
@@ -105,6 +117,8 @@ REGISTRY: dict[str, ProviderSpec] = {
             model_env="NIM_MODEL",
             vision_env="NIM_VISION_MODEL",
             strong_env="NIM_STRONG_MODEL",
+            agent_model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+            agent_env="NIM_AGENT_MODEL",
             signup_url="https://build.nvidia.com",
             notes="Free dev credits. Default Llama 3.2 11B Vision is verified live; it takes 1 image per request.",
         ),
@@ -127,6 +141,7 @@ REGISTRY: dict[str, ProviderSpec] = {
             model_env="GEMINI_MODEL",
             vision_env="GEMINI_VISION_MODEL",
             strong_env="GEMINI_STRONG_MODEL",
+            agent_env="GEMINI_AGENT_MODEL",
             signup_url="https://aistudio.google.com/apikey",
             notes="Free tier via AI Studio. Uses Google's OpenAI-compatible endpoint.",
         ),
@@ -149,6 +164,8 @@ REGISTRY: dict[str, ProviderSpec] = {
             model_env="GROQ_MODEL",
             vision_env="GROQ_VISION_MODEL",
             strong_env="GROQ_STRONG_MODEL",
+            agent_model="openai/gpt-oss-120b",
+            agent_env="GROQ_AGENT_MODEL",
             signup_url="https://console.groq.com/keys",
             notes="Fastest free tier. Vision model is a Groq *preview* model.",
         ),
@@ -171,6 +188,7 @@ REGISTRY: dict[str, ProviderSpec] = {
             model_env="OPENROUTER_MODEL",
             vision_env="OPENROUTER_VISION_MODEL",
             strong_env="OPENROUTER_STRONG_MODEL",
+            agent_env="OPENROUTER_AGENT_MODEL",
             signup_url="https://openrouter.ai/keys",
             notes="':free' models are rate-limited; 'openrouter/free' auto-picks a free model.",
             extra_headers={"HTTP-Referer": "https://github.com/ymmiah/AutoMotoAI", "X-Title": "AutoMoto AI"},
@@ -194,6 +212,7 @@ REGISTRY: dict[str, ProviderSpec] = {
             model_env="OPENAI_MODEL",
             vision_env="OPENAI_VISION_MODEL",
             strong_env="OPENAI_STRONG_MODEL",
+            agent_env="OPENAI_AGENT_MODEL",
             signup_url="https://platform.openai.com/api-keys",
             notes="Paid. Used only if you add a key.",
         ),
@@ -216,6 +235,7 @@ REGISTRY: dict[str, ProviderSpec] = {
             model_env="CLAUDE_MODEL",
             vision_env="CLAUDE_VISION_MODEL",
             strong_env="CLAUDE_STRONG_MODEL",
+            agent_env="CLAUDE_AGENT_MODEL",
             signup_url="https://console.anthropic.com/",
             notes="Paid. Used only if you add a key.",
         ),
@@ -350,3 +370,74 @@ def complete(spec: ProviderSpec, messages, model: str, key: str, *, temperature:
         raise
     except Exception as exc:  # SDK errors: rate limit, 5xx, auth, timeout, connection
         raise _classify(spec.id, exc) from None
+
+
+# ---------------------------------------------------------------------------
+# Agent turns (tool calling)
+# ---------------------------------------------------------------------------
+def _openai_turn(spec: ProviderSpec, messages, model, key, *, tools, native, temperature, max_tokens, timeout):
+    from openai import OpenAI
+
+    from automoto import toolcalls as tc
+
+    client = OpenAI(api_key=key, base_url=spec.base_url, timeout=timeout, max_retries=0,
+                    default_headers=spec.extra_headers or None)
+    kwargs: dict[str, Any] = {"model": model, "temperature": temperature, "max_tokens": max_tokens}
+    if native and tools:
+        kwargs["messages"] = tc.render_openai(messages)
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+    else:
+        kwargs["messages"] = tc.render_text(messages, tools)
+    resp = client.chat.completions.create(**kwargs)
+    choice = resp.choices[0] if resp.choices else None
+    if not choice or not choice.message:
+        raise ProviderError(spec.id, "empty response")
+    return tc.parse_openai_message(choice.message)
+
+
+def _anthropic_turn(spec: ProviderSpec, messages, model, key, *, tools, native, temperature, max_tokens, timeout):
+    import anthropic
+
+    from automoto import toolcalls as tc
+
+    client = anthropic.Anthropic(api_key=key, timeout=timeout, max_retries=0)
+    if native and tools:
+        system, msgs = tc.render_anthropic(messages, _to_anthropic)
+    else:
+        system, msgs = _to_anthropic(tc.render_text(messages, tools))
+    kwargs: dict[str, Any] = {"model": model, "max_tokens": max_tokens, "temperature": temperature, "messages": msgs}
+    if system:
+        kwargs["system"] = system
+    if native and tools:
+        kwargs["tools"] = tc.anthropic_tools(tools)
+    resp = client.messages.create(**kwargs)
+    text, calls = "", []
+    for b in resp.content:
+        if getattr(b, "type", "") == "text":
+            text += b.text
+        elif getattr(b, "type", "") == "tool_use":
+            calls.append({"id": b.id, "name": b.name, "arguments": dict(b.input or {})})
+    return text.strip(), calls
+
+
+TURN_TRANSPORTS: dict[str, Callable[..., tuple[str, list]]] = {"openai_compat": _openai_turn, "anthropic": _anthropic_turn}
+
+
+def complete_turn(spec: ProviderSpec, messages, model: str, key: str, *, tools: list[dict[str, Any]] | None,
+                  native: bool, temperature: float | None = None, max_tokens: int | None = None,
+                  timeout: float | None = None) -> tuple[str, list[dict[str, Any]]]:
+    """One agent step on one provider -> (text, native_tool_calls). Raises ProviderError."""
+    fn = TURN_TRANSPORTS[spec.kind]
+    try:
+        text, calls = fn(spec, messages, model, key, tools=tools, native=native,
+                         temperature=config.temperature() if temperature is None else temperature,
+                         max_tokens=config.max_tokens() if max_tokens is None else max_tokens,
+                         timeout=config.timeout_s() if timeout is None else timeout)
+    except ProviderError:
+        raise
+    except Exception as exc:
+        raise _classify(spec.id, exc) from None
+    if not text and not calls:
+        raise ProviderError(spec.id, "empty response")
+    return text, calls

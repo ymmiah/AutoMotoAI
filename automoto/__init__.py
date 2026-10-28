@@ -1,8 +1,9 @@
-"""AutoMoto AI v4 "Cousin" - a multi-AI assistant with auto-failover and vision routing.
+"""AutoMoto AI v5 "Agent" - your AI cousin: an autonomous agent with tools, approvals, memory,
+skills and routines on top of a multi-AI router with auto-failover and vision routing.
 
 Built by Yasin Mohammed Miah (ymmiah), Student of BCU, BSc Computing Top-Up (Hons).
 """
 
-__version__ = "4.0.0"
+__version__ = "5.0.0"
 APP_NAME = "AutoMoto AI"
-CODENAME = "Cousin"
+CODENAME = "Agent"

@@ -1,4 +1,4 @@
-"""The Cousin persona: system prompt + parsing of proposed desktop actions."""
+"""Persona + system prompts (agent mode and v4-style plain chat) and v4 action parsing."""
 
 from __future__ import annotations
 
@@ -15,12 +15,13 @@ LOOSE_RE = re.compile(r"`{0,3}\s*actions:?\s*(\[\s*\{.*\}\s*\])\s*`{0,3}\s*$", r
 
 
 def system_prompt(*, desktop: bool = True, client: str = "desktop") -> str:
-    base = f"""You are {APP_NAME} v{__version__} "Cousin" - a practical, friendly assistant built by
+    base = f"""You are {APP_NAME} v{__version__} - "your AI cousin" - a practical, friendly assistant built by
 Yasin Mohammed Miah (ymmiah). You help with any project: coding, debugging, writing,
 planning, research summaries, design feedback and reading screenshots/images.
 
 Style: direct, accurate, concise. Use Markdown. Say when you are unsure; never invent
-facts, file contents, command output or links. You cannot browse the web."""
+facts, file contents, command output or links. In plain chat mode you cannot browse the web
+or run tools (agent mode can)."""
     if not desktop or client == "mobile":
         return base + "\n\nThis client has no desktop automation. Do not propose desktop actions."
     return base + f"""
@@ -61,3 +62,41 @@ def split_actions(text: str) -> tuple[str, list[dict[str, Any]]]:
                         "why": str(a.get("why", ""))[:200], "risk": tool.risk})
     clean = (text[: m.start()] + text[m.end():]).strip()
     return clean, actions[:5]
+
+
+def agent_system_prompt(*, memory: str = "", skills: str = "", desktop: bool = False,
+                        tool_names: list[str] | None = None) -> str:
+    import time
+
+    from automoto import sandbox
+
+    tools_line = ", ".join(tool_names or [])
+    parts = [f"""You are {APP_NAME} v{__version__} "Agent" - "your AI cousin": an autonomous assistant built by
+Yasin Mohammed Miah (ymmiah). You get things done by using tools step by step until the
+user's goal is met, then you give a short, clear final answer.
+
+Today is {time.strftime('%A %d %B %Y, %H:%M')} (local time). The user is on {OS_LABEL}.
+
+How you work:
+- Think about the goal, then call tools. Prefer one or two tool calls per step.
+- Use web_search + fetch_url for anything current or factual you are unsure about, and cite links.
+- Files and shell commands live in your sandbox workspace ({sandbox.root()}). Paths are relative
+  to it. Put drafts and temporary files in scratch/ (no approval needed there).
+- Risky tools (run_shell, writing outside scratch/, desktop actions, forget) automatically show
+  the user an Approve/Deny prompt. So never ask "shall I?" in chat - just call the tool and the
+  user decides. If a call is denied or blocked, do not retry it - adapt or explain.
+- When the user tells you a lasting preference or fact about themselves or their projects,
+  save it with remember. Use recall when past context might help.
+- If a listed skill matches the task, call load_skill first and follow it.
+- Never invent tool output, file contents or links. Be honest about failures.
+- Final answers: Markdown, concise, lead with the result.
+
+Tools available: {tools_line}"""]
+    if desktop:
+        parts.append("Desktop tools (open_url, open_app, type_text, hotkey) act on the user's real computer: "
+                     "use them only when the user asks you to do something on their computer.")
+    if memory:
+        parts.append(memory)
+    if skills:
+        parts.append(skills)
+    return "\n\n".join(parts)

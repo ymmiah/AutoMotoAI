@@ -182,3 +182,79 @@ def status(keys: dict[str, str] | None = None) -> dict[str, Any]:
         "mode": config.ai_provider(),
         "providers": [p.public(keys) for p in sorted(REGISTRY.values(), key=lambda p: p.priority)],
     }
+
+
+# ---------------------------------------------------------------------------
+# ask_turn(): one agent step with tools, same failover rules as ask()
+# ---------------------------------------------------------------------------
+def tool_mode() -> str:
+    m = (config.env("AUTOMOTO_TOOL_MODE", "auto") or "auto").lower()
+    return m if m in ("auto", "native", "text") else "auto"
+
+
+def ask_turn(messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, known: set[str],
+             need_vision: bool = False, prefer: str | None = None, keys: dict[str, str] | None = None,
+             transport: Callable[..., tuple[str, list]] | None = None, task_hint: str | None = None,
+             exclude: set[str] | None = None, **gen: Any):
+    """Ask the best available AI for the next agent step.
+
+    Uses native tool calling when the provider supports it (``supports_tools``), else the
+    JSON-in-text protocol. If a native call is rejected (400/404/422) the same model is
+    retried in text mode before moving on. Any other failure fails over to the next
+    provider - so a rate limit halfway through a task just switches AI and carries on.
+    """
+    from automoto import providers as prov
+    from automoto import toolcalls as tc
+
+    transport = transport or prov.complete_turn
+    need_vision = need_vision or has_images(messages)
+    if task_hint is None:
+        last_user = next((m for m in reversed(messages) if m.get("role") == "user"), {})
+        c = last_user.get("content", "")
+        task_hint = c if isinstance(c, str) else " ".join(p.get("text", "") for p in c if isinstance(p, dict))
+    task = "vision" if need_vision else classify_task(task_hint)
+    order = plan_order(need_vision=need_vision, prefer=prefer, task=task, keys=keys)
+    if exclude and any(p.id not in exclude for p in order):
+        order = [p for p in order if p.id not in exclude]
+    if not order:
+        if need_vision and any(p.key(keys) for p in REGISTRY.values()):
+            raise NoProviderError("This needs a vision-capable AI, but none of your configured providers support images.")
+        raise NoProviderError(
+            "No AI provider key found. Add at least one key (e.g. NVIDIA_API_KEY, GEMINI_API_KEY, "
+            "GROQ_API_KEY or OPENROUTER_API_KEY) to .env - see .env.example."
+        )
+    mode_cfg = tool_mode()
+    tried: list[dict[str, Any]] = []
+    for spec in order:
+        native_first = spec.supports_tools and mode_cfg != "text"
+        for model in spec.agent_models(vision=need_vision):
+            if tried and tried[-1]["provider"] == spec.id and tried[-1].get("status") in (401, 403):
+                break  # bad key: don't try this provider's other models
+            modes = [True, False] if native_first and mode_cfg == "auto" else [native_first]
+            for native in modes:
+                t0 = time.monotonic()
+                try:
+                    text, calls = transport(spec, messages, model, spec.key(keys), tools=tools, native=native, **gen)
+                except ProviderError as exc:
+                    tried.append({"provider": spec.id, "model": model, "ok": False, "status": exc.status,
+                                  "mode": "native" if native else "text",
+                                  "error": str(exc).split(": ", 1)[-1][:200], "ms": int((time.monotonic() - t0) * 1000)})
+                    if native and exc.status in (400, 404, 422) and False in modes:
+                        continue  # retry this model without native tools
+                    break  # next model / provider
+                except Exception as exc:  # defensive
+                    tried.append({"provider": spec.id, "model": model, "ok": False, "status": None,
+                                  "error": f"{exc.__class__.__name__}: {str(exc)[:160]}",
+                                  "ms": int((time.monotonic() - t0) * 1000)})
+                    break
+                if not native:
+                    text, calls = tc.parse_text_calls(text, known)
+                else:
+                    calls = [c for c in calls if c.get("name")]
+                    if not calls and text:  # some models answer natively but in text form
+                        text, calls = tc.parse_text_calls(text, known)
+                tried.append({"provider": spec.id, "model": model, "ok": True, "mode": "native" if native else "text",
+                              "ms": int((time.monotonic() - t0) * 1000)})
+                return tc.Turn(text=text, tool_calls=calls, provider=spec.id, model=model,
+                               mode="native" if native else "text", tried=tried)
+    raise AllProvidersFailed(tried)

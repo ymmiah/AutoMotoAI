@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from automoto import agent, desktop, router, server
+from automoto import __version__, agent, desktop, router, server
 from automoto.providers import REGISTRY
 
 
@@ -26,12 +26,12 @@ H = {"X-AutoMoto-Token": server.SESSION_TOKEN}
 
 def test_index_injects_token(client):
     r = client.get("/")
-    assert r.status_code == 200 and server.SESSION_TOKEN in r.text and "4.0.0" in r.text
+    assert r.status_code == 200 and server.SESSION_TOKEN in r.text and __version__ in r.text
 
 
 def test_api_requires_token(client):
     assert client.get("/api/status").status_code == 403
-    assert client.get("/api/status", headers=H).json()["version"] == "4.0.0"
+    assert client.get("/api/status", headers=H).json()["version"] == __version__
 
 
 def test_chat_returns_provider_and_actions(client, monkeypatch):
