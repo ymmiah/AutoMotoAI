@@ -409,7 +409,7 @@ def test_server_refuses_unsafe_archive_and_previews_csv(client, ws):
     assert r.status_code == 200
     v = c.get("/api/files/inspect", params={"path": "uploads/sales.csv"}, headers=H).json()
     assert v["kind"] == "table" and v["columns"] == ["region", "units"] and v["rows"][1] == ["South", "4"]
-    assert v["info"]["delimiter"] == ";" and v["total_rows"] == 3
+    assert v["info"]["delimiter"] == ";" and v["total_rows"] == 2
     (ws / "conf.yaml").write_text("a:\n  b: 1\n")
     assert "b: int" in " ".join(c.get("/api/files/inspect", params={"path": "conf.yaml"}, headers=H).json()["outline"])
     assert c.get("/api/files/inspect", params={"path": "uploads/sales.csv"}, headers={"X-AutoMoto-Token": "x"}).status_code == 403

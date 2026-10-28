@@ -908,8 +908,12 @@ def files_inspect(request: Request, path: str, rows: int = 50) -> dict[str, Any]
             head = df.head(rows)
             cells = [[None if v is None or (isinstance(v, float) and v != v) else str(v)[:200] for v in r]
                      for r in head.itertuples(index=False)]
-            lines = dfm.count_lines(p, 5_000_000)[0] if info["kind"] == "csv" else len(df)
+            lines = len(df)
+            if info["kind"] == "csv" and info.get("truncated_at_rows"):
+                n, _ = dfm.count_lines(p, 5_000_000)  # big file: estimate from line count
+                lines = max(len(df), n - (1 if info.get("header") else 0))
             return {"kind": "table", "columns": [str(c) for c in df.columns], "rows": cells, "total_rows": lines,
+                    "estimated": bool(info.get("truncated_at_rows")),
                     "info": {k: v for k, v in info.items() if k in ("encoding", "delimiter", "header", "sheet", "kind")}}
         if kind == "data":
             if dfm.kind_of(p) == "sqlite":

@@ -921,7 +921,7 @@ PAGES.files = async () => {
       const r = d.report;
       const verdict = r.safe ? '<span class="pill st-live">safe to extract</span>' : '<span class="pill bad">unsafe</span>';
       const tree = d.entries.map((e) => {
-        const depth = e.name.split("/").length - (e.kind === "dir" ? 2 : 1);
+        const depth = e.name.replace(/\/$/, "").split("/").length - 1;
         const label = e.name.split("/").filter(Boolean).pop() + (e.kind === "dir" ? "/" : "");
         return `<div class="tree-row${e.problem ? " bad" : ""}" style="padding-left:${Math.max(0, depth) * 16}px">${icon(e.kind === "dir" ? "folder" : "file")}<span>${esc(label)}</span><span class="muted">${e.kind === "dir" ? "" : fmt(e.size)}${e.encrypted ? " · encrypted" : ""}${e.problem ? " · " + esc(e.problem) : ""}</span></div>`;
       }).join("");
