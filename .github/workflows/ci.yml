@@ -32,7 +32,8 @@ jobs:
           python -m automoto mcp
 
   office:
-    # Office suite end to end with free LibreOffice + poppler: PDF export, TOC page numbers, recalc, renders
+    # Office suite end to end with free LibreOffice + poppler: PDF export, TOC page numbers, recalc, renders;
+    # plus archives / WordPress (php -l) / data files with the optional tools installed
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +52,13 @@ jobs:
         run: |
           python -c "from automoto import office; assert office.lo_available(), 'LibreOffice not detected'"
           python -m pytest -q -rs tests/test_office.py
+      - name: Archives, WordPress and data files (real php -l, 7-Zip, Parquet)
+        run: |
+          php -v | head -1
+          command -v 7z || sudo apt-get install -y -q p7zip-full
+          pip install "pyarrow>=15" "py7zr>=0.21"
+          python -c "import shutil; assert shutil.which('php'), 'php not found'"
+          python -m pytest -q -rs tests/test_archives.py tests/test_wordpress.py tests/test_datafiles.py
 
   security:
     runs-on: ubuntu-latest

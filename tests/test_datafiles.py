@@ -195,3 +195,14 @@ def test_limits_and_policy(ws, monkeypatch, t):
     assert policy.classify("data_query", "safe", {"path": "s.csv", "out": "scratch/r.xlsx"})[0] == "safe"
     assert policy.classify("data_inspect", "safe", {"path": "~/.ssh/id_rsa"})[0] == "blocked"
     assert policy.classify("data_convert", "risky", {"path": "s.csv", "out": "~/.bashrc"})[0] == "blocked"
+
+
+def test_parquet_roundtrip(ws, t):
+    pytest.importorskip("pyarrow")
+    (ws / "s.csv").write_text(CSV)
+    call(t, "data_convert", path="s.csv", out="s.parquet")
+    assert (ws / "s.parquet").read_bytes()[:4] == b"PAR1"
+    out = call(t, "data_inspect", path="s.parquet")
+    assert "5 rows x 4 columns" in out
+    out = call(t, "data_query", path="s.parquet", filters=[{"column": "Product", "op": "==", "value": "Gadget"}])
+    assert out.startswith("5 rows in → 2 rows out")
