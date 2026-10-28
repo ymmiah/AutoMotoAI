@@ -1,6 +1,6 @@
 [package]
 name = "automoto-desktop"
-version = "4.0.0"
+version = "5.0.0"
 description = "AutoMoto AI v4 desktop shell"
 authors = ["Yasin Mohammed Miah (ymmiah)"]
 license = "MIT"

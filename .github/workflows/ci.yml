@@ -23,4 +23,8 @@ jobs:
       - name: Tests (mocked AI, no keys)
         run: python -m pytest -q
       - name: CLI smoke
-        run: python -m automoto --version
+        run: |
+          python -m automoto --version
+          python -m automoto tools
+          python -m automoto skills
+          python -m automoto routines list

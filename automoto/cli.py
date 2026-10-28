@@ -1,7 +1,13 @@
-"""Command line for AutoMoto AI v4.
+"""Command line for AutoMoto AI v5 "Agent".
 
-    python -m automoto                 # interactive chat (Rich)
-    python -m automoto serve           # local web UI on http://127.0.0.1:8765
+    python -m automoto                 # interactive AGENT chat (tools + approvals)
+    python -m automoto --plain         # v4-style plain chat (no tools)
+    python -m automoto do "goal"       # one-shot agent task
+    python -m automoto serve           # web UI + API + routines on http://127.0.0.1:8765
+    python -m automoto routines add NAME --every 1h --prompt "..."   (or --cron "0 8 * * 1-5")
+    python -m automoto routines list | remove NAME | run NAME
+    python -m automoto memory [list | add "fact" | forget ID]
+    python -m automoto skills | tools
     python -m automoto status          # which AIs are configured + vision matrix
     python -m automoto ask "question" [--image shot.png] [--prefer groq]
     python -m automoto recommend "read this receipt"
@@ -13,6 +19,7 @@ import argparse
 import base64
 import mimetypes
 import sys
+import time
 from pathlib import Path
 
 from automoto import APP_NAME, CODENAME, __version__, config
@@ -29,7 +36,7 @@ def _console():
 
 def _print(console, text: str, style: str | None = None) -> None:
     if console:
-        console.print(text, style=style, highlight=False)
+        console.print(text, style=style, highlight=False, markup=False)
     else:
         print(text)
 
@@ -171,6 +178,207 @@ def cmd_chat(args) -> int:
         _reply(console, ans)
 
 
+# -- v5 agent ----------------------------------------------------------------------
+def _terminal_approver(console):
+    def approve(call, decision) -> bool:
+        from automoto.loop import format_args
+
+        _print(console, f"   ⚠  {call['name']} {format_args(call['args'], 300)}", "yellow")
+        _print(console, f"      {decision.level}: {decision.reason}", "dim")
+        try:
+            ans = input("      Approve? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            ans = ""
+        return ans in ("y", "yes")
+    return approve
+
+
+def _event_printer(console):
+    from automoto.loop import format_args
+
+    def on_event(ev) -> None:
+        t = ev["type"]
+        if t == "model" and ev.get("switched"):
+            _print(console, f"   ↪ switched AI: {'; '.join(ev['switched'])} → {ev['provider']}", "dim")
+        elif t == "say" and ev.get("text"):
+            _print(console, f"   💭 {ev['text'][:300]}", "dim")
+        elif t == "tool_call":
+            d = ev["decision"]
+            mark = {"allow": "▶", "ask": "?", "deny": "⛔"}[d["action"]]
+            _print(console, f"   {mark} {ev['name']} {format_args(ev['args'])}", "cyan")
+        elif t == "tool_result":
+            out = (ev.get("output") or "").strip().splitlines()
+            first = out[0][:160] if out else ""
+            more = f" (+{len(out) - 1} lines)" if len(out) > 1 else ""
+            _print(console, f"     {'✓' if ev['ok'] else '✗'} {first}{more}", "green" if ev["ok"] else "red")
+        elif t == "max_steps":
+            _print(console, "   ⏹ step limit reached - summarising", "yellow")
+    return on_event
+
+
+def _agent(args, desktop: bool):
+    from automoto.loop import Agent
+
+    extra = []
+    if not getattr(args, "no_mcp", False):
+        from automoto import mcp
+
+        extra, errors = mcp.connect_all()
+        for e in errors:
+            _print(_console(), f"MCP: {e}", "yellow")
+    return Agent(desktop=desktop, extra_tools=extra, client="cli")
+
+
+def _show_final(console, res) -> None:
+    if console:
+        from rich.markdown import Markdown
+
+        console.print(Markdown(res.text or "(no answer)"))
+        console.print(f"[dim]{res.provider} · {res.model} · {res.steps} step(s) · {res.stopped}[/dim]")
+    else:
+        print(res.text, f"\n[{res.provider} · {res.model} · {res.steps} steps]")
+
+
+def cmd_do(args) -> int:
+    console = _console()
+    content: list | str = args.goal
+    if args.image:
+        content = [{"type": "text", "text": args.goal}] + [_image_part(i) for i in args.image]
+    agent = _agent(args, desktop=config.desktop_enabled())
+    res = agent.run([{"role": "user", "content": content}], approver=_terminal_approver(console),
+                    on_event=_event_printer(console), prefer=args.prefer, max_steps=args.max_steps)
+    _show_final(console, res)
+    return 0 if res.stopped in ("done", "max_steps") else 2
+
+
+def cmd_agent_chat(args) -> int:
+    from automoto import policy, sandbox
+
+    console = _console()
+    agent = _agent(args, desktop=config.desktop_enabled())
+    _print(console, f"🤖 {APP_NAME} v{__version__} \"{CODENAME}\" — your AI cousin. Tools: {len(agent.tools)} · "
+                    f"sandbox: {sandbox.mode()} ({sandbox.root()}) · approvals: {policy.mode()}", "bold green")
+    _print(console, "Ask me to do things. /image <path> attaches, /memory, /tools, /plain, /exit.", "dim")
+    history: list[dict] = []
+    pending_images: list[dict] = []
+    while True:
+        try:
+            line = input("\nyou › ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not line:
+            continue
+        if line in ("/exit", "/quit", "exit", "quit"):
+            return 0
+        if line == "/plain":
+            return cmd_chat(args)
+        if line == "/status":
+            cmd_status(args)
+            continue
+        if line == "/tools":
+            from automoto.tools import text_manifest
+
+            _print(console, text_manifest(agent.tools))
+            continue
+        if line == "/memory":
+            for f in agent.memory.facts():
+                _print(console, f"#{f['id']} {f['text']}")
+            continue
+        if line.startswith("/image "):
+            try:
+                pending_images.append(_image_part(line[7:].strip()))
+                _print(console, "📎 image attached — a vision AI will be used", "cyan")
+            except OSError as exc:
+                _print(console, f"✗ {exc}", "red")
+            continue
+        content: list | str = line
+        if pending_images:
+            content = [{"type": "text", "text": line}] + pending_images
+            pending_images = []
+        history.append({"role": "user", "content": content})
+        res = agent.run(history[-20:], approver=_terminal_approver(console), on_event=_event_printer(console),
+                        prefer=args.prefer, max_steps=args.max_steps)
+        _show_final(console, res)
+        if res.stopped == "error":
+            history.pop()
+            if "No AI provider key" in res.text:
+                return 2
+            continue
+        history.append({"role": "assistant", "content": res.text})
+
+
+def cmd_routines(args) -> int:
+    from automoto import routines
+
+    store = routines.RoutineStore()
+    console = _console()
+    if args.action == "add":
+        if not args.name or not args.prompt or not (args.every or args.cron):
+            _print(console, "usage: routines add NAME (--every 1h | --cron '0 8 * * *') --prompt '...'", "red")
+            return 2
+        sched = f"every {args.every}" if args.every else args.cron
+        try:
+            r = store.add(args.name, sched, args.prompt)
+        except routines.ScheduleError as exc:
+            _print(console, f"✗ {exc}", "red")
+            return 2
+        _print(console, f"✓ routine '{r.name}' ({r.schedule}) saved. It runs while `python -m automoto serve` is up.", "green")
+        return 0
+    if args.action == "remove":
+        ok = store.remove(args.name or "")
+        _print(console, "✓ removed" if ok else "no such routine", "green" if ok else "red")
+        return 0 if ok else 1
+    if args.action == "run":
+        r = store.load().get(args.name or "")
+        if not r:
+            _print(console, "no such routine", "red")
+            return 1
+        agent = _agent(args, desktop=False)
+        line = routines.run_routine(r, lambda p: agent.run(p, on_event=_event_printer(console)).as_dict(), store)
+        _print(console, f"[{line['status']}] {line['result']}")
+        return 0
+    rs = store.load()
+    if not rs:
+        _print(console, "No routines yet. Example: python -m automoto routines add morning --cron '0 8 * * 1-5' "
+                        "--prompt 'Search the web for news about NVIDIA NIM and summarise it in 5 bullets.'")
+    for r in rs.values():
+        last = time.strftime("%Y-%m-%d %H:%M", time.localtime(r.last_run)) if r.last_run else "never"
+        _print(console, f"• {r.name}  [{r.schedule}]  last: {last} {r.last_status}\n    {r.prompt[:120]}")
+    return 0
+
+
+def cmd_memory(args) -> int:
+    from automoto.memory import Memory
+
+    m = Memory()
+    if args.action == "add" and args.text:
+        print(m.remember(" ".join(args.text)))
+    elif args.action == "forget" and args.text:
+        print("forgotten" if m.forget(int(args.text[0])) else "no such memory")
+    else:
+        for f in m.facts():
+            print(f"#{f['id']} {f['text']}")
+        if not m.facts():
+            print(f"(memory is empty - {m.path})")
+    return 0
+
+
+def cmd_skills(_args) -> int:
+    from automoto import skills
+
+    for s in skills.discover().values():
+        print(f"• {s.name}{' (bundled)' if s.bundled else ''}: {s.description}")
+    return 0
+
+
+def cmd_tools(args) -> int:
+    from automoto.tools import build, text_manifest
+
+    print(text_manifest(build(desktop=config.desktop_enabled())))
+    return 0
+
+
 def cmd_serve(args) -> int:
     from automoto.server import run
 
@@ -182,8 +390,25 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="automoto", description=f"{APP_NAME} v{__version__} \"{CODENAME}\"")
     ap.add_argument("--version", action="version", version=__version__)
     ap.add_argument("--prefer", help="provider id to try first (nim, gemini, groq, openrouter, openai, claude)")
+    ap.add_argument("--plain", action="store_true", help="plain chat without tools (v4 behaviour)")
+    ap.add_argument("--max-steps", type=int, default=None, help="agent step limit (default AUTOMOTO_MAX_STEPS or 12)")
+    ap.add_argument("--no-mcp", action="store_true", help="don't start MCP servers from mcp.json")
     sub = ap.add_subparsers(dest="cmd")
-    sub.add_parser("chat", help="interactive chat (default)")
+    sub.add_parser("chat", help="interactive agent chat (default)")
+    d = sub.add_parser("do", help="one-shot agent task")
+    d.add_argument("goal")
+    d.add_argument("--image", action="append", help="attach an image (repeatable)")
+    rt = sub.add_parser("routines", help="scheduled agent prompts")
+    rt.add_argument("action", nargs="?", default="list", choices=["list", "add", "remove", "run"])
+    rt.add_argument("name", nargs="?")
+    rt.add_argument("--every", help="interval like 30m, 2h, 1d")
+    rt.add_argument("--cron", help="5-field cron, e.g. '0 8 * * 1-5'")
+    rt.add_argument("--prompt", help="what the agent should do")
+    mm = sub.add_parser("memory", help="list / add / forget long-term memory")
+    mm.add_argument("action", nargs="?", default="list", choices=["list", "add", "forget"])
+    mm.add_argument("text", nargs="*")
+    sub.add_parser("skills", help="list skills")
+    sub.add_parser("tools", help="list agent tools and their safety level")
     s = sub.add_parser("serve", help="local web UI + API")
     s.add_argument("--host", default=config.env("AUTOMOTO_HOST", "127.0.0.1"))
     s.add_argument("--port", type=int, default=int(config.env("AUTOMOTO_PORT", "8765")))
@@ -195,8 +420,12 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("recommend", help="which AI would handle this task")
     r.add_argument("task")
     args = ap.parse_args(argv)
-    handlers = {"serve": cmd_serve, "status": cmd_status, "ask": cmd_ask, "recommend": cmd_recommend}
-    return handlers.get(args.cmd, cmd_chat)(args)
+    handlers = {"serve": cmd_serve, "status": cmd_status, "ask": cmd_ask, "recommend": cmd_recommend,
+                "do": cmd_do, "routines": cmd_routines, "memory": cmd_memory, "skills": cmd_skills,
+                "tools": cmd_tools}
+    if args.cmd in handlers:
+        return handlers[args.cmd](args)
+    return cmd_chat(args) if args.plain else cmd_agent_chat(args)
 
 
 if __name__ == "__main__":  # pragma: no cover
