@@ -132,6 +132,28 @@ risky (approval required) unless you set `"trust": true`. Only add servers you t
 - Tokens come from `.env` or the tab's BYOK keys, are redacted from output, and are stripped from requests that
   redirect to another host or scheme (this applies to every netguard request).
 
+## Office files (untrusted input)
+- Every Office file is treated as untrusted. Before it is read, converted or uploaded, `inspect_file` enforces a
+  60 MB size limit and, for zip-based formats, at most 10,000 parts, 400 MB uncompressed and a 250× compression
+  ratio per large part (zip bombs). It refuses absolute or `..` part names and any XML part that declares a
+  DTD/ENTITY (XXE). openpyxl uses `defusedxml`, python-docx/pptx parse with entity resolution off.
+- **Macros never run.** LibreOffice runs headless with a throwaway profile: macro security level 3
+  (very high), macro execution disabled, VBA import neither loaded nor executable for Writer/Calc/Impress, links
+  never updated, no `-env` macro arguments, no shell, a timeout, a secret-free environment and the input copied
+  to a temp folder (no lock files next to your file). Macro-enabled files are reported as "contains macros (not run)".
+- External links (`TargetMode="External"`) are listed, never followed; workbooks load with `keep_links=False`.
+- Text read from Office files and PDFs is fenced as untrusted data for the model (`office_read`, `office_check`,
+  `office_review`, `office_recalc`).
+- Writes follow the file policy: `scratch/` is safe, other workspace paths ask, allowed folders ask, secrets and
+  system paths are blocked. Images embedded in documents must be raster files inside allowed folders.
+- Files API (`/api/files*`): default workspace only (never extra roots), session-token auth, hidden/secret names
+  refused, 25 MB upload limit, uploads checked before they appear, downloads sent as
+  `application/octet-stream` attachments with `nosniff` and a sandbox CSP; previews are PNG renders or raster
+  images only (never SVG/HTML).
+- Cloud office: Google Docs/Sheets/Slides and Microsoft Graph tokens are BYOK (tab-only or `.env`). Graph is
+  limited to files: mail, chats, calendars, contacts, users/groups/directory are blocked, as are sharing links,
+  invitations and permission changes on every service.
+
 ## VS Code extension
 - It connects only to loopback `http://127.0.0.1|localhost` and reads the token from `session.json`.
   `automoto.serverUrl` and `automoto.dataDir` are machine-scoped, so a cloned repo's workspace settings can't redirect it.

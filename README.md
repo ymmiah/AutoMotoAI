@@ -8,7 +8,7 @@ Give it a goal. It picks the best free AI, searches the web, reads and writes fi
 sandbox, runs commands **after you approve**, remembers what matters, and keeps going until the
 job is done. If one AI is rate-limited or down, the next one carries on mid-task.
 
-[![Version](https://img.shields.io/badge/version-5.2.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.3.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Windows_·_macOS_·_Linux-555?style=for-the-badge)
@@ -39,7 +39,8 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 - **🖥 Feel like a real app.** A full chat app at `python -m automoto serve` (and inside the desktop shell): saved conversations, live tool-step cards, inline approvals, image attach, Memory / Routines / Skills / Tasks / Tools / Settings pages, dark and light themes, a command palette and a layout that works on a phone. [See the GUI](#-the-app).
 
 - **🧑‍💻 Work inside VS Code.** The [AutoMoto extension](#-vs-code-extension) adds a chat view and commands: ask about a selection, fix a diagnostic, explain a file, or run a task on your project. Every risky step shows up as an Allow / Deny dialog.
-- **📚 Use 33 bundled skills.** Web design, graphic design, video and audio editing, bug fixing, the Linux terminal, Python, JavaScript, HTML/CSS, LaTeX, Go, algorithms and cross-platform apps, plus one skill per app or service. Each skill shows whether this computer has what it needs and how far it has been tested ([table](#-skills-library)).
+- **📄 Make publication-ready Word, Excel and PowerPoint files, for free.** Reports with title page, real contents page numbers, captions and Harvard references; spreadsheets with live formulas that are recalculated and checked; themed decks with charts and speaker notes. Exports tagged PDFs with embedded fonts, renders pages to PNG and lints them. No Microsoft Office needed ([Office suite](#-office-suite-word-excel-powerpoint-pdf)).
+- **📚 Use 39 bundled skills.** Web design, graphic design, video and audio editing, bug fixing, the Linux terminal, Python, JavaScript, HTML/CSS, LaTeX, Go, algorithms and cross-platform apps, plus one skill per app or service. Each skill shows whether this computer has what it needs and how far it has been tested ([table](#-skills-library)).
 - **🧩 Drive local apps through their official routes.** ffmpeg, ImageMagick, Inkscape, LibreOffice, Tectonic/LaTeX, git, Node, Python and Go from the command line; Photoshop and Illustrator through ExtendScript; AutoCAD through `accoreconsole`; and open-only support for Premiere, Figma and Canva. Licensing is never bypassed.
 - **🔌 Reach your services.** Built-in REST calls for GitHub, GitLab, Vercel, Figma, Notion and Zotero, and a one-click catalogue of official MCP connectors (GitHub, GitLab, Notion, Figma, Canva, Vercel, Google Drive, OneDrive, Zotero). Amazon, eBay, Etsy and Booking.com are research-only: **AutoMoto never buys or books.**
 - **📂 Work in your own folders when you allow it.** Add project folders in Settings → Files. Anything outside the sandbox asks first, and secrets (`~/.ssh`, `.env` files, keychains, browser profiles, system folders) stay blocked.
@@ -129,8 +130,8 @@ server through AutoMoto's private session file (`~/.automoto/session.json`, mode
 
 ```bash
 python -m automoto serve --no-browser                   # 1. start AutoMoto
-cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.2.0.vsix (or download it from CI)
-code --install-extension automoto-ai-5.2.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
+cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.3.0.vsix (or download it from CI)
+code --install-extension automoto-ai-5.3.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
 ```
 
 | Command | What it does |
@@ -152,6 +153,44 @@ the clear "not running" error). The extension's client also ran live against `au
 the video-editing and bug-fixing runs in the skills table below. CI builds the `.vsix` and uploads it as an artifact.
 
 ---
+
+## 📄 Office suite (Word, Excel, PowerPoint, PDF)
+
+Everything here is free and open source: `python-docx`, `openpyxl`, `python-pptx` and `pypdf` in Python, plus
+[LibreOffice](https://www.libreoffice.org) (headless) for PDF export, legacy formats and formula recalculation, and
+poppler (`pdftoppm`) for page previews. [OnlyOffice](https://www.onlyoffice.com) desktop editors work as an optional
+free editor for the files. Microsoft Office is not required, and the files open in Word/Excel/PowerPoint, Office on
+the web, Google Docs/Sheets/Slides, LibreOffice and OnlyOffice.
+
+| Tool | What it does |
+|---|---|
+| `office_create_docx` | Word from a JSON spec: A4/Letter, title page, contents with real page numbers (two-pass via LibreOffice), Heading 1-3 styles, bullets/numbering, tables with captions and repeating header rows, images with alt text and "Figure n" captions, header, "Page X of Y" footer, comments, Harvard references (sorted, hanging indent) |
+| `office_create_xlsx` | Excel: formulas, number formats, bold totals, auto column widths, frozen header, autofilter, conditional formatting (colour scale, data bars, cell rules, formulas), validation lists, bar/column/line/pie/scatter charts, named ranges, print setup |
+| `office_create_pptx` | PowerPoint: 16:9, one theme (colours + font), layouts title/section/bullets/two-content/comparison/image/table/chart/statement/quote, slide numbers, footer, speaker notes; empty placeholders removed |
+| `office_read` | Text of .docx/.xlsx/.pptx/.pdf/.odt/.ods/.odp and legacy .doc/.xls/.ppt/.rtf (via LibreOffice): headings, tables, formulas *and* values, slides and notes, comments |
+| `office_edit` | Replace text keeping formatting, set Excel cells/formulas, append Word blocks, set slide notes |
+| `office_convert` | LibreOffice headless: to PDF (tagged, bookmarks, fonts embedded), docx/xlsx/pptx/odt/ods/odp/html/txt/csv/rtf; Markdown → docx/pdf (pandoc if installed, else a built-in converter) |
+| `office_recalc` | Recalculates every formula with LibreOffice and lists values and `#REF!`/`#DIV/0!`/`#NAME?` errors |
+| `office_render` | Renders pages or slides to PNG (`scratch/renders/…`) |
+| `office_check` | Lint: heading hierarchy and duplicates, alt text, TOC placeholders, broken cross-references, missing title, formula errors and missing sheets, slide text overflow (approximate), small fonts, empty placeholders, off-slide shapes, missing notes, PDF fonts embedded / tagged / title / bookmarks |
+| `office_review` | Renders up to 6 pages into one contact sheet and asks a vision model for a layout critique (advisory) |
+
+Skills: `word-documents` (reports, essays, academic formatting, Harvard), `excel-spreadsheets`, `powerpoint-decks`
+(storyline, one idea per slide, notes), `publication-ready-pdf`, `google-docs-sheets-slides` and
+`microsoft-365-office`. In the web app the **Files** page uploads Office files (checked first), shows page thumbnails
+and downloads outputs; the 📎 button attaches Office files to a message. In VS Code: **AutoMoto: Create
+document/spreadsheet/deck from prompt…**
+
+| Part | Status |
+|---|---|
+| Word, Excel, PowerPoint builders, read, edit, lint | ✅ Unit-tested (32 tests) and live-tested: NIM agent runs built the [sample report, budget model and pitch deck](#office-samples) |
+| PDF export, TOC page numbers, formula recalc, renders (LibreOffice 25.2 + poppler) | ✅ Live on Linux and in the CI `office` job. Windows/macOS use the same code but were not run with LibreOffice |
+| Vision layout review | ✅ Live with NIM (Nemotron VL as the careful review model, Llama 3.2 Vision fallback) - advisory |
+| Files page, uploads, previews, VS Code command | ✅ API tested; VS Code command in the integration test. UI not clicked through by a person |
+| Google Docs/Sheets/Slides, Microsoft Graph (`service_api`) | 🟡 Implemented and unit-tested (paths, blocks). Not live: needs your OAuth token |
+| Footnotes, tracked changes, equations, SmartArt, PDF/A validation | 🔴 Not supported |
+
+<a id="office-samples"></a>Samples made live are listed in the [CHANGELOG](CHANGELOG.md).
 
 ## 📚 Skills library
 
@@ -442,6 +481,7 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 | Native tool calling on Gemini, Groq, OpenAI and Claude | 🟡 Implemented and unit-tested with fakes, not yet live-tested |
 | Docker sandbox runner | 🟡 Implemented, not yet tested on a machine with Docker. Falls back to the local sandbox |
 | MCP client (stdio) | 🟡 Working against a test server. Remote (HTTP) MCP is not supported |
+| v5.3 Office suite (Word, Excel, PowerPoint, PDF) | See the [Office status table](#-office-suite-word-excel-powerpoint-pdf) |
 | Desktop app: Tauri 2 shell for Windows, macOS and Linux (`apps/desktop`) | 🧱 Scaffold. Wraps the same web UI and now signs its own window in with a random launch token. Not compiled here: Tauri 2.12 needs Rust ≥ 1.90 and the test box has 1.85 |
 | Mobile app: Flutter for Android and iOS (`apps/mobile`) | 🧱 Scaffold. Still uses the plain-chat API (agent mode on mobile is next). iOS needs Xcode |
 | Browser automation (Playwright tool) | ⏭ Planned. Left out rather than shipped half-working |

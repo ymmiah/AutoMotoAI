@@ -1,5 +1,72 @@
 # AutoMoto AI - Version History & Changelog
 
+## Version 5.3.0 "Agent" - 28/10/2026
+**A free Office suite: Word, Excel, PowerPoint and PDF, up to publication standard.**
+
+### New
+- **Office tools** (group `office`): `office_create_docx`, `office_create_xlsx`, `office_create_pptx`,
+  `office_read`, `office_edit`, `office_convert`, `office_recalc`, `office_render`, `office_check` and
+  `office_review`. They are built on python-docx, openpyxl, python-pptx and pypdf, with LibreOffice headless
+  for PDF export, legacy `.doc/.xls/.ppt/.rtf` and OpenDocument, and formula recalculation, and poppler for
+  page renders. No Microsoft Office is needed.
+- **Word:** A4/Letter, title page, a contents page with real page numbers (two passes through LibreOffice,
+  headings matched as whole lines), Heading 1-3, lists, tables with numbered captions and repeating header rows,
+  images with alt text and "Figure n" captions, header, "Page X of Y" footer, comments, and Harvard references
+  (Cite Them Right style, sorted, hanging indent). Also a Markdown → docx/pdf fallback when pandoc is missing.
+- **Excel:** formulas, number formats, conditional formatting, validation lists, charts with explicit colours
+  (so LibreOffice draws them filled), frozen header, autofilter, named ranges and landscape fit-to-width printing.
+  `office_recalc` recalculates every formula and lists values and errors.
+- **PowerPoint:** 16:9 with the template's placeholders widened correctly, one theme, ten layouts (title,
+  section, bullets, two-content, comparison, image, table, chart, statement, quote), slide numbers, footer and
+  speaker notes. Empty placeholders are removed.
+- **Lint (`office_check`):** heading hierarchy and duplicates, alt text, TOC placeholders, broken
+  cross-references, document title, formula errors and missing sheets, approximate slide text overflow, small
+  fonts, off-slide shapes, missing notes, and PDF fonts embedded / tagged / title / bookmarks.
+- **Vision review (`office_review`):** renders up to 6 pages into one contact sheet (works with one-image
+  models) and asks a vision model for a layout critique. On NIM it uses Nemotron VL first ("careful" mode),
+  with Llama 3.2 Vision as the fallback. The review is advisory.
+- **Six skills:** `word-documents`, `excel-spreadsheets`, `powerpoint-decks`, `publication-ready-pdf`,
+  `google-docs-sheets-slides` and `microsoft-365-office` (39 skills in total).
+- **Cloud office services:** `google-docs`, `google-sheets`, `google-slides` and `msgraph` in `service_api`
+  (BYOK OAuth tokens). Graph is limited to files.
+- **Web app:** a Files page (upload, page thumbnails, download, "Ask agent"), and the 📎 button now attaches
+  Office/PDF files (they are uploaded to `uploads/` and passed to the agent as paths).
+  API: `GET /api/files`, `POST /api/files/upload`, `GET /api/files/download`, `GET /api/files/preview`.
+- **VS Code:** "AutoMoto: Create document/spreadsheet/deck from prompt…".
+
+### Agent improvements
+- When a model announces a step ("Now I'll build the document…") without calling a tool, it is asked once to
+  make the call instead of ending the task. This is capped at two nudges per run.
+- Agent steps get a bigger output budget (`AI_AGENT_MAX_TOKENS`, default max(AI_MAX_TOKENS, 8000)), so a whole
+  document spec fits in one tool call. Empty replies from reasoning models are retried once on the same model.
+
+### Security
+- Office files are untrusted input. The guards are size, part-count, total and ratio limits (zip bombs), unsafe
+  part names, DTD/ENTITY refusal (XXE), and macro and external-link detection.
+- LibreOffice runs with a throwaway profile, macro security set to very high, macro execution disabled, VBA not
+  loaded or executable, links never updated, a timeout, no shell and a secret-free environment.
+- Office/PDF text is fenced as untrusted. The files API is limited to the workspace, with hidden/secret names
+  refused, nosniff attachment downloads and raster-only previews.
+- Microsoft Graph mail, chats, calendars, contacts and directory calls are blocked, as are sharing, invite and
+  grant endpoints on every service.
+
+### Tests
+- 33 office tests (builders, readers, zip bomb/XXE/traversal/macros/links, LibreOffice conversion, TOC page
+  numbers, recalc, renders, lint, policy, tools, services, files API) and 2 loop tests.
+- A new CI `office` job installs LibreOffice and poppler on Ubuntu and runs the office tests with no skips.
+- Live (NVIDIA NIM, Nemotron 3.5 Super VL): an agent built a report (title page, contents, table, figure,
+  Harvard references) → PDF, a 12-month budget model (78 formulas, recalculated with 0 errors, chart) → PDF, and
+  a 6-slide pitch deck with notes → PDF. Each was checked, vision-reviewed and rendered to PNG. Layout bugs found
+  in those runs were fixed: duplicated "Figure 1:"/"Source:" labels, wrong TOC page when a heading word appeared
+  in body text, a duplicated References heading, unfilled Excel chart bars, zero-height slide placeholders, and
+  an invalid multi-image request to one-image vision models.
+
+### Limitations
+- Footnotes, tracked changes, equations, SmartArt and PDF/A validation are not supported.
+- Google and Microsoft 365 APIs are untested live (they need your OAuth token).
+- Overflow detection is approximate.
+- LibreOffice/poppler were exercised on Linux only. Windows/macOS run the same code, but CI there skips those tests.
+
 ## Version 5.2.0 "Agent" - 28/10/2026
 **Skills, local apps, services, a VS Code extension, and a security pass.**
 
