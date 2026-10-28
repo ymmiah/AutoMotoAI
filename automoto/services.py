@@ -52,12 +52,28 @@ SERVICES: dict[str, Service] = {s.id: s for s in [
             "https://developers.notion.com/reference/intro"),
     Service("zotero", "Zotero", "https://api.zotero.org", ("ZOTERO_API_KEY",), "zotero",
             "https://www.zotero.org/support/dev/web_api/v3/start", optional_auth=True),
+    # Office in the cloud (user OAuth access tokens - BYOK; never stored server-side)
+    Service("google-docs", "Google Docs", "https://docs.googleapis.com", ("GOOGLE_ACCESS_TOKEN",), "bearer",
+            "https://developers.google.com/workspace/docs/api/reference/rest"),
+    Service("google-sheets", "Google Sheets", "https://sheets.googleapis.com", ("GOOGLE_ACCESS_TOKEN",), "bearer",
+            "https://developers.google.com/workspace/sheets/api/reference/rest"),
+    Service("google-slides", "Google Slides", "https://slides.googleapis.com", ("GOOGLE_ACCESS_TOKEN",), "bearer",
+            "https://developers.google.com/workspace/slides/api/reference/rest"),
+    Service("msgraph", "Microsoft 365 (Graph)", "https://graph.microsoft.com", ("MS_GRAPH_TOKEN",), "bearer",
+            "https://learn.microsoft.com/graph/api/overview"),
 ]}
 
 _BLOCKED_PATH = re.compile(
     r"/(keys|gpg_keys|ssh_signing_keys|deploy_keys|secrets|variables|hooks|webhooks|tokens|personal_access_tokens|"
     r"collaborators|members|invitations|permissions|access_requests|protected_branches|env|environment-variables|"
-    r"oauth|authorizations|installations|runners|billing)(/|$|\?)", re.I)
+    r"oauth|authorizations|installations|runners|billing|"
+    r"createLink|invite|share|shares|grant|grants)(/|$|\?|:)", re.I)
+# Microsoft Graph: the agent works with files (OneDrive/SharePoint Word, Excel, PowerPoint) only -
+# never mail, chats, calendars, contacts, identities or sending anything.
+_GRAPH_BLOCKED = re.compile(
+    r"/(sendMail|send|reply|replyAll|forward|createReply|createReplyAll|createForward|messages|mailFolders|"
+    r"calendar|calendars|events|chats|teams|channels|contacts|people|authentication|appRoleAssignments|"
+    r"oauth2PermissionGrants|users|groups|directoryRoles|applications|servicePrincipals|subscriptions)(/|$|\?|:|\()", re.I)
 _DELETE_WHOLE = re.compile(r"^/(repos/[^/]+/[^/]+|projects/[^/]+|v\d+/projects/[^/]+|orgs/[^/]+|groups/[^/]+|"
                            r"users/[^/]+)/?$", re.I)
 
@@ -105,7 +121,9 @@ def classify(args: dict[str, Any]) -> tuple[str, str]:
     if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
         return "blocked", f"method {method} not allowed"
     if _BLOCKED_PATH.search(path.split("?")[0]):
-        return "blocked", "keys, secrets, tokens, webhooks, members and permissions are never touched by the agent"
+        return "blocked", "keys, secrets, tokens, webhooks, members, permissions and sharing are never touched by the agent"
+    if svc.id == "msgraph" and _GRAPH_BLOCKED.search(path.split("?")[0]):
+        return "blocked", "Microsoft Graph access is limited to files - mail, chats, calendars, people and directory are blocked"
     if method == "DELETE" and _DELETE_WHOLE.match(path.split("?")[0]):
         return "blocked", "deleting a whole repository, project, group or account is never done by the agent"
     if method == "GET":
@@ -195,7 +213,9 @@ def _make_tools():
     return [Tool(
         "service_api",
         "Call a service's official REST API with the user's token: github (api.github.com), gitlab, vercel, "
-        "figma (/v1/files/KEY), notion (/v1/search, /v1/pages/ID), zotero (use {user} in the path). GET is read-only; other methods need approval. "
+        "figma (/v1/files/KEY), notion (/v1/search, /v1/pages/ID), zotero (use {user} in the path), "
+        "google-docs (/v1/documents/ID), google-sheets (/v4/spreadsheets/ID/values/A1:D10), google-slides "
+        "(/v1/presentations/ID), msgraph (/v1.0/me/drive/root/children - OneDrive/Word/Excel files; mail and sharing are blocked). GET is read-only; other methods need approval. "
         "Example: service=github, path=/repos/OWNER/REPO/issues, query={state: open, per_page: 10}.",
         _obj({"service": S, "path": S, "method": S, "query": {"type": "object"}, "body": {"type": "object"},
               "max_chars": {"type": "integer"}}, ["service", "path"]),

@@ -7,5 +7,15 @@ pydantic>=2.7,<3
 python-dotenv>=1.0,<2
 rich>=13,<16
 
+# Office suite: create/read/edit .docx .xlsx .pptx, read PDFs (LibreOffice is optional, for PDF export,
+# legacy .doc/.xls/.ppt, formula recalculation and page previews - https://www.libreoffice.org)
+python-docx>=1.1,<2
+openpyxl>=3.1,<4
+python-pptx>=1.0,<2
+pypdf>=5,<7
+defusedxml>=0.7,<1
+Pillow>=10
+pandas>=2
+
 # Optional desktop automation (typing, hotkeys, screenshots). Safe to skip on servers.
 pyautogui>=0.9.54; platform_system != "Emscripten"

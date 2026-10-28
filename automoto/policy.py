@@ -69,6 +69,13 @@ def mode() -> str:
     return m if m in ("ask", "auto", "readonly") else "ask"
 
 
+def _in_scratch(path: str) -> bool:
+    try:
+        return sandbox.in_scratch(sandbox.resolve(path, allow_outside=True))
+    except sandbox.SandboxError:
+        return False
+
+
 def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
     """Return (level, reason) for one call, looking at its arguments."""
     if tool in ("write_file", "edit_file"):
@@ -85,6 +92,29 @@ def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
         if p.exists():
             return "risky", f"overwrites {sandbox.rel(p)}"
         return "risky", f"creates {sandbox.rel(p)}" + (" outside scratch/" if sandbox.is_default_root() else "")
+    if tool in ("office_create_docx", "office_create_xlsx", "office_create_pptx"):
+        return classify("write_file", base, {"path": args.get("path", "")})
+    if tool == "office_edit":
+        lvl, why = classify("write_file", base, {"path": args.get("path", "")})
+        return ("risky" if lvl == "safe" and not _in_scratch(args.get("path", "")) else lvl), why.replace("overwrites", "edits")
+    if tool in ("office_convert", "office_recalc"):
+        src = args.get("path", "")
+        lvl, why = classify("read_file", base, {"path": src})
+        if lvl != "safe":
+            return lvl, why
+        if tool == "office_recalc" and not args.get("save"):
+            return "safe", "read-only (recalculates a temporary copy)"
+        try:
+            sp = sandbox.resolve(src, allow_outside=True)
+        except sandbox.SandboxError as exc:
+            return "blocked", str(exc)
+        if tool == "office_recalc":
+            dest = str(sp.with_name(sp.stem + ".recalc.xlsx"))
+        else:
+            dest = args.get("out") or str(sp.with_suffix("." + str(args.get("to", "pdf")).lower().lstrip(".")))
+        return classify("write_file", base, {"path": dest})
+    if tool in ("office_read", "office_check", "office_render", "office_review"):
+        return classify("read_file", base, {"path": args.get("path", "")})
     if tool in ("read_file", "list_dir", "search_files"):
         try:
             p = sandbox.resolve(args.get("path", "."), allow_outside=True)

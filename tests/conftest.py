@@ -14,6 +14,6 @@ def isolated_home(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("AUTOMOTO_RATE_LIMIT", "0")
     for k in ("AUTOMOTO_ALLOWED_ROOTS", "AUTOMOTO_ALLOWED_ORIGINS", "AUTOMOTO_LAUNCH_TOKEN", "AUTOMOTO_API_TOKEN",
               "GITHUB_TOKEN", "GH_TOKEN", "GITLAB_TOKEN", "GITLAB_URL", "VERCEL_TOKEN", "FIGMA_TOKEN", "NOTION_TOKEN",
-              "ZOTERO_API_KEY", "ZOTERO_USER_ID"):
+              "ZOTERO_API_KEY", "ZOTERO_USER_ID", "GOOGLE_ACCESS_TOKEN", "MS_GRAPH_TOKEN"):
         monkeypatch.delenv(k, raising=False)
     return home
