@@ -107,3 +107,21 @@ jobs:
         with:
           name: automoto-ai-vsix
           path: apps/vscode/*.vsix
+
+  docker:
+    # hosted multi-user image: builds, runs as non-root, bootstraps the admin from env, serves the login page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t automoto:ci .
+      - name: Run and smoke-test hosted mode
+        run: |
+          docker run -d --name am -p 8765:8765 -e AUTOMOTO_ADMIN_USER=owner -e AUTOMOTO_ADMIN_PASSWORD=ci-only-pass-123 -e AUTOMOTO_COOKIE_SECURE=0 automoto:ci
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8765/api/health && break; sleep 1; done
+          curl -fs http://127.0.0.1:8765/api/auth/info | grep -q '"signup":"invite"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/api/settings)" = "401"
+          test "$(docker exec am id -u)" = "10001"
+          docker logs am | grep -q "Created the first admin 'owner'"
+          docker exec am python -m automoto admin list | grep -q owner
+          docker exec am sh -c 'command -v pdftotext && command -v php && command -v 7z'

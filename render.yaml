@@ -1,0 +1,24 @@
+# Render Blueprint (free plan). IMPORTANT: free Render services have no persistent disk - accounts,
+# usage and files are wiped whenever the service spins down (15 min idle), restarts or redeploys.
+# Fine for a demo; for real users see docs/HOSTING.md (Oracle Cloud Always Free or your own PC + Cloudflare Tunnel).
+services:
+  - type: web
+    name: automoto-ai
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: AUTOMOTO_ADMIN_USER
+        sync: false
+      - key: AUTOMOTO_ADMIN_PASSWORD
+        sync: false
+      - key: AUTOMOTO_ALLOWED_HOSTS
+        sync: false   # e.g. automoto-ai.onrender.com
+      - key: AUTOMOTO_FORWARDED_ALLOW_IPS
+        value: "*"    # Render's proxy sets X-Forwarded-For; needed for per-IP sign-in limits
+      - key: AUTOMOTO_DEFAULT_QUOTA_MINUTES
+        value: "60"
+      - key: AUTOMOTO_SIGNUP
+        value: invite

@@ -429,7 +429,7 @@ def test_cli_admin_commands(monkeypatch, capsys):
     from automoto import cli
     monkeypatch.setenv("PWVAR", PW)
     assert cli.main(["admin", "create", "yasin", "--password-env", "PWVAR"]) == 0
-    assert cli.main(["admin", "create", "pupil", "--role", "user", "--password-env", "PWVAR"]) == 0
+    assert cli.main(["admin", "create", "pupil", "--password-env", "PWVAR"]) == 0   # not the first: a user
     assert cli.main(["admin", "quota", "pupil", "--minutes", "1"]) == 0
     assert cli.main(["admin", "bonus", "pupil", "15", "--note", "exam week"]) == 0
     assert cli.main(["admin", "suspend", "pupil"]) == 0 and accounts.find_user("pupil").status == "suspended"
@@ -442,6 +442,17 @@ def test_cli_admin_commands(monkeypatch, capsys):
     assert cli.main(["admin", "delete", "pupil", "--yes"]) == 0 and accounts.find_user("pupil") is None
     assert cli.main(["admin", "audit"]) == 0
     out = capsys.readouterr().out
-    assert "created admin 'yasin'" in out and "invite code" in out and "16.0/" not in out
+    assert "created admin 'yasin'" in out and "created user 'pupil'" in out and "invite code" in out and "16.0/" not in out
     q = accounts.quota(accounts.find_user("yasin"))
     assert q["unlimited"]
+
+
+def test_platform_host_names_are_allowed(monkeypatch):
+    from automoto import server
+    monkeypatch.setenv("RENDER_EXTERNAL_HOSTNAME", "automoto-ai.onrender.com")
+    monkeypatch.setenv("SPACE_HOST", "https://ymmiah-automoto.hf.space/")
+    hosts = server._allowed_hosts()
+    assert "automoto-ai.onrender.com" in hosts and "ymmiah-automoto.hf.space" in hosts
+    monkeypatch.delenv("RENDER_EXTERNAL_HOSTNAME")
+    monkeypatch.delenv("SPACE_HOST")
+    assert "automoto-ai.onrender.com" not in server._allowed_hosts()

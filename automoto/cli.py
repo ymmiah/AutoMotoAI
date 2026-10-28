@@ -472,9 +472,10 @@ def cmd_serve(args) -> int:
 def _admin_parser(sub) -> None:
     ad = sub.add_parser("admin", help="hosted mode: users, quotas, bonus time, invites, usage and audit log")
     asub = ad.add_subparsers(dest="admin_cmd")
-    c = asub.add_parser("create", help="create a user (the first one should be you, --role admin)")
+    c = asub.add_parser("create", help="create a user (the first one becomes the admin)")
     c.add_argument("username")
-    c.add_argument("--role", choices=["admin", "user"], default="admin")
+    c.add_argument("--role", choices=["admin", "user"], default=None,
+                   help="default: admin if there is no admin yet, otherwise user")
     c.add_argument("--password-env", metavar="VAR", help="read the password from this env var instead of a prompt")
     asub.add_parser("list", help="users with their usage this period")
     q = asub.add_parser("quota", help="set a user's allowance")
@@ -559,7 +560,8 @@ def cmd_admin(args) -> int:
 
     try:
         if cmd == "create":
-            u = accounts.create_user(args.username, _read_password(args), role=args.role, actor=actor)
+            role = args.role or ("admin" if accounts.admin_count() == 0 else "user")
+            u = accounts.create_user(args.username, _read_password(args), role=role, actor=actor)
             print(f"created {u.role} '{u.username}'")
         elif cmd == "list" or cmd is None:
             users = accounts.list_users()

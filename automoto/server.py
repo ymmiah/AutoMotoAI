@@ -140,8 +140,16 @@ def _use_launch_token(tok: str) -> bool:
     return bool(exp and exp >= time.time())
 
 
+PLATFORM_HOST_VARS = ("RENDER_EXTERNAL_HOSTNAME", "KOYEB_PUBLIC_DOMAIN", "SPACE_HOST")
+
+
 def _allowed_hosts() -> set[str]:
     extra = {h.strip().lower() for h in (config.env("AUTOMOTO_ALLOWED_HOSTS", "") or "").split(",") if h.strip()}
+    # public host names that free hosts set for you (Render, Koyeb, Hugging Face Spaces)
+    for var in PLATFORM_HOST_VARS:
+        v = (config.env(var, "") or "").strip().lower()
+        if v:
+            extra.add(_host_name(v.split("://")[-1].split("/")[0]))
     return LOCAL_HOSTS | extra
 
 
