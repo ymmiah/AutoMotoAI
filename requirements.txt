@@ -17,5 +17,10 @@ defusedxml>=0.7,<1
 Pillow>=10
 pandas>=2
 
+# Data files and archives (v5.4): YAML (safe_load only), TOML on Python 3.10.
+# Optional extras: pyarrow (Parquet, ~150 MB), py7zr (.7z without the 7-Zip CLI), tomli-w (TOML writing).
+PyYAML>=6,<7
+tomli>=2; python_version < "3.11"
+
 # Optional desktop automation (typing, hotkeys, screenshots). Safe to skip on servers.
 pyautogui>=0.9.54; platform_system != "Emscripten"

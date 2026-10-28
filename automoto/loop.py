@@ -34,7 +34,8 @@ MAX_RESULT_CHARS = 12000
 UNTRUSTED_TOOLS = {"fetch_url", "web_search", "read_file", "search_files", "list_dir", "run_shell", "run_app",
                    "office_read", "office_check", "office_review", "office_recalc",
                    "archive_list", "archive_inspect", "archive_read", "archive_extract", "download_file",
-                   "wp_validate", "wp_security_review"}
+                   "wp_validate", "wp_security_review", "data_inspect", "data_query", "data_read", "sqlite_query",
+                   "text_search", "text_tail", "pdf_text", "image_info"}
 TAINTING_TOOLS = {"fetch_url", "web_search", "download_file"}
 UNTRUSTED_GROUPS = ("mcp:", "services")
 

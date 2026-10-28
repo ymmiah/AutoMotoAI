@@ -113,6 +113,17 @@ def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
         else:
             dest = args.get("out") or str(sp.with_suffix("." + str(args.get("to", "pdf")).lower().lstrip(".")))
         return classify("write_file", base, {"path": dest})
+    if tool in ("data_inspect", "data_read", "text_search", "text_tail", "pdf_text", "image_info",
+                "data_query", "sqlite_query"):
+        lvl, why = classify("read_file", base, {"path": args.get("path", "")})
+        if lvl == "blocked" or not args.get("out") or tool not in ("data_query", "sqlite_query"):
+            return lvl, why
+        return classify("write_file", base, {"path": args["out"]})
+    if tool == "data_convert":
+        lvl, why = classify("read_file", base, {"path": args.get("path", "")})
+        if lvl == "blocked":
+            return lvl, why
+        return classify("write_file", base, {"path": args.get("out", "")})
     if tool in ("wp_validate", "wp_security_review"):
         return classify("read_file", base, {"path": args.get("path", "")})
     if tool in ("wp_bump_version", "wp_add_guard", "wp_package"):
