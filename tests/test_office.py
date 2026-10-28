@@ -517,3 +517,14 @@ def test_references_heading_not_duplicated_and_lint(ws):
     office_build.build_docx({"properties": {"title": "T"}, "blocks": [
         {"type": "heading", "text": "1. Results"}, {"type": "heading", "text": "Results"}]}, out2)
     assert "duplicate heading" in office_check.check(str(out2))
+
+
+def test_pptx_placeholders_keep_geometry(ws):
+    out = ws / "g.pptx"
+    office_build.create_pptx({"slides": [{"layout": "bullets", "title": "T", "bullets": ["a", "b"], "notes": "n"}]}, out)
+    import pptx
+
+    prs = pptx.Presentation(str(out))
+    body = [ph for ph in prs.slides[0].placeholders if ph.placeholder_format.idx == 1][0]
+    assert body.height > 0 and body.top > 0 and body.left + body.width <= prs.slide_width
+    assert "past the slide edge" not in office_check.check(str(out))

@@ -812,10 +812,13 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
         prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
     sx = prs.slide_width / old_w
     # stretch the template's placeholders to the new width so layouts stay balanced
-    for layout in [prs.slide_master, *prs.slide_layouts]:
-        for sh in layout.placeholders:
-            if sh.left is not None and sh.width is not None:
-                sh.left, sh.width = Emu(int(sh.left * sx)), Emu(int(sh.width * sx))
+    # read every geometry first (layouts inherit from the master), then write explicit, scaled values
+    geo = [(sh, sh.left, sh.top, sh.width, sh.height) for layout in [prs.slide_master, *prs.slide_layouts]
+           for sh in layout.placeholders]
+    for sh, left, top, width, height in geo:
+        if None not in (left, top, width, height):
+            sh.left, sh.top = Emu(int(left * sx)), top
+            sh.width, sh.height = Emu(int(width * sx)), height
     W, H = prs.slide_width, prs.slide_height
     L = {"title": 0, "bullets": 1, "section": 2, "two_content": 3, "comparison": 4, "title_only": 5, "blank": 6}
 
