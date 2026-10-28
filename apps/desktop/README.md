@@ -1,6 +1,6 @@
 # AutoMoto AI — Desktop app (Tauri 2)
 
-Native window for **Windows, macOS and Linux** around the AutoMoto v4 web UI.
+Native window for **Windows, macOS and Linux** around the AutoMoto web UI (v5 agent mode included).
 Status: **scaffold** — it builds from source; code-signing/notarisation are up to you.
 
 How it works: on launch the Rust shell starts `python -m automoto serve --no-browser`

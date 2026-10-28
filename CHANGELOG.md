@@ -1,5 +1,53 @@
 # AutoMoto AI - Version History & Changelog
 
+## Version 5.0.0 "Agent" - 28/10/2026
+**AutoMoto becomes an agent: it uses tools step by step until the job is done.**
+
+### New
+- **Agent loop** (`automoto/loop.py`): goal → AI → tool calls → approval policy → results → repeat,
+  with a max-steps guard (`AUTOMOTO_MAX_STEPS`, default 12) and a summary when the limit is hit.
+- **Tool calling on every provider** (`router.ask_turn`, `toolcalls.py`): native tool calls for
+  OpenAI-compatible APIs (NIM, Gemini, Groq, OpenAI) and Claude (`tool_use`), plus a JSON-in-text
+  protocol for models without them (OpenRouter free, or `AUTOMOTO_TOOL_MODE=text`). A rejected
+  native call is retried in text mode. **Failover works mid-task**: one neutral history is
+  re-rendered for whichever provider takes the next step. Providers with a rejected key are
+  skipped for the rest of the run.
+- **Tools**: `list_dir`, `read_file`, `write_file`, `run_shell`, `web_search` (DuckDuckGo HTML, no key),
+  `fetch_url`, `remember`, `recall`, `forget`, `load_skill`, and desktop actions (`system_info`, `open_url`,
+  `open_app`, `type_text`, `hotkey`).
+- **Sandbox** (`sandbox.py`): a workspace jail at `~/.automoto/workspace` (symlink-safe). Shell commands run
+  with the workspace as cwd, secret-free environment variables, a timeout and a process-tree kill. An optional
+  Docker runner adds `--network none` and resource limits.
+- **Approval policy** (`policy.py`): each call is safe, risky or blocked, with `AUTOMOTO_APPROVAL=ask|auto|readonly`,
+  `AUTOMOTO_AUTO_APPROVE` and `AUTOMOTO_BLOCK_TOOLS`. Writes into `scratch/` are safe. Destructive or system
+  shell commands are blocked.
+- **SSRF guard** (`netguard.py`): blocks private and reserved ranges, including IPv4-mapped IPv6, NAT64, 6to4 and
+  Teredo. Connections are pinned to the checked IP and redirects are re-checked. `AUTOMOTO_NET_ALLOW_CIDRS` is an
+  opt-in for fake-IP DNS proxies; loopback and link-local can never be allow-listed.
+- **Memory** (`memory.py`): SQLite facts plus a dated journal, injected compactly into the system prompt.
+- **Skills** (`skills.py`): `SKILL.md` folders in `~/.automoto/skills`, with four bundled examples.
+- **Routines** (`routines.py`): interval or 5-field cron schedules. They run while `serve` is up, are logged to
+  `routines.log` and the journal, and risky tools are auto-denied.
+- **Background tasks** (`tasks.py`): every web agent run is a thread with streamed events, Approve/Deny and cancel.
+- **MCP client** (`mcp.py`): stdio servers from `~/.automoto/mcp.json`, exposed as `mcp__server__tool`.
+- **Web UI**: Agent/Chat toggle, collapsible tool steps, approval cards, and a side panel with tasks, memory,
+  routines, tools and skills. BYOK keys are still kept in sessionStorage only.
+- **CLI**: agent chat by default (`--plain` for v4 chat), plus `do`, `routines`, `memory`, `skills` and `tools`.
+- 74 new tests (100 total). CI also smoke-tests the new CLI commands.
+
+### Changed
+- NIM's first model for agent steps is `nvidia/nemotron-3.5-super-vl-120b-a12b` (`NIM_AGENT_MODEL`), and Groq's is
+  `openai/gpt-oss-120b`. Plain chat keeps the v4 defaults.
+- The desktop app scaffold version was bumped to 5.0.0. The mobile app still uses the plain-chat API.
+
+### Known limits
+- Native tool calling on Gemini, Groq, OpenAI and Claude is implemented and unit-tested but not yet live-tested.
+- The Docker runner has not been tested on a machine with Docker.
+- The local (non-Docker) sandbox is a cwd jail with command checks, not OS-level isolation.
+- No Playwright browser tool yet.
+
+---
+
 ## Version 4.0.0 "Cousin" - 27/10/2026
 **Rebuild: the code now matches the README.**
 

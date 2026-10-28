@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AutoMoto AI v4 - macOS / Linux setup
+# AutoMoto AI v5 - macOS / Linux setup
 set -euo pipefail
 python3 -m venv venv
 . venv/bin/activate
