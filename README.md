@@ -183,7 +183,7 @@ document/spreadsheet/deck from prompt…**
 
 | Part | Status |
 |---|---|
-| Word, Excel, PowerPoint builders, read, edit, lint | ✅ Unit-tested (32 tests) and live-tested: NIM agent runs built the [sample report, budget model and pitch deck](#office-samples) |
+| Word, Excel, PowerPoint builders, read, edit, lint | ✅ Unit-tested (34 tests) and live-tested: NIM agent runs built the [sample report, budget model and pitch deck](#office-samples) |
 | PDF export, TOC page numbers, formula recalc, renders (LibreOffice 25.2 + poppler) | ✅ Live on Linux and in the CI `office` job. Windows/macOS use the same code but were not run with LibreOffice |
 | Vision layout review | ✅ Live with NIM (Nemotron VL as the careful review model, Llama 3.2 Vision fallback) - advisory |
 | Files page, uploads, previews, VS Code command | ✅ API tested; VS Code command in the integration test. UI not clicked through by a person |

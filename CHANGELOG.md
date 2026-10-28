@@ -51,7 +51,7 @@
   grant endpoints on every service.
 
 ### Tests
-- 33 office tests (builders, readers, zip bomb/XXE/traversal/macros/links, LibreOffice conversion, TOC page
+- 34 office tests (builders, readers, zip bomb/XXE/traversal/macros/links, LibreOffice conversion, TOC page
   numbers, recalc, renders, lint, policy, tools, services, files API) and 2 loop tests.
 - A new CI `office` job installs LibreOffice and poppler on Ubuntu and runs the office tests with no skips.
 - Live (NVIDIA NIM, Nemotron 3.5 Super VL): an agent built a report (title page, contents, table, figure,
