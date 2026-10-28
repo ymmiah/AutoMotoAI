@@ -1,5 +1,91 @@
 # AutoMoto AI - Version History & Changelog
 
+## Version 5.4.0 "Agent" - 28/10/2026
+**ZIP and other archives, WordPress plugins and themes, and CSV and other data files: extract, work on them and repack.**
+
+### New
+- **Archive tools** (group `archive`): `archive_list`, `archive_inspect`, `archive_read`, `archive_extract`,
+  `archive_create`, `archive_repack` and `download_file`.
+  - zip, tar, tar.gz/tgz, tar.bz2, tar.xz and single-file .gz can be listed, extracted and created.
+  - 7z and rar are extract-only, through py7zr, unar or the 7z CLI when installed (status shown in
+    `archive_inspect`).
+  - Repacks are deterministic. You choose the top-level folder, and `.git`, `node_modules`, `.DS_Store`,
+    `__MACOSX` and `.env` are excluded by default.
+  - `download_file` fetches through the SSRF guard (100 MB cap), and downloaded archives are checked on arrival.
+- **WordPress tools** (group `wordpress`): `wp_validate`, `wp_security_review`, `wp_bump_version`,
+  `wp_add_guard` and `wp_package`.
+  - **Plugin checks:** slug folder, `Plugin Name` header, `readme.txt` headers and Stable tag, no dev files.
+  - **Theme checks:** `style.css` header, `index.php` or block templates, `theme.json`, screenshot, Text Domain.
+  - **Lint and review:** `php -l` on every PHP file, a heuristic security checklist, and phpcs/WPCS when
+    installed.
+  - **Version bump:** updates the header, `@version` tags, VERSION constants, the Stable tag and the changelog.
+  - **Guard and package:** inserts an ABSPATH guard (CRLF kept) and builds an installable zip with the slug as
+    its top-level folder.
+- **Data tools** (group `data`): `data_inspect`, `data_query`, `data_convert`, `data_read`, `sqlite_query`,
+  `text_search`, `text_tail`, `pdf_text` and `image_info`.
+  - **CSV/TSV:** encoding sniffing (including a cp1252 heuristic), plus delimiter, header and decimal-comma
+    detection.
+  - **Querying:** dd/mm and ISO dates, and filter/sort/group/aggregate with pandas.
+  - **Derived columns:** a safe expression language, e.g. `[Units] * [Price]` and `yearmonth(Date)`.
+  - **Other formats:** Excel, JSON/JSONL, YAML, TOML, XML, Parquet and read-only SQLite.
+  - **Text and media:** Markdown outline, log tail/grep/summary, image metadata and PDF text.
+  - **Outputs:** CSV, TSV, xlsx, JSON, JSONL, Parquet and Markdown.
+- **Three skills:** `zip-archives`, `wordpress-plugins-themes` and `data-files`, for 42 skills in total.
+- **Web app:**
+  - **Uploads:** the Files page and 📎 accept zip/tar/7z/csv/tsv/json/yaml/xml/parquet/sqlite/log/md files up to
+    50 MB. Archives are inspected on upload and unsafe ones are refused.
+  - **Viewers:** an archive tree, a CSV/Excel table preview with row counts, a JSON/YAML outline and a text view.
+  - **Actions:** Extract, "Clean zip" (deterministic repack) and Zip-folder buttons.
+  - **API:** `GET /api/files/inspect` and `POST /api/files/archive`.
+- **VS Code:** **AutoMoto: Repack folder as ZIP** and **AutoMoto: Validate WordPress plugin/theme** (command
+  palette and Explorer context menu).
+- **Dependencies:** PyYAML and tomli (Python < 3.11) are required. The optional `data` extra adds pyarrow, py7zr and
+  tomli-w.
+
+### Security
+- **Archive safety:**
+  - Zip-slip, absolute, drive-letter, `..` and NUL names are refused.
+  - Symlink, hardlink and device members are skipped.
+  - Bomb limits (bytes, files, ratio, nesting) are counted while streaming.
+  - Extraction goes into a temp folder and is moved into place only on success.
+  - Zip passwords are used only when you give one and are masked in events.
+- `download_file` taints the run, so later risky calls ask again. Archive and data tool output is fenced as
+  untrusted.
+- **Data safety:**
+  - YAML uses `safe_load` and XML uses defusedxml (no DTDs).
+  - SQLite is read-only and immutable, with an authorizer and a time limit.
+  - Pillow's pixel limit applies.
+  - xlsx output writes `=`/`+`/`-`/`@` cells as text (no formula injection).
+- **New:** every HTTP request now has a total deadline. A live run found a download that stalled for minutes, so `download_file`
+  now also retries a throttled connection (under 32 KB/s after 15 s) up to 3 times.
+
+### Tests
+- New tests:
+  - 31 archive tests (malicious zips and tars: traversal, absolute, symlink, hardlink, bombs, a lying gzip size,
+    nested bombs, encrypted, cp437 names, 7z, the files API, a download deadline and a retry for throttled downloads)
+  - 13 WordPress tests (including CRLF files)
+  - 13 data tests (including Parquet, decimal commas and derived columns)
+- **Total:** 296 tests.
+- **CI:** the `office` job also installs PHP and 7-Zip, adds pyarrow and py7zr, and runs these suites with no
+  skips.
+- **Live (NVIDIA NIM, Nemotron 3.5 Super VL):** the agent ran three tasks, with samples in
+  `automoto-archive-samples/`.
+  - **Download:** it downloaded the real hello-dolly 1.7.2 zip and inspected it.
+  - **Edit and repack:** it bumped hello-dolly to 1.8.0, added the ABSPATH guard, escaped the lyric output and
+    repacked it as an installable zip.
+  - **CSV analysis:** it analysed a cp1252, `;`-delimited, decimal-comma CSV (revenue by region and month, top
+    products, missing units) into xlsx/csv/json. The figures matched an independent pandas check.
+- **Live validation:** the real Twenty Twenty-Four 1.6 theme passed validation.
+- **Bugs found and fixed in those runs:** `@version` docblock tags were not bumped, aggregate sums showed float
+  noise, and a stalled download could hang the agent.
+
+### Limitations
+- rar is not tested and cannot be created. Creating 7z is not supported. AES-encrypted zips need py7zr or 7z.
+- phpcs/WPCS and the official Plugin Check are optional and were not installed here (the result reports this).
+  The security checklist is heuristic.
+- A zip password is visible to the model in its own tool call (it is masked in the event log).
+- Uploads are capped at 50 MB. Large data files are capped by size and rows (configurable).
+
 ## Version 5.3.0 "Agent" - 28/10/2026
 **A free Office suite: Word, Excel, PowerPoint and PDF, up to publication standard.**
 

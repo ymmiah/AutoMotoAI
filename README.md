@@ -8,7 +8,7 @@ Give it a goal. It picks the best free AI, searches the web, reads and writes fi
 sandbox, runs commands **after you approve**, remembers what matters, and keeps going until the
 job is done. If one AI is rate-limited or down, the next one carries on mid-task.
 
-[![Version](https://img.shields.io/badge/version-5.3.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.4.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Windows_·_macOS_·_Linux-555?style=for-the-badge)
@@ -40,7 +40,8 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 
 - **🧑‍💻 Work inside VS Code.** The [AutoMoto extension](#-vs-code-extension) adds a chat view and commands: ask about a selection, fix a diagnostic, explain a file, or run a task on your project. Every risky step shows up as an Allow / Deny dialog.
 - **📄 Make publication-ready Word, Excel and PowerPoint files, for free.** Reports with title page, real contents page numbers, captions and Harvard references; spreadsheets with live formulas that are recalculated and checked; themed decks with charts and speaker notes. Exports tagged PDFs with embedded fonts, renders pages to PNG and lints them. No Microsoft Office needed ([Office suite](#-office-suite-word-excel-powerpoint-pdf)).
-- **📚 Use 39 bundled skills.** Web design, graphic design, video and audio editing, bug fixing, the Linux terminal, Python, JavaScript, HTML/CSS, LaTeX, Go, algorithms and cross-platform apps, plus one skill per app or service. Each skill shows whether this computer has what it needs and how far it has been tested ([table](#-skills-library)).
+- **📦 Open, fix and repack ZIPs, WordPress plugins/themes and data files.** Safe extraction (zip-slip, bombs, links), deterministic repacks, WordPress validation, `php -l`, version bumps and ABSPATH guards, and CSV/Excel/JSON/YAML/XML/Parquet/SQLite analysis ([details](#-archives-wordpress-and-data-files)).
+- **📚 Use 42 bundled skills.** Web design, graphic design, video and audio editing, bug fixing, the Linux terminal, Python, JavaScript, HTML/CSS, LaTeX, Go, algorithms and cross-platform apps, plus one skill per app or service. Each skill shows whether this computer has what it needs and how far it has been tested ([table](#-skills-library)).
 - **🧩 Drive local apps through their official routes.** ffmpeg, ImageMagick, Inkscape, LibreOffice, Tectonic/LaTeX, git, Node, Python and Go from the command line; Photoshop and Illustrator through ExtendScript; AutoCAD through `accoreconsole`; and open-only support for Premiere, Figma and Canva. Licensing is never bypassed.
 - **🔌 Reach your services.** Built-in REST calls for GitHub, GitLab, Vercel, Figma, Notion and Zotero, and a one-click catalogue of official MCP connectors (GitHub, GitLab, Notion, Figma, Canva, Vercel, Google Drive, OneDrive, Zotero). Amazon, eBay, Etsy and Booking.com are research-only: **AutoMoto never buys or books.**
 - **📂 Work in your own folders when you allow it.** Add project folders in Settings → Files. Anything outside the sandbox asks first, and secrets (`~/.ssh`, `.env` files, keychains, browser profiles, system folders) stay blocked.
@@ -191,6 +192,64 @@ document/spreadsheet/deck from prompt…**
 | Footnotes, tracked changes, equations, SmartArt, PDF/A validation | 🔴 Not supported |
 
 <a id="office-samples"></a>Samples made live are listed in the [CHANGELOG](CHANGELOG.md).
+
+## 📦 Archives, WordPress and data files
+
+**Archives** (`archive` group): `archive_list`, `archive_inspect`, `archive_read`, `archive_extract`,
+`archive_create`, `archive_repack` and `download_file`. Supported formats: zip, tar, tar.gz/tgz, tar.bz2, tar.xz and
+single-file .gz, covering listing, extraction and creation. 7z and rar are read/extract only, and only when py7zr,
+unar or the 7z CLI is installed (`python -m automoto doctor` and `archive_inspect` show which). Archives are unsafe
+input by default, so these checks apply:
+- zip-slip, absolute and `..` names are refused
+- symlink and hardlink members are skipped
+- bomb limits cover total size, file count, compression ratio and nesting depth, counted while streaming
+- encrypted zips need a password you supply, and the password is masked in the event log
+- cp437 names are re-decoded to UTF-8
+- extraction only goes into the sandbox or allowed folders, via a temp folder that is moved into place
+
+Repacks are deterministic (fixed timestamps, sorted entries, uid 0) and let you choose the top-level folder.
+`.git`, `node_modules`, `.DS_Store`, `__MACOSX` and `.env` are excluded by default.
+
+**WordPress** (`wordpress` group): `wp_validate`, `wp_security_review`, `wp_bump_version`, `wp_add_guard` and
+`wp_package`.
+- **Plugin checks:** slug folder, the main file's `Plugin Name` header, `readme.txt` (Stable tag, Requires,
+  Tested up to, License) and no dev files.
+- **Theme checks:** `style.css` header, `index.php` or block templates, `theme.json` JSON, screenshot size and
+  Text Domain.
+- **Other tools:** `php -l` on every PHP file, a heuristic security checklist (direct-access guard, `eval`,
+  shell calls, unescaped output, `$_GET`/`$_POST` without sanitising, SQL without `prepare`, nonce/capability
+  hints, remote includes), a version bump (header, version constants, Stable tag, changelog entry), ABSPATH guard
+  insertion and an installable zip with the slug as the top-level folder. phpcs/WPCS is used when installed;
+  otherwise the result says "not installed".
+
+**Data files** (`data` group): `data_inspect`, `data_query`, `data_convert`, `data_read`, `sqlite_query`,
+`text_search`, `text_tail`, `pdf_text` and `image_info`.
+- **CSV/TSV:** encoding, delimiter, header and decimal-comma sniffing; filter, sort, group/aggregate and derived
+  columns with pandas (safe expressions, no `eval`); dd/mm and ISO dates.
+- **Other formats:** Excel, JSON/JSONL, YAML (safe loader), TOML, XML (defusedxml, no DTDs), Parquet (pyarrow
+  optional) and SQLite (read-only, `SELECT` only, with an authorizer and time limit).
+- **Text and media:** Markdown outline, log tail/grep, image metadata (EXIF, pixel limit) and PDF text.
+- **Outputs:** CSV, TSV, xlsx, JSON, JSONL, Parquet and Markdown. Spreadsheet formula injection (`=`, `+`, `-`,
+  `@`) is written as text.
+- **Large-file safety:** size and row caps, and previews stream the first rows.
+
+There are three new skills: `zip-archives`, `wordpress-plugins-themes` and `data-files`, for 42 skills in total.
+- **Web app:** The **Files** page accepts zip/tar/csv/json/… uploads, up to 50 MB. Uploaded archives are checked
+  first and unsafe ones are refused. The page shows an archive tree, a CSV/Excel table preview and a JSON/YAML
+  outline, and has Extract, "Clean zip" (deterministic repack) and Zip-folder buttons.
+- **VS Code:** **AutoMoto: Repack folder as ZIP** and **AutoMoto: Validate WordPress plugin/theme**, from the
+  command palette or the Explorer context menu.
+
+| Part | Status |
+|---|---|
+| zip/tar/tgz/tbz2/txz/gz list, extract, create, repack, safety limits | ✅ Unit-tested (31 tests, including zip-slip, symlink, hardlink, absolute names, bombs, lying gzip size, nested bombs, encrypted zips, cp437 names), and live in an agent run |
+| 7z | ✅ Extract tested with py7zr and the 7-Zip CLI in CI. Creating 7z is not supported |
+| rar | 🟡 Read/extract through unar or 7z when installed. Not tested (no rar fixtures) |
+| AES-encrypted zips | 🟡 Need 7z or py7zr. ZipCrypto works with the Python standard library |
+| WordPress validate, lint, security, bump, guard, package | ✅ Unit-tested (13 tests). Live on the real hello-dolly 1.7.2 plugin and Twenty Twenty-Four theme. NIM agent bumped, guarded and repacked hello-dolly |
+| phpcs/WPCS, Plugin Check | 🟡 Used when installed and reported otherwise. Not installed on the test box. Plugin Check needs a WordPress install |
+| CSV/Excel/JSON/YAML/TOML/XML/Parquet/SQLite/logs/images/PDF | ✅ Unit-tested (12 tests). Live NIM analysis of a cp1252, `;`-delimited, decimal-comma CSV |
+| Files page tree/table viewer, Extract/Clean zip | ✅ API tested and clicked through in headless Chromium |
 
 ## 📚 Skills library
 
@@ -482,6 +541,7 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 | Docker sandbox runner | 🟡 Implemented, not yet tested on a machine with Docker. Falls back to the local sandbox |
 | MCP client (stdio) | 🟡 Working against a test server. Remote (HTTP) MCP is not supported |
 | v5.3 Office suite (Word, Excel, PowerPoint, PDF) | See the [Office status table](#-office-suite-word-excel-powerpoint-pdf) |
+| v5.4 archives, WordPress, data files | See the [archives status table](#-archives-wordpress-and-data-files) |
 | Desktop app: Tauri 2 shell for Windows, macOS and Linux (`apps/desktop`) | 🧱 Scaffold. Wraps the same web UI and now signs its own window in with a random launch token. Not compiled here: Tauri 2.12 needs Rust ≥ 1.90 and the test box has 1.85 |
 | Mobile app: Flutter for Android and iOS (`apps/mobile`) | 🧱 Scaffold. Still uses the plain-chat API (agent mode on mobile is next). iOS needs Xcode |
 | Browser automation (Playwright tool) | ⏭ Planned. Left out rather than shipped half-working |
@@ -493,7 +553,7 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q          # 203 tests, no keys and no network needed
+python -m pytest -q          # 296 tests, no keys and no network needed
 cd apps/vscode && npm ci && npm test && xvfb-run -a npm run test:integration   # extension
 ```
 
@@ -501,7 +561,7 @@ The tests cover: the agent loop (native, text fallback, native→text retry, mid
 blocklists, allowed folders, prompt-injection taint and fencing, credential stripping on redirects, the MCP
 environment, local-app argument checks and per-OS script routes, service classification and token redaction, the
 connector catalogue, skill requirements, and `edit_file` / `search_files`. CI runs on Windows, macOS and Linux with
-Python 3.10 and 3.13. It also runs a **security** job (pip-audit, bandit, npm audit) and a **vscode** job (lint, unit
+Python 3.10 and 3.13. In v5.4 there are also archive tests (zip-slip, links, bombs, encrypted zips, nested archives), WordPress tests and data-file tests. The **office** job installs LibreOffice, poppler, PHP and 7-Zip and runs the office, archive, WordPress and data tests with no skips. CI also runs a **security** job (pip-audit, bandit, npm audit) and a **vscode** job (lint, unit
 tests, integration test, `.vsix` artifact).
 
 ## 🗂 Layout

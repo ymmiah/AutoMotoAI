@@ -147,12 +147,46 @@ risky (approval required) unless you set `"trust": true`. Only add servers you t
 - Writes follow the file policy: `scratch/` is safe, other workspace paths ask, allowed folders ask, secrets and
   system paths are blocked. Images embedded in documents must be raster files inside allowed folders.
 - Files API (`/api/files*`): default workspace only (never extra roots), session-token auth, hidden/secret names
-  refused, 25 MB upload limit, uploads checked before they appear, downloads sent as
+  refused, 50 MB upload limit (v5.4), uploads checked before they appear, downloads sent as
   `application/octet-stream` attachments with `nosniff` and a sandbox CSP; previews are PNG renders or raster
   images only (never SVG/HTML).
 - Cloud office: Google Docs/Sheets/Slides and Microsoft Graph tokens are BYOK (tab-only or `.env`). Graph is
   limited to files: mail, chats, calendars, contacts, users/groups/directory are blocked, as are sharing links,
   invitations and permission changes on every service.
+
+## Archives, WordPress packages and data files (untrusted input)
+- **Every archive is untrusted.** Member names are normalised before anything is written. Absolute paths, drive
+  letters, `..` components, and NUL bytes are refused (zip-slip). Duplicate names and names that differ only by case get a warning.
+  Symlink, hardlink and device members are skipped and reported. Members are written into a temp folder inside
+  the destination and only moved into place when the whole archive extracted cleanly, so a failure leaves nothing
+  half-written.
+- **Bomb limits** are counted while streaming, not taken from headers. The gzip ISIZE trailer is only a hint.
+  - Defaults: 1 GB archive, 2 GB unpacked, 50,000 files, 200× ratio, nested depth 3.
+  - Each can be overridden with `AUTOMOTO_ARCHIVE_MAX_BYTES`, `_MAX_UNPACKED`, `_MAX_FILES`, `_MAX_RATIO` or
+    `_MAX_DEPTH`.
+  - Nested archives are scanned in memory against the same budget.
+- **Encrypted zips:** the agent never guesses or brute-forces a password. A password is only used when you give
+  one, and it is masked as `***` in events and logs. The model still sees it in the tool call.
+- **7z/rar:** these go through py7zr, unar or the 7z CLI (`-snl-`, so no symlinks), with output staged and
+  re-checked before it is moved into place.
+- **Where files go:** extraction, creation and downloads follow the file policy (sandbox or allowed folders only).
+  `download_file` uses the SSRF guard on every redirect, has a 100 MB cap and marks the run as tainted, so later
+  risky calls ask again.
+- **Repacks** exclude `.git`, `node_modules`, `.DS_Store`, `__MACOSX` and `.env` by default and never follow
+  symlinks out of the folder.
+- **WordPress:** `php -l` runs with `-n` (no php.ini) on copies of the files with a timeout, so no plugin code is
+  executed. The security checklist is a heuristic static review, not a guarantee.
+- **Data files:**
+  - YAML is loaded with `safe_load` and XML with defusedxml (DTDs and entities refused).
+  - SQLite is opened read-only and immutable, with an authorizer that allows only reads and a progress-handler
+    time limit.
+  - Pillow's pixel limit guards against decompression bombs.
+  - Size and row caps apply (`AUTOMOTO_DATA_MAX_BYTES`, `_MAX_LOAD_BYTES`, `_MAX_ROWS`).
+  - Derived columns use a small AST-checked expression language, never `eval`.
+  - Cells starting with `=`, `+`, `-` or `@` are written to xlsx as text, so formula injection doesn't work.
+  - Text read from archives and data files is fenced as untrusted for the model.
+- **Files API:** uploads are capped at 50 MB. Archives are inspected on upload, and unsafe ones are deleted and
+  refused. Extract, pack and repack go through the same checks and stay inside the default workspace.
 
 ## VS Code extension
 - It connects only to loopback `http://127.0.0.1|localhost` and reads the token from `session.json`.
