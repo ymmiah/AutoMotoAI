@@ -238,6 +238,32 @@ export function activate(context: vscode.ExtensionContext): { getClient: typeof 
     await runPrompt(prompt, { workspaceUri: folder?.uri, title: `Create ${pick.docKind}: ${what}`.slice(0, 160) });
   });
 
+  reg("automoto.repackZip", async (uri?: vscode.Uri) => {
+    const target = uri ?? (await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, openLabel: "Zip this folder" }))?.[0];
+    if (!target) return;
+    const folder = folderFor(target);
+    if (!folder) return vscode.window.showInformationMessage("Pick a folder inside the open workspace.");
+    const rel = relPath(target) || ".";
+    const name = path.basename(target.fsPath);
+    const prompt = `Repack the folder "${rel}" as a ZIP. Load the zip-archives skill. Use archive_create with sources=["${rel}"] ` +
+      `and out="dist/${name}.zip" (deterministic, default excludes so .git, node_modules, .DS_Store, __MACOSX and .env are left out; ` +
+      `keep "${name}" as the top-level folder). If the folder is a WordPress plugin or theme, use wp_package instead and then ` +
+      "wp_validate the zip. Finish with archive_list on the result and tell me the path, file count, size and sha256.";
+    await runPrompt(prompt, { workspaceUri: folder.uri, title: `Repack ${rel} as ZIP` });
+  });
+
+  reg("automoto.validateWordPress", async (uri?: vscode.Uri) => {
+    const target = uri ?? (await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: true, filters: { "WordPress zip": ["zip"] }, openLabel: "Validate" }))?.[0];
+    if (!target) return;
+    const folder = folderFor(target);
+    if (!folder) return vscode.window.showInformationMessage("Pick a plugin/theme folder or zip inside the open workspace.");
+    const rel = relPath(target) || ".";
+    const prompt = `Validate the WordPress plugin or theme at "${rel}". Load the wordpress-plugins-themes skill and run wp_validate on it ` +
+      "(structure, headers, readme.txt Stable tag, php -l, security checklist). Summarise errors, warnings and the security findings " +
+      "with file:line, and suggest concrete fixes. Do not change any files unless I ask.";
+    await runPrompt(prompt, { workspaceUri: folder.uri, title: `Validate WordPress package ${rel}` });
+  });
+
   reg("automoto.allowWorkspace", async () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) return vscode.window.showInformationMessage("Open a folder first.");

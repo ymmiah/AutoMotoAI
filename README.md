@@ -130,8 +130,8 @@ server through AutoMoto's private session file (`~/.automoto/session.json`, mode
 
 ```bash
 python -m automoto serve --no-browser                   # 1. start AutoMoto
-cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.3.0.vsix (or download it from CI)
-code --install-extension automoto-ai-5.3.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
+cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.4.0.vsix (or download it from CI)
+code --install-extension automoto-ai-5.4.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
 ```
 
 | Command | What it does |
