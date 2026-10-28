@@ -783,7 +783,7 @@ def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) ->
     if host not in ("127.0.0.1", "localhost", "::1") and not config.env("AUTOMOTO_API_TOKEN"):
         raise SystemExit("Refusing to listen on a network interface without AUTOMOTO_API_TOKEN set.")
     global SCHEDULER
-    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"
+    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"  # nosec B104 - display URL only
     launch = f"{url}?launch={new_launch_token(ttl=3600)}"
     write_session_file(url, port)
     print(f"{APP_NAME} v{__version__} \"{CODENAME}\" -> {url}", flush=True)

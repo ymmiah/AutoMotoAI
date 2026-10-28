@@ -28,3 +28,53 @@ jobs:
           python -m automoto tools
           python -m automoto skills
           python -m automoto routines list
+          python -m automoto apps
+          python -m automoto mcp
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install tools
+        run: pip install "pip-audit>=2.7" "bandit>=1.8"
+      - name: pip-audit (known CVEs in Python dependencies)
+        run: pip-audit -r requirements.txt
+      - name: bandit (medium+ severity)
+        run: bandit -q -r automoto -ll
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: npm audit (VS Code extension)
+        working-directory: apps/vscode
+        run: |
+          npm ci --no-fund
+          npm audit --audit-level=moderate
+
+  vscode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        working-directory: apps/vscode
+        run: npm ci --no-fund
+      - name: Lint + compile + unit tests
+        working-directory: apps/vscode
+        run: |
+          npm run lint
+          npm run test:unit
+      - name: Integration test in a real VS Code (xvfb)
+        working-directory: apps/vscode
+        run: xvfb-run -a npm run test:integration
+      - name: Package .vsix
+        working-directory: apps/vscode
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: automoto-ai-vsix
+          path: apps/vscode/*.vsix

@@ -43,7 +43,7 @@ SERVICES: dict[str, Service] = {s.id: s for s in [
     Service("github", "GitHub", "https://api.github.com", ("GITHUB_TOKEN", "GH_TOKEN"), "bearer",
             "https://docs.github.com/rest", status="live", optional_auth=True),
     Service("gitlab", "GitLab", "https://gitlab.com/api/v4", ("GITLAB_TOKEN",), "private-token",
-            "https://docs.gitlab.com/api/rest/", optional_auth=True),
+            "https://docs.gitlab.com/api/rest/", status="live", optional_auth=True),
     Service("vercel", "Vercel", "https://api.vercel.com", ("VERCEL_TOKEN",), "bearer",
             "https://vercel.com/docs/rest-api"),
     Service("figma", "Figma", "https://api.figma.com", ("FIGMA_TOKEN",), "figma",

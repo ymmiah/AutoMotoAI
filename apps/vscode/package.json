@@ -1,0 +1,191 @@
+{
+  "name": "automoto-ai",
+  "displayName": "AutoMoto AI",
+  "description": "Chat with your local AutoMoto AI agent in VS Code: ask about code, fix errors, explain files and run agent tasks on your project - every risky step asks you first.",
+  "version": "5.2.0",
+  "publisher": "ymmiah",
+  "author": {
+    "name": "Yasin Mohammed Miah",
+    "url": "https://ymmiah.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ymmiah/AutoMotoAI"
+  },
+  "homepage": "https://github.com/ymmiah/AutoMotoAI/tree/main/apps/vscode",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "assistant",
+    "automoto",
+    "nim"
+  ],
+  "main": "./out/src/extension.js",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Running agent tasks on the workspace needs a trusted workspace."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "automoto",
+          "title": "AutoMoto AI",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "automoto": [
+        {
+          "type": "webview",
+          "id": "automoto.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "automoto.askSelection",
+        "title": "Ask about selection",
+        "category": "AutoMoto"
+      },
+      {
+        "command": "automoto.fixDiagnostic",
+        "title": "Fix this error",
+        "category": "AutoMoto"
+      },
+      {
+        "command": "automoto.explainFile",
+        "title": "Explain this file",
+        "category": "AutoMoto"
+      },
+      {
+        "command": "automoto.runTask",
+        "title": "Run agent task on workspace\u2026",
+        "category": "AutoMoto"
+      },
+      {
+        "command": "automoto.openWebUI",
+        "title": "Open the AutoMoto web UI",
+        "category": "AutoMoto"
+      },
+      {
+        "command": "automoto.allowWorkspace",
+        "title": "Let the agent work in this folder",
+        "category": "AutoMoto"
+      },
+      {
+        "command": "automoto.status",
+        "title": "Show connection status",
+        "category": "AutoMoto"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "automoto.askSelection",
+          "when": "editorHasSelection",
+          "group": "automoto@1"
+        },
+        {
+          "command": "automoto.explainFile",
+          "group": "automoto@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "automoto.explainFile",
+          "when": "!explorerResourceIsFolder",
+          "group": "automoto@1"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "automoto.askSelection",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "AutoMoto AI",
+      "properties": {
+        "automoto.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Leave empty to find the server started with `python -m automoto serve` on this computer (via its private session file). Only loopback URLs (127.0.0.1 / localhost) are accepted.",
+          "scope": "machine"
+        },
+        "automoto.dataDir": {
+          "type": "string",
+          "default": "",
+          "description": "AutoMoto's data folder if not ~/.automoto (same as AUTOMOTO_DATA_DIR).",
+          "scope": "machine"
+        },
+        "automoto.provider": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "nim",
+            "gemini",
+            "groq",
+            "openrouter",
+            "openai",
+            "claude"
+          ],
+          "description": "Which AI to try first."
+        },
+        "automoto.maxSteps": {
+          "type": "number",
+          "default": 12,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Agent step limit per task."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "lint": "eslint src test",
+    "test:unit": "npm run compile && mocha out/test/unit/*.test.js",
+    "test:integration": "npm run compile && node out/test/integration/run.js",
+    "test": "npm run test:unit",
+    "package": "vsce package --no-dependencies -o automoto-ai-5.2.0.vsix",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.17.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.0",
+    "eslint": "^9.20.0",
+    "mocha": "^12.0.3",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.1.4",
+    "diff": "^9.0.0",
+    "uuid": "^11.1.1"
+  }
+}

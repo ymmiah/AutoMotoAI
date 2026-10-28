@@ -439,7 +439,9 @@ def cmd_open(_args) -> int:
     req = urllib.request.Request(info["url"].rstrip("/") + "/api/session/launch", method="POST", data=b"{}",
                                  headers={"X-AutoMoto-Token": info["token"], "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=5) as r:  # noqa: S310 - loopback URL from our own session file
+        if not info["url"].startswith(("http://127.0.0.1:", "http://localhost:", "http://[::1]:")):
+            raise OSError("session file URL is not a loopback address")
+        with urllib.request.urlopen(req, timeout=5) as r:  # nosec B310 - loopback http URL checked above
             url = json.loads(r.read())["url"]
     except OSError as exc:
         print(f"Server not reachable at {info['url']}: {exc}")
@@ -464,6 +466,11 @@ def cmd_serve(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles/pipes may not be UTF-8: never crash on ✅ or →
+        try:
+            stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(prog="automoto", description=f"{APP_NAME} v{__version__} \"{CODENAME}\"")
     ap.add_argument("--version", action="version", version=__version__)
     ap.add_argument("--prefer", help="provider id to try first (nim, gemini, groq, openrouter, openai, claude)")

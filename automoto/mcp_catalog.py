@@ -71,7 +71,8 @@ CATALOG: list[Connector] = [
     Connector("filesystem-docs", "Folder (read/write) - reference server", "official", "stdio", "npx",
               ["-y", "@modelcontextprotocol/server-filesystem", "${AUTOMOTO_MCP_FOLDER}"], needs=["AUTOMOTO_MCP_FOLDER"],
               docs="https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
-              note="Gives the agent one extra folder through MCP. Prefer Settings → Files, which keeps the path blocklist."),
+              note="Gives the agent one extra folder through MCP. Prefer Settings → Files, which keeps the path blocklist.",
+              status="live"),
 ]
 BY_ID = {c.id: c for c in CATALOG}
 _VAR = re.compile(r"\$\{([A-Z0-9_]+)\}")

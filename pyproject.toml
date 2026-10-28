@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "automoto-ai"
-version = "5.1.0"
-description = "AutoMoto AI v5 'Agent' - your AI cousin: an autonomous agent with tools, approvals, memory, skills and routines over a multi-AI router with auto-failover"
+version = "5.2.0"
+description = "AutoMoto AI v5 'Agent' - a local AI agent with skills, local apps, service connectors, a VS Code extension, approvals, memory and routines over a multi-AI router with auto-failover"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

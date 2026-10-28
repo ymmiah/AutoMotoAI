@@ -3,7 +3,7 @@ name: online-shopping
 description: Research products on Amazon, eBay and Etsy - compare prices, specs and reviews - and hand the user links. Never buys anything.
 category: research
 tools: web_search, fetch_url
-status: live
+status: unit
 ---
 # Online shopping research (Amazon, eBay, Etsy)
 

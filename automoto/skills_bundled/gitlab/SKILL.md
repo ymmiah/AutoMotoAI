@@ -5,7 +5,7 @@ category: services
 tools: service_api
 optional_apps: glab
 env: GITLAB_TOKEN
-status: unit
+status: live
 ---
 # GitLab
 

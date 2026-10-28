@@ -133,7 +133,15 @@ def hotkey(keys: str) -> str:
 def run_command(command: str) -> str:
     if (config.env("AUTOMOTO_ALLOW_SHELL", "0") or "0").lower() not in ("1", "true", "yes"):
         raise ToolError("shell commands are disabled. Set AUTOMOTO_ALLOW_SHELL=1 to allow them (still confirmed each time).")
-    res = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=60, cwd=_workdir())
+    from automoto import policy, sandbox
+
+    level, reason = policy.classify("run_shell", "risky", {"command": command})
+    if level == "blocked":  # same never-allowed list as the agent's run_shell
+        raise ToolError(f"refused: {reason}")
+    with sandbox.use_root(None):
+        argv = ["cmd", "/c", command] if sys.platform == "win32" else ["/bin/sh", "-c", command]
+        res = subprocess.run(argv, capture_output=True, text=True, timeout=60, cwd=_workdir(),  # nosec B603 - user-confirmed
+                             env=sandbox.clean_env())
     out = (res.stdout + res.stderr).strip()
     return f"exit {res.returncode}\n{out[-4000:]}"
 

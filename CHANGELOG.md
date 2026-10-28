@@ -1,5 +1,70 @@
 # AutoMoto AI - Version History & Changelog
 
+## Version 5.2.0 "Agent" - 28/10/2026
+**Skills, local apps, services, a VS Code extension, and a security pass.**
+
+### New
+- **Skills library:** 29 new bundled skills (33 in total). They cover web design, HTML/CSS, graphic design, video
+  and audio editing, bug fixing, the Linux terminal, Python, JavaScript, LaTeX, Go, algorithms and cross-platform
+  apps (Tauri, Electron, Flutter, PyInstaller, Go), plus VS Code, Photoshop, Illustrator, Premiere Pro, AutoCAD,
+  Canva, Google Drive, OneDrive, GitHub, GitLab, Notion, Figma, Vercel, Zotero, online shopping research
+  (Amazon/eBay/Etsy) and travel research (Booking.com). New front matter declares `tools`, `apps`,
+  `optional_apps`, `env`, `connectors`, `category` and `status`. `automoto skills`, `GET /api/skills` and the Skills
+  page show requirement checks and ✅/🟡/🔴 test status.
+- **Local apps** (`apps.py`): a registry of 30 apps with per-OS detection. New tools are `list_apps`, `run_app`
+  (no shell, per-app flag deny-lists, path checks), `open_in_app` and `run_app_script`. `run_app_script` drives
+  Photoshop/Illustrator via ExtendScript over COM or AppleScript, AutoCAD via `accoreconsole`, Blender via
+  `--python` and GIMP via Script-Fu. CLI: `automoto apps`.
+- **Services** (`services.py`): a `service_api` tool for GitHub, GitLab, Vercel, Figma, Notion and Zotero REST
+  APIs, using BYOK or `.env` tokens. GET is safe and writes are risky. Secret/admin endpoints and whole-repo
+  deletes are blocked, and tokens are redacted.
+- **Connector catalogue** (`mcp_catalog.py`): official MCP servers for GitHub (Docker), and GitLab, Notion, Figma,
+  Canva, Vercel and Google Drive (remote, via `mcp-remote` OAuth). Also OneDrive and Zotero (community) and the
+  reference filesystem server. Manage them in Settings → Connectors or with `automoto mcp`. `${VAR}` placeholders
+  are expanded at start.
+- **VS Code extension** (`apps/vscode`): a chat view, Ask about selection, Fix this error (with a quick fix),
+  Explain file, Run agent task on workspace, Allow folder, Open web UI and Status. Approvals appear as modal
+  dialogs. It is tested with mocha and @vscode/test-electron, and CI builds the `.vsix`.
+- **Allowed folders:** `allowed_roots` setting / `AUTOMOTO_ALLOWED_ROOTS` / Settings → Files. Tasks can work in an
+  allowed folder (`workspace` on `POST /api/agent`, `--workspace` on the CLI). Access outside the sandbox always asks.
+- **Tools:** `edit_file` (exact snippet replace) and `search_files` (regex search that skips secrets).
+- **CLI:** `automoto open` (fresh one-time sign-in link), `apps`, `mcp`, `--workspace`. `skills` now shows
+  readiness.
+- **API:** `/api/apps`, `/api/services`, `/api/connectors` (+ enable/disable/reload), `/api/session/launch`.
+  `/api/agent/info` adds `extra_roots`.
+
+### Security
+- Launch-link sign-in: a one-time link sets an HttpOnly, SameSite=Strict cookie, and the page no longer
+  contains the token. Without it you get a locked page.
+- Host check (DNS rebinding, 421) and Origin check (CSRF, 403). Cookie writes need a same-origin `Origin`.
+- Rate limiting (429), security headers, no `Server` header, and Swagger off by default.
+- `session.json` (0600) for local clients, removed on exit.
+- Secret-path blocklist: SSH/cloud/kube credentials, keychains, browser profiles, shell start-up files, system
+  folders, AutoMoto's data folder, and `.env`/key files everywhere. Shell commands and app arguments that
+  mention them are blocked.
+- Prompt-injection defences: untrusted output is fenced in `<untrusted>`, auto-approval is suspended after a run
+  reads web or third-party content, and the system prompt has rules against secrets and purchases.
+- netguard strips credential headers on cross-host redirects. MCP servers get a cleaned environment.
+- The v4 `run_command` no longer uses `shell=True` and goes through the same blocklist.
+- CI `security` job: pip-audit, bandit, npm audit. See the threat model in SECURITY.md.
+- The desktop shell makes a random launch token for its own window. Its loading page is now committed (it was
+  hidden by the `dist/` ignore rule).
+
+### Fixed
+- `edit_file` with `count=0` replaced only one occurrence.
+- git's `-C` was refused by a case-insensitive `-c` rule.
+- CLI output no longer crashes on non-UTF-8 Windows consoles.
+
+### Tested
+- 203 pytest tests (91 new).
+- Live on Linux: ffmpeg/ffprobe (generate, trim, scale, loudnorm), ImageMagick (SVG→PNG, resize, text),
+  Tectonic (PDF with maths), LibreOffice (txt→PDF), git, Node, npm, Python, Go, GitHub and GitLab public API reads,
+  and the MCP filesystem server.
+- Two NVIDIA NIM agent runs went through the VS Code extension's client: the video-editing skill end to end, and a
+  bug fix in an allowed folder that ignored an injected instruction.
+- The VS Code extension passes lint, unit tests and an integration test in a real VS Code, and packages to a `.vsix`.
+- Not testable here: Adobe apps, AutoCAD, OAuth connectors, Docker, Tauri build (needs Rust ≥ 1.90).
+
 ## Version 5.1.0 "Agent" - 28/10/2026
 **A real app: AutoMoto's web UI is rebuilt as a full chat app.**
 
