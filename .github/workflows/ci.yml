@@ -212,10 +212,10 @@ jobs:
           foreach ($i in 1..40) { try { Invoke-RestMethod http://127.0.0.1:8799/api/health | Out-Null; $ok = $true; break } catch { Start-Sleep 1 } }
           if (-not $ok) { throw "server did not start" }
           $link = (& $am open --print | Select-Object -Last 1).Trim()
-          $r = Invoke-WebRequest $link -MaximumRedirection 0 -SkipHttpErrorCheck -SessionVariable web
-          if ($r.StatusCode -ne 303) { throw "launch link gave $($r.StatusCode)" }
-          $st = Invoke-WebRequest http://127.0.0.1:8799/api/status -WebSession $web
-          if ($st.StatusCode -ne 200) { throw "status $($st.StatusCode)" }
+          $code = curl.exe -s -o NUL -c jar.txt -w '%{http_code}' $link
+          if ($code -ne "303") { throw "launch link gave $code" }
+          $code = curl.exe -s -o NUL -b jar.txt -w '%{http_code}' http://127.0.0.1:8799/api/status
+          if ($code -ne "200") { throw "status gave $code" }
           $ErrorActionPreference = "Continue"
           $busy = (& $am serve --no-browser --port 8799 2>&1 | ForEach-Object { "$_" }) -join "`n"
           $ErrorActionPreference = "Stop"
