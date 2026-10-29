@@ -27,5 +27,6 @@ USER automoto
 VOLUME ["/data"]
 EXPOSE 8765
 HEALTHCHECK --interval=60s --timeout=5s CMD python -c "import urllib.request,os;urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8765\")}/api/health',timeout=4)" || exit 1
-# PORT is set by Render / Koyeb / Hugging Face; 8765 otherwise
-CMD ["sh", "-c", "exec python -m automoto serve --hosted --host 0.0.0.0 --port ${PORT:-8765} --no-browser"]
+# Hosted (multi-user) by default. Single-user: -e AUTOMOTO_MODE=local -e AUTOMOTO_HOST=127.0.0.1 --network host
+# (Linux; see compose.yaml). PORT is set by Render / Koyeb / Hugging Face; 8765 otherwise.
+CMD ["sh", "-c", "exec python -m automoto serve --host \"${AUTOMOTO_HOST:-0.0.0.0}\" --port \"${PORT:-8765}\" --no-browser"]

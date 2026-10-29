@@ -1,0 +1,47 @@
+# AutoMoto AI with Docker Compose. Keys go in a file next to this one called `.env` (git-ignored), e.g.
+#   NVIDIA_API_KEY=nvapi-...
+#   AUTOMOTO_ADMIN_USER=yasin
+#   AUTOMOTO_ADMIN_PASSWORD=a-long-password
+#
+#   docker compose up -d --build            # hosted multi-user server on http://127.0.0.1:8765 (any OS)
+#   docker compose --profile local up -d --build automoto-local   # single-user, Linux only (host network)
+#
+# Data (accounts, chats, files, memory) lives in the named volume `automoto-data` and survives restarts,
+# rebuilds and `docker compose down` (only `down -v` deletes it). See docs/INSTALL.md.
+services:
+  automoto:
+    build: .
+    image: automoto-ai:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AUTOMOTO_MODE: multiuser
+      # plain http on your own computer; put HTTPS in front (Caddy / Cloudflare Tunnel) and set 1 when public
+      AUTOMOTO_COOKIE_SECURE: ${AUTOMOTO_COOKIE_SECURE:-0}
+    ports:
+      - "127.0.0.1:${AUTOMOTO_PORT:-8765}:8765"   # only this computer; change to "8765:8765" to open it to your LAN
+    volumes:
+      - automoto-data:/data
+
+  automoto-local:
+    # single-user mode (all tools, approvals, no accounts). Needs the host network so your browser counts as
+    # "this computer" - works on Linux; Docker Desktop on Windows/macOS: use the hosted service above instead.
+    profiles: ["local"]
+    build: .
+    image: automoto-ai:local
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AUTOMOTO_MODE: local
+      AUTOMOTO_HOST: 127.0.0.1
+      PORT: ${AUTOMOTO_PORT:-8765}
+    volumes:
+      - automoto-data:/data
+
+volumes:
+  automoto-data:
