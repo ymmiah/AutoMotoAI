@@ -201,6 +201,7 @@ jobs:
           $s = (& $am status) -join "`n"; $s
           if ($s -notmatch "Settings read from: .*\.automoto\\\.env") { throw "the .env in the data folder was not read" }
           if (-not ([Environment]::GetEnvironmentVariable("Path", "User") -split ";" -contains (Split-Path $am))) { throw "not on PATH" }
+          exit 0   # `automoto status` exits 1 when no AI key is set, which is expected here
       - name: install.ps1 - run the server and sign in
         if: runner.os == 'Windows'
         shell: pwsh

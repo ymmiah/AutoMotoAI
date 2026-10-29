@@ -184,6 +184,10 @@ def test_encrypted_zip_needs_password(ws):
         archives.extract("enc.zip", "e")
     with pytest.raises(ArchiveError, match="password"):
         archives.extract("enc.zip", "e", password="wrong")
+    # ZipCrypto lets ~1/256 wrong passwords past its check byte; those must still say "wrong password"
+    for i in range(600):
+        with pytest.raises(ArchiveError, match="wrong password"):
+            archives.extract("enc.zip", f"e{i % 3}", password=f"nope-{i}")
     assert not (ws / "e").exists()
     archives.extract("enc.zip", "e", password="pw123")
     assert (ws / "e" / "secret.txt").read_text() == "top secret"

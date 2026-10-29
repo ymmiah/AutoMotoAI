@@ -648,6 +648,10 @@ def _extract(p: Path, d: Path, *, password: str | None = None, members_only: lis
                     except RuntimeError as exc:
                         raise ArchiveError(f"{m.name}: wrong password ({exc})") from None
                     except (zipfile.BadZipFile, EOFError, lzma.LZMAError, zlib_error) as exc:
+                        if m.encrypted and password:
+                            # ZipCrypto only checks 1 byte of the key, so ~1 in 256 wrong passwords get past the
+                            # check and then fail the CRC: report that as a wrong password, not damage
+                            raise ArchiveError(f"{m.name}: wrong password (or damaged data: {exc})") from None
                         raise ArchiveError(f"{m.name}: damaged data ({exc})") from None
                     except OSError as exc:
                         if isinstance(exc, gzip.BadGzipFile) or "compressed" in str(exc).lower():
