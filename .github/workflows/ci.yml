@@ -223,6 +223,7 @@ jobs:
           Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "automoto" -and $_.CommandLine -match "8799" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
           ./scripts/install.ps1 -Uninstall
           if (Test-Path $am) { throw "still installed" }
+          exit 0   # the deliberate port-in-use run above left $LASTEXITCODE = 1
       - name: Start-at-login option (systemd user service / launchd / Task Scheduler) - best effort on CI
         shell: pwsh
         run: |
