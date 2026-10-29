@@ -70,8 +70,13 @@ def cmd_status(_args) -> int:
     else:
         for p in st["providers"]:
             print(p["id"], p["configured"], p["supports_vision"], p["text_model"])
+    from automoto import home
+
+    files = ", ".join(config.LOADED_ENV_FILES) or "none (only environment variables)"
+    print(f"Settings read from: {files}\nData folder: {home.base()}", flush=True)  # plain print: paths never wrap
     if not any(p["configured"] for p in st["providers"]):
-        _print(console, "No keys yet: copy .env.example to .env and add at least one key.", "yellow")
+        _print(console, f"No keys yet: set e.g. NVIDIA_API_KEY as an environment variable or put it in "
+                        f"{config._data_env_file()} (or a .env in this folder). See docs/INSTALL.md.", "yellow")
         return 1
     return 0
 
@@ -446,8 +451,12 @@ def cmd_open(_args) -> int:
     except OSError as exc:
         print(f"Server not reachable at {info['url']}: {exc}")
         return 1
+    if getattr(_args, "print_link", False):
+        print(url)  # one-time link, valid 1 h, works once - for SSH / Docker / service setups without a browser
+        return 0
     print(f"Opening {info['url']} …")
-    webbrowser.open(url)
+    if not webbrowser.open(url):
+        print(f"No browser found here. Open this one-time link yourself (valid 1 h, works once):\n{url}")
     return 0
 
 
@@ -667,7 +676,9 @@ def main(argv: list[str] | None = None) -> int:
     mc = sub.add_parser("mcp", help="connector catalog (GitHub, Notion, Figma, Canva, Drive, OneDrive, …)")
     mc.add_argument("action", nargs="?", default="catalog", choices=["catalog", "enable", "disable"])
     mc.add_argument("id", nargs="?")
-    sub.add_parser("open", help="open the running web UI (fresh one-time sign-in link)")
+    op = sub.add_parser("open", help="open the running web UI (fresh one-time sign-in link)")
+    op.add_argument("--print", dest="print_link", action="store_true",
+                    help="print the link instead of opening a browser (SSH, Docker, services)")
     s = sub.add_parser("serve", help="local web UI + API")
     s.add_argument("--host", default=config.env("AUTOMOTO_HOST", "127.0.0.1"))
     s.add_argument("--port", type=int, default=int(config.env("AUTOMOTO_PORT") or config.env("PORT") or "8765"))

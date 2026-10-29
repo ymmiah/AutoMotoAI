@@ -1188,6 +1188,24 @@ def screen_explain(body: ScreenIn, request: Request):
 
 
 
+def check_port(host: str, port: int) -> None:
+    """Fail early with a clear message when the port is taken (usually AutoMoto is already running)."""
+    import socket
+
+    fam = socket.AF_INET6 if ":" in host else socket.AF_INET
+    with socket.socket(fam, socket.SOCK_STREAM) as s:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows: don't share a port someone else holds
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:  # like uvicorn: ignore TIME_WAIT leftovers from a restart, still fails if something listens
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+        except OSError as exc:
+            raise SystemExit(f"Port {port} on {host} is already in use ({exc.strerror or exc}). AutoMoto may already "
+                             f"be running - try `automoto open` - or start on another port: "
+                             f"`automoto serve --port {port + 1}`.") from None
+
+
 def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) -> None:
     import threading
     import webbrowser
@@ -1195,9 +1213,11 @@ def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) ->
     import uvicorn
 
     if tenancy.multiuser():
+        check_port(host, port)
         return run_hosted(host, port)
     if host not in ("127.0.0.1", "localhost", "::1") and not config.env("AUTOMOTO_API_TOKEN"):
         raise SystemExit("Refusing to listen on a network interface without AUTOMOTO_API_TOKEN set.")
+    check_port(host, port)
     global SCHEDULER
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"  # nosec B104 - display URL only
     launch = f"{url}?launch={new_launch_token(ttl=3600)}"

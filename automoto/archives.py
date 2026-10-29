@@ -182,6 +182,11 @@ def _seven_cli() -> str | None:
     for b in ("7zz", "7z", "7za"):
         if shutil.which(b):
             return shutil.which(b)
+    if os.name == "nt":  # the 7-Zip installer doesn't add itself to PATH
+        for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)"), "C:/Program Files"):
+            exe = os.path.join(base, "7-Zip", "7z.exe") if base else ""
+            if exe and os.path.isfile(exe):
+                return exe
     return None
 
 

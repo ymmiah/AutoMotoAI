@@ -8,12 +8,44 @@ from __future__ import annotations
 
 import os
 
-try:  # python-dotenv is optional at import time (tests don't need it)
-    from dotenv import load_dotenv
 
-    load_dotenv()
-except Exception:  # pragma: no cover
-    pass
+
+def env_files() -> list[str]:
+    """The .env files AutoMoto reads, first one wins for each key (real environment variables beat all):
+    1. ``.env`` in the current folder (or a parent), 2. ``.env`` next to a source checkout,
+    3. ``~/.automoto/.env`` (or ``$AUTOMOTO_DATA_DIR/.env``) - the place for pip / pipx installs."""
+    try:
+        from dotenv import find_dotenv
+    except Exception:  # pragma: no cover
+        return []
+    out: list[str] = []
+    for p in (find_dotenv(usecwd=True), find_dotenv()):
+        if p and os.path.abspath(p) not in out:
+            out.append(os.path.abspath(p))
+    return out
+
+
+def _data_env_file() -> str:
+    base = os.getenv("AUTOMOTO_DATA_DIR") or os.path.join(os.path.expanduser("~"), ".automoto")
+    return os.path.abspath(os.path.join(os.path.expanduser(base), ".env"))
+
+
+def load_env_files() -> list[str]:
+    try:  # python-dotenv is optional at import time (tests don't need it)
+        from dotenv import load_dotenv
+    except Exception:  # pragma: no cover
+        return []
+    loaded: list[str] = []
+    for p in env_files():
+        if load_dotenv(p, override=False):
+            loaded.append(p)
+    data = _data_env_file()  # after the others, so AUTOMOTO_DATA_DIR from a local .env counts
+    if data not in loaded and os.path.isfile(data) and load_dotenv(data, override=False):
+        loaded.append(data)
+    return loaded
+
+
+LOADED_ENV_FILES = load_env_files()
 
 PLACEHOLDER_PREFIXES = ("your_", "replace", "changeme", "xxx", "<")
 
