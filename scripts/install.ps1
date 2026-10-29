@@ -15,6 +15,8 @@
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -SystemDeps
 .EXAMPLE
+  powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -AutoStart
+.EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -Uninstall
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'interactive installer: coloured console output')]
@@ -31,6 +33,7 @@ param(
     [string]$Extras = "office",
     [switch]$Full,
     [switch]$SystemDeps,
+    [switch]$AutoStart,
     [switch]$Yes,
     [switch]$Uninstall,
     [switch]$Purge
@@ -65,7 +68,13 @@ function Remove-FromUserPath([string]$dir) {
     }
 }
 
+$TaskName = "AutoMoto AI"
 if ($Uninstall) {
+    if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+        Say "Removed the '$TaskName' log-on task"
+    }
     Say "Removing $AppDir"
     if (Test-Path $AppDir) { Remove-Item -Recurse -Force $AppDir }
     Remove-FromUserPath $BinDir
@@ -202,6 +211,20 @@ if (-not (Test-Path $EnvFile)) {
 # ---- 7. check ------------------------------------------------------------------------------------------------
 & (Join-Path $BinDir "automoto.cmd") --version
 if ($LASTEXITCODE -ne 0) { throw "automoto --version failed" }
+# ---- 8. optional: start at log-on (no window, no admin rights) -------------------------------------------
+if ($AutoStart) {
+    $PyW = Join-Path $Venv "Scripts\pythonw.exe"
+    # pythonw has no console: send output to %USERPROFILE%\.automoto\automoto.log
+    $CodeW = "import os, sys; d = os.environ.get('AUTOMOTO_DATA_DIR') or os.path.join(os.path.expanduser('~'), '.automoto'); os.makedirs(d, exist_ok=True); sys.stdout = sys.stderr = open(os.path.join(d, 'automoto.log'), 'a', buffering=1, encoding='utf-8'); " + $Code
+    $Action = New-ScheduledTaskAction -Execute $PyW -Argument ("-c `"$CodeW`" serve --no-browser")
+    $Trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+    $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
+    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings `
+        -Description "AutoMoto AI local web app (http://127.0.0.1:8765)" -Force | Out-Null
+    Start-ScheduledTask -TaskName $TaskName
+    Say "AutoMoto now starts when you log on (Task Scheduler: '$TaskName'). Open it with: automoto open"
+}
+
 Write-Host ""
 Write-Host "Done. Next (in a NEW PowerShell window):"
 Write-Host "  1. notepad `"$EnvFile`"     # paste a key, e.g. NVIDIA_API_KEY=nvapi-..."

@@ -4,6 +4,7 @@
 #   ./scripts/install.sh                     # release wheel (SHA-256 checked) into its own virtualenv
 #   ./scripts/install.sh --from-source       # this checkout instead (developers, newest code)
 #   ./scripts/install.sh --system-deps       # also install LibreOffice, poppler, 7-Zip, PHP (asks first, uses sudo)
+#   ./scripts/install.sh --service           # also start AutoMoto when you log in (systemd user service / launchd)
 #   ./scripts/install.sh --uninstall         # remove the program (keeps your data in ~/.automoto)
 #
 # Safe by design: nothing is piped into a shell, the release wheel is checked against a pinned SHA-256,
@@ -33,7 +34,10 @@ EXTRAS="office"
 SHA=""
 WHEEL=""
 SYSTEM_DEPS=0
+SERVICE=0
 YES=0
+UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/automoto.service"
+PLIST="$HOME/Library/LaunchAgents/com.ymmiah.automoto.plist"
 ACTION="install"
 
 say()  { printf '\033[1;32m==>\033[0m %s\n' "$*"; }
@@ -55,6 +59,7 @@ Options:
   --system-deps      install LibreOffice, poppler, 7-Zip and PHP with your package manager (sudo, asks first)
   --venv DIR         virtualenv location (default $VENV)
   --bin-dir DIR      where the \`automoto\` command goes (default $BIN_DIR)
+  --service          start AutoMoto automatically at login (Linux: systemd user service, macOS: launchd agent)
   --yes              don't ask before --system-deps / --uninstall --purge
   --uninstall        remove the virtualenv and the command (keeps $DATA_DIR)
   --purge            with --uninstall: also delete $DATA_DIR (chats, memory, files, keys)
@@ -72,6 +77,7 @@ while [ $# -gt 0 ]; do
     --extras) EXTRAS="${2-}"; shift 2 ;;
     --full) EXTRAS="office,data"; shift ;;
     --system-deps) SYSTEM_DEPS=1; shift ;;
+    --service) SERVICE=1; shift ;;
     --venv) VENV="${2:?}"; shift 2 ;;
     --bin-dir) BIN_DIR="${2:?}"; shift 2 ;;
     --yes|-y) YES=1; shift ;;
@@ -88,7 +94,22 @@ confirm() {  # confirm "question" -> 0 if yes
   printf '%s [y/N] ' "$1"; read -r ans; case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
+have_user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
+
+remove_service() {
+  if [ -f "$UNIT" ]; then
+    have_user_systemd && systemctl --user disable --now automoto.service >/dev/null 2>&1 || true
+    rm -f "$UNIT"; have_user_systemd && systemctl --user daemon-reload || true
+    say "Removed the systemd user service"
+  fi
+  if [ -f "$PLIST" ]; then
+    launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
+    rm -f "$PLIST"; say "Removed the launchd agent"
+  fi
+}
+
 if [ "$ACTION" = "uninstall" ]; then
+  remove_service
   say "Removing $VENV and $BIN_DIR/automoto"
   rm -rf "$VENV"; rm -f "$BIN_DIR/automoto"
   if [ "$PURGE" = 1 ]; then
@@ -226,6 +247,61 @@ fi
 
 # ---- 7. check ------------------------------------------------------------------------------------------
 "$BIN_DIR/automoto" --version
+
+# ---- 8. optional: start at login ----------------------------------------------------------------------
+if [ "$SERVICE" = 1 ]; then
+  SVC_PATH="$BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  if [ "$(uname -s)" = "Darwin" ]; then
+    mkdir -p "$(dirname "$PLIST")"
+    cat > "$PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ymmiah.automoto</string>
+  <key>ProgramArguments</key>
+  <array><string>$BIN_DIR/automoto</string><string>serve</string><string>--no-browser</string></array>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$SVC_PATH</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>StandardOutPath</key><string>$DATA_DIR/automoto.log</string>
+  <key>StandardErrorPath</key><string>$DATA_DIR/automoto.log</string>
+</dict>
+</plist>
+PL
+    launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
+    if launchctl bootstrap "gui/$(id -u)" "$PLIST"; then
+      say "AutoMoto now starts when you log in (launchd agent $PLIST). Open it with: automoto open"
+    else
+      warn "Couldn't load the launchd agent; it will load at your next login ($PLIST)"
+    fi
+  else
+    mkdir -p "$(dirname "$UNIT")"
+    cat > "$UNIT" <<UN
+[Unit]
+Description=AutoMoto AI (local web app on http://127.0.0.1:8765)
+After=network-online.target
+
+[Service]
+ExecStart=$BIN_DIR/automoto serve --no-browser
+Environment=PATH=$SVC_PATH
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+UN
+    if have_user_systemd; then
+      systemctl --user daemon-reload
+      systemctl --user enable --now automoto.service
+      say "AutoMoto now runs as a systemd user service. Open it with: automoto open   (logs: journalctl --user -u automoto)"
+      say "To keep it running after you log out / at boot: sudo loginctl enable-linger $USER"
+    else
+      warn "No systemd user session here (containers, WSL without systemd, ChromeOS). Wrote $UNIT anyway;"
+      warn "start AutoMoto yourself with: automoto serve"
+    fi
+  fi
+fi
 case ":$PATH:" in
   *":$BIN_DIR:"*) RUN="automoto" ;;
   *) RUN="$BIN_DIR/automoto"

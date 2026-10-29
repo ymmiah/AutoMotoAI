@@ -222,3 +222,16 @@ jobs:
           Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "automoto" -and $_.CommandLine -match "8799" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
           ./scripts/install.ps1 -Uninstall
           if (Test-Path $am) { throw "still installed" }
+      - name: Start-at-login option (systemd user service / launchd / Task Scheduler) - best effort on CI
+        shell: pwsh
+        run: |
+          if ($IsWindows) { ./scripts/install.ps1 -FromSource -AutoStart -Yes } else { bash scripts/install.sh --from-source --service --yes }
+          $ok = $false
+          foreach ($i in 1..45) { try { Invoke-RestMethod http://127.0.0.1:8765/api/health | Out-Null; $ok = $true; break } catch { Start-Sleep 1 } }
+          if ($ok) { "autostart verified: the server answered on 8765" }
+          else {
+            "::warning::autostart registered but the server did not start on this runner (no interactive session / user bus)"
+            if ($IsWindows) { Get-ScheduledTask -TaskName "AutoMoto AI" | Get-ScheduledTaskInfo | Format-List | Out-String }
+          }
+          if ($IsWindows) { ./scripts/install.ps1 -Uninstall } else { bash scripts/install.sh --uninstall }
+          if ($IsWindows -and (Get-ScheduledTask -TaskName "AutoMoto AI" -ErrorAction SilentlyContinue)) { throw "task not removed" }
