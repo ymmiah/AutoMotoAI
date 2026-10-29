@@ -1,5 +1,38 @@
 # AutoMoto AI - Version History & Changelog
 
+## Unreleased (on `main`, after 5.5.0)
+**Install and deploy on every OS.**
+
+### New
+- **docs/INSTALL.md:** beginner step-by-step for Windows 10/11, macOS (Intel and Apple Silicon), Linux
+  (Ubuntu/Debian, Fedora, Arch, openSUSE), Docker / Compose, hosted deploys (own PC + Cloudflare Tunnel, Oracle
+  Cloud Always Free + Caddy, Render demo, phones on home Wi-Fi), VS Code (incl. remote), ChromeOS, Raspberry Pi,
+  phones, BSD; free AI keys; updating, uninstalling, troubleshooting; and what was tested where. README has a
+  *Quick install* table per OS.
+- **Installers:** `scripts/install.sh` (Linux, macOS, ChromeOS, Pi) and `scripts/install.ps1` (Windows, no admin).
+  They download the release wheel and refuse it unless its SHA-256 matches the pinned checksum (or install from
+  source / a git ref), use a private virtualenv, add the `automoto` command, create `~/.automoto/.env` (mode 600),
+  can install LibreOffice / poppler / 7-Zip / PHP after asking (`--system-deps` / `-SystemDeps`), can start
+  AutoMoto at login (systemd user service, launchd agent, Task Scheduler without a window), and uninstall.
+- **compose.yaml:** hosted mode on any OS, or full single-user mode on Linux (host network); data in a named volume.
+  The Docker image now follows `AUTOMOTO_MODE` / `AUTOMOTO_HOST`.
+- AutoMoto reads `~/.automoto/.env` (or `$AUTOMOTO_DATA_DIR/.env`) and a `.env` in the current folder, so pip /
+  pipx installs need no repo folder; `automoto status` shows which files were read.
+- `automoto open --print` prints the one-time link (SSH, Docker, services); a missing browser no longer fails silently.
+- Clear "port already in use" message instead of a uvicorn traceback.
+- 7-Zip is found in `C:\Program Files\7-Zip` on Windows even when it isn't on PATH.
+
+### Fixed
+- A wrong ZipCrypto password that slips past the format's 1-byte check now says "wrong password" instead of
+  "damaged data" (this also made a CI test flaky about 1 run in 256).
+
+### Tests / CI
+- `tests/test_install.py` (.env discovery order, port message, `open --print`, 7-Zip path, installer checksum pin).
+- New CI **install** job on ubuntu, macos and windows runners: lints both installers (shellcheck, PowerShell parser,
+  PSScriptAnalyzer), installs the release wheel and the source, starts the server, signs in with the one-time link,
+  checks the port message, tries start-at-login, uninstalls. The **docker** job also tests single-user host-network
+  mode and Compose up/down/up with the data volume.
+
 ## Version 5.5.0 "Agent" - 28/10/2026
 **Let other people use AutoMoto: an opt-in hosted multi-user mode with a 1-hour daily limit you control, plus a release you can download.**
 

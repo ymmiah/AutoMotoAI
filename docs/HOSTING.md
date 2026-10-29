@@ -124,9 +124,12 @@ For a stable URL, add a domain to Cloudflare and create a named tunnel (`cloudfl
    git clone https://github.com/ymmiah/AutoMotoAI && cd AutoMotoAI && sudo docker build -t automoto .
    sudo docker run -d --restart unless-stopped --name automoto -p 127.0.0.1:8765:8765 -v automoto-data:/data \
      -e NVIDIA_API_KEY=… -e AUTOMOTO_ADMIN_USER=yasin -e AUTOMOTO_ADMIN_PASSWORD='…' \
-     -e AUTOMOTO_ALLOWED_HOSTS=your.domain automoto
+     -e AUTOMOTO_ALLOWED_HOSTS=your.domain -e AUTOMOTO_FORWARDED_ALLOW_IPS='*' automoto
    ```
-4. Put HTTPS in front: Caddy (`your.domain { reverse_proxy 127.0.0.1:8765 }`) or `cloudflared`.
+4. Put HTTPS in front: Caddy (`your.domain { reverse_proxy 127.0.0.1:8765 }`) or `cloudflared`. Because the port is
+   published on `127.0.0.1` only, the proxy is the only way in, so `AUTOMOTO_FORWARDED_ALLOW_IPS='*'` is safe and lets
+   the per-IP sign-in limits see real visitors (Docker shows every proxied request as coming from its bridge IP).
+   Step-by-step with Docker Compose, Oracle's firewall rules and a Caddyfile: [INSTALL.md § 7B](INSTALL.md#b-oracle-cloud-always-free-vm--caddy-free-always-on-https).
 5. Back up the `automoto-data` volume now and then (`accounts.db` and `users/`).
 
 ### Option C — Render free (demo only, data is wiped)

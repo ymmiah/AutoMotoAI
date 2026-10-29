@@ -34,6 +34,28 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 
 ---
 
+## ⚡ Quick install
+
+Python 3.10+ and a free AI key ([NVIDIA NIM](https://build.nvidia.com), [Gemini](https://aistudio.google.com/apikey),
+[Groq](https://console.groq.com/keys) or [OpenRouter](https://openrouter.ai/keys)). The installers check the release's
+SHA-256, install into a private virtualenv and create `~/.automoto/.env` for your key.
+**Step-by-step for every OS, Docker, hosting, updates and fixes: [docs/INSTALL.md](docs/INSTALL.md).**
+
+| OS | Install | Then |
+|---|---|---|
+| **Windows 10/11** (PowerShell) | `winget install -e --id Python.Python.3.12` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` | `notepad $env:USERPROFILE\.automoto\.env` → add key · `automoto serve` |
+| **macOS** (Intel / Apple Silicon) | `brew install python@3.12 git` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `./scripts/install.sh` | `open -e ~/.automoto/.env` → add key · `automoto serve` |
+| **Linux** (Ubuntu/Debian, Fedora, Arch…) | `sudo apt install python3 python3-venv git` (or dnf / pacman) · clone · `./scripts/install.sh` | `nano ~/.automoto/.env` → add key · `automoto serve` |
+| **Docker** (any OS) | clone · create `.env` with your key + admin name/password · `docker compose up -d --build` | open <http://127.0.0.1:8765> and sign in |
+| **Host for friends** (1 h/day limits) | Docker or `automoto serve --hosted` behind Cloudflare Tunnel / Caddy | [Admin guide](docs/INSTALL.md#7-host-it-for-other-people) |
+| **VS Code** | `code --install-extension automoto-ai-5.5.0.vsix` (from [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest)) | start `automoto serve` first |
+| **Phone / tablet** | use the web app from a hosted server in the phone's browser | [details](docs/INSTALL.md#8-other-platforms) |
+
+Optional extras: `--system-deps` (`-SystemDeps` on Windows) installs LibreOffice, poppler, 7-Zip and PHP;
+`--service` (`-AutoStart`) starts AutoMoto at login.
+
+---
+
 ## ✨ What it can do
 
 - **🖥 Feel like a real app.** A full chat app at `python -m automoto serve` (and inside the desktop shell): saved conversations, live tool-step cards, inline approvals, image attach, Memory / Routines / Skills / Tasks / Tools / Settings pages, dark and light themes, a command palette and a layout that works on a phone. [See the GUI](#-the-app).
@@ -365,6 +387,8 @@ hand you links. AutoMoto never adds to a basket, bids, books, pays or enters car
 
 ## 🚀 Quick start
 
+> New here? The [⚡ Quick install](#-quick-install) table and [docs/INSTALL.md](docs/INSTALL.md) are the easiest way. This section is the from-source route.
+
 **Download:** every release on [GitHub Releases](https://github.com/ymmiah/AutoMotoAI/releases) has the VS Code
 extension (`.vsix`) and the Python package (wheel + source). Install the package with
 `pip install automoto_ai-5.5.0-py3-none-any.whl` (add `"[office,data]"` extras from source for pandas, Parquet and 7z),
@@ -592,7 +616,7 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q          # 319 tests, no keys and no network needed
+python -m pytest -q          # 325 tests, no keys and no network needed
 cd apps/vscode && npm ci && npm test && xvfb-run -a npm run test:integration   # extension
 ```
 
@@ -622,7 +646,7 @@ automoto/
   web/           index.html + static/ (app.js, app.css, icons, vendored marked / DOMPurify / highlight.js)
   skills_bundled/ 42 bundled skills
 apps/vscode      VS Code extension · apps/desktop Tauri 2 shell · apps/mobile Flutter app · tests/ pytest
-Dockerfile · render.yaml · docs/HOSTING.md · docs/PUBLISHING.md
+Dockerfile · compose.yaml · render.yaml · scripts/install.sh + install.ps1 · docs/INSTALL.md · HOSTING.md · PUBLISHING.md
 ```
 
 ---
