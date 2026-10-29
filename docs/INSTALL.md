@@ -480,7 +480,7 @@ Still stuck? Run `automoto status` and open an issue at <https://github.com/ymmi
 |---|---|
 | `scripts/install.sh` (release wheel with checksum, `--from-source`, server start, one-time sign-in, port-in-use message, uninstall, `.env` mode 600) | CI on **ubuntu-latest** and **macos-latest**; by hand on Debian 13 (x86-64) |
 | `scripts/install.ps1` (release wheel under Windows PowerShell 5.1, `-FromSource` under PowerShell 7, PATH, server + sign-in, uninstall) | CI on **windows-latest**; PSScriptAnalyzer clean |
-| Start at login (`--service` / `-AutoStart`) | Tried in CI on all three; runners without a desktop session only register it (see the CI log). Unit file checked with `systemd-analyze verify` |
+| Start at login (`--service` / `-AutoStart`) | CI on all three: the systemd user service (ubuntu), launchd agent (macOS) and Task Scheduler task (Windows) each started the server, which answered on port 8765; then removed by `--uninstall`. Unit file also checked with `systemd-analyze verify` |
 | Docker image, hosted mode, single-user host-network mode, Compose up/down/up with the data volume | CI (ubuntu) and by hand on Debian 13 |
 | Hosted mode on a LAN address (phone scenario) | By hand on Debian 13: sign-in by IP works, other host names get 421 |
 | Python test suite | CI on Windows, macOS, Linux × Python 3.10 and 3.13 |
