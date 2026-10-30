@@ -752,14 +752,30 @@ PAGES.account = async () => {
       It resets ${esc(resetText(q.resets_at))}.${q.request_cap ? ` Request cap: ${q.requests}/${q.request_cap}.` : ""}${q.token_cap ? ` Token cap (estimated): ${q.tokens.toLocaleString()}/${q.token_cap.toLocaleString()}.` : ""}</p></div>
     <div class="card"><h3>${icon("folder")} Limits</h3><p class="muted small">Uploads up to ${esc(state.limits?.max_upload_mb)} MB · storage ${esc(state.limits?.storage_mb)} MB · ${esc(state.limits?.max_tasks)} runs at a time.
       On this shared server the agent can research the web and work on Office, archive and data files in your own workspace. It can't run shell commands or control a computer.</p></div>
+    <div class="card"><h3>${icon("monitor")} My devices</h3>
+      <p class="muted small">Apps (Windows, Mac, Linux, phone, VS Code) and browsers signed in to this account. They all see the same chats, files and usage time. Sign out any you don't recognise.</p>
+      <div class="tbl-wrap"><table class="tbl small" id="devList"></table></div></div>
     <div class="card"><h3>${icon("lock")} Change password</h3><form id="pwForm" class="stack">
       <input class="input" type="password" name="current" placeholder="Current password" autocomplete="current-password" required>
       <input class="input" type="password" name="new" placeholder="New password (10+ characters)" autocomplete="new-password" required>
       <div class="row"><button class="btn primary">Change password</button></div></form></div>`);
   const m = $("#usageMeter"); if (m) $("#acctMeter").innerHTML = m.innerHTML;
+  const loadDevices = async () => {
+    let d; try { d = await api("/api/devices"); } catch { return; }
+    const box = $("#devList"); if (!box) return;
+    box.innerHTML = `<thead><tr><th>Device</th><th>Signed in</th><th>Last used</th><th></th></tr></thead><tbody>${d.devices.map((x) => `<tr>
+      <td><b>${esc(x.name)}</b>${x.id === d.current ? ' <span class="pill on">this one</span>' : ""}<div class="muted small">${esc(x.kind === "app" ? `${x.platform || "app"} app` : "browser")}${x.last_ip ? ` · ${esc(x.last_ip)}` : ""}</div></td>
+      <td class="muted small">${esc(timeAgo(x.created))}</td><td class="muted small">${esc(timeAgo(x.last_seen))}</td>
+      <td>${x.id === d.current ? "" : `<button class="btn sm danger" data-dev="${esc(x.id)}" data-name="${esc(x.name)}">Sign out</button>`}</td></tr>`).join("") || '<tr><td colspan="4" class="muted">No other devices.</td></tr>'}</tbody>`;
+    $$("[data-dev]", box).forEach((b) => b.onclick = async () => {
+      if (!(await confirmDialog(`Sign out "${b.dataset.name}"? It will need the password again.`, { ok: "Sign out" }))) return;
+      try { await api(`/api/devices/${b.dataset.dev}`, undefined, "DELETE"); toast("Signed out"); loadDevices(); } catch (err) { toast(err.message, "bad"); }
+    });
+  };
+  loadDevices();
   $("#pwForm", root).onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
-    try { await api("/api/auth/password", { current: f.get("current"), new: f.get("new") }); toast("Password changed - other sessions were signed out"); setTimeout(() => location.reload(), 900); }
+    try { await api("/api/auth/password", { current: f.get("current"), new: f.get("new") }); toast("Password changed - other sessions and apps were signed out"); setTimeout(() => location.reload(), 900); }
     catch (err) { toast(err.message, "bad"); }
   };
 };
@@ -777,11 +793,20 @@ PAGES.admin = async () => {
         <label>Label<input class="input" name="label" placeholder="e.g. classmates"></label><label>Uses<input class="input" name="uses" type="number" min="1" max="1000" value="5"></label>
         <label>Valid for (days)<input class="input" name="days" type="number" min="1" max="365" value="7"></label><button class="btn primary">Create invite</button></form>
       <div id="admCode"></div><div id="admInvites" class="muted small"></div></div>
+    <div class="card"><h3>${icon("monitor")} Signed-in apps</h3><p class="muted small">Every app signed in to this server. Sign one out if a device is lost or someone shouldn't have it.</p>
+      <div class="tbl-wrap"><table class="tbl small" id="admDevices"></table></div></div>
     <div class="card"><h3>${icon("activity")} Usage log</h3><div class="tbl-wrap"><table class="tbl small" id="admUsage"></table></div></div>
     <div class="card"><h3>${icon("shield")} Audit log</h3><div class="tbl-wrap"><table class="tbl small" id="admAudit"></table></div></div>`);
   const ts = (t) => new Date(t * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
   const load = async () => {
-    const [u, inv, us, au] = await Promise.all([api("/api/admin/users"), api("/api/admin/invites"), api("/api/admin/usage?limit=40"), api("/api/admin/audit?limit=40")]);
+    const [u, inv, us, au, dv] = await Promise.all([api("/api/admin/users"), api("/api/admin/invites"), api("/api/admin/usage?limit=40"), api("/api/admin/audit?limit=40"), api("/api/admin/devices")]);
+    $("#admDevices").innerHTML = `<thead><tr><th>User</th><th>Device</th><th>Last used</th><th></th></tr></thead><tbody>${dv.devices.map((x) => `<tr><td>${esc(x.user)}</td>
+      <td><b>${esc(x.name)}</b><div class="muted small">${esc(x.platform || "app")}${x.last_ip ? ` · ${esc(x.last_ip)}` : ""} · since ${esc(ts(x.created))}</div></td><td class="muted small">${esc(timeAgo(x.last_seen))}</td>
+      <td><button class="btn sm danger" data-adev="${esc(x.id)}" data-name="${esc(x.user + " / " + x.name)}">Sign out</button></td></tr>`).join("") || '<tr><td colspan="4" class="muted">No apps signed in yet.</td></tr>'}</tbody>`;
+    $$("[data-adev]", root).forEach((b) => b.onclick = async () => {
+      if (!(await confirmDialog(`Sign out ${b.dataset.name}?`, { ok: "Sign out" }))) return;
+      try { await api(`/api/admin/devices/${b.dataset.adev}`, undefined, "DELETE"); toast("Device signed out"); load(); } catch (err) { toast(err.message, "bad"); }
+    });
     const st = u.settings;
     $("#admSet").innerHTML = `
       <label>Default minutes / period<input class="input" name="default_quota_minutes" type="number" min="0" step="1" value="${st.default_quota_minutes}"></label>
