@@ -1,7 +1,7 @@
 # Start here: pick your device
 
-> **⚠️ Beta.** This guide is for **AutoMoto AI 5.6.0 Beta 1**, a test version
-> ([download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1)). Things may still change or break.
+> **⚠️ Beta.** This guide is for **AutoMoto AI 5.6.0 Beta 2**, a test version
+> ([download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2)). Things may still change or break.
 > Want the stable version instead? Use **5.5.0** ([release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0))
 > and the [install guide](INSTALL.md). 5.5.0 has no Windows app.
 
@@ -35,12 +35,12 @@ You need Windows 10 or 11 (64-bit) and the internet.
 
 ### A1. Download the app
 
-1. Open the **[5.6.0 Beta 1 download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1)**.
+1. Open the **[5.6.0 Beta 2 download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2)**.
 2. Scroll down to **Assets**.
-3. Click **`AutoMoto-AI_5.6.0-beta.1_x64-setup.exe`** to download it. This is the one most people want. It installs just for you
+3. Click **`AutoMoto-AI_5.6.0-beta.2_x64-setup.exe`** to download it. This is the one most people want. It installs just for you
    and doesn't need an admin password.
 
-   *(The other installer, `AutoMoto-AI_5.6.0-beta.1_x64_en-US.msi`, is for school or work IT and needs admin rights.)*
+   *(The other installer, `AutoMoto-AI_5.6.0-beta.2_x64_en-US.msi`, is for school or work IT and needs admin rights.)*
 
    If **Edge** says the file *isn't commonly downloaded*, click **⋯ → Keep → Show more → Keep anyway**.
    New programs get this message until enough people have downloaded them.
@@ -49,7 +49,7 @@ You need Windows 10 or 11 (64-bit) and the internet.
    *PowerShell* → open it) and paste:
 
    ```powershell
-   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.1_x64-setup.exe").Hash
+   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.2_x64-setup.exe").Hash
    ```
 
    It should print `8DD3298AFF2F00D486B5C47FF12B1E764D40FDBD555BEBA2CC53A52EB6656DCA`
@@ -115,7 +115,7 @@ Wait until it says it's done, then **close PowerShell**.
 runs AutoMoto's official installer, which comes inside the app:
 
 * It finds Python. (If it can't, it tells you to do Step 1 and stops.)
-* It downloads the **5.6.0b1** engine from GitHub and checks its fingerprint (SHA-256) before installing it.
+* It downloads the **5.6.0b2** engine from GitHub and checks its fingerprint (SHA-256) before installing it.
 * It installs into `%LOCALAPPDATA%\automoto-ai`, without admin rights.
 * It may ask whether to install **optional tools** (LibreOffice, PDF tools, 7-Zip, PHP) with winget.
   Type **y** for yes or **n** for no. You can say no.
@@ -258,10 +258,10 @@ The desktop **app is only released for Windows** so far. On a Mac or Linux you h
    cd AutoMotoAI
    ```
 
-5. Install the **beta** engine (leave out `--version 5.6.0b1` to get stable 5.5.0):
+5. Install the **beta** engine (leave out `--version 5.6.0b2` to get stable 5.5.0):
 
    ```bash
-   ./scripts/install.sh --version 5.6.0b1
+   ./scripts/install.sh --version 5.6.0b2
    ```
 
 6. Add your free AI key (see [A5 Step 3](#a5-local-mode-no-account-just-this-pc) for getting one). Open the
@@ -297,12 +297,12 @@ sign in to a shared account server.
 
 1. Install AutoMoto on the computer first: Windows → [A5](#a5-local-mode-no-account-just-this-pc) Steps 1–3 (or
    [INSTALL.md](INSTALL.md#3-windows-1011)), Mac/Linux → [C](#c-mac-or-linux).
-2. Download **`automoto-ai-5.6.0-beta.1.vsix`** from the
-   [beta download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1) (Assets).
+2. Download **`automoto-ai-5.6.0-beta.2.vsix`** from the
+   [beta download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2) (Assets).
 3. Install it. In a terminal, in your **Downloads** folder:
 
    ```bash
-   code --install-extension automoto-ai-5.6.0-beta.1.vsix
+   code --install-extension automoto-ai-5.6.0-beta.2.vsix
    ```
 
    (Or in VS Code: **Extensions → ⋯ → Install from VSIX…** and pick the file.)
@@ -346,7 +346,7 @@ People can only sign in once someone runs an **AutoMoto account server** (hosted
 by step: **[HOSTING.md](HOSTING.md)** and [INSTALL.md § 7](INSTALL.md#7-host-it-for-other-people). Use HTTPS
 (Cloudflare Tunnel or Caddy), because the Windows app refuses `http://` servers that aren't on the same PC.
 
-> **Run 5.6.0b1 on the server.** The Windows app's sign-in uses features that are new in 5.6.0. A 5.5.0 server
+> **Run 5.6.0b2 on the server.** The Windows app's sign-in uses features that are new in 5.6.0. A 5.5.0 server
 > works in browsers but **not** in the app.
 
 **Make accounts** (on the server, where `AUTOMOTO_DATA_DIR` points to the server's data). Create a user (it asks
@@ -406,7 +406,7 @@ keep an empty box.
 | *"Use https:// - your password and device key must not travel unencrypted"* | The address starts with `http://`. Use the `https://` address from your admin (try it in a browser first). |
 | *"Network error …"* or *"the server answered …"* | Check the address and your internet. Open the address in a browser: you should see the AutoMoto sign-in page. |
 | *"wrong username or password"* | Check Caps Lock. Ask your admin to reset it (`automoto admin passwd <name>`). |
-| *"That address is not an AutoMoto account server (hosted mode is off, or it is older than 5.6)"* | Sign-in works in a browser but not in the app: the server needs 5.6.0b1. Ask the admin ([F](#f-for-admins-running-the-account-server)). |
+| *"That address is not an AutoMoto account server (hosted mode is off, or it is older than 5.6)"* | Sign-in works in a browser but not in the app: the server needs 5.6.0b2. Ask the admin ([F](#f-for-admins-running-the-account-server)). |
 | *"too many sign-in attempts - wait 15 minutes"* | Wait 15 minutes, then try again carefully. |
 | *"this device was signed out - sign in again"* | Someone signed this PC out in **My devices**, or the password changed. Sign in again. |
 | *The local engine is not installed yet* | Do [A5](#a5-local-mode-no-account-just-this-pc) Steps 1–2. |

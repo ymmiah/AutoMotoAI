@@ -444,6 +444,7 @@ function renderEvent(ctx, ev) {
     }
     case "max_steps": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("alert")} Step limit reached, summarising.`; steps.appendChild(n); break; }
     case "quota": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("clock")} ${esc(ev.text)}`; steps.appendChild(n); refreshMe(); break; }
+    case "nudge": { const n = document.createElement("div"); n.className = "note"; n.innerHTML = `${icon("refresh")} The AI's tool call was broken, asking it to retry properly.`; steps.appendChild(n); break; }
     case "cancelled": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("stop")} Stopped by you.`; steps.appendChild(n); break; }
     case "error": ctx.error = ev.error; break;
   }

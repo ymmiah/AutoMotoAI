@@ -6,8 +6,8 @@ hosted (multi-user) mode. Every command sits in its own box. On GitHub and on th
 top-right corner, then paste it into your terminal.
 
 > **Quickest start for your device** (Windows app, phone, Mac/Linux, VS Code): [Start here: pick your device](START.md).
-> This guide is the long version, page by page. 5.6.0 Beta 1 is a
-> [pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1); 5.5.0 is the stable version.
+> This guide is the long version, page by page. 5.6.0 Beta 2 is a
+> [pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2); 5.5.0 is the stable version.
 
 **Contents:** [0 The Windows app](#0-the-windows-app) · [1 Install](#1-install) · [2 Add a free AI key](#2-add-a-free-ai-key) · [3 Start AutoMoto](#3-start-automoto) ·
 [4 Open the app](#4-open-the-app-one-time-sign-in-link) · [5 The screen](#5-a-quick-tour-of-the-screen) ·
@@ -31,9 +31,9 @@ The **AutoMoto AI app for Windows** (new in 5.6.0, **Beta**) is a normal window 
 on a sign-in screen with two choices: **your AutoMoto account** (the same chats, files and usage time on every
 device) or **Local mode** (just this PC, no account).
 
-**Step 0.1** — download the installer from the [5.6.0 Beta 1 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1):
-`AutoMoto-AI_5.6.0-beta.1_x64-setup.exe` (recommended, installs just for you, no admin) or
-`AutoMoto-AI_5.6.0-beta.1_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
+**Step 0.1** — download the installer from the [5.6.0 Beta 2 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2):
+`AutoMoto-AI_5.6.0-beta.2_x64-setup.exe` (recommended, installs just for you, no admin) or
+`AutoMoto-AI_5.6.0-beta.2_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
 published yet.) It's a **beta**: please report problems at <https://github.com/ymmiah/AutoMotoAI/issues>.
 
 **Step 0.2** — run it. The app is **not code-signed yet**, so Windows SmartScreen shows *"Windows protected your PC"*.
@@ -41,7 +41,7 @@ Click **More info → Run anyway**. (Why, and how that will go away: [WINDOWS-DI
 You can check the download first against `SHA256SUMS.txt` on the release page:
 
 ```powershell
-(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.1_x64-setup.exe").Hash
+(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.2_x64-setup.exe").Hash
 ```
 
 **Step 0.3** — sign in. Type the **server address** your admin gave you (for example
@@ -219,7 +219,7 @@ automoto serve
 It prints something like this and opens your browser:
 
 ```text
-AutoMoto AI v5.6.0b1 "Agent" -> http://127.0.0.1:8765/
+AutoMoto AI v5.6.0b2 "Agent" -> http://127.0.0.1:8765/
 Open (one-time link): http://127.0.0.1:8765/?launch=…
 Workspace: ~/.automoto/workspace  ·  sandbox: local  ·  approvals: ask  ·  routines: on
 ```
@@ -797,7 +797,7 @@ More fixes: [INSTALL.md → Troubleshooting](INSTALL.md#11-troubleshooting). Sti
 
 ---
 
-<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. Section 0: the 5.6.0 Beta 1
+<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. Section 0: the 5.6.0 Beta 2
 app built from this repository on Linux (the Windows build looks the same; CI saves a Windows screenshot of every build). The example AI
 replies in the chat screenshots came from a scripted stand-in model so they stay the same every time; with a real
 key the wording will differ.</sub>

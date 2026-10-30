@@ -1,5 +1,53 @@
 # AutoMoto AI - Version History & Changelog
 
+## 5.6.0-beta.2 "Agent" — Beta — 30 October 2026
+**Fixes for the first beta testers: AI errors and broken tool calls.** Still a pre-release (`v5.6.0-beta.2`, Python
+`5.6.0b2`); 5.5.0 stays the latest stable release. The Windows app offers this update to beta 1 automatically.
+
+### Fixed — "nim: NotFoundError: Error code: 404" / "All AI providers failed"
+- **Cause:** a NIM key may only call some of NVIDIA's models. When the default model
+  (`meta/llama-3.2-11b-vision-instruct`, agent `nvidia/nemotron-3.5-super-vl-120b-a12b`) returned 404 for a key,
+  AutoMoto gave up on NIM, and with no other key every request failed.
+- **Per-provider model fallback.** Each provider now has ordered backup models per role (chat, deep reasoning,
+  vision, review, agent). A 404/410 or "model/function not found" tries the next model of the same provider
+  before the next provider, and that model is skipped for 1 hour. Your own `NIM_MODEL` / `NIM_AGENT_MODEL` /
+  `NIM_VISION_MODEL` / `NIM_REVIEW_MODEL` (and the Gemini, Groq, OpenRouter equivalents) are still tried first.
+  NIM backups come from NVIDIA's public model list (e.g. `openai/gpt-oss-20b`, `deepseek-ai/deepseek-v4.1-flash`,
+  `mistralai/mistral-large-2-instruct`, `nvidia/nemotron-3-super-120b-a12b`, vision `meta/llama-3.2-90b-vision-instruct`,
+  `microsoft/phi-3-vision-128k-instruct`); Gemini backs up to `gemini-3.8-flash`, `gemini-3.6-flash`,
+  `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`.
+- **Retries with backoff for busy providers.** 503/502/500/504/429 and timeouts are retried on the same model
+  twice (exponential backoff with jitter, honouring `Retry-After`; at most 20 s of waiting per request), then the
+  provider's next model (e.g. another Gemini model on a persistent 503), then the next provider. A 429 goes to the
+  next provider. Tune with `AUTOMOTO_RETRIES` and `AUTOMOTO_RETRY_BUDGET_S`.
+- **Clear errors** in the chat, agent and CLI: which model failed and what to do. *403 = key rejected or expired,
+  get a new key at build.nvidia.com*; *404 = model not available to this key, tried X, Y, Z*; *503 = provider busy,
+  retried 2 times*; plus a tip to add a free Gemini or Groq key as a backup.
+- **`automoto doctor`** and **Settings → Test keys**: a 1-token request to every model AutoMoto may use with your
+  keys, a table of which answer, and the exact `NIM_MODEL=…` lines to set. Local mode only.
+
+### Fixed — the agent stopped with a half-written tool call as its answer
+- Seen as: *"…Let me try again to read the file…office_readpathuploads/Viva.pptx"*. Two causes: (1) Gemini 3 needs
+  its "thought signature" sent back with each tool call, otherwise the next request is rejected and the run fell
+  back to text mode; (2) the loop treated any reply without a proper tool call as the final answer.
+- Gemini thought signatures are now kept and sent back (a documented placeholder is used for calls made by
+  another provider after a failover). Other providers never get the extra field.
+- **Lenient tool-call parsing** when unambiguous: `tool(path="x")`, `tool({...})`, `<invoke name="tool">…`,
+  `<function=tool>{…}</function>`, `<tool><path>x</path></tool>`, JSON with `parameters`/`args`/`function`, and
+  glued text like `office_readpathuploads/x.pptx`. A call missing a required argument is never guessed.
+- **Corrective nudges:** a broken call, or a promise like *"Let me try again"* without a call, gets "Your tool call
+  was NOT executed…" with the correct format for that tool, up to 3 times. A raw call is never shown as the
+  answer; if the model keeps failing, you get a plain message instead.
+- **Argument repair** before the safety check: `file`/`file_path`/`filename` → `path`, number strings, and path slips
+  (`/uploads/x`, `uploads\x` on Linux, a bare file name that is in `uploads/`), never widening access.
+- **Better tool errors for the model:** what was missing, what it sent, and a correct example call
+  (`{"name": "office_read", "arguments": {"path": "uploads/file.pptx"}}`); unknown tools get "Did you mean…".
+
+### Also in this beta
+- The hosted sign-in page no longer shows the "Invite code" field when it should be hidden (a CSS rule overrode `hidden`).
+- Docs: troubleshooting rows for 403 / 404 / 503 in [START.md](docs/START.md#g-help-its-not-working) and
+  [INSTALL.md § 11](docs/INSTALL.md#11-troubleshooting).
+
 ## 5.6.0-beta.1 "Agent" — Beta — 30 October 2026
 **One account everywhere, and the Windows app. This whole release is a beta** (GitHub pre-release
 `v5.6.0-beta.1`; 5.5.0 stays the latest stable release).

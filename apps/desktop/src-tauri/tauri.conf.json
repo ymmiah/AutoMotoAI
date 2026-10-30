@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AutoMoto AI",
   "mainBinaryName": "AutoMoto AI",
-  "version": "5.6.0-beta.1",
+  "version": "5.6.0-beta.2",
   "identifier": "com.ymmiah.automoto",
   "build": {
     "frontendDist": "../dist"

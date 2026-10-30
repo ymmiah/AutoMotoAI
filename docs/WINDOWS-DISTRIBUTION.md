@@ -1,7 +1,7 @@
 # Shipping the Windows app: SmartScreen, signing, winget and the Microsoft Store
 
-Status for **5.6.0 Beta 1** (checked 30 October 2026): the app is a **beta**, published **free as a GitHub
-pre-release** (`v5.6.0-beta.1`; 5.5.0 stays the latest stable release), as an NSIS
+Status for **5.6.0 Beta 2** (checked 30 October 2026): the app is a **beta**, published **free as a GitHub
+pre-release** (`v5.6.0-beta.2`; 5.5.0 stays the latest stable release), as an NSIS
 `.exe` and an `.msi`, **not code-signed**. Updates are signed with the Tauri updater key, so the app only installs
 updates that came from this repository's release workflow. A winget manifest is ready in `packaging/winget/` but
 **has not been submitted**. Nothing has been signed up for.
@@ -63,7 +63,7 @@ or **(b)** an MSIX build for the Store only. Both need Yasin to create the accou
 
 ## winget (Windows Package Manager)
 
-Manifests for the beta are in [`packaging/winget/manifests/y/ymmiah/AutoMotoAI/Beta/5.6.0-beta.1/`](https://github.com/ymmiah/AutoMotoAI/tree/main/packaging/winget/manifests/y/ymmiah/AutoMotoAI/Beta/5.6.0-beta.1)
+Manifests for the beta are in [`packaging/winget/manifests/y/ymmiah/AutoMotoAI/Beta/5.6.0-beta.2/`](https://github.com/ymmiah/AutoMotoAI/tree/main/packaging/winget/manifests/y/ymmiah/AutoMotoAI/Beta/5.6.0-beta.2)
 as the package **`ymmiah.AutoMotoAI.Beta`** (winget-pkgs keeps pre-releases under their own identifier, so the stable
 `ymmiah.AutoMotoAI` can come later) (schema 1.12, NSIS per-user installer, URL and SHA-256 of the release file). A submission is a pull request to
 `microsoft/winget-pkgs`; an automated process validates the manifest, checks the package against the winget
@@ -74,9 +74,9 @@ To submit (Yasin, when ready — this has **not** been done):
 
 ```powershell
 winget install wingetcreate
-winget validate --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.1
-winget install --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.1   # test install locally
-wingetcreate submit packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.1           # opens a PR on microsoft/winget-pkgs
+winget validate --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.2
+winget install --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.2   # test install locally
+wingetcreate submit packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.2           # opens a PR on microsoft/winget-pkgs
 ```
 
 For later versions: `wingetcreate update ymmiah.AutoMotoAI.Beta --version <new> --urls <setup.exe URL> --submit`.

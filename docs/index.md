@@ -4,8 +4,8 @@ AutoMoto AI is a free AI agent that runs on your own computer: it researches the
 PowerPoint, PDF, CSV and ZIP files in a sandbox, remembers what matters and asks before every risky step.
 Every command on this site has a **copy button** in the top-right corner of its box.
 
-> **New: 5.6.0 Beta 1** with the **Windows app** and **one account on every device**
-> ([download](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1)). It's a beta; 5.5.0 stays the stable version.
+> **New: 5.6.0 Beta 2** with the **Windows app** and **one account on every device**
+> ([download](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2)). It's a beta; 5.5.0 stays the stable version.
 
 **👉 [Start here: pick your device](START.md)** has easy steps for a Windows PC, an Android phone or iPhone, a Mac,
 Linux or VS Code.

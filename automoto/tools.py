@@ -374,13 +374,101 @@ def text_manifest(tools: dict[str, Tool]) -> str:
     return "\n".join(lines)
 
 
+# Argument names models often use instead of ours (only applied when unambiguous).
+ARG_ALIASES = {
+    "path": ("file", "file_path", "filepath", "filename", "file_name", "path_to_file", "document", "doc",
+             "input", "input_path", "src", "source", "fname", "pathname"),
+    "url": ("link", "href", "uri", "address"),
+    "query": ("q", "search", "search_query", "term", "text"),
+    "command": ("cmd", "shell", "script"),
+}
+PATH_ARGS = ("path", "out", "dest", "to_path", "folder")
+
+
+def _fix_path(raw: Any) -> Any:
+    """Common model slips with paths, mapped back into the workspace (never widens access):
+    ``/uploads/x`` (leading slash), ``uploads\\x`` (Windows slashes on Linux) and a bare file
+    name that only exists in ``uploads/``."""
+    if not isinstance(raw, str) or not raw.strip():
+        return raw
+    p = raw.strip().strip("`'\"")
+    try:
+        base = sandbox.root().resolve()
+    except Exception:
+        return raw
+    if "\\" in p and "/" not in p and not Path(p).exists():
+        p = p.replace("\\", "/")
+    pp = Path(p)
+    if pp.is_absolute() and not pp.parent.exists():
+        rel = p.lstrip("/\\")
+        for prefix in ("workspace/", "sandbox/", "home/workspace/"):
+            if rel.startswith(prefix) and (base / rel[len(prefix):]).parent.exists():
+                rel = rel[len(prefix):]
+                break
+        if rel and (base / rel).parent.exists():
+            return rel
+    if not pp.is_absolute() and not (base / p).exists() and "/" not in p and (base / "uploads" / p).is_file():
+        return f"uploads/{p}"
+    return p
+
+
+def repair_args(tool: Tool, args: Any) -> dict[str, Any]:
+    """Make a model's arguments usable: JSON strings, alias names, number strings, path slips."""
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except json.JSONDecodeError:
+            args = {}
+    if not isinstance(args, dict):
+        return {}
+    props = tool.parameters.get("properties", {})
+    req = tool.parameters.get("required", [])
+    out = dict(args)
+    for want, aliases in ARG_ALIASES.items():
+        if want in props and want not in out:
+            found = [a for a in aliases if a in out and a not in props]
+            if len(found) == 1:
+                out[want] = out.pop(found[0])
+    # one required argument and exactly one unknown argument: that must be it
+    unknown = [k for k in out if k not in props]
+    missing = [k for k in req if k not in out]
+    if len(missing) == 1 and len(unknown) == 1 and isinstance(out[unknown[0]], str):
+        out[missing[0]] = out.pop(unknown[0])
+    for k, v in list(out.items()):
+        typ = props.get(k, {}).get("type")
+        if typ == "integer" and isinstance(v, str) and v.strip().lstrip("-").isdigit():
+            out[k] = int(v.strip())
+        elif typ == "boolean" and isinstance(v, str) and v.strip().lower() in ("true", "false"):
+            out[k] = v.strip().lower() == "true"
+        elif k in PATH_ARGS and typ in (None, "string"):
+            out[k] = _fix_path(v)
+    return out
+
+
+def usage(tool: Tool) -> str:
+    """A correct-call example for error messages, so the model can fix its own call."""
+    props = tool.parameters.get("properties", {})
+    req = list(tool.parameters.get("required", []))
+    example: dict[str, Any] = {}
+    for k in req:
+        t = props.get(k, {}).get("type")
+        example[k] = ("uploads/file.pptx" if k == "path" else 1 if t == "integer" else {} if t == "object"
+                      else [] if t == "array" else True if t == "boolean" else f"<{k}>")
+    opt = [k for k in props if k not in req]
+    return (f'Correct call: {json.dumps({"name": tool.name, "arguments": example})} - required: '
+            f"{', '.join(req) or 'none'}" + (f"; optional: {', '.join(opt)}" if opt else "") +
+            ". File paths are relative to the workspace, e.g. uploads/<file name> for uploaded files.")
+
+
 def call(tool: Tool, ctx: ToolContext, args: dict[str, Any]) -> tuple[bool, str]:
     """Run a tool; never raises. Returns (ok, output)."""
     props = tool.parameters.get("properties", {})
+    args = repair_args(tool, args)
     clean = {k: v for k, v in (args or {}).items() if k in props}
     missing = [k for k in tool.parameters.get("required", []) if k not in clean]
     if missing:
-        return False, f"missing argument(s): {', '.join(missing)}"
+        got = ", ".join(sorted(args)) or "none"
+        return False, f"missing argument(s): {', '.join(missing)} (you sent: {got})"
     try:
         out = tool.fn(ctx, **clean)
         return True, out if isinstance(out, str) else json.dumps(out, default=str)[:20000]

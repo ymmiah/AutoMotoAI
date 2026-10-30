@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from automoto import config, policy, router
+from automoto import toolcalls as tc
 from automoto import skills as skills_mod
 from automoto import tools as tools_mod
 from automoto.memory import Memory
@@ -65,9 +66,23 @@ def fence_untrusted(name: str, text: str) -> str:
 _ANNOUNCE = re.compile(
     r"(?:\b(?:now|next|then|first)\b[^.!?\n]{0,40}\b(?:i'll|i will|i'm going to|let me|let's)\b"
     r"|^\s*(?:i'll|i will|let me|let's)\b[^.!?\n]{0,80}\b(?:now|next)\b"
-    r"|\b(?:i'll|i will|let me)\s+(?:now\s+)?(?:create|build|write|generate|run|call|export|convert|make|save|fix|check|render|update|add)\b[^\n]{0,160}$"
+    r"|\b(?:i'll|i will|let me)\s+(?:now\s+)?(?:create|build|write|generate|run|call|export|convert|make|save|fix|check|render|update|add|try|retry|read|open|look|summari[sz]e|use|extract|analy[sz]e|fetch|search|list)\b[^\n]{0,160}$"
     r"|:\s*\Z)",  # ends with a colon (not "Results:" followed by a list)
     re.I | re.M)
+MAX_FORMAT_FIXES = 3  # corrective nudges for broken/promised tool calls per run
+
+
+def format_nudge(why: str, mode: str, tool: Any = None) -> str:
+    """Tell the model its tool call didn't run and how to make a proper one."""
+    from automoto import tools as _t
+
+    example = _t.usage(tool) if tool is not None else ""
+    how = ("Use the tool-calling interface (a real function call), not text." if mode == "native" else
+           "Reply with ONLY a fenced block:\n```tool\n{\"name\": \"<tool>\", \"arguments\": {...}}\n```")
+    return (f"Your tool call was NOT executed: your last message contained {why}, so nothing ran. "
+            f"{how} {example} If you don't need a tool, give the final answer and don't mention tools.").strip()
+
+
 CONTINUE_NUDGE = ("Continue: make that tool call now (don't describe it). "
                   "If the task is complete, reply with the final answer instead.")
 
@@ -170,6 +185,8 @@ class Agent:
         last = ("", "")
         dead: set[str] = set()  # providers whose key was rejected during this run
         nudges = 0
+        fixes = 0
+        specs = tc.specs_from_schemas(schemas)
         for step in range(1, max_steps + 1):
             if cancel is not None and cancel.is_set():
                 emit({"type": "cancelled", "step": step})
@@ -198,6 +215,22 @@ class Agent:
             dead |= {t["provider"] for t in failed if t.get("status") in (401, 403)}
             emit({"type": "model", "step": step, "provider": turn.provider, "model": turn.model, "mode": turn.mode,
                   "switched": [f"{t['provider']}/{t['model']}: {t.get('error', '')[:80]}" for t in failed]})
+            if not turn.tool_calls:
+                clean, loose = tc.parse_loose_calls(turn.text, specs)
+                if loose:  # a malformed but unambiguous text tool call: run it
+                    emit({"type": "repaired", "step": step, "names": [c["name"] for c in loose]})
+                    turn.text, turn.tool_calls = clean, loose
+            broken = tc.looks_like_failed_call(turn.text, known) if not turn.tool_calls else ""
+            if broken and fixes < MAX_FORMAT_FIXES and step < max_steps:
+                fixes += 1
+                named = next((self.tools[n] for n in sorted(known, key=len, reverse=True) if n in turn.text), None)
+                shown = tc.strip_failed_call(turn.text, known)
+                if shown:
+                    emit({"type": "say", "step": step, "text": shown})
+                emit({"type": "nudge", "step": step, "reason": broken})
+                history.append({"role": "assistant", "content": shown or "(tried to call a tool)"})
+                history.append({"role": "user", "content": format_nudge(broken, turn.mode, named)})
+                continue
             if not turn.tool_calls and nudges < 2 and step < max_steps and _announces_action(turn.text):
                 # Some models describe the next tool call ("Now I'll build the document…") and stop.
                 # Ask them to actually make the call instead of ending the task half-way.
@@ -208,6 +241,11 @@ class Agent:
                 history.append({"role": "user", "content": CONTINUE_NUDGE})
                 continue
             if not turn.tool_calls:
+                if broken:  # out of retries: never show a raw, half-written tool call as the answer
+                    shown = tc.strip_failed_call(turn.text, known)
+                    note = ("I couldn't finish this: the AI kept writing its tool call in a broken format, so the "
+                            "tool never ran. Please try again (or pick another AI in the model menu).")
+                    turn.text = f"{shown}\n\n{note}" if shown and not tc._PROMISE_RE.search(shown) else note
                 emit({"type": "final", "step": step, "text": turn.text})
                 self._journal(goal_text, turn.text, step)
                 return AgentResult(turn.text, step, *last, events=events, history=history + [
@@ -236,9 +274,15 @@ class Agent:
         base = {"role": "tool", "tool_call_id": call.get("id") or "call", "name": name}
         tool = self.tools.get(name)
         if not tool:
+            import difflib
+
+            close = difflib.get_close_matches(str(name), list(self.tools), n=3, cutoff=0.5)
             emit({"type": "tool_result", "step": step, "id": base["tool_call_id"], "name": name, "ok": False,
                   "output": f"unknown tool '{name}'"})
-            return {**base, "content": f"ERROR: unknown tool '{name}'. Available: {', '.join(self.tools)}"}
+            hint = f" Did you mean: {', '.join(close)}?" if close else ""
+            return {**base, "content": f"ERROR: unknown tool '{name}'.{hint} Available: {', '.join(self.tools)}"}
+        args = tools_mod.repair_args(tool, args)  # alias names, "/uploads/x" slips etc. - before the policy sees it
+        call["arguments"] = args
         decision = policy.decide(name, tool.level, args, tainted=self.tainted)
         shown = mask_args(args)
         emit({"type": "tool_call", "step": step, "id": base["tool_call_id"], "name": name, "args": shown,
@@ -275,7 +319,7 @@ class Agent:
         if ok and (name in TAINTING_TOOLS or tool.group.startswith(UNTRUSTED_GROUPS) or decision.level == "risky"
                    and name in ("read_file", "search_files", "list_dir")):
             self.tainted = True
-        content = out if ok else f"ERROR: {out}"
+        content = out if ok else f"ERROR: {out}\n{tools_mod.usage(tool)} Fix the call and try again, or explain the problem."
         if is_untrusted(tool):
             content = fence_untrusted(name, content)
         return {**base, "content": content}

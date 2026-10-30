@@ -545,7 +545,7 @@ def _openai_turn(spec: ProviderSpec, messages, model, key, *, tools, native, tem
                     default_headers=spec.extra_headers or None)
     kwargs: dict[str, Any] = {"model": model, "temperature": temperature, "max_tokens": max_tokens}
     if native and tools:
-        kwargs["messages"] = tc.render_openai(messages)
+        kwargs["messages"] = tc.render_openai(messages, provider=spec.id)
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
     else:
@@ -554,7 +554,10 @@ def _openai_turn(spec: ProviderSpec, messages, model, key, *, tools, native, tem
     choice = resp.choices[0] if resp.choices else None
     if not choice or not choice.message:
         raise ProviderError(spec.id, "empty response")
-    return tc.parse_openai_message(choice.message)
+    text, calls = tc.parse_openai_message(choice.message)
+    for c in calls:
+        c["provider"] = spec.id  # a provider-specific "extra" (Gemini signature) is only replayed to it
+    return text, calls
 
 
 def _anthropic_turn(spec: ProviderSpec, messages, model, key, *, tools, native, temperature, max_tokens, timeout):
