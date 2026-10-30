@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL,
   target TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+  platform TEXT NOT NULL DEFAULT '', created REAL NOT NULL, last_seen REAL NOT NULL, last_ip TEXT NOT NULL DEFAULT '',
+  expires REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS devices_user ON devices(user_id);
 """
 
 
@@ -82,6 +87,7 @@ def _db() -> Iterator[sqlite3.Connection]:
         con.execute("PRAGMA journal_mode=WAL")
         con.execute("PRAGMA foreign_keys=ON")
         con.executescript(SCHEMA)
+        _migrate(con, str(p))
         yield con
     finally:
         con.close()
@@ -89,6 +95,19 @@ def _db() -> Iterator[sqlite3.Connection]:
         p.chmod(0o600)
     except OSError:  # pragma: no cover
         pass
+
+
+_MIGRATED: set[str] = set()
+
+
+def _migrate(con: sqlite3.Connection, key: str) -> None:
+    """Add columns that newer versions need to a database made by an older one (once per process)."""
+    if key in _MIGRATED:
+        return
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(sessions)")}
+    if "device_id" not in cols:  # v5.6: browser sessions opened by a signed-in app belong to that device
+        con.execute("ALTER TABLE sessions ADD COLUMN device_id TEXT")
+    _MIGRATED.add(key)
 
 
 # -- settings (admin-editable, env gives the first default) ------------------------------------
@@ -323,6 +342,7 @@ def set_password(uid: str, password: str, actor: str) -> None:
     with _db() as con:
         con.execute("UPDATE users SET pw=?, failed=0, locked_until=0 WHERE id=?", (hash_password(password), uid))
         con.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+        con.execute("DELETE FROM devices WHERE user_id=?", (uid,))  # a new password signs every app out too
     audit(actor, "set_password", u.username)
 
 
@@ -333,7 +353,7 @@ def delete_user(uid: str, actor: str) -> User:
     if u.is_admin and admin_count() <= 1:
         raise AccountError("you can't delete the last admin")
     with _db() as con:
-        for t in ("sessions", "usage", "bonuses"):
+        for t in ("sessions", "devices", "usage", "bonuses"):
             con.execute(f"DELETE FROM {t} WHERE user_id=?", (uid,))  # nosec B608 - fixed table names
         con.execute("DELETE FROM users WHERE id=?", (uid,))
     import shutil
@@ -391,14 +411,17 @@ def authenticate(username: str, password: str) -> User:
     return _user(row)  # type: ignore[return-value]
 
 
-def new_session(user: User, ip: str = "") -> tuple[str, str]:
-    """Returns (session token, csrf token). Only the token's hash is stored."""
+def new_session(user: User, ip: str = "", device_id: str | None = None) -> tuple[str, str]:
+    """Returns (session token, csrf token). Only the token's hash is stored.
+    ``device_id``: the signed-in app that opened this window; revoking the device ends the session too."""
     tok, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(24)
     now = time.time()
     with _db() as con:
         con.execute("DELETE FROM sessions WHERE expires < ?", (now,))
-        con.execute("INSERT INTO sessions(token, user_id, csrf, created, expires, ip) VALUES(?,?,?,?,?,?)",
-                    (_h(tok), user.id, csrf, now, now + session_days() * 86400, ip[:64]))
+        if device_id:  # one window session per app: the previous one ends when the app opens a new one
+            con.execute("DELETE FROM sessions WHERE device_id=?", (device_id,))
+        con.execute("INSERT INTO sessions(token, user_id, csrf, created, expires, ip, device_id) VALUES(?,?,?,?,?,?,?)",
+                    (_h(tok), user.id, csrf, now, now + session_days() * 86400, ip[:64], device_id))
     return tok, csrf
 
 
@@ -417,6 +440,141 @@ def session_user(token: str) -> tuple[User, str] | None:
 def end_session(token: str) -> None:
     with _db() as con:
         con.execute("DELETE FROM sessions WHERE token=?", (_h(token),))
+
+
+def session_id(token: str) -> str:
+    """A public id for a session (a prefix of its stored hash), for the "My devices" list."""
+    return _h(token)[:16] if token else ""
+
+
+def list_sessions(uid: str) -> list[dict[str, Any]]:
+    """Browser sign-ins (not opened by an app) that are still valid."""
+    with _db() as con:
+        return [{"id": r["token"][:16], "kind": "browser", "name": "Web browser", "platform": "web",
+                 "created": r["created"], "last_seen": r["created"], "last_ip": r["ip"], "expires": r["expires"]}
+                for r in con.execute("SELECT * FROM sessions WHERE user_id=? AND device_id IS NULL AND expires > ? "
+                                     "ORDER BY created DESC", (uid, time.time()))]
+
+
+def end_session_by_id(uid: str, sid: str) -> bool:
+    if not re.fullmatch(r"[0-9a-f]{16}", sid or ""):
+        return False
+    with _db() as con:
+        n = con.execute("DELETE FROM sessions WHERE user_id=? AND substr(token, 1, 16)=?", (uid, sid)).rowcount
+    return bool(n)
+
+
+# -- devices: apps (Windows/macOS/Linux/phone/VS Code) signed in to this account ---------------------
+# An app signs in once with the username and password and gets a long random device token. Only its
+# SHA-256 is stored. The app keeps it in the OS credential store and uses it (Authorization: Bearer) to
+# call the API or to open a normal browser session in its window. Every device can be revoked on its own
+# (My devices / Admin) and all of them go when the password changes, the user is deleted or suspended.
+DEVICE_PREFIX = "amd_"
+MAX_DEVICES = 20
+_LAUNCH_CODES: dict[str, tuple[str, str, float]] = {}  # hash(code) -> (device id, user id, expiry)
+_LAUNCH_LOCK = threading.Lock()
+
+
+def device_days() -> float:
+    return max(1.0, _env_float("AUTOMOTO_DEVICE_DAYS", 90))
+
+
+def _clean(text: str, n: int) -> str:
+    return re.sub(r"[^\w .,'()+@#/-]", "", (text or "").replace("\n", " "))[:n].strip()
+
+
+def new_device(user: User, name: str, platform: str = "", ip: str = "") -> tuple[str, dict[str, Any]]:
+    """Returns (device token - shown once, device info)."""
+    tok = DEVICE_PREFIX + secrets.token_urlsafe(32)
+    did = secrets.token_hex(8)
+    now = time.time()
+    name = _clean(name, 60) or "App"
+    platform = _clean(platform, 30).lower()
+    with _db() as con:
+        con.execute("DELETE FROM devices WHERE expires < ?", (now,))
+        rows = con.execute("SELECT id FROM devices WHERE user_id=? ORDER BY last_seen DESC", (user.id,)).fetchall()
+        for r in rows[MAX_DEVICES - 1:]:  # keep the newest; the oldest sign-ins drop off
+            con.execute("DELETE FROM sessions WHERE device_id=?", (r["id"],))
+            con.execute("DELETE FROM devices WHERE id=?", (r["id"],))
+        con.execute("INSERT INTO devices(id, user_id, token, name, platform, created, last_seen, last_ip, expires) "
+                    "VALUES(?,?,?,?,?,?,?,?,?)", (did, user.id, _h(tok), name, platform, now, now, ip[:64],
+                                                   now + device_days() * 86400))
+    audit(user.username, "device_sign_in", name, platform)
+    return tok, {"id": did, "name": name, "platform": platform, "created": now}
+
+
+def device_user(token: str, ip: str = "") -> tuple[User, dict[str, Any]] | None:
+    """(user, device) for a live device token of an active user, else None. Use extends the expiry."""
+    if not token or not token.startswith(DEVICE_PREFIX) or len(token) > 200:
+        return None
+    now = time.time()
+    with _db() as con:
+        row = con.execute("SELECT d.id AS d_id, d.name AS d_name, d.platform AS d_platform, d.expires AS d_expires, "
+                          "d.last_seen AS d_seen, u.* FROM devices d JOIN users u ON u.id = d.user_id WHERE d.token=?",
+                          (_h(token),)).fetchone()
+        if not row or row["d_expires"] < now or row["status"] != "active":
+            return None
+        if now - row["d_seen"] > 300:  # sliding expiry, written at most every 5 minutes
+            con.execute("UPDATE devices SET last_seen=?, last_ip=?, expires=? WHERE id=?",
+                        (now, ip[:64], now + device_days() * 86400, row["d_id"]))
+    return _user(row), {"id": row["d_id"], "name": row["d_name"], "platform": row["d_platform"]}  # type: ignore[return-value]
+
+
+def list_devices(uid: str | None = None) -> list[dict[str, Any]]:
+    q = ("SELECT d.*, u.username FROM devices d JOIN users u ON u.id = d.user_id "
+         "WHERE d.expires > ? AND (? IS NULL OR d.user_id = ?) ORDER BY d.last_seen DESC")
+    args = (time.time(), uid, uid)
+    with _db() as con:
+        return [{"id": r["id"], "kind": "app", "user": r["username"], "name": r["name"], "platform": r["platform"],
+                 "created": r["created"], "last_seen": r["last_seen"], "last_ip": r["last_ip"], "expires": r["expires"]}
+                for r in con.execute(q, args)]
+
+
+def revoke_device(device_id: str, actor: str, uid: str | None = None) -> bool:
+    """Sign a device out (its token and the window session it opened). ``uid`` limits it to that user's devices."""
+    if not re.fullmatch(r"[0-9a-f]{16}", device_id or ""):
+        return False
+    with _db() as con:
+        row = con.execute("SELECT d.name, u.username FROM devices d JOIN users u ON u.id = d.user_id "
+                          "WHERE d.id=? AND (? IS NULL OR d.user_id = ?)", (device_id, uid, uid)).fetchone()
+        if not row:
+            return False
+        con.execute("DELETE FROM sessions WHERE device_id=?", (device_id,))
+        con.execute("DELETE FROM devices WHERE id=?", (device_id,))
+    with _LAUNCH_LOCK:
+        for k in [k for k, v in _LAUNCH_CODES.items() if v[0] == device_id]:
+            _LAUNCH_CODES.pop(k, None)
+    audit(actor, "revoke_device", row["username"], row["name"])
+    return True
+
+
+def device_launch_code(device_id: str, uid: str, ttl: float = 60) -> str:
+    """A one-time code (60 s) the app puts in its window URL to open a normal browser session."""
+    code = secrets.token_urlsafe(32)
+    now = time.time()
+    with _LAUNCH_LOCK:
+        for k in [k for k, v in _LAUNCH_CODES.items() if v[2] < now]:
+            _LAUNCH_CODES.pop(k, None)
+        _LAUNCH_CODES[_h(code)] = (device_id, uid, now + ttl)
+    return code
+
+
+def use_device_launch_code(code: str) -> tuple[User, str] | None:
+    """(user, device id) for a fresh, unused code whose device is still signed in."""
+    if not code or len(code) > 100:
+        return None
+    with _LAUNCH_LOCK:
+        got = _LAUNCH_CODES.pop(_h(code), None)
+    if not got or got[2] < time.time():
+        return None
+    did, uid, _ = got
+    with _db() as con:
+        alive = con.execute("SELECT 1 FROM devices WHERE id=? AND user_id=? AND expires > ?",
+                            (did, uid, time.time())).fetchone()
+    u = get_user(uid)
+    if not alive or not u or u.status != "active":
+        return None
+    return u, did
 
 
 # -- invites -------------------------------------------------------------------------------------

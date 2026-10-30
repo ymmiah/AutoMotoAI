@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -202,8 +202,11 @@ def _rate_limited(client: str, path: str) -> bool:
 @app.middleware("http")
 async def guard(request: Request, call_next):
     tenancy.set_current(None)  # never inherit a tenant; _authorise sets it per request
+    origin = request.headers.get("origin")
+    # hosted mode: the desktop/phone apps' own pages may call a few sign-in paths (no cookies), see hosted.CORS_PATHS
+    cors = origin is not None and tenancy.multiuser() and hosted.cors_allowed(origin, request.url.path)
     if tenancy.multiuser():
-        if not hosted.path_allowed(request.method, request.url.path):
+        if not hosted.path_allowed(request.method, request.url.path) and not (cors and request.method == "OPTIONS"):
             return JSONResponse({"detail": "not available on this hosted AutoMoto server"}, status_code=404)
     elif hosted.is_hosted_only(request.url.path):  # local mode has no accounts
         return JSONResponse({"detail": "only in hosted mode (AUTOMOTO_MODE=multiuser)"}, status_code=404)
@@ -211,15 +214,18 @@ async def guard(request: Request, call_next):
     # DNS rebinding: a web page that re-points its domain at 127.0.0.1 still sends its own Host header.
     if _host_name(host) not in _allowed_hosts() and not _bearer_ok(request):
         return JSONResponse({"detail": "unexpected Host header"}, status_code=421)
-    origin = request.headers.get("origin")
+    if cors and request.method == "OPTIONS":
+        return Response(status_code=204, headers=hosted.cors_headers(origin, preflight=True))  # type: ignore[arg-type]
     # CSRF / cross-site requests: only this server's own pages (or configured origins) may call it.
-    if origin is not None and not _origin_ok(origin, host) and not _bearer_ok(request):
+    if origin is not None and not cors and not _origin_ok(origin, host) and not _bearer_ok(request):
         return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
     if request.url.path.startswith("/api/") and _rate_limited(request.client.host if request.client else "?",
                                                                request.url.path):
         return JSONResponse({"detail": "too many requests - slow down"}, status_code=429,
                             headers={"Retry-After": "10"})
     response = await call_next(request)
+    if cors:
+        response.headers.update(hosted.cors_headers(origin))  # type: ignore[arg-type]
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -398,9 +404,11 @@ code{background:#161b22;padding:2px 6px;border-radius:6px}</style></head><body><
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, launch: str | None = None):
+def index(request: Request, launch: str | None = None, device_launch: str | None = None):
     base_headers = {"Content-Security-Policy": CSP, "Cache-Control": "no-store"}
     if tenancy.multiuser():
+        if device_launch is not None:  # an app opening its window, signed in (accounts.device_launch_code)
+            return hosted.open_device_window(request, device_launch, base_headers)
         got = hosted.current_user(request)
         if not got:
             html = (WEB_DIR / "login.html").read_text(encoding="utf-8").replace("__AUTOMOTO_VERSION__", __version__)
@@ -415,7 +423,12 @@ def index(request: Request, launch: str | None = None):
             return HTMLResponse(LOCKED_PAGE, status_code=403, headers=base_headers)
         from fastapi.responses import RedirectResponse
 
-        resp = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
+        if request.headers.get("sec-fetch-site", "") in ("cross-site", "same-site") or request.query_params.get("app"):
+            # opened by another site or the desktop app's own page: a redirect would carry that origin along
+            # and the SameSite=Strict cookie would not be sent with it, so refresh from our own page instead
+            resp: Any = HTMLResponse(hosted._OPENING, headers=base_headers)
+        else:
+            resp = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
         resp.set_cookie(COOKIE, SESSION_TOKEN, httponly=True, samesite="strict", path="/",
                         secure=request.url.scheme == "https")
         return resp

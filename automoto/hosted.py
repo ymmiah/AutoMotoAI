@@ -28,6 +28,8 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("GET", r"/"), ("GET", r"/static/.+"), ("GET", r"/login"),
     ("GET", r"/api/health"),
     ("POST", r"/api/auth/(login|signup|logout|password)"), ("GET", r"/api/auth/info"), ("GET", r"/api/me"),
+    ("POST", r"/api/auth/device/(login|launch|logout)"),
+    ("GET", r"/api/devices"), ("DELETE", r"/api/devices/[0-9a-f]{16}"),
     ("GET", r"/api/status"), ("POST", r"/api/status"), ("POST", r"/api/recommend"),
     ("POST", r"/api/chat"), ("POST", r"/api/agent"), ("GET", r"/api/agent/info"),
     ("GET", r"/api/tasks"), ("GET", r"/api/tasks/[\w-]+"), ("POST", r"/api/tasks/[\w-]+/(approve|cancel)"),
@@ -43,11 +45,75 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("PATCH", r"/api/admin/users/\w+"), ("DELETE", r"/api/admin/users/\w+"),
     ("POST", r"/api/admin/users/\w+/(bonus|reset|password)"), ("POST", r"/api/admin/users"),
     ("POST", r"/api/admin/invites"), ("DELETE", r"/api/admin/invites/\w+"),
+    ("GET", r"/api/admin/devices"), ("DELETE", r"/api/admin/devices/[0-9a-f]{16}"),
 ]]
 
 
 def is_hosted_only(path: str) -> bool:
-    return path.startswith(("/api/auth/", "/api/admin/")) or path in ("/api/me", "/login")
+    return path.startswith(("/api/auth/", "/api/admin/", "/api/devices")) or path in ("/api/me", "/login")
+
+
+# -- native apps (Windows/macOS/Linux desktop, phones, VS Code) ---------------------------------
+# Apps sign in with a device token (accounts.new_device). Their own pages may call only these few paths
+# cross-origin, from the app origins below, without cookies (no credentials, so no CSRF risk).
+APP_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
+CORS_PATHS = {"/api/health", "/api/auth/info", "/api/auth/device/login", "/api/auth/device/launch",
+              "/api/auth/device/logout", "/api/me"}
+
+
+def app_origins() -> set[str]:
+    from automoto import config
+
+    extra = {o.strip().lower().rstrip("/") for o in (config.env("AUTOMOTO_APP_ORIGINS", "") or "").split(",")
+             if o.strip()}
+    return set(APP_ORIGINS) | extra
+
+
+def cors_allowed(origin: str, path: str) -> bool:
+    return path in CORS_PATHS and origin.strip().lower().rstrip("/") in app_origins()
+
+
+def cors_headers(origin: str, preflight: bool = False) -> dict[str, str]:
+    h = {"Access-Control-Allow-Origin": origin, "Vary": "Origin"}
+    if preflight:
+        h.update({"Access-Control-Allow-Methods": "GET, POST", "Access-Control-Max-Age": "600",
+                  "Access-Control-Allow-Headers": "content-type, authorization"})
+    return h
+
+
+def secure_transport(request: Request) -> bool:
+    """Device tokens and passwords from apps only over HTTPS, except to this computer itself."""
+    from automoto import config, server
+
+    if request.url.scheme == "https":
+        return True
+    if (config.env("AUTOMOTO_ALLOW_HTTP_DEVICES", "") or "").lower() in ("1", "true", "yes"):
+        return True  # testing on a home network only - the token travels in clear text
+    return server._host_name(request.headers.get("host", "")) in server.LOCAL_HOSTS and server._is_loopback(request)
+
+
+def _device_guard(request: Request) -> None:
+    from automoto import server
+
+    if not secure_transport(request):
+        raise HTTPException(403, "apps can sign in only over HTTPS (or to this computer itself)")
+    origin = request.headers.get("origin")
+    if origin is not None and origin.strip().lower().rstrip("/") not in app_origins() \
+            and not server._origin_ok(origin, request.headers.get("host", "")):
+        raise HTTPException(403, "this origin may not sign in apps")
+
+
+def bearer_device(request: Request) -> tuple[accounts.User, dict[str, Any]] | None | bool:
+    """False: no device token sent. None: a device token was sent but it is not valid (any more)."""
+    auth = request.headers.get("authorization", "")
+    if auth[:7].lower() != "bearer ":
+        return False
+    tok = auth[7:].strip()
+    if not tok.startswith(accounts.DEVICE_PREFIX):
+        return False
+    if not secure_transport(request):
+        raise HTTPException(403, "device tokens are accepted only over HTTPS")
+    return accounts.device_user(tok, client_ip(request))
 
 
 def path_allowed(method: str, path: str) -> bool:
@@ -89,11 +155,22 @@ def current_user(request: Request) -> tuple[accounts.User, str] | None:
 
 
 def authenticate(request: Request) -> accounts.User:
-    """Session cookie + CSRF header (+ the Origin check in the server middleware) for hosted mode."""
+    """Session cookie + CSRF header (+ the Origin check in the server middleware) for hosted mode,
+    or an app's device token (Authorization: Bearer amd_...; not sent automatically, so no CSRF check)."""
+    dev = bearer_device(request)
+    if dev is not False:
+        if not dev:
+            raise HTTPException(401, "this device was signed out - sign in again")
+        user, device = dev  # type: ignore[misc]
+        tenancy.set_current(tenant_for(user))
+        request.state.user = user
+        request.state.device = device
+        return user
     got = current_user(request)
     if not got:
         raise HTTPException(401, "please sign in")
     user, csrf = got
+    request.state.device = None
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         sent = request.headers.get("x-csrf-token", "")
         if not sent or not hmac.compare_digest(sent, csrf):
@@ -213,6 +290,113 @@ def change_password(body: PasswordIn, request: Request):
     resp = JSONResponse({"ok": True})
     _cookie(resp, request, tok, int(accounts.session_days() * 86400))
     return resp
+
+
+class DeviceLoginIn(LoginIn):
+    device_name: str = Field("App", max_length=60)
+    platform: str = Field("", max_length=30)
+
+
+@router.post("/api/auth/device/login")
+def device_login(body: DeviceLoginIn, request: Request) -> dict[str, Any]:
+    """An app signs in once and gets a revocable device token (shown once; store it in the OS keychain)."""
+    from automoto import __version__
+
+    _device_guard(request)
+    ip = client_ip(request)
+    if _auth_limited("ip:" + ip) or _auth_limited("user:" + body.username.strip().lower(), limit=10):
+        raise HTTPException(429, "too many sign-in attempts - wait 15 minutes")
+    try:
+        user = accounts.authenticate(body.username, body.password)
+    except accounts.AccountError as exc:
+        raise HTTPException(401, str(exc)) from None
+    tok, dev = accounts.new_device(user, body.device_name, body.platform, ip)
+    return {"ok": True, "token": tok, "device": dev, "user": user.public(), "server": {"version": __version__}}
+
+
+def _require_device(request: Request) -> tuple[accounts.User, dict[str, Any]]:
+    _device_guard(request)
+    if _auth_limited("dev:" + client_ip(request), limit=120):
+        raise HTTPException(429, "too many requests - wait a few minutes")
+    dev = bearer_device(request)
+    if dev is False:
+        raise HTTPException(401, "send the device token: Authorization: Bearer amd_...")
+    if not dev:
+        raise HTTPException(401, "this device was signed out - sign in again")
+    return dev  # type: ignore[return-value]
+
+
+@router.post("/api/auth/device/launch")
+def device_launch(request: Request) -> dict[str, Any]:
+    """A one-time link (60 s) that opens the normal AutoMoto page, signed in, in the app's window."""
+    user, dev = _require_device(request)
+    code = accounts.device_launch_code(dev["id"], user.id)
+    return {"path": "/?device_launch=" + code, "expires_in": 60, "user": user.public()}
+
+
+@router.post("/api/auth/device/logout")
+def device_logout(request: Request) -> dict[str, Any]:
+    user, dev = _require_device(request)
+    accounts.revoke_device(dev["id"], user.username, uid=user.id)
+    return {"ok": True}
+
+
+_OPENING = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>AutoMoto AI</title>
+<meta http-equiv="refresh" content="1;url=/"><style>body{font:16px system-ui;background:#0b0f14;color:#e6edf3;
+display:grid;place-items:center;min-height:100vh;margin:0}</style></head><body><p>Opening AutoMoto…</p></body></html>"""
+
+
+def open_device_window(request: Request, code: str, headers: dict[str, str]):
+    """``/?device_launch=<code>``: swap an app's one-time code for a normal session cookie in its window.
+    A same-origin refresh (not a redirect) follows, so the SameSite=Strict cookie is sent with it."""
+    from fastapi.responses import HTMLResponse
+
+    if not secure_transport(request):
+        return HTMLResponse("<h1>HTTPS required</h1>", status_code=403, headers=headers)
+    ip = client_ip(request)
+    if _auth_limited("launch:" + ip, limit=60):
+        return HTMLResponse("<h1>Too many attempts - wait a few minutes</h1>", status_code=429, headers=headers)
+    got = accounts.use_device_launch_code(code)
+    if not got:
+        resp = HTMLResponse(_OPENING, status_code=200, headers=headers)  # expired or used: the sign-in page follows
+        return resp
+    user, did = got
+    tok, _ = accounts.new_session(user, ip, device_id=did)
+    resp = HTMLResponse(_OPENING, headers={**headers, "Referrer-Policy": "no-referrer"})
+    _cookie(resp, request, tok, int(accounts.session_days() * 86400))  # type: ignore[arg-type]
+    return resp
+
+
+@router.get("/api/devices")
+def my_devices(request: Request) -> dict[str, Any]:
+    from automoto import server
+
+    server._authorise(request)
+    user = request.state.user
+    dev = getattr(request.state, "device", None)
+    current = dev["id"] if dev else accounts.session_id(request.cookies.get(COOKIE, ""))
+    if not dev:  # a window opened by an app: its session row says which device
+        current = _session_device(request.cookies.get(COOKIE, "")) or current
+    return {"devices": accounts.list_devices(user.id) + accounts.list_sessions(user.id), "current": current}
+
+
+def _session_device(token: str) -> str | None:
+    if not token:
+        return None
+    with accounts._db() as con:
+        row = con.execute("SELECT device_id FROM sessions WHERE token=?", (accounts._h(token),)).fetchone()
+    return row["device_id"] if row else None
+
+
+@router.delete("/api/devices/{did}")
+def my_device_revoke(did: str, request: Request) -> dict[str, Any]:
+    from automoto import server
+
+    server._authorise(request)
+    user = request.state.user
+    if accounts.revoke_device(did, user.username, uid=user.id) or accounts.end_session_by_id(user.id, did):
+        return {"ok": True}
+    raise HTTPException(404, "no such device")
 
 
 @router.get("/api/me")
@@ -444,6 +628,26 @@ def admin_usage(request: Request, user: str = "", limit: int = 200) -> dict[str,
 def admin_audit(request: Request, limit: int = 200) -> dict[str, Any]:
     require_admin(request)
     return {"audit": accounts.audit_log(max(1, min(int(limit), 2000)))}
+
+
+@router.get("/api/admin/devices")
+def admin_devices(request: Request, user: str = "") -> dict[str, Any]:
+    require_admin(request)
+    uid = None
+    if user:
+        u = accounts.find_user(user)
+        if not u:
+            raise HTTPException(404, "no such user")
+        uid = u.id
+    return {"devices": accounts.list_devices(uid)}
+
+
+@router.delete("/api/admin/devices/{did}")
+def admin_device_revoke(did: str, request: Request) -> dict[str, Any]:
+    admin = require_admin(request)
+    if not accounts.revoke_device(did, admin.username):
+        raise HTTPException(404, "no such device")
+    return {"ok": True}
 
 
 def hosted_tools() -> dict[str, Any]:
