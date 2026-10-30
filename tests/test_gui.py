@@ -209,3 +209,26 @@ def test_gui_assets_and_csp(c):
     js = c.get("/static/app.js").text
     assert "sessionStorage" in js and "localStorage.setItem(\"automoto_keys\"" not in js
     assert "Student of BCU, BSc Computing Top-Up (Hons)" in js
+
+
+def test_help_guide_link_is_a_safe_external_link(c):
+    import re
+    c.get("/?launch=" + server.new_launch_token())
+    html = c.get("/").text
+    m = re.search(r'<a href="([^"]+)" id="helpLink"([^>]*)>', html)
+    assert m, "Help / Guide link missing from the sidebar"
+    assert m.group(1) == "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html"
+    assert 'target="_blank"' in m.group(2) and "noopener" in m.group(2)
+    js = c.get("/static/app.js").text
+    assert 'const GUIDE_URL = "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html"' in js and '"_blank", "noopener"' in js
+
+
+def test_gui_guide_images_exist():
+    import pathlib
+    import re
+    docs = pathlib.Path(__file__).resolve().parent.parent / "docs"
+    text = (docs / "GUI-GUIDE.md").read_text(encoding="utf-8")
+    imgs = re.findall(r'\(gui-guide/([^)]+)\)|src="gui-guide/([^"]+)"', text)
+    assert len(imgs) >= 30
+    for a, b in imgs:
+        assert (docs / "gui-guide" / (a or b)).is_file(), a or b

@@ -731,8 +731,10 @@ function setupHosted() {
   document.body.classList.add("hosted");
   ["routines", "settings"].forEach((p) => { const a = $(`.nav a[data-page="${p}"]`); if (a) a.remove(); });
   const nav = $(".nav");
-  nav.insertAdjacentHTML("beforeend", `<a href="#/account" data-page="account"><span data-icon="user"></span>Account</a>` +
-    (state.me?.role === "admin" ? `<a href="#/admin" data-page="admin"><span data-icon="shield"></span>Admin</a>` : ""));
+  const navHtml = `<a href="#/account" data-page="account"><span data-icon="user"></span>Account</a>` +
+    (state.me?.role === "admin" ? `<a href="#/admin" data-page="admin"><span data-icon="shield"></span>Admin</a>` : "");
+  const help = $("#helpLink");
+  if (help) help.insertAdjacentHTML("beforebegin", navHtml); else nav.insertAdjacentHTML("beforeend", navHtml);
   $(".side-foot").insertAdjacentHTML("beforebegin", `<div class="usage" id="usageMeter" aria-live="polite"></div>`);
   $(".side-foot").insertAdjacentHTML("afterbegin", `<button class="linkish" id="logoutBtn">Sign out ${esc(state.me?.username || "")}</button> · `);
   $("#logoutBtn").onclick = logout;
@@ -1219,6 +1221,7 @@ PAGES.settings = async () => {
 };
 
 // ---------------------------------------------------------------- command palette
+const GUIDE_URL = "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html";
 const COMMANDS = [
   { t: "New chat", i: "plus", k: "mod+N", run: () => newChat() },
   { t: "Switch to Agent mode", i: "bolt", run: () => setMode("agent") },
@@ -1234,6 +1237,7 @@ const COMMANDS = [
   { t: "Theme: system", i: "monitor", run: () => { applyTheme("system"); saveSetting({ theme: "system" }); } },
   { t: "Toggle sidebar", i: "menu", k: "mod+B", run: () => toggleSidebar() },
   { t: "Toggle info panel", i: "panel", run: () => $("#toggleInfo").click() },
+  { t: "Help / Guide (opens the step-by-step guide)", i: "info", run: () => window.open(GUIDE_URL, "_blank", "noopener") },
   { t: "Forget BYOK keys in this tab", i: "key", run: () => { sessionStorage.removeItem("automoto_keys"); refreshStatus(); toast("Keys forgotten"); } },
 ];
 let palItems = [], palSel = 0;
