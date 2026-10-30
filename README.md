@@ -10,7 +10,10 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 
 **New here? 👉 [Step-by-step GUI guide](docs/GUI-GUIDE.md)** · [docs site with copy buttons](https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html)
 
-[![Version](https://img.shields.io/badge/version-5.5.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
+**🪟 Windows app:** [download the installer](https://github.com/ymmiah/AutoMotoAI/releases/latest) (`AutoMoto-AI_…_x64-setup.exe`) —
+sign in once and the same chats and files follow you to the app, the web and your phone. [How to](docs/GUI-GUIDE.md#0-the-windows-app)
+
+[![Version](https://img.shields.io/badge/version-5.6.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Windows_·_macOS_·_Linux-555?style=for-the-badge)
@@ -45,12 +48,13 @@ SHA-256, install into a private virtualenv and create `~/.automoto/.env` for you
 
 | OS | Install | Then |
 |---|---|---|
+| **Windows app** (10/11, 64-bit) | `AutoMoto-AI_5.6.0_x64-setup.exe` from [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest) (SmartScreen: *More info → Run anyway*, it isn't code-signed yet) | sign in to your account, or **Start local mode** ([guide](docs/GUI-GUIDE.md#0-the-windows-app)) |
 | **Windows 10/11** (PowerShell) | `winget install -e --id Python.Python.3.12` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` | `notepad $env:USERPROFILE\.automoto\.env` → add key · `automoto serve` |
 | **macOS** (Intel / Apple Silicon) | `brew install python@3.12 git` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `./scripts/install.sh` | `open -e ~/.automoto/.env` → add key · `automoto serve` |
 | **Linux** (Ubuntu/Debian, Fedora, Arch…) | `sudo apt install python3 python3-venv git` (or dnf / pacman) · clone · `./scripts/install.sh` | `nano ~/.automoto/.env` → add key · `automoto serve` |
 | **Docker** (any OS) | clone · create `.env` with your key + admin name/password · `docker compose up -d --build` | open <http://127.0.0.1:8765> and sign in |
 | **Host for friends** (1 h/day limits) | Docker or `automoto serve --hosted` behind Cloudflare Tunnel / Caddy | [Admin guide](docs/INSTALL.md#7-host-it-for-other-people) |
-| **VS Code** | `code --install-extension automoto-ai-5.5.0.vsix` (from [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest)) | start `automoto serve` first |
+| **VS Code** | `code --install-extension automoto-ai-5.6.0.vsix` (from [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest)) | start `automoto serve` first |
 | **Phone / tablet** | use the web app from a hosted server in the phone's browser | [details](docs/INSTALL.md#8-other-platforms) |
 
 Optional extras: `--system-deps` (`-SystemDeps` on Windows) installs LibreOffice, poppler, 7-Zip and PHP;
@@ -60,7 +64,7 @@ Optional extras: `--system-deps` (`-SystemDeps` on Windows) installs LibreOffice
 
 ## ✨ What it can do
 
-- **🖥 Feel like a real app.** A full chat app at `python -m automoto serve` (and inside the desktop shell): saved conversations, live tool-step cards, inline approvals, image attach, Memory / Routines / Skills / Tasks / Tools / Settings pages, dark and light themes, a command palette and a layout that works on a phone. [See the GUI](#-the-app).
+- **🖥 Feel like a real app.** A full chat app at `python -m automoto serve` (and inside the Windows app): saved conversations, live tool-step cards, inline approvals, image attach, Memory / Routines / Skills / Tasks / Tools / Settings pages, dark and light themes, a command palette and a layout that works on a phone. [See the GUI](#-the-app).
 
 - **🧑‍💻 Work inside VS Code.** The [AutoMoto extension](#-vs-code-extension) adds a chat view and commands: ask about a selection, fix a diagnostic, explain a file, or run a task on your project. Every risky step shows up as an Allow / Deny dialog.
 - **📄 Make publication-ready Word, Excel and PowerPoint files, for free.** Reports with title page, real contents page numbers, captions and Harvard references; spreadsheets with live formulas that are recalculated and checked; themed decks with charts and speaker notes. Exports tagged PDFs with embedded fonts, renders pages to PNG and lints them. No Microsoft Office needed ([Office suite](#-office-suite-word-excel-powerpoint-pdf)).
@@ -115,7 +119,7 @@ without native tool calling).
 
 ## 🖥 The app
 
-`python -m automoto serve` opens a full app in your browser (the Tauri desktop shell shows the same one).
+`python -m automoto serve` opens a full app in your browser (the Windows app shows the same one).
 Everything ships inside the Python package, with no build step and no CDN: the libraries are vendored and the page runs under a strict Content-Security-Policy (`script-src 'self'`, no inline scripts).
 
 <div align="center">
@@ -155,8 +159,8 @@ server through AutoMoto's private session file (`~/.automoto/session.json`, mode
 
 ```bash
 python -m automoto serve --no-browser                   # 1. start AutoMoto
-cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.5.0.vsix (or download it from CI)
-code --install-extension automoto-ai-5.5.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
+cd apps/vscode && npm ci && npm run package             # 2. build automoto-ai-5.6.0.vsix (or download it from CI)
+code --install-extension automoto-ai-5.6.0.vsix         # 3. install it (or Extensions → … → Install from VSIX)
 ```
 
 | Command | What it does |
@@ -607,7 +611,7 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 | v5.4 archives, WordPress, data files | See the [archives status table](#-archives-wordpress-and-data-files) |
 | v5.5 hosted multi-user mode: accounts, sessions + CSRF, per-user quotas and bonus time, admin GUI + CLI, per-user sandboxes, Dockerfile | ✅ Unit-tested (23 tests) and live-tested on the box: an admin and two users, one user ran NIM agent tasks until her 1-minute limit stopped her, the admin gave the other 30 bonus minutes from the Admin page. Docker image built and smoke-tested. Not yet deployed to a public host |
 | Publishing: GitHub Release, Marketplace / Open VSX / PyPI workflow | ✅ Release assets built in CI. Store publishing is wired but waits for your tokens ([docs/PUBLISHING.md](docs/PUBLISHING.md)) |
-| Desktop app: Tauri 2 shell for Windows, macOS and Linux (`apps/desktop`) | 🧱 Scaffold. Wraps the same web UI and now signs its own window in with a random launch token. Not compiled here: Tauri 2.12 needs Rust ≥ 1.90 and the test box has 1.85 |
+| Windows app (v5.6): Tauri 2, `apps/desktop` — sign-in to an AutoMoto account with revocable device tokens, or Local mode; `.exe` + `.msi`, signed auto-updates | ✅ Built and smoke-tested in CI on windows-latest (silent install, launch, Local mode health, close, uninstall). Sign-in, two devices on one account and device revocation tested by hand on the Linux build. Not code-signed (SmartScreen warns); macOS/Linux builds not released |
 | Mobile app: Flutter for Android and iOS (`apps/mobile`) | 🧱 Scaffold. Still uses the plain-chat API (agent mode on mobile is next). iOS needs Xcode |
 | Browser automation (Playwright tool) | ⏭ Planned. Left out rather than shipped half-working |
 | Remote MCP, streaming tokens, per-routine approval rules | ⏭ Planned |

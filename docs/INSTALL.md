@@ -15,6 +15,7 @@ Everything here is free. Latest release: **v5.5.0** ([downloads](https://github.
 
 | You want… | Use | Time |
 |---|---|---|
+| The **Windows app** — sign in to an AutoMoto account, or Local mode | The installer from Releases ([section 3](#windows-app)) | ~2 min |
 | AutoMoto for **yourself** on Windows / macOS / Linux | The **installer script** for your OS (sections 3–5) | ~5 min |
 | An isolated setup, or the same steps on every OS | **Docker Compose** (section 6) | ~10 min |
 | Friends / classmates use it, with a **1-hour daily limit** | **Hosted mode** (section 7) | ~20 min |
@@ -47,6 +48,43 @@ Never share a key or paste it into a chat, an issue or a Git commit.
 ---
 
 ## 3. Windows 10/11
+
+### Windows app
+
+The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an AutoMoto account.
+
+1. Download from the [latest release](https://github.com/ymmiah/AutoMotoAI/releases/latest):
+   * `AutoMoto-AI_5.6.0_x64-setup.exe` — installs for you only, no admin (recommended), or
+   * `AutoMoto-AI_5.6.0_x64_en-US.msi` — installs for all users (admin; good for school/work PCs and silent installs).
+2. Optional — check it against `SHA256SUMS.txt` from the same release:
+
+   ```powershell
+   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0_x64-setup.exe").Hash
+   ```
+
+3. Run it. The app isn't code-signed yet, so SmartScreen says *"Windows protected your PC"* → **More info → Run anyway**
+   ([why](WINDOWS-DISTRIBUTION.md)). WebView2 is installed automatically if the PC doesn't have it (Windows 11 does).
+4. **Sign in** with the server address, username and password from your admin — or click **Start local mode**.
+
+Silent installs (IT, scripts):
+
+```powershell
+.\AutoMoto-AI_5.6.0_x64-setup.exe /S                                       # per-user, no admin
+msiexec /i AutoMoto-AI_5.6.0_x64_en-US.msi /qn /norestart                  # all users, admin PowerShell
+```
+
+**Local mode** runs AutoMoto on this PC without an account. It needs the engine from step 2 below; the app's
+**Install the local engine** button runs the same official installer for you (it ships inside the app). The app
+starts the engine when you pick Local mode and stops it when you close the window.
+
+**Updates:** the app checks GitHub Releases on start and asks before updating; updates are signature-checked.
+**Uninstall:** *Settings → Apps → AutoMoto AI → Uninstall* (your account and its chats stay on the server; Local mode
+data stays in `%USERPROFILE%\.automoto`).
+
+Step-by-step with screenshots: [GUI guide § 0](GUI-GUIDE.md#0-the-windows-app).
+The rest of this section installs the **engine** (the command line, the web GUI and Local mode).
+
+### Engine (command line and web GUI)
 
 All commands are for **PowerShell** (Start menu → type *PowerShell*).
 
@@ -409,7 +447,7 @@ HTTP is only OK on a network you trust; for anything else use option A or B.
 
 | Platform | How | Status |
 |---|---|---|
-| **VS Code extension** (any OS) | Download `automoto-ai-5.5.0.vsix` from the release → `code --install-extension automoto-ai-5.5.0.vsix` (or *Extensions → … → Install from VSIX*). Start `automoto serve` first; the extension finds it by itself. | ✅ tested in CI (real VS Code on Linux) |
+| **VS Code extension** (any OS) | Download `automoto-ai-5.6.0.vsix` from the release → `code --install-extension automoto-ai-5.6.0.vsix` (or *Extensions → … → Install from VSIX*). Start `automoto serve` first; the extension finds it by itself. | ✅ tested in CI (real VS Code on Linux) |
 | **VS Code Remote-SSH / WSL / Dev Containers / Codespaces** | The extension runs on the **remote** side, so install and start AutoMoto **there** (Linux steps). VS Code's port forwarding keeps `localhost:8765` working for the web app over SSH. | 🟡 should work, not tested |
 | **Cursor / VSCodium** | Same `.vsix` (Open VSX listing coming once published). | 🟡 not tested |
 | **ChromeOS** | *Settings → About ChromeOS → Developers → Linux development environment → Turn on*, then the Debian steps in section 5 inside the Linux terminal. If Chrome can't open `127.0.0.1:8765`, enable it under *Linux → Port forwarding*, or install a browser inside Linux (`sudo apt install chromium`). | 🟡 not tested |
@@ -483,5 +521,7 @@ Still stuck? Run `automoto status` and open an issue at <https://github.com/ymmi
 | Start at login (`--service` / `-AutoStart`) | CI on all three: the systemd user service (ubuntu), launchd agent (macOS) and Task Scheduler task (Windows) each started the server, which answered on port 8765; then removed by `--uninstall`. Unit file also checked with `systemd-analyze verify` |
 | Docker image, hosted mode, single-user host-network mode, Compose up/down/up with the data volume | CI (ubuntu) and by hand on Debian 13 |
 | Hosted mode on a LAN address (phone scenario) | By hand on Debian 13: sign-in by IP works, other host names get 421 |
+| Windows app (`.exe` NSIS + `.msi`): build, Rust unit tests, silent install (`/S`, `msiexec /qn`), launch on the sign-in screen, Local mode starts the engine and it answers `/api/health`, closing the window stops it, silent uninstall | CI on **windows-latest** (`.github/workflows/desktop.yml`, screenshots saved as an artifact) |
+| App sign-in, opening the account, two devices on one account seeing the same chat, My devices, admin sign-out, Local mode | By hand: the same app built on Debian 13 (Linux WebKitGTK), against a hosted server on the same machine |
 | Python test suite | CI on Windows, macOS, Linux × Python 3.10 and 3.13 |
 | ChromeOS, Raspberry Pi, WSL, Codespaces, BSD, Oracle Cloud, Cloudflare Tunnel, Render | **Not tested** — instructions follow each platform's documentation |

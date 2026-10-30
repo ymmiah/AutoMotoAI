@@ -1,9 +1,43 @@
 # AutoMoto AI - Version History & Changelog
 
-## Unreleased (on `main`, after 5.5.0)
-**Install and deploy on every OS.**
+## 5.6.0 "Agent" — 30 October 2026
+**One account everywhere, and the Windows app.**
 
-### New
+### New — one account on every device
+- **Device sign-in for apps:** `POST /api/auth/device/login` gives an app a revocable device token (`amd_…`, stored
+  only as a SHA-256 hash, expires after `AUTOMOTO_DEVICE_DAYS` (90) days without use, max 20 per user). Tokens
+  work only over HTTPS or on the same machine. `POST /api/auth/device/launch` turns the token into a one-time
+  60-second code that opens the server's GUI signed in, as a session tied to that device.
+- **Account → My devices** lists every app and browser signed in, with *Sign out*; **Admin → Signed-in apps**
+  lets the admin sign any app out. Changing a password, suspending or deleting a user signs out every device.
+- CORS only for the app's own origins (`tauri://localhost`, `http(s)://tauri.localhost`, `AUTOMOTO_APP_ORIGINS`),
+  without credentials; app sign-in shares the web sign-in's rate limits.
+- Chats, files, memory, usage time and bonus time were already stored per user on the server; now every client
+  signs in to the same account (tested: two devices see the same chat and the same files).
+
+### New — Windows app (`apps/desktop`, Tauri 2)
+- `.exe` (NSIS, per-user, no admin) and `.msi` installers on GitHub Releases, free.
+- Opens on a **sign-in screen**: server address (default baked in with the repo variable `AUTOMOTO_DEFAULT_SERVER`,
+  editable), username, password, device name; the device token is kept in Windows Credential Manager.
+- **Local mode:** starts the AutoMoto engine installed on the PC and stops it on close; *Install the local engine*
+  runs the bundled official `install.ps1`. Python isn't bundled (size and antivirus false positives).
+- **Auto-update** from GitHub Releases with signed `latest.json`; unsigned updates are refused.
+- Security: 7 app commands only, for the bundled page only; strict CSP; no remote code; other sites open in the
+  browser; HTTPS required for non-local servers; no secrets in the installer.
+- CI (`.github/workflows/desktop.yml`, windows-latest): version check, Rust tests + clippy, build, silent
+  install/launch/Local-mode health/close/uninstall smoke test for both installers, screenshots; on a tag, the
+  installers and `latest.json` are attached to the release.
+- `packaging/winget/` manifests (prepared, not submitted) and **docs/WINDOWS-DISTRIBUTION.md** (SmartScreen, free
+  Microsoft Store registration, SignPath Foundation, winget), with sources.
+- Docs: INSTALL.md *Windows app*, GUI guide § 0 with screenshots, HOSTING.md *Apps and devices*.
+
+### Fixes
+- A local one-time link opened from another site or the app (`&app=1`) answers with a short page instead of a
+  redirect, so the browser keeps the SameSite=Strict sign-in cookie.
+
+### Also in 5.6.0 — install and deploy on every OS
+
+#### New
 - **docs/GUI-GUIDE.md:** beginner step-by-step guide to the web GUI and the VS Code panel (install, free key,
   every page, approval cards, files/CSV/archives, office docs, skills, connectors, routines, memory, settings,
   hosted mode and the Admin panel, phones, troubleshooting) with 36 real screenshots. Published with copy buttons
@@ -29,11 +63,11 @@
 - Clear "port already in use" message instead of a uvicorn traceback.
 - 7-Zip is found in `C:\Program Files\7-Zip` on Windows even when it isn't on PATH.
 
-### Fixed
+#### Fixed
 - A wrong ZipCrypto password that slips past the format's 1-byte check now says "wrong password" instead of
   "damaged data" (this also made a CI test flaky about 1 run in 256).
 
-### Tests / CI
+#### Tests / CI
 - `tests/test_install.py` (.env discovery order, port message, `open --print`, 7-Zip path, installer checksum pin).
 - New CI **install** job on ubuntu, macos and windows runners: lints both installers (shellcheck, PowerShell parser,
   PSScriptAnalyzer), installs the release wheel and the source, starts the server, signs in with the one-time link,

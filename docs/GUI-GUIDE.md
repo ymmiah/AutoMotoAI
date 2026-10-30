@@ -5,7 +5,7 @@ hosted (multi-user) mode. Every command sits in its own box. On GitHub and on th
 [docs site](https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html), hover over a box and click the **copy icon** in its
 top-right corner, then paste it into your terminal.
 
-**Contents:** [1 Install](#1-install) · [2 Add a free AI key](#2-add-a-free-ai-key) · [3 Start AutoMoto](#3-start-automoto) ·
+**Contents:** [0 The Windows app](#0-the-windows-app) · [1 Install](#1-install) · [2 Add a free AI key](#2-add-a-free-ai-key) · [3 Start AutoMoto](#3-start-automoto) ·
 [4 Open the app](#4-open-the-app-one-time-sign-in-link) · [5 The screen](#5-a-quick-tour-of-the-screen) ·
 [6 Agent tasks and approvals](#6-give-the-agent-a-task-and-approve-its-steps) · [7 Chat mode](#7-chat-mode-quick-answers-no-tools) ·
 [8 Tasks](#8-tasks-page) · [9 Files](#9-files-upload-preview-csv-archives) · [10 Office documents](#10-word-excel-powerpoint-and-pdf) ·
@@ -17,6 +17,72 @@ top-right corner, then paste it into your terminal.
 
 > **Two ways to run it.** **Local mode** (default) is just for you, on your own computer, with every tool.
 > **Hosted mode** gives other people an account with a daily usage limit you control (sections 19–20).
+> The **Windows app** (section 0) signs in to a hosted account, or runs Local mode for you.
+
+---
+
+## 0. The Windows app
+
+The **AutoMoto AI app for Windows** (new in 5.6.0) is a normal window you install like any other program. It opens
+on a sign-in screen with two choices: **your AutoMoto account** (the same chats, files and usage time on every
+device) or **Local mode** (just this PC, no account).
+
+**Step 0.1** — download the installer from the [latest release](https://github.com/ymmiah/AutoMotoAI/releases/latest):
+`AutoMoto-AI_5.6.0_x64-setup.exe` (recommended, installs just for you, no admin) or
+`AutoMoto-AI_5.6.0_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
+published yet.)
+
+**Step 0.2** — run it. The app is **not code-signed yet**, so Windows SmartScreen shows *"Windows protected your PC"*.
+Click **More info → Run anyway**. (Why, and how that will go away: [WINDOWS-DISTRIBUTION.md](WINDOWS-DISTRIBUTION.md).)
+You can check the download first against `SHA256SUMS.txt` on the release page:
+
+```powershell
+(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0_x64-setup.exe").Hash
+```
+
+**Step 0.3** — sign in. Type the **server address** your admin gave you (for example
+`https://automoto.example.org`; it must start with `https://` unless it's on this PC), your **username** and
+**password**. Open *This device's name* to call it something you'll recognise, like *Amira's Windows PC*, then
+click **Sign in**.
+
+![The app's sign-in screen](gui-guide/60-app-sign-in.png)
+
+Your password goes once to the server and is never saved. The app keeps a **device key** in Windows Credential
+Manager instead, so next time it opens straight into your account.
+
+**Step 0.4** — you're in. It's the same AutoMoto you know from the browser, with your chats in the sidebar.
+
+![Signed in: the account's chats in the app](gui-guide/61-app-signed-in.png)
+
+**Step 0.5** — the same account everywhere. Sign in on your phone's browser (section 21) or another PC with the same
+username: you see the same chats and files. Here the chat made on the PC is open on a phone, and a question asked on
+the phone appears in the app after **Reload** (`Ctrl+R`):
+
+![The same chat on a phone](gui-guide/62-app-same-chat-phone.png)
+
+![The phone's question shows up in the app](gui-guide/65-app-sees-phone-message.png)
+
+**Step 0.6** — see and sign out devices. **Account → My devices** lists every app and browser signed in to your
+account. *this one* is the device you're using. Click **Sign out** next to anything you don't recognise; changing
+your password signs out every other device too.
+
+![Account → My devices](gui-guide/63-app-my-devices.png)
+
+Admins see every user's apps under **Admin → Signed-in apps** and can sign any of them out (a lost laptop, a
+shared PC):
+
+![Admin → Signed-in apps](gui-guide/64-admin-signed-in-apps.png)
+
+**Step 0.7** — Local mode (no account). Click **Start local mode** on the sign-in screen. It needs the AutoMoto
+engine on this PC; if it isn't installed, click **Install the local engine** (it opens PowerShell and runs the
+official installer that ships inside the app), add a free AI key when it asks, then click **Start local mode** again.
+The app starts the engine for you and stops it when you close the window.
+
+**Useful menu items** (menu **AutoMoto**): *Sign-in screen / switch mode* (`Ctrl+Shift+H`), *Reload* (`Ctrl+R`),
+*Check for updates…*, *Sign out of this device*. **Help** has this guide (`F1`) and the local engine's log.
+
+**Updates** — the app checks GitHub Releases when it starts and asks before installing a new version. Every update
+is signed; the app refuses one whose signature doesn't match.
 
 ---
 
@@ -149,7 +215,7 @@ automoto serve
 It prints something like this and opens your browser:
 
 ```text
-AutoMoto AI v5.5.0 "Agent" -> http://127.0.0.1:8765/
+AutoMoto AI v5.6.0 "Agent" -> http://127.0.0.1:8765/
 Open (one-time link): http://127.0.0.1:8765/?launch=…
 Workspace: ~/.automoto/workspace  ·  sandbox: local  ·  approvals: ask  ·  routines: on
 ```
@@ -494,11 +560,11 @@ Repack uploads/hello-plugin.zip as a clean zip with hello-plugin/ as the top fol
 
 ## 18. VS Code panel and commands
 
-**Step 18.1** — download `automoto-ai-5.5.0.vsix` from the
+**Step 18.1** — download `automoto-ai-5.6.0.vsix` from the
 [latest release](https://github.com/ymmiah/AutoMotoAI/releases/latest), then install it:
 
 ```bash
-code --install-extension automoto-ai-5.5.0.vsix
+code --install-extension automoto-ai-5.6.0.vsix
 ```
 
 (or **Extensions → … → Install from VSIX…**).
@@ -723,6 +789,7 @@ More fixes: [INSTALL.md → Troubleshooting](INSTALL.md#11-troubleshooting). Sti
 
 ---
 
-<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. The example AI
+<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. Section 0: the 5.6.0
+app built from this repository on Linux (the Windows build looks the same; CI saves a Windows screenshot of every build). The example AI
 replies in the chat screenshots came from a scripted stand-in model so they stay the same every time; with a real
 key the wording will differ.</sub>

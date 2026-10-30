@@ -84,6 +84,50 @@ admin can't be removed.
 
 Do **not** set `AUTOMOTO_NET_ALLOW_CIDRS` on a public server — it would let users' web tools reach private networks.
 
+## Apps and devices (one account everywhere)
+
+The same server is the **account server** for every client: the web GUI, phones' browsers and the
+**Windows app** (`apps/desktop`). A user's chats, files, memory, usage limit and bonus time live on the server,
+so every device signed in to that account sees the same things.
+
+How the app signs in:
+
+1. The app sends the username and password once to `POST /api/auth/device/login` and gets a **device token**
+   (`amd_…`). The server keeps only its SHA-256 hash; the app stores the token in the OS credential store
+   (Windows Credential Manager), never in a file.
+2. To open the window, the app asks `POST /api/auth/device/launch` (token in `Authorization: Bearer …`) for a
+   one-time code valid for 60 seconds, then opens `/?device_launch=<code>`. That becomes a normal browser session
+   tied to the device, so the GUI works exactly as in a browser.
+3. Device tokens **expire** after `AUTOMOTO_DEVICE_DAYS` without use (each use extends it). A user can have at most 20;
+   the oldest is dropped.
+
+Revoking:
+
+* The user: **Account → My devices → Sign out** (also lists browser sessions), or *AutoMoto → Sign out of this device*
+  in the app.
+* The admin: **Admin → Signed-in apps → Sign out**, for any user.
+* Changing a password, suspending or deleting a user signs out every device at once.
+
+Security rules the server enforces:
+
+* Device tokens are accepted **only over HTTPS** (or from the same machine). Put the server behind Caddy or
+  Cloudflare Tunnel (below) — the app also refuses `http://` addresses that aren't `localhost`.
+* Bearer requests can't be made by a web page in a browser (it would need the token), so they skip the CSRF check;
+  cookie requests still need the CSRF token and a same-origin `Origin`.
+* CORS is answered only for the app's own origins (`tauri://localhost`, `http(s)://tauri.localhost`) on the device
+  endpoints, without credentials. App sign-in has the same per-IP and per-user limits as the web sign-in; launch
+  codes are rate-limited per IP.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AUTOMOTO_DEVICE_DAYS` | `90` | a device token expires after this many days without use |
+| `AUTOMOTO_APP_ORIGINS` | — | extra app origins allowed by CORS, comma-separated (only if you build your own client) |
+| `AUTOMOTO_ALLOW_HTTP_DEVICES` | off | `1` accepts device tokens over plain HTTP — **testing only** |
+
+**Building the app with your server pre-filled:** set the repository variable `AUTOMOTO_DEFAULT_SERVER`
+(*Settings → Secrets and variables → Actions → Variables*) to e.g. `https://automoto.example.org`. The Windows app
+workflow bakes it in as the default server address; users can still change it on the sign-in screen.
+
 ## Free hosting — what's actually free (checked October 2026)
 
 Free tiers change often; check the provider's page before you rely on one. The big catch for AutoMoto is

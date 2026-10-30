@@ -13,6 +13,7 @@ nav:
   - GUI guide: GUI-GUIDE.md
   - Install: INSTALL.md
   - Hosting: HOSTING.md
+  - Windows app distribution: WINDOWS-DISTRIBUTION.md
   - Publishing: PUBLISHING.md
 theme:
   name: material
