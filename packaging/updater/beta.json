@@ -1,19 +1,19 @@
 {
-  "version": "5.6.0-beta.1",
-  "notes": "AutoMoto AI 5.6.0-beta.1 - see https://github.com/ymmiah/AutoMotoAI/blob/main/CHANGELOG.md",
-  "pub_date": "2026-10-30T21:02:14Z",
+  "version": "5.6.0-beta.2",
+  "notes": "AutoMoto AI 5.6.0-beta.2 - see https://github.com/ymmiah/AutoMotoAI/blob/main/CHANGELOG.md",
+  "pub_date": "2026-10-30T23:07:20Z",
   "platforms": {
-    "windows-x86_64-nsis": {
-      "url": "https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.1/AutoMoto-AI_5.6.0-beta.1_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTUjBXaG9TYWticXFFYzdNR0dqUmNUNER6M1F6K2hTUDVBRlhQSXV1OHNBaGpWV0g1R0ozQldJQWdEc1lpalVLTy9uQzhEWFpzWDlYNkI3cTU3aGdGNVNPZkh2NHJxclFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMzk0MDEzCWZpbGU6QXV0b01vdG8gQUlfNS42LjAtYmV0YS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjo1LjYuMC1iZXRhLjEKbHlIWE82TGxjcFRZYVRzZ0lGTkMzRFArZUxYb2pJLzBNVWJ3MVkwa1lmakx2R2NQU0RQb2Y0T2lWS3hNOTFEZ1FvQUdCUWZMTGR1Yjg0aWlMY0VMRFE9PQo="
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTUjBXaG9TYWticWg1MTNVSk1HY1Y1c0pPSWlRL0dOb25Mcitsc0ptMmtKK21SZ3ZtNm5jeEVNWlVQK0g2VXhoVk45d25ZOEFRWE42Z243RGJsMHIveWpQTHRsTytJQ2dNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNDAxNTEzCWZpbGU6QXV0b01vdG8gQUlfNS42LjAtYmV0YS4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjo1LjYuMC1iZXRhLjIKOUdXWE00T0ptOWFjeDJNL0ZBTno4aHBzRnlhaVpvZ3BrbFJyK1NDM2VOdXRYREJoTzFaK2duSWdhUVNKWFE0d0hyYjA3akhRUkJWS3BDeEpLcklqRHc9PQo=",
+      "url": "https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.2/AutoMoto-AI_5.6.0-beta.2_x64-setup.exe"
     },
     "windows-x86_64-msi": {
-      "url": "https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.1/AutoMoto-AI_5.6.0-beta.1_x64_en-US.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTUjBXaG9TYWticXRuSU9oR1l5dmIzUXpsakxOZ3MvemxqUlNIYzczSXVzbE9ZUytVRUdvSzkrdXpNeUR5UmNrSXMxWTArSzBuaXlHM2lDcmlGN2tmdFVQSkF0WWdtZlFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMzk0MDEzCWZpbGU6QXV0b01vdG8gQUlfNS42LjAtYmV0YS4xX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjo1LjYuMC1iZXRhLjEKRExXTkk4Rnk1MXNYTmZDTGFUVFhpTDlBcXNJcnZiUnlDazlsdmpwVWRlQktEVU1udktLUExBcmV0Z2xBOTdKajFndElGSDRKZ3l6bmJTaDBVUm0yQ0E9PQo="
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTUjBXaG9TYWticWpsT1VZMWZjQTZ1TWxPaTc0dHEvMXNlOVNlVUNEbnd5RERYVFAxRmJPT3oxYjZsQ1NwZ0IxZjFvOXZmSSt6MG11NUNDNUQ5MTEybUY0TzI5Z2lQVUFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNDAxNTEzCWZpbGU6QXV0b01vdG8gQUlfNS42LjAtYmV0YS4yX3g2NF9lbi1VUy5tc2kJdmVyc2lvbjo1LjYuMC1iZXRhLjIKNVVPWmlVMnRxbS96Vkx3NVk2TFNrNS9pS25MYThESW1LR1UxM1V6RkcxRjFsck5BU1dtTHlod2RRd3RIdkhLTkV0S2x6NzJxeXkwQjdPenZTS2dBQ2c9PQo=",
+      "url": "https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.2/AutoMoto-AI_5.6.0-beta.2_x64_en-US.msi"
     },
-    "windows-x86_64": {
-      "url": "https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.1/AutoMoto-AI_5.6.0-beta.1_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTUjBXaG9TYWticXFFYzdNR0dqUmNUNER6M1F6K2hTUDVBRlhQSXV1OHNBaGpWV0g1R0ozQldJQWdEc1lpalVLTy9uQzhEWFpzWDlYNkI3cTU3aGdGNVNPZkh2NHJxclFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMzk0MDEzCWZpbGU6QXV0b01vdG8gQUlfNS42LjAtYmV0YS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjo1LjYuMC1iZXRhLjEKbHlIWE82TGxjcFRZYVRzZ0lGTkMzRFArZUxYb2pJLzBNVWJ3MVkwa1lmakx2R2NQU0RQb2Y0T2lWS3hNOTFEZ1FvQUdCUWZMTGR1Yjg0aWlMY0VMRFE9PQo="
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTUjBXaG9TYWticWg1MTNVSk1HY1Y1c0pPSWlRL0dOb25Mcitsc0ptMmtKK21SZ3ZtNm5jeEVNWlVQK0g2VXhoVk45d25ZOEFRWE42Z243RGJsMHIveWpQTHRsTytJQ2dNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNDAxNTEzCWZpbGU6QXV0b01vdG8gQUlfNS42LjAtYmV0YS4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjo1LjYuMC1iZXRhLjIKOUdXWE00T0ptOWFjeDJNL0ZBTno4aHBzRnlhaVpvZ3BrbFJyK1NDM2VOdXRYREJoTzFaK2duSWdhUVNKWFE0d0hyYjA3akhRUkJWS3BDeEpLcklqRHc9PQo=",
+      "url": "https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.2/AutoMoto-AI_5.6.0-beta.2_x64-setup.exe"
     }
   }
 }
