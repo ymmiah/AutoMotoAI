@@ -399,7 +399,9 @@ def _fix_path(raw: Any) -> Any:
     if "\\" in p and "/" not in p and not Path(p).exists():
         p = p.replace("\\", "/")
     pp = Path(p)
-    if pp.is_absolute() and not pp.parent.exists():
+    # "/uploads/x" is root-relative (not absolute) on Windows, so check the leading slash too
+    rooted = pp.is_absolute() or (p[:1] in ("/", "\\") and not p.startswith("\\\\"))
+    if rooted and not pp.parent.exists():
         rel = p.lstrip("/\\")
         for prefix in ("workspace/", "sandbox/", "home/workspace/"):
             if rel.startswith(prefix) and (base / rel[len(prefix):]).parent.exists():
@@ -407,7 +409,7 @@ def _fix_path(raw: Any) -> Any:
                 break
         if rel and (base / rel).parent.exists():
             return rel
-    if not pp.is_absolute() and not (base / p).exists() and "/" not in p and (base / "uploads" / p).is_file():
+    if not rooted and not (base / p).exists() and "/" not in p and (base / "uploads" / p).is_file():
         return f"uploads/{p}"
     return p
 

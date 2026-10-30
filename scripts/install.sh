@@ -19,7 +19,7 @@ sha_for() {
   case "$1" in
     5.5.0) echo "755bc31b8f8b6f1ed5330c5356b05e9509f94f0eafc3b6e9aa7eab443f223107" ;;
     5.6.0b1) echo "0c9529605b3d18e9739f408da745074a48dd77408fdc4526e241938955a13b22" ;;  # beta (tag v5.6.0-beta.1)
-    5.6.0b2) echo "ee5b2421e9116e50c06b9376671b4cd061ceec963a07379ccc4dbe0393d84585" ;;  # beta (tag v5.6.0-beta.2)
+    5.6.0b2) echo "f4c1ab42003f2cf8964dfec783e005fa847a38831d5f22385b119d27922f68c5" ;;  # beta (tag v5.6.0-beta.2)
     *) echo "" ;;
   esac
 }
