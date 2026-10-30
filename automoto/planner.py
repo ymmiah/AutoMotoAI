@@ -62,7 +62,7 @@ CAPS: tuple[Capability, ...] = (
                ("office_convert", "office_check", "office_review"), skills=("publication-ready-pdf",),
                how="Read with read_file (first/last for a page range). Make PDFs by creating the Word/slide file and "
                    "office_convert to=pdf; office_check verifies tags, fonts and links."),
-    Capability("data", "Data and tables", r"\b(csv|tsv|data|dataset|table|rows?|columns?|average|mean|median|sum|total|"
+    Capability("data", "Data and tables", r"\b(csv|tsv|data|dataset|table(?! of contents)|rows?|columns?|average|mean|median|sum|total|"
                r"count|group by|filter|sort|dedupe|duplicates|chart|graph|statistics|stats|analy[sz]e|analysis|json|yaml|"
                r"xml|toml|parquet|sqlite|sql|database|logs?)\b",
                (".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".yaml", ".yml", ".toml", ".xml", ".parquet", ".sqlite",
@@ -397,5 +397,9 @@ def ideas_for(files: Iterable[str]) -> list[dict[str, Any]]:
     return out[:6]
 
 
+_IDEA_ICONS = ("file", "edit", "sheet", "terminal", "globe", "slides", "archive", "brain")
+
+
 def default_ideas() -> list[dict[str, Any]]:
-    return [{"title": t, "subtitle": s, "prompt": p, "attach": a} for t, s, p, a in DEFAULT_IDEAS]
+    return [{"title": t, "subtitle": s, "prompt": p, "attach": a, "icon": _IDEA_ICONS[i % len(_IDEA_ICONS)]}
+            for i, (t, s, p, a) in enumerate(DEFAULT_IDEAS)]

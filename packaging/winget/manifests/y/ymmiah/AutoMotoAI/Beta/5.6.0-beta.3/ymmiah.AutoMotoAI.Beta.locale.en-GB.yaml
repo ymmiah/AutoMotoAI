@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: ymmiah.AutoMotoAI.Beta
+PackageVersion: 5.6.0-beta.3
+PackageLocale: en-GB
+Publisher: Yasin Mohammed Miah
+PublisherUrl: https://github.com/ymmiah
+PublisherSupportUrl: https://github.com/ymmiah/AutoMotoAI/issues
+Author: Yasin Mohammed Miah
+PackageName: AutoMoto AI (Beta)
+PackageUrl: https://github.com/ymmiah/AutoMotoAI
+License: MIT
+LicenseUrl: https://github.com/ymmiah/AutoMotoAI/blob/main/LICENSE
+Copyright: Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)
+ShortDescription: (Beta) AI agent for research, Word/Excel/PowerPoint files and tasks, with approvals.
+Description: |-
+  AutoMoto AI is an AI agent that does the work: it researches the web, writes Word, Excel and PowerPoint files,
+  works on archives and data, and asks before risky steps. Sign in to an AutoMoto account to see the same chats
+  and files on every device, or use Local mode on this PC with your own free AI key.
+Moniker: automoto-beta
+Tags:
+- ai
+- agent
+- assistant
+- chatbot
+- productivity
+ReleaseNotesUrl: https://github.com/ymmiah/AutoMotoAI/blob/main/CHANGELOG.md
+Documentations:
+- DocumentLabel: Guide
+  DocumentUrl: https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0

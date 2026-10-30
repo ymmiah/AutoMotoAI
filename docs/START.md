@@ -1,7 +1,7 @@
 # Start here: pick your device
 
-> **⚠️ Beta.** This guide is for **AutoMoto AI 5.6.0 Beta 2**, a test version
-> ([download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2)). Things may still change or break.
+> **⚠️ Beta.** This guide is for **AutoMoto AI 5.6.0 Beta 3**, a test version
+> ([download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)). Things may still change or break.
 > Want the stable version instead? Use **5.5.0** ([release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0))
 > and the [install guide](INSTALL.md). 5.5.0 has no Windows app.
 
@@ -35,12 +35,12 @@ You need Windows 10 or 11 (64-bit) and the internet.
 
 ### A1. Download the app
 
-1. Open the **[5.6.0 Beta 2 download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2)**.
+1. Open the **[5.6.0 Beta 3 download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)**.
 2. Scroll down to **Assets**.
-3. Click **`AutoMoto-AI_5.6.0-beta.2_x64-setup.exe`** to download it. This is the one most people want. It installs just for you
+3. Click **`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe`** to download it. This is the one most people want. It installs just for you
    and doesn't need an admin password.
 
-   *(The other installer, `AutoMoto-AI_5.6.0-beta.2_x64_en-US.msi`, is for school or work IT and needs admin rights.)*
+   *(The other installer, `AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi`, is for school or work IT and needs admin rights.)*
 
    If **Edge** says the file *isn't commonly downloaded*, click **⋯ → Keep → Show more → Keep anyway**.
    New programs get this message until enough people have downloaded them.
@@ -49,7 +49,7 @@ You need Windows 10 or 11 (64-bit) and the internet.
    *PowerShell* → open it) and paste:
 
    ```powershell
-   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.2_x64-setup.exe").Hash
+   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe").Hash
    ```
 
    It should print `8DD3298AFF2F00D486B5C47FF12B1E764D40FDBD555BEBA2CC53A52EB6656DCA`
@@ -115,7 +115,7 @@ Wait until it says it's done, then **close PowerShell**.
 runs AutoMoto's official installer, which comes inside the app:
 
 * It finds Python. (If it can't, it tells you to do Step 1 and stops.)
-* It downloads the **5.6.0b2** engine from GitHub and checks its fingerprint (SHA-256) before installing it.
+* It downloads the **5.6.0b3** engine from GitHub and checks its fingerprint (SHA-256) before installing it.
 * It installs into `%LOCALAPPDATA%\automoto-ai`, without admin rights.
 * It may ask whether to install **optional tools** (LibreOffice, PDF tools, 7-Zip, PHP) with winget.
   Type **y** for yes or **n** for no. You can say no.
@@ -258,10 +258,10 @@ The desktop **app is only released for Windows** so far. On a Mac or Linux you h
    cd AutoMotoAI
    ```
 
-5. Install the **beta** engine (leave out `--version 5.6.0b2` to get stable 5.5.0):
+5. Install the **beta** engine (leave out `--version 5.6.0b3` to get stable 5.5.0):
 
    ```bash
-   ./scripts/install.sh --version 5.6.0b2
+   ./scripts/install.sh --version 5.6.0b3
    ```
 
 6. Add your free AI key (see [A5 Step 3](#a5-local-mode-no-account-just-this-pc) for getting one). Open the
@@ -297,12 +297,12 @@ sign in to a shared account server.
 
 1. Install AutoMoto on the computer first: Windows → [A5](#a5-local-mode-no-account-just-this-pc) Steps 1–3 (or
    [INSTALL.md](INSTALL.md#3-windows-1011)), Mac/Linux → [C](#c-mac-or-linux).
-2. Download **`automoto-ai-5.6.0-beta.2.vsix`** from the
-   [beta download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2) (Assets).
+2. Download **`automoto-ai-5.6.0-beta.3.vsix`** from the
+   [beta download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (Assets).
 3. Install it. In a terminal, in your **Downloads** folder:
 
    ```bash
-   code --install-extension automoto-ai-5.6.0-beta.2.vsix
+   code --install-extension automoto-ai-5.6.0-beta.3.vsix
    ```
 
    (Or in VS Code: **Extensions → ⋯ → Install from VSIX…** and pick the file.)
@@ -346,7 +346,7 @@ People can only sign in once someone runs an **AutoMoto account server** (hosted
 by step: **[HOSTING.md](HOSTING.md)** and [INSTALL.md § 7](INSTALL.md#7-host-it-for-other-people). Use HTTPS
 (Cloudflare Tunnel or Caddy), because the Windows app refuses `http://` servers that aren't on the same PC.
 
-> **Run 5.6.0b2 on the server.** The Windows app's sign-in uses features that are new in 5.6.0. A 5.5.0 server
+> **Run 5.6.0b3 on the server.** The Windows app's sign-in uses features that are new in 5.6.0. A 5.5.0 server
 > works in browsers but **not** in the app.
 
 **Make accounts** (on the server, where `AUTOMOTO_DATA_DIR` points to the server's data). Create a user (it asks
@@ -406,14 +406,14 @@ keep an empty box.
 | *"Use https:// - your password and device key must not travel unencrypted"* | The address starts with `http://`. Use the `https://` address from your admin (try it in a browser first). |
 | *"Network error …"* or *"the server answered …"* | Check the address and your internet. Open the address in a browser: you should see the AutoMoto sign-in page. |
 | *"wrong username or password"* | Check Caps Lock. Ask your admin to reset it (`automoto admin passwd <name>`). |
-| *"That address is not an AutoMoto account server (hosted mode is off, or it is older than 5.6)"* | Sign-in works in a browser but not in the app: the server needs 5.6.0b2. Ask the admin ([F](#f-for-admins-running-the-account-server)). |
+| *"That address is not an AutoMoto account server (hosted mode is off, or it is older than 5.6)"* | Sign-in works in a browser but not in the app: the server needs 5.6.0b3. Ask the admin ([F](#f-for-admins-running-the-account-server)). |
 | *"too many sign-in attempts - wait 15 minutes"* | Wait 15 minutes, then try again carefully. |
 | *"this device was signed out - sign in again"* | Someone signed this PC out in **My devices**, or the password changed. Sign in again. |
 | *The local engine is not installed yet* | Do [A5](#a5-local-mode-no-account-just-this-pc) Steps 1–2. |
 | The engine install says Python is missing | Do A5 Step 1, **close** PowerShell, then click **Install the local engine** again. |
 | Local mode opens, but the AI doesn't answer | Add a key (A5 Step 3), then close and reopen the app. Menu **Help → Open the local engine log** shows what happened. |
 | *"NVIDIA NIM: the key was rejected (403)"* | The key is wrong or expired. Make a new one at <https://build.nvidia.com> (**Get API Key**), replace the `NVIDIA_API_KEY=` line in your settings file (A5 Step 3), then close and reopen the app. |
-| *"model not available to this key (404) - tried …"* (or `nim: NotFoundError: Error code: 404`) | The key works, but NVIDIA doesn't let it use those models. 5.6.0-beta.2 tries other models by itself. To see which ones answer, open **Settings → Test keys** (or run `automoto doctor`), then put the suggested line, e.g. `NIM_MODEL=openai/gpt-oss-20b`, in your settings file. |
+| *"model not available to this key (404) - tried …"* (or `nim: NotFoundError: Error code: 404`) | The key works, but NVIDIA doesn't let it use those models. 5.6.0-beta.3 tries other models by itself. To see which ones answer, open **Settings → Test keys** (or run `automoto doctor`), then put the suggested line, e.g. `NIM_MODEL=openai/gpt-oss-20b`, in your settings file. |
 | *"503 = provider busy … retried 2 times"* (or `InternalServerError: Error code: 503`) | The AI company's servers are overloaded. It's not your key. AutoMoto already waited and tried other models. Try again in a minute. |
 | *"All AI providers failed"* with only one key | Add a second **free** key so one company can't stop you: Gemini (<https://aistudio.google.com/apikey>, `GEMINI_API_KEY=`) or Groq (<https://console.groq.com/keys>, `GROQ_API_KEY=`). |
 | Local mode opens an AutoMoto you started yourself | If something already runs on port 8765 (e.g. `automoto serve`), the app opens that one instead of starting a second. |

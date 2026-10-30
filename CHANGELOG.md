@@ -1,5 +1,62 @@
 # AutoMoto AI - Version History & Changelog
 
+## 5.6.0-beta.3 "Agent" — Beta — 30 October 2026
+**One smart assistant instead of an ocean of tools.** Still a pre-release (`v5.6.0-beta.3`, Python `5.6.0b3`);
+5.5.0 stays the latest stable release. The Windows app offers this update to beta 1 and beta 2 automatically.
+
+### New — the task planner picks the tools for you
+- **Automatic routing.** A built-in planner (`automoto/planner.py`, no extra AI call) reads your request and any
+  attached or mentioned files (`.pptx/.docx/.xlsx/.pdf/.csv/.json/.zip/.php/.py/images/audio/video…`), recognises
+  the kind of task (Word, spreadsheet, slides, PDF, data, archive, WordPress, code, web research, images, media,
+  terminal, apps, connectors, routines, memory) and offers the AI only the tools that task needs, plus the
+  matching skill's instructions in the prompt. Typos are understood (*"presntation"*, *"spredsheet"*).
+- **Small prompts.** Before: all 48 tools (about 24 KB of tool descriptions) on every request. Now: 10-22 tools per
+  task (median 13, about 4-10 KB). This helps every model and is designed for small local models next.
+- **`more_tools`.** If a task turns out to need something else (e.g. "read my notes, then make a spreadsheet"),
+  the AI asks for it mid-run and gets those tools. Works with native tool calling and the JSON-in-text mode.
+- **Leaner tool set (48 → 41 offered).** `read_file` now reads anything: text and code, Word/Excel/PowerPoint/PDF
+  (`first`/`last` pages), JSON/YAML/XML (`select=`), archives (listing), images (size/EXIF), Parquet/SQLite
+  (profile) and the end of a log (`tail=`). Also merged: `text_search` → `search_files` (inside one big file),
+  `archive_inspect` → `archive_list check=true`, `office_render` → `office_review ai=false`, `sqlite_query` →
+  `data_query sql=`. The old names still run if an older skill or model calls them; they are just not offered.
+- **New `routine` tool.** *"Every morning at 8 give me the top 3 tech headlines"* sets up a routine from the
+  chat (it asks first). Not available on hosted servers.
+- `AUTOMOTO_PLANNER=off` offers every tool again (the old behaviour), for debugging.
+
+### Changed — a clean chat
+- **Idea cards instead of a tool list.** New chats show eight ideas (Summarise my file, Make a Word report, Analyse
+  my spreadsheet or CSV, Fix my code, Research a topic, Make slides, Unzip & edit a WordPress plugin, Remember
+  something). Attach a file and you get ideas for that file, e.g. *Summarise my slides*, *Speaker notes*,
+  *Improve my deck* for a `.pptx`. New API: `POST /api/ideas`.
+- **Plain-language steps.** Step cards and the status line say *Reading your slides*, *Building your spreadsheet*,
+  *Writing your Word document*; the tool name and arguments are one click away. Approval cards say what will
+  happen (*Allow: Writing your Word document?*) with the arguments under **Details**. A short note shows what the
+  assistant is working with.
+- **Tools and Skills moved to Settings → Advanced** (and Account → Advanced on hosted servers). The sidebar is
+  now Tasks · Memory · Routines · Files · Settings.
+- The attachment note sent to the AI no longer shows in your message bubble; the files appear as chips.
+- **VS Code panel:** idea buttons on an empty chat, plain-language step lines and approval prompts, a plan line.
+- **Windows app:** gets all of the above (it shows the same app).
+
+### Fixed (found by the new scenario harness)
+- Reading Office/PDF/data files through the merged reader failed with "takes 1 positional argument".
+- `data_query` can sort by the column you aggregated (`sort=['-Units']` after `aggregate={'Units':'sum'}`).
+- `run_app` reports a non-zero exit as a failure (the AI used to think a failed ImageMagick/ffmpeg run worked)
+  and creates the output file's folder.
+- Connector (MCP) tools were never matched by the planner's connector group; tools of a connector named in the
+  request (*"in Linear"*) are now offered.
+- "table of contents" no longer makes a Word report look like a data task; `rm`, `sudo`, `ls` etc. are terminal.
+
+### Tests and evaluation
+- **`python -m evals`**: 85 realistic scenarios (office, files, archives, data, coding, web, writing, images,
+  media, terminal, WordPress, connectors, routines, memory, safety) run through the real agent loop with real
+  sample files and a scripted model that can only call tools it was offered. Checks: task recognised, files
+  created and valid, content correct, risky steps asked, unsafe ones refused (`rm -rf /`, `169.254.169.254`,
+  `localhost`), plain-language labels. Result: **85/85**, 84/85 routed right on the first try. Runs in CI as
+  `tests/test_scenarios.py`. `python -m evals --real` runs the same requests against real keys.
+- New `tests/test_planner.py`. 504 tests in total.
+- Plain-language catalogue for users: [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
+
 ## 5.6.0-beta.2 "Agent" — Beta — 30 October 2026
 **Fixes for the first beta testers: AI errors and broken tool calls.** Still a pre-release (`v5.6.0-beta.2`, Python
 `5.6.0b2`); 5.5.0 stays the latest stable release. The Windows app offers this update to beta 1 automatically.

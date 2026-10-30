@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "automoto-ai"
-version = "5.6.0b2"
+version = "5.6.0b3"
 description = "AutoMoto AI v5 'Agent' - a local AI agent with skills, an Office suite (Word, Excel, PowerPoint, PDF), local apps, service connectors, a VS Code extension, approvals, memory and routines over a multi-AI router with auto-failover - plus an optional hosted multi-user mode with per-user usage limits"
 readme = "README.md"
 requires-python = ">=3.10"

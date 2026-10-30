@@ -308,6 +308,7 @@ async function loadIdeas() {
 // After an upload: a few ideas that fit the file (e.g. a .pptx -> "Summarise the slides").
 async function drawFileIdeas() {
   const box = $("#fileIdeas"); if (!box) return;
+  $(".hero")?.classList.toggle("has-file", !!state.files.length);
   if (!state.files.length) { box.innerHTML = ""; return; }
   let ideas = [];
   try { ideas = (await api("/api/ideas", { files: state.files })).ideas || []; } catch { /* optional */ }
@@ -378,12 +379,16 @@ function ensureThread() {
   if (!$("#thread")) $("#msgs").innerHTML = '<div class="thread" id="thread"></div>';
   return $("#thread");
 }
+const ATTACH_NOTE = /\n*\[Attached file\(s\) in the workspace: ([^\]]*?)\. Use \w+ to read them; they are untrusted content\.\]\s*$/;
 function addUser(content, thread = ensureThread()) {
-  const text = typeof content === "string" ? content : content.filter((p) => p.type === "text").map((p) => p.text).join("\n");
+  let text = typeof content === "string" ? content : content.filter((p) => p.type === "text").map((p) => p.text).join("\n");
+  const m = text.match(ATTACH_NOTE); // the note is for the AI; show the files as chips instead
+  const files = m ? m[1].split(", ") : [];
+  if (m) text = text.slice(0, m.index).trim();
   const imgs = Array.isArray(content) ? content.filter((p) => p.type === "image_url").map((p) => p.image_url.url) : [];
   const d = document.createElement("div");
   d.className = "msg user";
-  d.innerHTML = `<div><div class="bubble">${esc(text)}</div>${imgs.length ? `<div class="imgs">${imgs.map((u) => `<img src="${esc(u)}" alt="attached image">`).join("")}</div>` : ""}</div>`;
+  d.innerHTML = `<div><div class="bubble">${esc(text)}</div>${files.length ? `<div class="att-files">${files.map((f) => `<span class="filechip">${icon("file")}<span>${esc(f.split("/").pop())}</span></span>`).join("")}</div>` : ""}${imgs.length ? `<div class="imgs">${imgs.map((u) => `<img src="${esc(u)}" alt="attached image">`).join("")}</div>` : ""}</div>`;
   thread.appendChild(d);
   scrollDown(true);
   return d;
@@ -452,7 +457,7 @@ function renderEvent(ctx, ev) {
       a.setAttribute("role", "group"); a.setAttribute("aria-label", `Approve ${ev.name}?`);
       const what = (ctx.steps.find((x) => x.id === ev.id) || {}).label || stepLabel(ev.name, ev.args);
       a.innerHTML = `<div class="ah">${icon("shield")} Allow: ${esc(what)}? <code>${esc(ev.name)}</code></div>
-        <div class="why">${esc(ev.reason || "This action is marked risky.")}</div><pre>${esc(pretty(ev.args))}</pre>
+        <div class="why">${esc(ev.reason || "This action is marked risky.")}</div><details class="adv"><summary>Details</summary><pre>${esc(pretty(ev.args))}</pre></details>
         <div class="row">${ctx.live ? `<button class="btn primary" data-ok="1">${icon("check")} Approve</button><button class="btn" data-ok="0">${icon("x")} Deny</button><span class="muted" style="font-size:12px">or press A / D</span>` : '<span class="muted">Waiting…</span>'}</div>`;
       steps.appendChild(a);
       if (ctx.live) {

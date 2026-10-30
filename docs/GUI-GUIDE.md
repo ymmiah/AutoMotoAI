@@ -6,8 +6,8 @@ hosted (multi-user) mode. Every command sits in its own box. On GitHub and on th
 top-right corner, then paste it into your terminal.
 
 > **Quickest start for your device** (Windows app, phone, Mac/Linux, VS Code): [Start here: pick your device](START.md).
-> This guide is the long version, page by page. 5.6.0 Beta 2 is a
-> [pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2); 5.5.0 is the stable version.
+> This guide is the long version, page by page. 5.6.0 Beta 3 is a
+> [pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3); 5.5.0 is the stable version.
 
 **Contents:** [0 The Windows app](#0-the-windows-app) · [1 Install](#1-install) · [2 Add a free AI key](#2-add-a-free-ai-key) · [3 Start AutoMoto](#3-start-automoto) ·
 [4 Open the app](#4-open-the-app-one-time-sign-in-link) · [5 The screen](#5-a-quick-tour-of-the-screen) ·
@@ -31,9 +31,9 @@ The **AutoMoto AI app for Windows** (new in 5.6.0, **Beta**) is a normal window 
 on a sign-in screen with two choices: **your AutoMoto account** (the same chats, files and usage time on every
 device) or **Local mode** (just this PC, no account).
 
-**Step 0.1** — download the installer from the [5.6.0 Beta 2 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2):
-`AutoMoto-AI_5.6.0-beta.2_x64-setup.exe` (recommended, installs just for you, no admin) or
-`AutoMoto-AI_5.6.0-beta.2_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
+**Step 0.1** — download the installer from the [5.6.0 Beta 3 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3):
+`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe` (recommended, installs just for you, no admin) or
+`AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
 published yet.) It's a **beta**: please report problems at <https://github.com/ymmiah/AutoMotoAI/issues>.
 
 **Step 0.2** — run it. The app is **not code-signed yet**, so Windows SmartScreen shows *"Windows protected your PC"*.
@@ -41,7 +41,7 @@ Click **More info → Run anyway**. (Why, and how that will go away: [WINDOWS-DI
 You can check the download first against `SHA256SUMS.txt` on the release page:
 
 ```powershell
-(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.2_x64-setup.exe").Hash
+(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe").Hash
 ```
 
 **Step 0.3** — sign in. Type the **server address** your admin gave you (for example
@@ -219,7 +219,7 @@ automoto serve
 It prints something like this and opens your browser:
 
 ```text
-AutoMoto AI v5.6.0b2 "Agent" -> http://127.0.0.1:8765/
+AutoMoto AI v5.6.0b3 "Agent" -> http://127.0.0.1:8765/
 Open (one-time link): http://127.0.0.1:8765/?launch=…
 Workspace: ~/.automoto/workspace  ·  sandbox: local  ·  approvals: ask  ·  routines: on
 ```
@@ -265,13 +265,13 @@ automoto open --print
 |---|---|
 | **New chat** (top left) | Starts a fresh conversation (`Ctrl+N`, or `Ctrl+Shift+O` in Chrome). |
 | **Search chats** | Finds old chats by title (`Ctrl+K` opens the command palette). |
-| **Tasks · Memory · Routines · Files · Skills · Tools · Settings** | The pages, explained below. |
+| **Tasks · Memory · Routines · Files · Settings** | The pages, explained below. (Tools and Skills are under **Settings → Advanced**: you never need to pick them, AutoMoto does.) |
 | **Help / Guide** | Opens this guide in a new tab. |
 | **Chats** | Your saved conversations. Hover one to rename ✎ or delete 🗑. |
 | **Agent / Chat** (top) | *Agent* uses tools step by step; *Chat* gives a plain answer with no tools. |
 | **Auto · best available** | Which AI answers first. *Auto* picks the best one and switches if one fails. |
 | **Panel icon** (top right) | Shows the **Run info** panel: provider, model and every step. |
-| **Suggestion cards** | Click one to fill the message box with an example. |
+| **Idea cards** | *Summarise my file*, *Make a Word report*, *Fix my code*… Click one to fill the message box. After you attach a file you get ideas for that file (for a `.pptx`: *Summarise my slides*, *Speaker notes*, *Improve my deck*). |
 | **Message box** | Type and press **Enter** to send, **Shift+Enter** for a new line, 📎 to attach a file or image. |
 
 ---
@@ -288,17 +288,20 @@ Create a file notes/study-tips.md with 3 short study tips for a computing studen
 
 ![Typing a goal in Agent mode](gui-guide/03-type-a-goal.png)
 
-**Step 6.3** — press **Enter**. The agent plans and calls tools one at a time.
+**Step 6.3** — press **Enter**. AutoMoto works out what kind of task it is (a Word report, a spreadsheet, a zip,
+code…), picks only the tools it needs and shows each step in plain words, like *Writing your Word document* or
+*Reading your slides*. Click a step to see the details (the tool name and its arguments).
 
 **Step 6.4** — risky steps (writing files outside `scratch/`, running commands, apps, connectors) stop and show an
-**approval card** with the exact arguments. Read it, then click **Approve** (or press **A**) or **Deny** (**D**).
+**approval card** that says what it wants to do (*Allow: Writing your Word document?*). **Details** shows the exact
+arguments. Click **Approve** (or press **A**) or **Deny** (**D**).
 
-![An approval card for write_file](gui-guide/04-approval-card.png)
+![An approval card for a new Word document](gui-guide/04-approval-card.png)
 
 **Step 6.5** — read the answer. Open the **Run info** panel (top-right icon) to see the provider, model and steps.
 Click a step row to expand its result.
 
-![The finished run with the Run info panel open](gui-guide/05-agent-result-and-run-info.png)
+![The finished run: plain-language steps and the answer](gui-guide/05-agent-result-and-run-info.png)
 
 > **Good to know.** Press **Esc** or the ■ button to stop a run. Runs keep going if you switch chats; the
 > **Tasks** badge counts them and changes colour when one is waiting for your approval.
@@ -369,17 +372,15 @@ Read uploads/sales.csv and show total Units by Region, sorted from highest to lo
 
 ## 10. Word, Excel, PowerPoint and PDF
 
-**Step 10.1** — on **Files**, click **Ask agent** on a document (or use 📎 in the message box).
+**Step 10.1** — click 📎 in the message box and pick a Word, Excel, PowerPoint or PDF file (or use **Ask agent**
+on the **Files** page).
 
-**Step 10.2** — type what you want and press Enter:
+**Step 10.2** — ideas for that file appear above the message box. Click one (for a deck: **Summarise my slides**),
+or type your own request, and press **Enter**. Sending a file with no text also gives you a summary.
 
-```text
-Summarise this Word document in 3 bullets.
-```
+![Ideas for an attached PowerPoint file](gui-guide/11-ask-agent-about-a-file.png)
 
-![Asking about an attached Word file](gui-guide/11-ask-agent-about-a-file.png)
-
-![The agent read the document with office_read](gui-guide/12-office-answer.png)
+![The agent read the slides and summarised them](gui-guide/12-office-answer.png)
 
 Create a new document (the agent asks before saving outside `scratch/`):
 
@@ -402,7 +403,8 @@ everything else still works (check with `automoto apps`).
 
 ## 11. Skills
 
-Click **Skills**. Skills are `SKILL.md` playbooks the agent reads when a task matches (for example *data-files*,
+You don't need this page: AutoMoto loads the right skill by itself. For a look under the hood, open
+**Settings → Advanced → Skills**. Skills are `SKILL.md` playbooks the agent reads when a task matches (for example *data-files*,
 *zip-archives*, *wordpress-plugins-themes*). Each card shows whether this computer has what the skill needs.
 
 * **View** reads a skill. **Customise** copies a bundled skill so you can edit it.
@@ -414,7 +416,8 @@ Click **Skills**. Skills are `SKILL.md` playbooks the agent reads when a task ma
 
 ## 12. Tools
 
-Click **Tools** to see everything the agent can use, grouped, with a safety level:
+You don't pick tools either: for each task AutoMoto offers the AI only the few it needs (about 10-18 of 41).
+Developers can see them all in **Settings → Advanced → Tools**, grouped, with a safety level:
 **safe** runs by itself, **risky** asks you first, **blocked** never runs. Below the tools you'll see
 **Services** (GitHub, GitLab… with token status) and **Local apps** found on this computer.
 
@@ -441,6 +444,9 @@ Remember that I prefer short answers with bullet points.
 ## 14. Routines (scheduled prompts)
 
 Click **Routines** to run a prompt on a schedule while `automoto serve` is running.
+
+Or just ask in the chat, for example *"every morning at 8 give me the top 3 tech headlines"*: AutoMoto sets the
+routine up for you (it asks first).
 
 **Step 14.1** — fill in **Name** (letters, numbers, `-`), **Schedule** and **Prompt**, then **Create routine**.
 
@@ -485,10 +491,14 @@ Click **Settings**.
 | **Connectors (MCP)** | Official connectors (GitHub, Notion, Figma, Canva, Google Drive…). Click **Enable**, then **Reconnect now**. Remote ones sign in with OAuth in your browser on first use. |
 | **Provider order** | Which AI *Auto* tries first; it fails over down the list. |
 | **Bring your own keys** | Paste a key for **this browser tab only** (wiped when you close it). Keys in `.env` work without this. |
+| **Test keys** | Sends one tiny request to every model your keys can use and shows which answer. |
+| **Advanced (for developers)** | Links to the **Tools** and **Skills** pages. You never need them: AutoMoto picks tools and skills for each task. |
 
 ![Settings: connectors](gui-guide/18-settings-connectors.png)
 
 ![Settings: bring your own keys](gui-guide/18b-settings-keys.png)
+
+![Settings: Advanced, with links to Tools and Skills](gui-guide/17b-settings-advanced.png)
 
 Enable a connector from the terminal instead (then restart `serve`):
 
@@ -797,7 +807,7 @@ More fixes: [INSTALL.md → Troubleshooting](INSTALL.md#11-troubleshooting). Sti
 
 ---
 
-<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. Section 0: the 5.6.0 Beta 2
+<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. Section 0: the 5.6.0 Beta 3
 app built from this repository on Linux (the Windows build looks the same; CI saves a Windows screenshot of every build). The example AI
 replies in the chat screenshots came from a scripted stand-in model so they stay the same every time; with a real
 key the wording will differ.</sub>

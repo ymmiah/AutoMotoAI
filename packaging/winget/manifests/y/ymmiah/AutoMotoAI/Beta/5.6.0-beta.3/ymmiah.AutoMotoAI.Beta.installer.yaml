@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+PackageIdentifier: ymmiah.AutoMotoAI.Beta
+PackageVersion: 5.6.0-beta.3
+Platform:
+- Windows.Desktop
+MinimumOSVersion: 10.0.17763.0
+InstallerType: nullsoft
+Scope: user
+InstallModes:
+- interactive
+- silent
+UpgradeBehavior: install
+ReleaseDate: 2026-10-30
+Dependencies:
+  PackageDependencies:
+  - PackageIdentifier: Microsoft.EdgeWebView2Runtime
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.3/AutoMoto-AI_5.6.0-beta.3_x64-setup.exe
+  InstallerSha256: 44D94AF3563E95E28F5CCB3D169105B866D16B994BD6A345B489CAAF5FCEE23F
+ManifestType: installer
+ManifestVersion: 1.12.0

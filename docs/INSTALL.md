@@ -3,10 +3,10 @@
 This guide is for everyone, including first-timers. Copy the commands for **your** computer, top to bottom.
 Everything here is free. Latest **stable** release: **v5.5.0** ([downloads](https://github.com/ymmiah/AutoMotoAI/releases/latest)).
 
-> **Beta: 5.6.0 Beta 2** ([pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2)) adds the
+> **Beta: 5.6.0 Beta 3** ([pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)) adds the
 > **Windows app** and **one account on every device**. New here? The simplest steps per device (Windows PC, phone,
 > Mac/Linux, VS Code) are in **[Start here: pick your device](START.md)**. To install the beta engine with the
-> scripts below, add `-Version 5.6.0b2` (Windows) or `--version 5.6.0b2` (macOS/Linux). Without it you get 5.5.0.
+> scripts below, add `-Version 5.6.0b3` (Windows) or `--version 5.6.0b3` (macOS/Linux). Without it you get 5.5.0.
 
 **Contents:** [Pick a way](#1-pick-a-way) · [Get a free AI key](#2-get-a-free-ai-key) · [Windows](#3-windows-1011) ·
 [macOS](#4-macos-intel-and-apple-silicon) · [Linux](#5-linux-ubuntu--debian-fedora-arch-and-others) ·
@@ -56,15 +56,15 @@ Never share a key or paste it into a chat, an issue or a Git commit.
 
 ### Windows app
 
-**Beta** (5.6.0 Beta 2). The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an AutoMoto account.
+**Beta** (5.6.0 Beta 3). The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an AutoMoto account.
 
-1. Download from the [5.6.0 Beta 2 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.2):
-   * `AutoMoto-AI_5.6.0-beta.2_x64-setup.exe` — installs for you only, no admin (recommended), or
-   * `AutoMoto-AI_5.6.0-beta.2_x64_en-US.msi` — installs for all users (admin; good for school/work PCs and silent installs).
+1. Download from the [5.6.0 Beta 3 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3):
+   * `AutoMoto-AI_5.6.0-beta.3_x64-setup.exe` — installs for you only, no admin (recommended), or
+   * `AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi` — installs for all users (admin; good for school/work PCs and silent installs).
 2. Optional — check it against `SHA256SUMS.txt` from the same release:
 
    ```powershell
-   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.2_x64-setup.exe").Hash
+   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe").Hash
    ```
 
 3. Run it. The app isn't code-signed yet, so SmartScreen says *"Windows protected your PC"* → **More info → Run anyway**
@@ -74,13 +74,13 @@ Never share a key or paste it into a chat, an issue or a Git commit.
 Silent installs (IT, scripts):
 
 ```powershell
-.\AutoMoto-AI_5.6.0-beta.2_x64-setup.exe /S                                       # per-user, no admin
-msiexec /i AutoMoto-AI_5.6.0-beta.2_x64_en-US.msi /qn /norestart                  # all users, admin PowerShell
+.\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe /S                                       # per-user, no admin
+msiexec /i AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi /qn /norestart                  # all users, admin PowerShell
 ```
 
 **Local mode** runs AutoMoto on this PC without an account. It needs the engine from step 2 below; the app's
 **Install the local engine** button runs the same official installer for you (it ships inside the app) and installs
-the matching beta engine (`-Version 5.6.0b2`). The app
+the matching beta engine (`-Version 5.6.0b3`). The app
 starts the engine when you pick Local mode and stops it when you close the window.
 
 **Updates:** the beta app checks the beta channel on start and asks before updating; updates are signature-checked.

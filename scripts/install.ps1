@@ -48,6 +48,7 @@ $Pinned = @{
     "5.5.0"   = "755bc31b8f8b6f1ed5330c5356b05e9509f94f0eafc3b6e9aa7eab443f223107"
     "5.6.0b1" = "0c9529605b3d18e9739f408da745074a48dd77408fdc4526e241938955a13b22"   # beta (tag v5.6.0-beta.1)
     "5.6.0b2" = "f4c1ab42003f2cf8964dfec783e005fa847a38831d5f22385b119d27922f68c5"   # beta (tag v5.6.0-beta.2)
+    "5.6.0b3" = "48dbf3a3f08c95781221fef287b8377f80a7caecba79e9b07a15a04a6f488216"   # beta (tag v5.6.0-beta.3)
 }
 $AppDir = Join-Path $env:LOCALAPPDATA "automoto-ai"
 $Venv = Join-Path $AppDir "venv"

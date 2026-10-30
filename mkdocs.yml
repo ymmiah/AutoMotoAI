@@ -12,6 +12,7 @@ nav:
   - Home: index.md
   - Start here - pick your device: START.md
   - GUI guide: GUI-GUIDE.md
+  - What you can ask for: CAPABILITIES.md
   - Install: INSTALL.md
   - Hosting: HOSTING.md
   - Windows app distribution: WINDOWS-DISTRIBUTION.md
