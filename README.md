@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> 🎉 **New: AutoMoto now supports Windows, in Beta!** Download **[AutoMoto AI 5.6.0 Beta 1](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1)** (`.exe` or `.msi`), sign in once, and the same chats and files follow you to the Windows app, the web and your phone.
+> 👉 New here? **[Start here: pick your device](https://ymmiah.github.io/AutoMotoAI/START.html)** · macOS and Linux apps are coming next. Beta means rough edges are possible; the stable version is [v5.5.0](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0).
+
 <div align="center">
 
 # 🤖 AutoMoto AI
