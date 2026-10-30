@@ -1,0 +1,99 @@
+name: Windows app
+# Builds the Windows installers (.exe NSIS + .msi) on every change to the app or the engine, smoke-tests them
+# on a clean runner (silent install, launch, local engine health, close, uninstall), and on a version tag
+# attaches them plus the signed updater manifest (latest.json) to that tag's GitHub Release.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["apps/desktop/**", "automoto/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
+  pull_request:
+    paths: ["apps/desktop/**", "automoto/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write   # only used on tags, to attach the installers to the release
+    env:
+      AUTOMOTO_DEFAULT_SERVER: ${{ vars.AUTOMOTO_DEFAULT_SERVER }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Versions agree (pyproject, app, Cargo, package.json)
+        shell: pwsh
+        run: |
+          $py = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $conf = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $cargo = (Select-String -Path apps/desktop/src-tauri/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $pkg = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          "pyproject $py · tauri.conf $conf · Cargo $cargo · package.json $pkg"
+          if (($py, $conf, $cargo, $pkg | Sort-Object -Unique).Count -ne 1) { throw "versions differ" }
+          if ($env:GITHUB_REF -like "refs/tags/v*" -and $env:GITHUB_REF_NAME -ne "v$py") { throw "tag $env:GITHUB_REF_NAME is not v$py" }
+      - name: Rust unit tests and lint
+        working-directory: apps/desktop/src-tauri
+        run: |
+          cargo test --locked
+          cargo clippy --locked --all-targets -- -D warnings
+      - name: Build the installers
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          npm ci --no-fund --no-audit
+          node --check dist/app.js
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            "::notice::No updater signing key (fork PR) - building without update signatures"
+            '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Encoding ascii no-updater.json
+            npx tauri build --bundles nsis,msi --config no-updater.json
+          } else {
+            npx tauri build --bundles nsis,msi
+          }
+          if ($LASTEXITCODE) { exit 1 }
+      - name: Collect the installers
+        shell: pwsh
+        run: ./scripts/ci/collect-windows.ps1 -Out out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: automoto-ai-windows
+          path: out/*
+          if-no-files-found: error
+      - name: Install the local engine (from this source) for the smoke test
+        shell: pwsh
+        run: |
+          ./scripts/install.ps1 -FromSource -Yes
+          exit 0
+      - name: Smoke test - NSIS (.exe) silent install, launch, local engine, close, uninstall
+        shell: pwsh
+        run: ./scripts/ci/smoke-windows.ps1 -Kind nsis -Dir out -Shots shots
+      - name: Smoke test - MSI silent install, launch, local engine, close, uninstall
+        shell: pwsh
+        run: ./scripts/ci/smoke-windows.ps1 -Kind msi -Dir out -Shots shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-screenshots-and-logs
+          path: shots/*
+          if-no-files-found: ignore
+      - name: Attach to the GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci/release-windows.ps1 -Dir out -Tag $env:GITHUB_REF_NAME -Repo $env:GITHUB_REPOSITORY
