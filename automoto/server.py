@@ -115,7 +115,7 @@ app.include_router(hosted.router)  # hosted-mode auth/admin API (only reachable 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
-EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/explain")
+EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/explain", "/api/doctor")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
 
@@ -478,6 +478,17 @@ def get_status(request: Request) -> dict[str, Any]:
 def post_status(body: RecommendIn, request: Request) -> dict[str, Any]:
     _authorise(request)
     return {**status(None if tenancy.multiuser() else body.keys), "version": __version__}
+
+
+@app.post("/api/doctor")
+def doctor_run(body: RecommendIn, request: Request) -> dict[str, Any]:
+    """Settings -> Test keys: a 1-token request to each configured model (local mode only)."""
+    _authorise(request)
+    if tenancy.multiuser():  # also blocked by the hosted allow-list; belt and braces
+        raise HTTPException(404, "not available on a hosted AutoMoto server")
+    from automoto import doctor
+
+    return doctor.run(body.keys or None)
 
 
 @app.post("/api/recommend")

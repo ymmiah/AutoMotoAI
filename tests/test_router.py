@@ -61,9 +61,9 @@ def test_failover_when_first_provider_raises(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "test-q")
     log = []
     ans = router.ask("hello", prefer="nim", transport=fake_transport(fail={"nim"}, log=log))
-    assert [p for p, _ in log] == ["nim", "groq"]
+    assert [p for p, _ in log] == ["nim", "nim", "nim", "groq"]  # 429: 2 backoff retries, then fail over
     assert ans.provider == "groq"
-    assert ans.tried[0]["ok"] is False and ans.tried[0]["status"] == 429
+    assert ans.tried[0]["ok"] is False and ans.tried[0]["status"] == 429 and ans.tried[0]["attempts"] == 3
     assert ans.tried[1]["ok"] is True
 
 

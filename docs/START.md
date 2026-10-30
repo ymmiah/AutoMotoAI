@@ -412,6 +412,10 @@ keep an empty box.
 | *The local engine is not installed yet* | Do [A5](#a5-local-mode-no-account-just-this-pc) Steps 1–2. |
 | The engine install says Python is missing | Do A5 Step 1, **close** PowerShell, then click **Install the local engine** again. |
 | Local mode opens, but the AI doesn't answer | Add a key (A5 Step 3), then close and reopen the app. Menu **Help → Open the local engine log** shows what happened. |
+| *"NVIDIA NIM: the key was rejected (403)"* | The key is wrong or expired. Make a new one at <https://build.nvidia.com> (**Get API Key**), replace the `NVIDIA_API_KEY=` line in your settings file (A5 Step 3), then close and reopen the app. |
+| *"model not available to this key (404) - tried …"* (or `nim: NotFoundError: Error code: 404`) | The key works, but NVIDIA doesn't let it use those models. 5.6.0-beta.2 tries other models by itself. To see which ones answer, open **Settings → Test keys** (or run `automoto doctor`), then put the suggested line, e.g. `NIM_MODEL=openai/gpt-oss-20b`, in your settings file. |
+| *"503 = provider busy … retried 2 times"* (or `InternalServerError: Error code: 503`) | The AI company's servers are overloaded. It's not your key. AutoMoto already waited and tried other models. Try again in a minute. |
+| *"All AI providers failed"* with only one key | Add a second **free** key so one company can't stop you: Gemini (<https://aistudio.google.com/apikey>, `GEMINI_API_KEY=`) or Groq (<https://console.groq.com/keys>, `GROQ_API_KEY=`). |
 | Local mode opens an AutoMoto you started yourself | If something already runs on port 8765 (e.g. `automoto serve`), the app opens that one instead of starting a second. |
 | Stuck on a page | **Ctrl+R** reloads. **Ctrl+Shift+H** goes back to the first screen. |
 

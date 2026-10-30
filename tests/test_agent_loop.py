@@ -78,9 +78,10 @@ def test_native_rejection_retries_same_model_in_text_mode():
 
 def test_failover_mid_loop_keeps_history(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "test-q")
+    monkeypatch.setenv("AUTOMOTO_RETRIES", "0")  # a 429 (rate-limited key) then fails over to the next provider
     log = []
     replies = [("", [call("remember", fact="likes tea")]),
-               ProviderError("x", "429", status=429), ProviderError("x", "429", status=429),
+               ProviderError("x", "429", status=429),  # rate-limited key: straight to the next provider
                ("Noted.", [])]
     res = agent(scripted(*replies, log=log)).run("remember I like tea", prefer="nim")
     assert res.text == "Noted."

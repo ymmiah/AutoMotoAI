@@ -12,6 +12,9 @@ Every model id can be overridden from the environment, e.g. ``NIM_MODEL``.
 
 from __future__ import annotations
 
+import re
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -45,6 +48,9 @@ class ProviderSpec:
     signup_url: str = ""
     notes: str = ""
     extra_headers: dict[str, str] = field(default_factory=dict)
+    # Ordered backup models per role ("text", "strong", "vision", "review", "agent"). Tried, in
+    # order, after the (env-overridable) default when a model is missing for this key (404/410).
+    fallbacks: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     # -- resolved (env-overridable) values ---------------------------------
     def key(self, overrides: dict[str, str] | None = None) -> str | None:
@@ -67,14 +73,39 @@ class ProviderSpec:
                 return s
         return (config.env(self.model_env) if self.model_env else None) or self.text_model
 
+    def all_models(self, role: str = "text") -> list[str]:
+        """Every model for a role, in order: env override / default first, then the fallbacks.
+
+        Roles: ``text`` (quick chat), ``strong`` (deep reasoning), ``vision`` (image attached),
+        ``review`` (careful vision review), ``agent`` (tool-calling step), ``agent_vision``.
+        Models currently marked unavailable are *not* filtered here - see :meth:`models`.
+        """
+        fb = self.fallbacks
+        if role == "vision" or role == "agent_vision":
+            if not self.supports_vision:
+                return self.all_models("agent" if role == "agent_vision" else "text")
+            order = [self.model_for(vision=True), *fb.get("vision", ())]
+            if role == "agent_vision":
+                order.append(self.model_for())
+        elif role == "review":
+            rm = (config.env(self.review_env) if self.review_env else None) or self.review_model
+            order = [rm, *fb.get("review", ()), *self.all_models("vision")]
+        elif role == "strong":
+            order = [self.model_for(strong=True), self.model_for(), *fb.get("strong", ()), *self.all_models("text")]
+        elif role == "agent":
+            first = (config.env(self.agent_env) if self.agent_env else None) or self.agent_model
+            order = [first, *fb.get("agent", ()), *self.all_models("text")]
+        else:
+            order = [self.model_for(), *fb.get("text", ())]
+        return list(dict.fromkeys(m for m in order if m))
+
+    def models(self, role: str = "text") -> list[str]:
+        """Like :meth:`all_models` but without models that recently returned 404/410 for us."""
+        return [m for m in self.all_models(role) if not is_unavailable(self.id, m)]
+
     def agent_models(self, *, vision: bool = False) -> list[str]:
         """Models to try, in order, for an agent (tool-calling) step."""
-        first = (config.env(self.agent_env) if self.agent_env else None) or self.agent_model
-        order = [self.model_for(vision=True)] if vision and self.supports_vision else []
-        if not vision and first:
-            order.append(first)
-        order.append(self.model_for())
-        return list(dict.fromkeys(m for m in order if m))
+        return self.models("agent_vision" if vision else "agent")
 
     def public(self, overrides: dict[str, str] | None = None) -> dict[str, Any]:
         """Status dict that is safe to send to a UI (no key material)."""
@@ -91,7 +122,8 @@ class ProviderSpec:
             "text_model": self.model_for(),
             "vision_model": self.model_for(vision=True) if self.supports_vision else None,
             "strong_model": self.model_for(strong=True) if self.model_for(strong=True) != self.model_for() else None,
-            "agent_model": self.agent_models()[0],
+            "agent_model": self.all_models("agent")[0],
+            "unavailable": [m for m in self.all_models("agent") + self.all_models("review") if is_unavailable(self.id, m)],
             "signup_url": self.signup_url,
             "notes": self.notes,
         }
@@ -124,7 +156,20 @@ REGISTRY: dict[str, ProviderSpec] = {
             review_model="nvidia/nemotron-3.5-super-vl-120b-a12b",
             review_env="NIM_REVIEW_MODEL",
             signup_url="https://build.nvidia.com",
-            notes="Free dev credits. Default Llama 3.2 11B Vision is verified live; it takes 1 image per request.",
+            notes="Free dev credits. Default Llama 3.2 11B Vision is verified live; it takes 1 image per request. "
+                  "Which models a key may call varies, so 404s fall back through the lists below.",
+            # From the public catalogue (GET https://integrate.api.nvidia.com/v1/models, Oct 2026);
+            # widely available free chat models first. Unverified per key - 404s are skipped.
+            fallbacks={
+                "text": ("openai/gpt-oss-20b", "deepseek-ai/deepseek-v4.1-flash", "mistralai/mistral-large-2-instruct",
+                         "nvidia/nemotron-3-super-120b-a12b", "nvidia/llama-3.1-nemotron-70b-instruct",
+                         "google/gemma-3-12b-it"),
+                "agent": ("nvidia/nemotron-3-super-120b-a12b", "openai/gpt-oss-20b", "deepseek-ai/deepseek-v4.1-flash",
+                          "mistralai/mistral-large-2-instruct", "nvidia/llama-3.1-nemotron-70b-instruct"),
+                "vision": ("meta/llama-3.2-90b-vision-instruct", "nvidia/nemotron-3.5-super-vl-120b-a12b",
+                           "microsoft/phi-3-vision-128k-instruct"),
+                "review": ("meta/llama-3.2-90b-vision-instruct",),
+            },
         ),
         ProviderSpec(
             id="gemini",
@@ -148,6 +193,13 @@ REGISTRY: dict[str, ProviderSpec] = {
             agent_env="GEMINI_AGENT_MODEL",
             signup_url="https://aistudio.google.com/apikey",
             notes="Free tier via AI Studio. Uses Google's OpenAI-compatible endpoint.",
+            # Current ids from https://ai.google.dev/gemini-api/docs/models (Oct 2026). A busy (503)
+            # or missing model moves to the next one; Flash-Lite is the lightest, most available.
+            fallbacks={
+                "text": ("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"),
+                "strong": ("gemini-3.8-flash",),
+                "vision": ("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"),
+            },
         ),
         ProviderSpec(
             id="groq",
@@ -172,6 +224,13 @@ REGISTRY: dict[str, ProviderSpec] = {
             agent_env="GROQ_AGENT_MODEL",
             signup_url="https://console.groq.com/keys",
             notes="Fastest free tier. Vision model is a Groq *preview* model.",
+            # Ids from https://console.groq.com/docs/models (Oct 2026).
+            fallbacks={
+                "text": ("llama-3.3-70b-versatile", "qwen/qwen3-32b", "llama-3.1-8b-instant"),
+                "strong": ("llama-3.3-70b-versatile", "moonshotai/kimi-k2-instruct"),
+                "agent": ("llama-3.3-70b-versatile", "qwen/qwen3-32b"),
+                "vision": ("meta-llama/llama-4-scout-17b-16e-instruct", "qwen/qwen3.6-27b"),
+            },
         ),
         ProviderSpec(
             id="openrouter",
@@ -195,6 +254,12 @@ REGISTRY: dict[str, ProviderSpec] = {
             agent_env="OPENROUTER_AGENT_MODEL",
             signup_url="https://openrouter.ai/keys",
             notes="':free' models are rate-limited; 'openrouter/free' auto-picks a free model.",
+            # ':free' ids from GET https://openrouter.ai/api/v1/models (Oct 2026).
+            fallbacks={
+                "text": ("nvidia/nemotron-3.5-lightning:free", "google/gemma-4-31b-it:free"),
+                "strong": ("nvidia/nemotron-3.5-super-vl:free",),
+                "vision": ("google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3.5-super-vl:free"),
+            },
             extra_headers={"HTTP-Referer": "https://github.com/ymmiah/AutoMotoAI", "X-Title": "AutoMoto AI"},
         ),
         ProviderSpec(
@@ -256,11 +321,81 @@ REGISTRY: dict[str, ProviderSpec] = {
 class ProviderError(Exception):
     """A provider call failed. ``retryable`` tells the router to try the next one."""
 
-    def __init__(self, provider: str, message: str, *, status: int | None = None, retryable: bool = True):
+    def __init__(self, provider: str, message: str, *, status: int | None = None, retryable: bool = True,
+                 retry_after: float | None = None, transient: bool | None = None):
         super().__init__(f"{provider}: {message}")
         self.provider = provider
         self.status = status
         self.retryable = retryable
+        self.retry_after = retry_after  # seconds, from a Retry-After header when the provider sent one
+        # Busy/overloaded/timeout: worth retrying the *same* model after a short wait.
+        self.transient = (status in TRANSIENT_STATUSES) if transient is None else transient
+        self.attempts = 1
+
+
+TRANSIENT_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+
+
+# ---------------------------------------------------------------------------
+# Model availability: a model that returns 404/410 for this key is skipped for a while
+# ---------------------------------------------------------------------------
+UNAVAILABLE_TTL_S = 3600.0
+_UNAVAILABLE: dict[tuple[str, str], float] = {}
+_UNAVAILABLE_LOCK = threading.Lock()
+
+_MODEL_MISSING = re.compile(
+    r"(model|function)[^.;]{0,80}(not found|not exist|does not exist|unavailable|not available|"
+    r"decommissioned|deprecated|no longer|retired)|"
+    r"no such model|unknown model|invalid model|not a valid model|no endpoints found|"
+    r"model_not_found|NotFoundError|Error code: 404|Error code: 410",
+    re.I,
+)
+
+
+def mark_unavailable(provider: str, model: str, ttl: float | None = None) -> None:
+    with _UNAVAILABLE_LOCK:
+        _UNAVAILABLE[(provider, model)] = time.monotonic() + (UNAVAILABLE_TTL_S if ttl is None else ttl)
+
+
+def is_unavailable(provider: str, model: str) -> bool:
+    with _UNAVAILABLE_LOCK:
+        until = _UNAVAILABLE.get((provider, model))
+        if until is None:
+            return False
+        if until <= time.monotonic():
+            _UNAVAILABLE.pop((provider, model), None)
+            return False
+        return True
+
+
+def clear_unavailable(provider: str | None = None) -> None:
+    with _UNAVAILABLE_LOCK:
+        for k in [k for k in _UNAVAILABLE if provider is None or k[0] == provider]:
+            _UNAVAILABLE.pop(k, None)
+
+
+def clear_unavailable_model(provider: str, model: str) -> None:
+    with _UNAVAILABLE_LOCK:
+        _UNAVAILABLE.pop((provider, model), None)
+
+
+def unavailable_models() -> list[tuple[str, str]]:
+    return [k for k in list(_UNAVAILABLE) if is_unavailable(*k)]
+
+
+def model_missing(exc: Exception) -> bool:
+    """True when an error means "this model is not available to this key" (404/410 or the
+    provider's words for it), as opposed to a bad key, a rate limit or a timeout."""
+    status = getattr(exc, "status", None) or getattr(exc, "status_code", None)
+    if status in (404, 410):
+        return True
+    if status in (401, 403, 429) or (isinstance(status, int) and status >= 500):
+        return False
+    return bool(_MODEL_MISSING.search(str(exc)))
+
+
+def key_rejected(exc: Exception) -> bool:
+    return (getattr(exc, "status", None) or getattr(exc, "status_code", None)) in (401, 403)
 
 
 def has_images(messages: list[dict[str, Any]]) -> bool:
@@ -283,12 +418,34 @@ def strip_images(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _retry_after(exc: Exception) -> float | None:
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    if not headers:
+        return None
+    try:
+        ms = headers.get("retry-after-ms")
+        if ms:
+            return max(0.0, float(ms) / 1000)
+        v = headers.get("retry-after")
+        if v:
+            return max(0.0, float(v))
+    except (TypeError, ValueError):  # an HTTP date: not worth parsing, fall back to our backoff
+        return None
+    return None
+
+
+_TIMEOUTISH = re.compile(r"timeout|timed out|connection (error|reset|aborted|refused)|temporarily unavailable|overloaded", re.I)
+
+
 def _classify(provider: str, exc: Exception) -> ProviderError:
     status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
     # Bad request (400/422) is usually our payload, but a different provider may accept it,
     # so everything is retryable; the router decides how far to go.
     msg = str(exc).splitlines()[0][:240] if str(exc) else exc.__class__.__name__
-    return ProviderError(provider, f"{exc.__class__.__name__}: {msg}", status=status, retryable=True)
+    transient = status in TRANSIENT_STATUSES or (status is None and bool(
+        _TIMEOUTISH.search(f"{exc.__class__.__name__} {msg}")))
+    return ProviderError(provider, f"{exc.__class__.__name__}: {msg}", status=status, retryable=True,
+                         retry_after=_retry_after(exc), transient=transient)
 
 
 # ---------------------------------------------------------------------------

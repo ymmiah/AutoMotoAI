@@ -1174,6 +1174,8 @@ PAGES.settings = async () => {
       <div id="connList" class="muted">Loading…</div><div class="row" style="margin-top:8px"><button class="btn sm" id="connReload">Reconnect now</button></div></div>
     <div class="card"><h3>${icon("cpu")} Provider order</h3><p class="muted" style="font-size:13px;margin-top:0">Auto tries providers top to bottom and fails over on errors.</p>
       <div id="orderList"></div><div class="row"><button class="btn primary sm" id="orderSave">Save order</button><button class="btn sm" id="orderReset">Reset to recommended</button></div></div>
+    ${HOSTED ? "" : `<div class="card"><h3>${icon("bolt")} Test keys</h3><p class="muted" style="font-size:13px;margin-top:0">Sends one tiny (1-token) request to every model AutoMoto may use with your keys and shows which answer. Models that are not available to your key (404) are skipped automatically for an hour.</p>
+      <div class="row"><button class="btn sm primary" id="doctorRun">Test keys</button></div><div id="doctorOut" style="margin-top:8px" aria-live="polite"></div></div>`}
     <div class="card"><h3>${icon("key")} Bring your own keys</h3><p class="muted" style="font-size:13px;margin-top:0">Kept only in this browser tab (sessionStorage) and wiped when you close it. Sent with each request, never saved on the server. Server keys from <code>.env</code> work without this.</p>
       <form id="keyForm">${st.providers.map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
       <div class="row"><button class="btn primary">Use keys for this tab</button><button type="button" class="btn danger" id="forgetKeys">Forget keys</button></div></form></div>
@@ -1209,6 +1211,18 @@ PAGES.settings = async () => {
   drawOrder();
   $("#orderSave").onclick = async () => { if (await saveSetting({ provider_order: order })) toast("Provider order saved"); };
   $("#orderReset").onclick = async () => { if (await saveSetting({ provider_order: [] })) { toast("Using the recommended order"); PAGES.settings(); } };
+  const STATE_LABEL = { ok: "answers", busy: "rate-limited (works)", missing: "404 not available", key: "key rejected", error: "error" };
+  if ($("#doctorRun")) $("#doctorRun").onclick = async (e) => {
+    const btn = e.currentTarget, out = $("#doctorOut"); btn.disabled = true; out.innerHTML = '<span class="muted">Testing… (one tiny request per model)</span>';
+    try {
+      const rep = await api("/api/doctor", { keys: keys() });
+      if (!rep.configured) { out.innerHTML = '<span class="muted">No keys configured yet.</span>'; return; }
+      out.innerHTML = rep.providers.map((p) => `<p style="margin:8px 0 4px"><b>${esc(p.label)}</b> ${p.key_ok === false ? statusPill("key rejected") : ""}</p>` +
+        p.models.map((m) => `<div class="order-item"><span class="nm"><code>${esc(m.model)}</code> <span class="muted" style="font-size:12px">${esc(m.roles.join(", "))}</span></span><span class="${m.ok ? "" : "muted"}">${m.ok ? icon("check") : icon("x")} ${esc(STATE_LABEL[m.state] || m.state)}${m.status && !m.ok ? " (" + m.status + ")" : ""}</span></div>`).join("")).join("") +
+        (rep.hints.length ? `<p style="margin:10px 0 4px"><b>Suggestions</b></p><ul style="margin:0;padding-left:18px">${rep.hints.map((h) => `<li><code style="white-space:normal">${esc(h)}</code></li>`).join("")}</ul>` : "");
+    } catch (err) { out.innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+    finally { btn.disabled = false; }
+  };
   $("#keyForm").onsubmit = async (e) => {
     e.preventDefault();
     const obj = {}; for (const [n, v] of new FormData(e.target)) if (String(v).trim()) obj[n] = String(v).trim();

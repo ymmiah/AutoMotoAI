@@ -19,3 +19,17 @@ def isolated_home(monkeypatch, tmp_path_factory):
               "ZOTERO_API_KEY", "ZOTERO_USER_ID", "GOOGLE_ACCESS_TOKEN", "MS_GRAPH_TOKEN"):
         monkeypatch.delenv(k, raising=False)
     return home
+
+
+@pytest.fixture(autouse=True)
+def fast_retries(monkeypatch):
+    """No real backoff sleeps, and a fresh "model unavailable" cache, in every test."""
+    from automoto import providers, router
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(router, "_sleep", sleeps.append)
+    providers.clear_unavailable()
+    monkeypatch.delenv("AUTOMOTO_RETRIES", raising=False)
+    monkeypatch.delenv("AUTOMOTO_RETRY_BUDGET_S", raising=False)
+    yield sleeps
+    providers.clear_unavailable()

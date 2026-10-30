@@ -15,12 +15,14 @@ model id) moves on to the next provider; the result lists everything tried.
 from __future__ import annotations
 
 import logging
+import random
 import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from automoto import config
+from automoto import providers as _prov
 from automoto.providers import REGISTRY, ProviderError, ProviderSpec, complete, has_images
 
 log = logging.getLogger("automoto.router")
@@ -73,17 +75,122 @@ def recommend_provider(task_hint: str = "", *, has_image: bool = False,
 
 
 # ---------------------------------------------------------------------------
+# Retries: a busy model (429/5xx/timeout) gets a couple more tries before failover
+# ---------------------------------------------------------------------------
+MAX_WAIT_S = 8.0  # longest single wait; a longer Retry-After means "fail over now"
+_sleep = time.sleep  # tests replace this
+
+
+def retry_count() -> int:
+    try:
+        return max(0, min(5, int(config.env("AUTOMOTO_RETRIES", "2") or 2)))
+    except ValueError:
+        return 2
+
+
+def retry_budget_s() -> float:
+    try:
+        return max(0.0, float(config.env("AUTOMOTO_RETRY_BUDGET_S", "20") or 20))
+    except ValueError:
+        return 20.0
+
+
+def backoff_delay(attempt: int, retry_after: float | None = None) -> float:
+    """Wait before retry ``attempt`` (1, 2, ...): Retry-After if given, else exponential + jitter."""
+    if retry_after is not None:
+        return min(max(retry_after, 0.0), MAX_WAIT_S)
+    base = 0.75 * (2 ** (attempt - 1))
+    return min(base + random.uniform(0, base / 2), MAX_WAIT_S)  # nosec B311 - jitter, not security
+
+
+class _Budget:
+    def __init__(self) -> None:
+        self.left = retry_budget_s()
+
+
+def _call(fn: Callable[[], Any], budget: _Budget) -> Any:
+    """Run one provider call, retrying the same model on transient errors (with backoff)."""
+    tries = retry_count()
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return fn()
+        except ProviderError as exc:
+            exc.attempts = attempt
+            if not getattr(exc, "transient", False) or attempt > tries:
+                raise
+            if exc.retry_after is not None and exc.retry_after > MAX_WAIT_S:
+                raise  # the provider asked for a long pause: switch model/provider instead
+            wait = backoff_delay(attempt, exc.retry_after)
+            if wait > budget.left:
+                raise
+            budget.left -= wait
+            log.info("%s busy (%s); retry %d in %.1fs", exc.provider, exc.status or "timeout", attempt, wait)
+            _sleep(wait)
+
+
+# ---------------------------------------------------------------------------
 # ask()
 # ---------------------------------------------------------------------------
 class NoProviderError(RuntimeError):
     """No provider with a key (or none that supports vision) is available."""
 
 
+FREE_BACKUP_HINT = ("Add a free backup key so one provider can't stop you: Gemini "
+                    "(https://aistudio.google.com/apikey -> GEMINI_API_KEY) or Groq "
+                    "(https://console.groq.com/keys -> GROQ_API_KEY).")
+
+
+def explain_failures(tried: list[dict[str, Any]]) -> list[str]:
+    """Plain-language lines (one per provider) plus what to do. Never contains key material."""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for t in tried:
+        if not t.get("ok"):
+            by.setdefault(t["provider"], []).append(t)
+    lines: list[str] = []
+    for pid, ts in by.items():
+        spec = REGISTRY.get(pid)
+        label = spec.label if spec else pid
+        signup = spec.signup_url if spec else ""
+        env = spec.env_keys[0] if spec else "the API key"
+        missing = list(dict.fromkeys(t["model"] for t in ts if t.get("missing")))
+        busy = [t for t in ts if t.get("transient")]
+        if any(t.get("status") in (401, 403) for t in ts):
+            bad = next(t for t in ts if t.get("status") in (401, 403))
+            lines.append(f"{label}: the key was rejected ({bad['status']}) on model {bad['model']} - it is wrong, "
+                         f"expired or has no access. Make a new key{' at ' + signup if signup else ''} and put it "
+                         f"in {env}.")
+            continue
+        if busy:
+            codes = "/".join(sorted({str(t.get("status") or "timeout") for t in busy}))
+            n = max(t.get("attempts", 1) for t in busy) - 1
+            models = ", ".join(dict.fromkeys(t["model"] for t in busy))
+            what = "rate limit" if codes == "429" else "provider busy / overloaded"
+            again = (f"retried {n} time{'s' if n != 1 else ''} with backoff" if n else "not retried")
+            lines.append(f"{label}: {codes} = {what} (not your key) on {models} - {again}, then moved on. "
+                         "Try again in a minute.")
+        if missing:
+            env_hint = spec.model_env if spec and spec.model_env else "the model setting"
+            lines.append(f"{label}: model not available to this key (404) - tried {', '.join(missing)}. "
+                         f"Run `automoto doctor` (or Settings -> Test keys) to see which models answer, then set "
+                         f"{env_hint} to one of them.")
+        if not busy and not missing:
+            last = ts[-1]
+            lines.append(f"{label}: {last.get('error', 'failed')} (model {last['model']}).")
+    configured_free = {p.id for p in REGISTRY.values() if p.free_tier and p.key()}
+    if not ({"gemini", "groq"} & configured_free):
+        lines.append(FREE_BACKUP_HINT)
+    return lines
+
+
 class AllProvidersFailed(RuntimeError):
     def __init__(self, tried: list[dict[str, Any]]):
         self.tried = tried
-        detail = "; ".join(f"{t['provider']}: {t.get('error', '?')}" for t in tried)
-        super().__init__(f"All AI providers failed ({detail})")
+        self.hints = explain_failures(tried)
+        detail = "; ".join(f"{t['provider']}/{t.get('model', '?')}: {t.get('error', '?')}" for t in tried if not t.get("ok"))
+        super().__init__("All AI providers failed.\n" + "\n".join(f"- {h}" for h in self.hints)
+                         + (f"\n(details: {detail})" if detail else ""))
 
 
 @dataclass
@@ -162,26 +269,39 @@ def ask(messages: list[dict[str, Any]] | str, *, need_vision: bool = False, pref
         )
 
     tried: list[dict[str, Any]] = []
+    budget = _Budget()
     for spec in order:
-        # Within one provider: try the task-specific model first, then its default
-        # (e.g. a "strong" model that this key can't access) before moving on.
-        models = [spec.model_for(vision=need_vision, strong=(task == "code"))]
-        if careful and need_vision:  # e.g. office_review: a stronger vision model first, if the provider has one
-            rm = (config.env(spec.review_env) if spec.review_env else None) or spec.review_model
-            if rm and rm not in models:
-                models.insert(0, rm)
-        if not need_vision and models[0] != spec.model_for():
-            models.append(spec.model_for())
+        # Within one provider: the (env-overridable) model for the task first, then that
+        # provider's ordered fallbacks; a model that is missing for this key (404/410) is
+        # remembered for an hour so later requests go straight to one that works.
+        if careful and need_vision:  # e.g. office_review: a stronger vision model first
+            role = "review"
+        elif need_vision:
+            role = "vision"
+        else:
+            role = "strong" if task == "code" else "text"
+        models = spec.models(role)
+        if not models:
+            tried.append({"provider": spec.id, "model": ", ".join(spec.all_models(role)[:4]), "ok": False,
+                          "status": 404, "missing": True, "ms": 0,
+                          "error": "every model returned 404 in the last hour - skipped"})
+            continue
         for model in models:
             t0 = time.monotonic()
             try:
-                text = transport(spec, msgs, model, spec.key(keys), **gen)
+                text = _call(lambda: transport(spec, msgs, model, spec.key(keys), **gen), budget)
             except ProviderError as exc:
+                missing = _prov.model_missing(exc)
+                if missing:
+                    _prov.mark_unavailable(spec.id, model)
                 tried.append({"provider": spec.id, "model": model, "ok": False, "status": exc.status,
-                              "error": str(exc).split(": ", 1)[-1][:200],
+                              "missing": missing, "transient": bool(getattr(exc, "transient", False)),
+                              "attempts": getattr(exc, "attempts", 1), "error": str(exc).split(": ", 1)[-1][:200],
                               "ms": int((time.monotonic() - t0) * 1000)})
                 log.warning("provider %s/%s failed (%s); trying next", spec.id, model, exc.status or "error")
-                continue
+                if _prov.key_rejected(exc) or exc.status == 429:
+                    break  # bad key / rate-limited key: this provider's other models won't help
+                continue  # missing or busy (5xx/timeout) model: try this provider's next model
             except Exception as exc:  # defensive: a transport bug must not stop failover
                 tried.append({"provider": spec.id, "model": model, "ok": False, "status": None,
                               "error": f"{exc.__class__.__name__}: {str(exc)[:160]}",
@@ -241,21 +361,37 @@ def ask_turn(messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, kno
         )
     mode_cfg = tool_mode()
     tried: list[dict[str, Any]] = []
+    budget = _Budget()
     for spec in order:
         native_first = spec.supports_tools and mode_cfg != "text"
-        for model in spec.agent_models(vision=need_vision):
-            if tried and tried[-1]["provider"] == spec.id and tried[-1].get("status") in (401, 403):
-                break  # bad key: don't try this provider's other models
+        models = spec.agent_models(vision=need_vision)
+        if not models:
+            tried.append({"provider": spec.id, "model": ", ".join(spec.all_models("agent")[:4]), "ok": False,
+                          "status": 404, "missing": True, "ms": 0,
+                          "error": "every model returned 404 in the last hour - skipped"})
+            continue
+        for model in models:
+            if tried and tried[-1]["provider"] == spec.id and tried[-1].get("status") in (401, 403, 429):
+                break  # bad or rate-limited key: don't try this provider's other models
             modes = [True, False] if native_first and mode_cfg == "auto" else [native_first]
             for native in modes:
                 t0 = time.monotonic()
                 try:
-                    text, calls = transport(spec, messages, model, spec.key(keys), tools=tools, native=native, **gen)
+                    text, calls = _call(lambda: transport(spec, messages, model, spec.key(keys), tools=tools,
+                                                          native=native, **gen), budget)
                 except ProviderError as exc:
+                    retry_text = native and exc.status in (400, 404, 422) and False in modes and exc.status != 410
+                    # A native 404 may just mean "no tool calling here": retry as text first and
+                    # only call the model missing when that fails too (or there is no text retry).
+                    missing = _prov.model_missing(exc) and not retry_text
+                    if missing:
+                        _prov.mark_unavailable(spec.id, model)
                     tried.append({"provider": spec.id, "model": model, "ok": False, "status": exc.status,
-                                  "mode": "native" if native else "text",
+                                  "mode": "native" if native else "text", "missing": missing,
+                                  "transient": bool(getattr(exc, "transient", False)),
+                                  "attempts": getattr(exc, "attempts", 1),
                                   "error": str(exc).split(": ", 1)[-1][:200], "ms": int((time.monotonic() - t0) * 1000)})
-                    if native and exc.status in (400, 404, 422) and False in modes:
+                    if retry_text:
                         continue  # retry this model without native tools
                     break  # next model / provider
                 except Exception as exc:  # defensive

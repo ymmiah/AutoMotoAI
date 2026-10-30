@@ -81,6 +81,39 @@ def cmd_status(_args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    """Send a 1-token request to every model AutoMoto may use with your keys; list what answers."""
+    from automoto import doctor
+
+    console = _console()
+    _print(console, "Testing your keys: one tiny (1-token) request per model...", "dim")
+    rep = doctor.run(only=args.provider)
+    if not rep["configured"]:
+        _print(console, "No provider keys found - nothing to test. See docs/START.md.", "yellow")
+        return 1
+    icons = {"ok": "✅ answers", "busy": "⏳ rate-limited (works)", "missing": "✗ 404 not available",
+             "key": "✗ key rejected", "error": "✗ error"}
+    for p in rep["providers"]:
+        if console:
+            from rich.table import Table
+
+            t = Table(title=f"{p['label']} - key {'OK' if p['key_ok'] else 'REJECTED' if p['key_ok'] is False else '?'}")
+            for col in ("Model", "Used for", "Result", "ms"):
+                t.add_column(col)
+            for r in p["models"]:
+                res = icons.get(r["state"], r["state"]) + (f" ({r['status']})" if r["status"] and not r["ok"] else "")
+                t.add_row(r["model"], ", ".join(r["roles"]), res, str(r["ms"]))
+            console.print(t)
+        else:
+            for r in p["models"]:
+                print(p["id"], r["model"], r["state"], r["status"] or "", ",".join(r["roles"]))
+    if rep["hints"]:
+        _print(console, "\nSuggestions:", "bold")
+        for h in rep["hints"]:
+            print(f"  - {h}", flush=True)
+    return 0 if any(p["working"] for p in rep["providers"]) else 2
+
+
 def cmd_recommend(args) -> int:
     from automoto.router import classify_task, recommend_provider
 
@@ -687,13 +720,15 @@ def main(argv: list[str] | None = None) -> int:
                                                           "(same as AUTOMOTO_MODE=multiuser)")
     _admin_parser(sub)
     sub.add_parser("status", help="show providers and vision support")
+    dr = sub.add_parser("doctor", help="test your keys: which models answer (1-token request each)")
+    dr.add_argument("--provider", help="only this provider id, e.g. nim")
     a = sub.add_parser("ask", help="one-shot question")
     a.add_argument("question")
     a.add_argument("--image", action="append", help="attach an image (repeatable)")
     r = sub.add_parser("recommend", help="which AI would handle this task")
     r.add_argument("task")
     args = ap.parse_args(argv)
-    handlers = {"serve": cmd_serve, "status": cmd_status, "ask": cmd_ask, "recommend": cmd_recommend,
+    handlers = {"serve": cmd_serve, "status": cmd_status, "ask": cmd_ask, "recommend": cmd_recommend, "doctor": cmd_doctor,
                 "do": cmd_do, "routines": cmd_routines, "memory": cmd_memory, "skills": cmd_skills,
                 "tools": cmd_tools, "apps": cmd_apps, "mcp": cmd_mcp, "open": cmd_open,
                 "admin": cmd_admin}
