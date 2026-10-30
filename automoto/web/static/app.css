@@ -348,6 +348,7 @@ pre.code { font-size: 12px; white-space: pre-wrap; word-break: break-word; backg
 .auth-brand b { color: var(--accent); }
 .auth form { display: grid; gap: 12px; margin: 14px 0 10px; }
 .auth label { display: grid; gap: 5px; font-size: 13px; color: var(--dim); }
+.auth [hidden] { display: none; }   /* e.g. the invite field while signing in */
 .auth-tabs { margin-top: 12px; }
 .auth-tabs button { flex: 1; justify-content: center; }
 .seg button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }

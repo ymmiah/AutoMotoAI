@@ -5,6 +5,10 @@ hosted (multi-user) mode. Every command sits in its own box. On GitHub and on th
 [docs site](https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html), hover over a box and click the **copy icon** in its
 top-right corner, then paste it into your terminal.
 
+> **Quickest start for your device** (Windows app, phone, Mac/Linux, VS Code): [Start here: pick your device](START.md).
+> This guide is the long version, page by page. 5.6.0 Beta 1 is a
+> [pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1); 5.5.0 is the stable version.
+
 **Contents:** [0 The Windows app](#0-the-windows-app) · [1 Install](#1-install) · [2 Add a free AI key](#2-add-a-free-ai-key) · [3 Start AutoMoto](#3-start-automoto) ·
 [4 Open the app](#4-open-the-app-one-time-sign-in-link) · [5 The screen](#5-a-quick-tour-of-the-screen) ·
 [6 Agent tasks and approvals](#6-give-the-agent-a-task-and-approve-its-steps) · [7 Chat mode](#7-chat-mode-quick-answers-no-tools) ·
@@ -745,6 +749,10 @@ automoto admin passwd ben
 ---
 
 ## 21. Use it on your phone
+
+**Got an account?** Open the server address in Chrome (Android) or Safari (iPhone), sign in, and add it to your home
+screen. Step by step with pictures: [Start here → B. Phone or tablet](START.md#b-phone-or-tablet-android-and-iphone).
+There's no phone app in a store yet.
 
 The web app has a phone layout. Tap ☰ (top left) for the menu.
 

@@ -1,7 +1,12 @@
 # Install, run and deploy AutoMoto AI — every OS
 
 This guide is for everyone, including first-timers. Copy the commands for **your** computer, top to bottom.
-Everything here is free. Latest release: **v5.5.0** ([downloads](https://github.com/ymmiah/AutoMotoAI/releases/latest)).
+Everything here is free. Latest **stable** release: **v5.5.0** ([downloads](https://github.com/ymmiah/AutoMotoAI/releases/latest)).
+
+> **Beta: 5.6.0 Beta 1** ([pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1)) adds the
+> **Windows app** and **one account on every device**. New here? The simplest steps per device (Windows PC, phone,
+> Mac/Linux, VS Code) are in **[Start here: pick your device](START.md)**. To install the beta engine with the
+> scripts below, add `-Version 5.6.0b1` (Windows) or `--version 5.6.0b1` (macOS/Linux). Without it you get 5.5.0.
 
 **Contents:** [Pick a way](#1-pick-a-way) · [Get a free AI key](#2-get-a-free-ai-key) · [Windows](#3-windows-1011) ·
 [macOS](#4-macos-intel-and-apple-silicon) · [Linux](#5-linux-ubuntu--debian-fedora-arch-and-others) ·
@@ -15,7 +20,7 @@ Everything here is free. Latest release: **v5.5.0** ([downloads](https://github.
 
 | You want… | Use | Time |
 |---|---|---|
-| The **Windows app** — sign in to an AutoMoto account, or Local mode | The beta installer from Releases ([section 3](#windows-app)) | ~2 min |
+| The **Windows app (Beta)**: sign in to an AutoMoto account, or Local mode | The beta installer from Releases ([section 3](#windows-app)) | ~2 min |
 | AutoMoto for **yourself** on Windows / macOS / Linux | The **installer script** for your OS (sections 3–5) | ~5 min |
 | An isolated setup, or the same steps on every OS | **Docker Compose** (section 6) | ~10 min |
 | Friends / classmates use it, with a **1-hour daily limit** | **Hosted mode** (section 7) | ~20 min |

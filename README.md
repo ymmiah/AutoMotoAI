@@ -41,21 +41,27 @@ sign in once and the same chats and files follow you to the app, the web and you
 
 ## ⚡ Quick install
 
-Python 3.10+ and a free AI key ([NVIDIA NIM](https://build.nvidia.com), [Gemini](https://aistudio.google.com/apikey),
+> **👉 New? [Start here: pick your device](docs/START.md)** ([on the docs site](https://ymmiah.github.io/AutoMotoAI/START.html))
+> has short steps with pictures for a **Windows PC, Android phone, iPhone, Mac, Linux and VS Code**.
+> **5.6.0 Beta 1** ([pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1)) adds the Windows app and one
+> account on every device. **5.5.0** stays the stable release; the scripts below install it unless you add
+> `-Version 5.6.0b1` / `--version 5.6.0b1`.
+
+For the scripts: Python 3.10+ and a free AI key ([NVIDIA NIM](https://build.nvidia.com), [Gemini](https://aistudio.google.com/apikey),
 [Groq](https://console.groq.com/keys) or [OpenRouter](https://openrouter.ai/keys)). The installers check the release's
 SHA-256, install into a private virtualenv and create `~/.automoto/.env` for your key.
 **Step-by-step for every OS, Docker, hosting, updates and fixes: [docs/INSTALL.md](docs/INSTALL.md).**
 
 | OS | Install | Then |
 |---|---|---|
-| **Windows app — Beta** (10/11, 64-bit) | `AutoMoto-AI_5.6.0-beta.1_x64-setup.exe` from the [5.6.0 Beta 1 release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1) (SmartScreen: *More info → Run anyway*, it isn't code-signed yet) | sign in to your account, or **Start local mode** ([guide](docs/GUI-GUIDE.md#0-the-windows-app)) |
+| **Windows app — Beta** (10/11, 64-bit) | `AutoMoto-AI_5.6.0-beta.1_x64-setup.exe` from the [5.6.0 Beta 1 release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1) (SmartScreen: *More info → Run anyway*, it isn't code-signed yet) | sign in to your account, or **Start local mode** ([steps](docs/START.md#a-windows-pc)) |
 | **Windows 10/11** (PowerShell) | `winget install -e --id Python.Python.3.12` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` | `notepad $env:USERPROFILE\.automoto\.env` → add key · `automoto serve` |
 | **macOS** (Intel / Apple Silicon) | `brew install python@3.12 git` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `./scripts/install.sh` | `open -e ~/.automoto/.env` → add key · `automoto serve` |
 | **Linux** (Ubuntu/Debian, Fedora, Arch…) | `sudo apt install python3 python3-venv git` (or dnf / pacman) · clone · `./scripts/install.sh` | `nano ~/.automoto/.env` → add key · `automoto serve` |
 | **Docker** (any OS) | clone · create `.env` with your key + admin name/password · `docker compose up -d --build` | open <http://127.0.0.1:8765> and sign in |
 | **Host for friends** (1 h/day limits) | Docker or `automoto serve --hosted` behind Cloudflare Tunnel / Caddy | [Admin guide](docs/INSTALL.md#7-host-it-for-other-people) |
-| **VS Code** | `code --install-extension automoto-ai-5.5.0.vsix` (from [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest)) | start `automoto serve` first |
-| **Phone / tablet** | use the web app from a hosted server in the phone's browser | [details](docs/INSTALL.md#8-other-platforms) |
+| **VS Code** | `code --install-extension automoto-ai-5.5.0.vsix` (stable, [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest)) or `automoto-ai-5.6.0-beta.1.vsix` ([beta](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1)) | start `automoto serve` first ([steps](docs/START.md#d-vs-code)) |
+| **Phone / tablet** (Android, iPhone) | open your account server's address in Chrome / Safari, sign in, *Add to Home Screen* (no store app yet) | [steps](docs/START.md#b-phone-or-tablet-android-and-iphone) |
 
 Optional extras: `--system-deps` (`-SystemDeps` on Windows) installs LibreOffice, poppler, 7-Zip and PHP;
 `--service` (`-AutoStart`) starts AutoMoto at login.

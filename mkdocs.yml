@@ -10,6 +10,7 @@ use_directory_urls: false   # page-relative images work the same on GitHub and o
 copyright: Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)
 nav:
   - Home: index.md
+  - Start here - pick your device: START.md
   - GUI guide: GUI-GUIDE.md
   - Install: INSTALL.md
   - Hosting: HOSTING.md
