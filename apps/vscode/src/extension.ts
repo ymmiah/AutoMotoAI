@@ -59,14 +59,16 @@ async function ensureAllowed(client: AutoMotoClient, folder: string): Promise<bo
 
 async function approve(ev: AgentEvent): Promise<boolean> {
   const detail = `${ev.reason || "risky step"}\n\n${ev.name}(${summariseArgs(ev.args, 600)})`;
-  const pick = await vscode.window.showWarningMessage(`AutoMoto wants to run ${ev.name}`, { modal: true, detail }, "Allow", "Deny");
+  const pick = await vscode.window.showWarningMessage(`AutoMoto wants to: ${ev.label || ev.name}`, { modal: true, detail }, "Allow", "Deny");
   return pick === "Allow";
 }
 
 function describe(ev: AgentEvent): string | undefined {
   switch (ev.type) {
+    case "plan":
+      return ev.summary ? `✦ ${ev.summary}` : undefined;
     case "tool_call":
-      return `▸ ${ev.name} ${summariseArgs(ev.args)}`;
+      return `▸ ${ev.label || ev.name} ${summariseArgs(ev.args)}`;
     case "approval":
       return ev.approved ? "  ✓ allowed" : "  ✗ denied";
     case "tool_result":
@@ -286,7 +288,7 @@ export function activate(context: vscode.ExtensionContext): { getClient: typeof 
     try {
       const c = getClient();
       const [h, info] = await Promise.all([c.health(), c.info()]);
-      const msg = `AutoMoto ${h.version} at ${c.url} · approvals: ${info.approval_mode} · ${info.tools.length} tools · ${info.skills.length} skills`;
+      const msg = `AutoMoto ${h.version} at ${c.url} · approvals: ${info.approval_mode} · ${info.tools.filter((t: { hidden?: boolean }) => !t.hidden).length} tools · ${info.skills.length} skills`;
       output.appendLine(msg);
       vscode.window.showInformationMessage(msg);
     } catch (e) {

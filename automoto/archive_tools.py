@@ -28,9 +28,9 @@ def _list(v: Any) -> list[str] | None:
 
 
 def _wrap(fn):
-    def inner(ctx: ToolContext, **kw: Any) -> str:
+    def inner(ctx: ToolContext, *args: Any, **kw: Any) -> str:
         try:
-            return fn(ctx, **kw)
+            return fn(ctx, *args, **kw)
         except archives.ArchiveError as exc:
             raise ToolFailed(str(exc)) from None
     return inner
@@ -41,8 +41,13 @@ def _fmt(d: dict) -> str:
 
 
 @_wrap
-def archive_list(ctx: ToolContext, path: str, max_lines: int = 300) -> str:
-    return archives.list_text(path, max(20, min(int(max_lines or 300), 2000)))
+def archive_list(ctx: ToolContext, path: str, max_lines: int = 300, check: bool = False) -> str:
+    listing = archives.list_text(path, max(20, min(int(max_lines or 300), 2000)))
+    if not check:
+        return listing
+    rep = archives.inspect(path)
+    verdict = "SAFE to extract" if rep["safe"] else "UNSAFE - extraction will be refused"
+    return f"{verdict}\n{_fmt(rep)}\n\n{listing}"
 
 
 @_wrap
@@ -142,7 +147,9 @@ _ROOT = {**S, "description": "top-level folder inside the archive: omit = keep/d
 
 TOOLS: list[Tool] = [
     Tool("archive_list", "List the contents of a .zip/.tar/.tar.gz/.tgz/.tar.bz2/.tar.xz/.gz/.7z/.rar archive as a tree "
-         "(no extraction).", _obj({"path": S, "max_lines": I}, ["path"]), "safe", archive_list, "archive"),
+         "(no extraction). check=true adds the safety report (zip-slip, symlinks, zip bombs, encryption) - do that "
+         "before archive_extract.", _obj({"path": S, "max_lines": I, "check": {"type": "boolean"}}, ["path"]), "safe",
+         archive_list, "archive"),
     Tool("archive_inspect", "Safety report for an archive before extracting: zip-slip/absolute names, symlinks, zip bomb "
          "ratios and sizes, file count, nested archives, encryption, filename encoding.",
          _obj({"path": S}, ["path"]), "safe", archive_inspect, "archive"),

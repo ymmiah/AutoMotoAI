@@ -31,7 +31,7 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("POST", r"/api/auth/device/(login|launch|logout)"),
     ("GET", r"/api/devices"), ("DELETE", r"/api/devices/[0-9a-f]{16}"),
     ("GET", r"/api/status"), ("POST", r"/api/status"), ("POST", r"/api/recommend"),
-    ("POST", r"/api/chat"), ("POST", r"/api/agent"), ("GET", r"/api/agent/info"),
+    ("POST", r"/api/chat"), ("POST", r"/api/agent"), ("GET", r"/api/agent/info"), ("POST", r"/api/ideas"),
     ("GET", r"/api/tasks"), ("GET", r"/api/tasks/[\w-]+"), ("POST", r"/api/tasks/[\w-]+/(approve|cancel)"),
     ("GET", r"/api/conversations"), ("POST", r"/api/conversations"), ("POST", r"/api/conversations/chat"),
     ("GET", r"/api/conversations/[\w-]+"), ("PATCH", r"/api/conversations/[\w-]+"),

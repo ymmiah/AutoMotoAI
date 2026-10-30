@@ -96,6 +96,11 @@ def _announces_action(text: str) -> bool:
     return bool(_ANNOUNCE.search(tail))
 
 
+def planner_enabled() -> bool:
+    """AUTOMOTO_PLANNER=off offers every tool to the model (the pre-5.6.0b3 behaviour)."""
+    return (config.env("AUTOMOTO_PLANNER", "on") or "on").lower() not in ("off", "0", "false", "no")
+
+
 def max_steps_default() -> int:
     try:
         return max(1, min(50, int(config.env("AUTOMOTO_MAX_STEPS", "12"))))
@@ -138,11 +143,15 @@ class Agent:
         self.tainted = False
         self.meter = meter  # hosted mode: usage quota (accounts.Meter) - checked before every model call
 
-    def system(self) -> str:
+    def system(self, plan: Any = None) -> str:
+        from automoto import planner
         from automoto.agent import agent_system_prompt
 
-        return agent_system_prompt(memory=self.memory.prompt_block(), skills=skills_mod.prompt_block(self.skills),
-                                   desktop=self.desktop, tool_names=list(self.tools))
+        if plan is None:
+            return agent_system_prompt(memory=self.memory.prompt_block(), skills=skills_mod.prompt_block(self.skills),
+                                       desktop=self.desktop, tool_names=list(tools_mod.offered(self.tools)))
+        return agent_system_prompt(memory=self.memory.prompt_block(), desktop=self.desktop, tool_names=plan.tools,
+                                   task=planner.prompt_block(plan, self.skills))
 
     def run(self, messages: list[dict[str, Any]] | str, *, max_steps: int | None = None,
             approver: Approver = deny_all, on_event: EventSink | None = None,
@@ -176,17 +185,42 @@ class Agent:
                 except Exception:  # a UI bug must not kill the task
                     pass
 
-        history: list[dict[str, Any]] = [{"role": "system", "content": self.system()}]
-        history += [m for m in messages if m.get("role") in ("user", "assistant", "tool")]
-        schemas = [t.schema() for t in self.tools.values()]
-        known = set(self.tools)
+        from automoto import planner
+
         goal = next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), "")
         goal_text = goal if isinstance(goal, str) else " ".join(p.get("text", "") for p in goal if isinstance(p, dict))
+        known = set(self.tools)  # every tool can run if called (incl. merged names); only the plan's are offered
+        plan = None
+        if planner_enabled():
+            earlier = " ".join(m.get("content", "") for m in messages[:-1][-6:]
+                               if m.get("role") == "user" and isinstance(m.get("content"), str))
+            plan = planner.plan(goal_text, self.tools, files=planner.mentioned_files(earlier), skills=self.skills)
+            emit({"type": "plan", **plan.as_dict()})
+        schemas = [self.tools[n].schema() for n in (plan.tools if plan else tools_mod.offered(self.tools))]
+        extra_needs: list[str] = []
+
+        def expand(need: str) -> list[str]:
+            nonlocal plan
+            if plan is None:
+                return []
+            extra_needs.append(need)
+            before = set(plan.tools)
+            plan = planner.plan(goal_text, self.tools, files=plan.files, extra=extra_needs, skills=self.skills,
+                                max_tools=40)
+            added = [n for n in plan.tools if n not in before]
+            schemas[:] = [self.tools[n].schema() for n in plan.tools]
+            if added:
+                emit({"type": "plan", **plan.as_dict()})
+            return added
+
+        self.ctx.expand = expand if plan else None
+        history: list[dict[str, Any]] = [{"role": "system", "content": self.system(plan)}]
+        history += [m for m in messages if m.get("role") in ("user", "assistant", "tool")]
         last = ("", "")
         dead: set[str] = set()  # providers whose key was rejected during this run
         nudges = 0
         fixes = 0
-        specs = tc.specs_from_schemas(schemas)
+        specs = tc.specs_from_schemas([t.schema() for t in self.tools.values()])  # merged names still parse
         for step in range(1, max_steps + 1):
             if cancel is not None and cancel.is_set():
                 emit({"type": "cancelled", "step": step})
@@ -285,7 +319,10 @@ class Agent:
         call["arguments"] = args
         decision = policy.decide(name, tool.level, args, tainted=self.tainted)
         shown = mask_args(args)
+        from automoto import planner
+
         emit({"type": "tool_call", "step": step, "id": base["tool_call_id"], "name": name, "args": shown,
+              "label": planner.human_step(name, shown if isinstance(shown, dict) else {}),
               "decision": decision.as_dict()})
         if decision.action == policy.ASK:
             emit({"type": "approval_needed", "step": step, "id": base["tool_call_id"], "name": name, "args": shown,

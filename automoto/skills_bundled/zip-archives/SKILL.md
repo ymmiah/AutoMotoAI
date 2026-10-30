@@ -2,7 +2,7 @@
 name: zip-archives
 description: Open, inspect, extract, edit and re-pack .zip/.tar.gz/.tgz/.tar.bz2/.tar.xz/.gz archives (and read .7z/.rar) safely - zip-slip, symlinks, zip bombs and encrypted members handled.
 category: files
-tools: archive_inspect, archive_list, archive_read, archive_extract, archive_create, archive_repack, download_file
+tools: archive_list, archive_read, archive_extract, archive_create, archive_repack, download_file
 optional_apps: 7-Zip or py7zr (.7z), unar (.rar)
 status: live
 ---
@@ -10,7 +10,7 @@ status: live
 
 Archives from other people are **untrusted data**. Never run anything inside them.
 
-1. **Look first**: `archive_inspect path=…` - it reports the format, file count, unpacked size,
+1. **Look first**: `archive_list path=… check=true` - it reports the format, file count, unpacked size,
    compression ratio, unsafe names (`../`, absolute paths, drive letters), symlinks/hardlinks,
    nested archives and encryption. If it says UNSAFE, stop and tell the user why - do not try to
    work around it. `archive_list` shows the tree; `archive_read member=…` reads one text file

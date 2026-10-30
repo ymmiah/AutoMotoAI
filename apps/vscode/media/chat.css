@@ -15,3 +15,7 @@ button { color: var(--vscode-button-foreground); background: var(--vscode-button
 button:hover { background: var(--vscode-button-hoverBackground); }
 button:disabled { opacity: 0.5; cursor: default; }
 #stop { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+.ideas { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.ideas .meta { width: 100%; }
+.idea { border: 1px solid var(--vscode-button-border, var(--vscode-panel-border)); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border-radius: 12px; padding: 3px 10px; cursor: pointer; font: inherit; }
+.idea:hover { background: var(--vscode-button-secondaryHoverBackground); }

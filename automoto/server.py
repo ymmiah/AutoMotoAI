@@ -797,14 +797,27 @@ def agent_info(request: Request) -> dict[str, Any]:
     hosted_mode = tenancy.multiuser()
     tl = hosted.hosted_tools() if hosted_mode else tools_mod.build(desktop=desktop, extra=MCP_TOOLS,
                                                                   local_apps=_local(request))
-    return {"tools": [{"name": t.name, "level": t.level, "group": t.group, "description": t.description}
-                      for t in tl.values()],
+    from automoto import planner
+
+    return {"tools": [{"name": t.name, "level": t.level, "group": t.group, "description": t.description,
+                       "hidden": t.hidden} for t in tl.values()],
+            "ideas": planner.default_ideas(),
             "skills": [{"name": s.name, "description": s.description, "bundled": s.bundled}
                        for s in skills_mod.discover().values()],
             "approval_mode": policy.mode(), "sandbox": "hosted (per-user)" if hosted_mode else sandbox.mode(),
             "workspace": "your private workspace" if hosted_mode else str(sandbox.root()),
             "mcp_errors": [] if hosted_mode else MCP_ERRORS,
             "extra_roots": [] if hosted_mode else [str(p) for p in sandbox.extra_roots()]}
+
+
+@app.post("/api/ideas")
+def ideas(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Friendly next-step chips for the chat: defaults, or ones that fit the files the user just attached."""
+    _authorise(request)
+    from automoto import planner
+
+    files = [str(f)[:300] for f in (body.get("files") or [])[:20] if isinstance(f, str)]
+    return {"ideas": planner.ideas_for(files) if files else planner.default_ideas()}
 
 
 # -- files (workspace only): upload Office files, preview, download ------------------------

@@ -32,6 +32,7 @@ class Tool:
     level: str  # safe | risky | blocked
     fn: Callable[..., Any]
     group: str = "core"
+    hidden: bool = False  # merged into another tool: still runs if called, never offered to the model
 
     def schema(self) -> dict[str, Any]:
         return {"type": "function", "function": {"name": self.name, "description": self.description,
@@ -43,6 +44,7 @@ class ToolContext:
     memory: Memory | None = None
     skills: dict[str, skills_mod.Skill] = field(default_factory=dict)
     keys: dict[str, str] = field(default_factory=dict)  # per-run BYOK tokens (never logged or stored)
+    expand: Callable[[str], list[str]] | None = None  # the agent loop's planner hook for more_tools
 
 
 def _obj(props: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -69,16 +71,56 @@ def _title(raw: str) -> str:
 
 
 # -- file tools -----------------------------------------------------------------
-def read_file(ctx: ToolContext, path: str, max_chars: int = 12000) -> str:
+OFFICE_EXT = {".docx", ".doc", ".odt", ".rtf", ".xlsx", ".xlsm", ".xls", ".ods", ".pptx", ".ppt", ".odp", ".pdf"}
+STRUCT_EXT = {".json", ".jsonl", ".ndjson", ".yaml", ".yml", ".toml", ".xml"}
+ARCHIVE_EXT = {".zip", ".tar", ".gz", ".tgz", ".bz2", ".tbz2", ".xz", ".txz", ".7z", ".rar"}
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic"}
+TABLE_EXT = {".parquet", ".sqlite", ".sqlite3", ".db"}
+
+
+def read_file(ctx: ToolContext, path: str, max_chars: int = 12000, tail: int = 0, select: str = "",
+              sheet: str = "", first: int = 0, last: int = 0) -> str:
+    """Read anything: text, Word/Excel/PowerPoint/PDF, JSON/YAML/XML, archives (listing), images
+    (metadata), Parquet/SQLite (profile). One tool instead of nine, so models can't pick the wrong one."""
     p = sandbox.resolve(path, allow_outside=True)
     if not p.is_file():
         raise ToolFailed(f"no such file: {sandbox.rel(p)}")
+    ext = p.suffix.lower()
+    name = p.name.lower()
+    cap = max(200, min(int(max_chars or 12000), 60000))
+    if ext in OFFICE_EXT:
+        if ext == ".pdf" and (first or last):
+            from automoto import data_tools
+
+            return data_tools.pdf_text(ctx, path, first=int(first or 1), last=int(last or 0), max_chars=cap)
+        from automoto import office_tools
+
+        return office_tools.read(ctx, path, sheet=sheet or "", max_chars=max(cap, 20000))
+    if ext in STRUCT_EXT and select:
+        from automoto import data_tools
+
+        return data_tools.data_read(ctx, path, select=select, max_chars=cap)
+    if ext in ARCHIVE_EXT or name.endswith((".tar.gz", ".tar.bz2", ".tar.xz")):
+        from automoto import archive_tools
+
+        return archive_tools.archive_list(ctx, path)
+    if ext in IMAGE_EXT:
+        from automoto import data_tools
+
+        return data_tools.image_info(ctx, path) + "\n(To see what is in the picture, the user can attach it to the chat.)"
+    if ext in TABLE_EXT:
+        from automoto import data_tools
+
+        return data_tools.data_inspect(ctx, path)
+    if tail:
+        from automoto import data_tools
+
+        return data_tools.text_tail(ctx, path, lines=int(tail))
     data = p.read_bytes()
     if b"\x00" in data[:4096]:
-        raise ToolFailed("binary file - not shown")
+        raise ToolFailed(f"binary file ({ext or 'no extension'}) - it can't be shown as text")
     text = data.decode("utf-8", errors="replace")
-    max_chars = max(200, min(int(max_chars or 12000), 60000))
-    return text if len(text) <= max_chars else text[:max_chars] + f"\n[…{len(text) - max_chars} more chars]"
+    return text if len(text) <= cap else text[:cap] + f"\n[…{len(text) - cap} more chars; use tail=50 for the end]"
 
 
 def write_file(ctx: ToolContext, path: str, content: str, append: bool = False) -> str:
@@ -120,12 +162,19 @@ def edit_file(ctx: ToolContext, path: str, old: str, new: str, count: int = 1) -
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build", ".next", "target", ".mypy_cache"}
 
 
-def search_files(ctx: ToolContext, pattern: str, path: str = ".", glob: str = "*", max_results: int = 50) -> str:
-    """Grep-like search (regex, case-insensitive) through text files under ``path``."""
+def search_files(ctx: ToolContext, pattern: str, path: str = ".", glob: str = "*", max_results: int = 50,
+                 context: int = 0) -> str:
+    """Grep-like search (regex, case-insensitive) through text files under ``path`` - or inside one
+    (large) file when ``path`` is a file (streams logs/CSVs, with ``context`` lines)."""
     import fnmatch
     import os as _os
 
     base = sandbox.resolve(path, allow_outside=True)
+    if base.is_file():
+        from automoto import data_tools
+
+        return data_tools.text_search(ctx, path, pattern, regex=True, ignore_case=True, context=int(context or 0),
+                                      max_matches=int(max_results or 50))
     if not base.is_dir():
         raise ToolFailed(f"not a folder: {sandbox.rel(base)}")
     try:
@@ -257,6 +306,38 @@ def load_skill(ctx: ToolContext, name: str) -> str:
 
 
 # -- local apps (official CLI / scripting routes only) ------------------------------
+def more_tools(ctx: ToolContext, need: str) -> str:
+    """Ask the task planner for the tools of another capability (Word, spreadsheet, data, web, …)."""
+    if ctx.expand is None:
+        return "All tools are already available."
+    added = ctx.expand(str(need or ""))
+    return (f"Now available: {', '.join(added)}. Call them directly." if added else
+            "No extra tools matched that need. Describe it differently (e.g. 'spreadsheet', 'zip', 'web search', "
+            "'run a command'), or continue with the tools you have.")
+
+
+def routine(ctx: ToolContext, action: str = "list", name: str = "", schedule: str = "", prompt: str = "") -> str:
+    """Create, list or remove a scheduled routine (a prompt the agent runs on a schedule)."""
+    from automoto import routines as routines_mod
+
+    store = routines_mod.RoutineStore()
+    action = (action or "list").strip().lower()
+    if action in ("add", "create", "set", "update"):
+        if not (name and schedule and prompt):
+            raise ToolFailed("add needs name, schedule ('every 1d' or cron '0 8 * * 1-5') and prompt")
+        try:
+            r = store.add(name, schedule, prompt)
+        except routines_mod.ScheduleError as exc:
+            raise ToolFailed(f"{exc} - use 'every 30m', 'every 2h', 'every 1d' or a cron like '0 8 * * *' (08:00 daily)") from None
+        return (f"routine '{r.name}' saved: {r.schedule} -> {r.prompt[:120]}. It runs while AutoMoto is open "
+                "(the app or `automoto serve`); risky steps are skipped unless auto-approved.")
+    if action in ("remove", "delete", "stop"):
+        return f"removed routine '{name}'" if store.remove(name) else f"no routine named '{name}'"
+    rs = store.load()
+    return "\n".join(f"- {r.name}: {r.schedule} ({'on' if r.enabled else 'off'}) -> {r.prompt[:100]}"
+                     for r in rs.values()) or "no routines yet"
+
+
 def _apps():
     from automoto import apps
 
@@ -298,13 +379,19 @@ def _desktop(name: str) -> Callable[..., str]:
 
 CORE: list[Tool] = [
     Tool("list_dir", "List files in a workspace folder.", _obj({"path": {**S, "description": "folder, relative to the workspace"}}), "safe", list_dir),
-    Tool("read_file", "Read a text file from the workspace.", _obj({"path": S, "max_chars": I}, ["path"]), "safe", read_file),
+    Tool("read_file", "Read ANY file: text/code, Word/Excel/PowerPoint/PDF (headings, tables, slides, notes), "
+         "JSON/YAML/XML (select='a.b[0]'), zip/tar/7z (lists contents), images (size/EXIF), Parquet/SQLite (profile). "
+         "tail=50 = last lines of a log; first/last = PDF page range; sheet = Excel sheet.",
+         _obj({"path": S, "max_chars": I, "tail": I, "select": S, "sheet": S, "first": I, "last": I}, ["path"]),
+         "safe", read_file),
     Tool("write_file", "Create or overwrite a text file in the workspace (scratch/ needs no approval). Set append=true to append.",
          _obj({"path": S, "content": S, "append": {"type": "boolean"}}, ["path", "content"]), "risky", write_file),
     Tool("edit_file", "Replace an exact text snippet in a file (read_file first; old must match exactly and be unique unless count is set; count=0 replaces all).",
          _obj({"path": S, "old": S, "new": S, "count": I}, ["path", "old", "new"]), "risky", edit_file),
-    Tool("search_files", "Search text files for a regex (like grep -rn). Skips .git, node_modules, build folders and secret files.",
-         _obj({"pattern": S, "path": S, "glob": {**S, "description": "file name filter, e.g. *.py"}, "max_results": I}, ["pattern"]),
+    Tool("search_files", "Search for a regex in a folder (like grep -rn; skips .git, node_modules, secrets) or inside "
+         "one big file such as a log or CSV (path = the file; context = lines around each hit).",
+         _obj({"pattern": S, "path": S, "glob": {**S, "description": "file name filter, e.g. *.py"}, "max_results": I,
+               "context": I}, ["pattern"]),
          "safe", search_files),
     Tool("run_shell", "Run a shell command inside the sandbox workspace (needs approval). Returns exit code and output.",
          _obj({"command": S, "timeout": {**I, "description": "seconds, default 60"}}, ["command"]), "risky", run_shell),
@@ -315,6 +402,13 @@ CORE: list[Tool] = [
     Tool("recall", "Search long-term memory.", _obj({"query": S}), "safe", recall, "memory"),
     Tool("forget", "Delete one memory by id.", _obj({"id": I}, ["id"]), "risky", forget, "memory"),
     Tool("load_skill", "Load the full instructions of a skill by name.", _obj({"name": S}, ["name"]), "safe", load_skill, "skills"),
+    Tool("more_tools", "Get the tools for another kind of work if the ones listed aren't enough, e.g. need='spreadsheet', "
+         "'slides', 'zip', 'data', 'web search', 'run a command', 'WordPress', 'images', 'video'.",
+         _obj({"need": S}, ["need"]), "safe", more_tools, "skills"),
+    Tool("routine", "Schedule a prompt to run automatically (daily digest, weekly report, reminder): action='add' with "
+         "name, schedule ('every 1d', 'every 2h' or cron '0 8 * * 1-5' = 08:00 on weekdays) and prompt; 'list'; "
+         "'remove' name.", _obj({"action": {"type": "string", "enum": ["add", "list", "remove"]}, "name": S,
+                                  "schedule": S, "prompt": S}, ["action"]), "risky", routine, "routines"),
 ]
 
 APPS: list[Tool] = [
@@ -341,6 +435,13 @@ DESKTOP: list[Tool] = [
 ]
 
 
+# Tools merged into a broader one in 5.6.0-beta.3. They still run when a model (or an old skill)
+# calls them by name, but they are not offered any more, so the model sees a smaller, clearer set.
+MERGED = {"office_read": "read_file", "pdf_text": "read_file", "data_read": "read_file", "text_tail": "read_file",
+          "image_info": "read_file", "text_search": "search_files", "archive_inspect": "archive_list",
+          "office_render": "office_review", "sqlite_query": "data_query"}
+
+
 def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps: bool = True,
           services: bool = True, office: bool = True, files: bool = True) -> dict[str, Tool]:
     tools = list(CORE)
@@ -361,7 +462,17 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
     if desktop and config.desktop_enabled():
         tools += DESKTOP
     tools += extra or []
-    return {t.name: t for t in tools}
+    out = {t.name: t for t in tools}
+    for name, into in MERGED.items():
+        t = out.get(name)
+        if t is not None and into in out and not t.hidden:
+            out[name] = Tool(t.name, f"(merged into {into}) {t.description}", t.parameters, t.level, t.fn, t.group, True)
+    return out
+
+
+def offered(tools: dict[str, Tool]) -> dict[str, Tool]:
+    """The tools a model may be shown (merged ones excluded)."""
+    return {n: t for n, t in tools.items() if not t.hidden}
 
 
 def text_manifest(tools: dict[str, Tool]) -> str:

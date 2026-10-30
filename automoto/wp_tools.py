@@ -15,9 +15,9 @@ from automoto.tools import S, Tool, ToolContext, ToolFailed, _obj
 
 
 def _wrap(fn):
-    def inner(ctx: ToolContext, **kw: Any) -> str:
+    def inner(ctx: ToolContext, *args: Any, **kw: Any) -> str:
         try:
-            return fn(ctx, **kw)
+            return fn(ctx, *args, **kw)
         except (ArchiveError, sandbox.SandboxError) as exc:
             raise ToolFailed(str(exc)) from None
     return inner

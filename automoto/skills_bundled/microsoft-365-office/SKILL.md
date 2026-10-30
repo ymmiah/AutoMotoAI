@@ -2,7 +2,7 @@
 name: microsoft-365-office
 description: Work with Word, Excel and PowerPoint files in OneDrive/SharePoint through Microsoft Graph with your own access token - list, download, upload and edit workbooks - or use free desktop alternatives.
 category: office
-tools: service_api, office_read, office_create_docx, office_create_xlsx, office_create_pptx
+tools: service_api, read_file, office_create_docx, office_create_xlsx, office_create_pptx
 optional_apps: libreoffice
 status: untested
 ---

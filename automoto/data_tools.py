@@ -14,9 +14,9 @@ OBJ = {"type": "object"}
 
 
 def _wrap(fn):
-    def inner(ctx: ToolContext, **kw: Any) -> str:
+    def inner(ctx: ToolContext, *args: Any, **kw: Any) -> str:
         try:
-            return fn(ctx, **kw)
+            return fn(ctx, *args, **kw)
         except (dfm.DataError, sandbox.SandboxError) as exc:
             raise ToolFailed(str(exc)) from None
         except UnicodeDecodeError as exc:
@@ -91,7 +91,9 @@ def data_inspect(ctx: ToolContext, path: str, sheet: str = "", table: str = "", 
 def data_query(ctx: ToolContext, path: str, columns: Any = None, filters: Any = None, group_by: Any = None,
                aggregate: Any = None, sort: Any = None, limit: int = 0, dedupe: bool = False, out: str = "",
                sheet: str = "", table: str = "", delimiter: str = "", encoding: str = "", show: int = 25,
-               add_columns: Any = None) -> str:
+               add_columns: Any = None, sql: str = "") -> str:
+    if sql:  # read-only SQL on an SQLite file (was sqlite_query)
+        return sqlite_query(ctx, path, sql=sql, limit=int(limit or 200), out=out)
     df, info = dfm.load_table(path, sheet=sheet or None, table=table or None, delimiter=delimiter or None,
                               encoding=encoding or None)
     filters = _json_arg(filters, "filters")
@@ -202,10 +204,11 @@ TOOLS: list[Tool] = [
          "aggregate={'Revenue':'sum','*':'count'} or {'Price':['mean','max']}; sort=['-Revenue','Region']. "
          "add_columns={'Revenue':'[Units] * [Unit Price]', 'Month':'yearmonth([Order Date])'} derives columns first "
          "(+ - * / and month/year/quarter/yearmonth/weekday/round/abs/upper/lower - no code runs). "
-         "Dates like 28/10/2026 and decimal commas (14,5) are detected automatically.",
+         "Dates like 28/10/2026 and decimal commas (14,5) are detected automatically. SQLite: sql='SELECT …' (read-only).",
          _obj({"path": S, "add_columns": OBJ, "columns": ARR, "filters": FILTERS, "group_by": ARR, "aggregate": OBJ,
                "sort": ARR, "limit": I, "dedupe": B, "out": S, "sheet": S, "table": S, "delimiter": S,
-               "encoding": S, "show": I}, ["path"]), "safe", data_query, "data"),
+               "encoding": S, "show": I, "sql": {**S, "description": "SQLite only: read-only SELECT/WITH"}}, ["path"]),
+         "safe", data_query, "data"),
     Tool("data_convert", "Convert between csv, tsv, xlsx, json, jsonl, parquet, md, html, sqlite (tables) and json, yaml, "
          "toml, xml→json (structured). select='a.b' picks part of a structured file. Formula-looking text from CSVs "
          "stays text in xlsx.", _obj({"path": S, "out": S, "sheet": S, "table": S, "select": S, "delimiter": S,

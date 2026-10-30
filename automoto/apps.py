@@ -249,11 +249,18 @@ def run_app(app_id: str, args: list[str], timeout: int | None = None) -> str:
     if not app.cli:
         raise AppError(f"{app.name} has no supported command line - use open_in_app or run_app_script")
     argv = [path, *check_args(app, args)]
+    if len(argv) > 2 and _PATHISH.search(argv[-1]) and not argv[-1].startswith("-") and "://" not in argv[-1]:
+        out = sandbox.resolve(argv[-1], allow_outside=True)  # an output file: make its folder (already allowed)
+        if not out.exists() and not out.parent.exists():
+            out.parent.mkdir(parents=True, exist_ok=True)
     if sys.platform == "win32" and path.lower().endswith((".cmd", ".bat")):
         if any(re.search(r'[&|<>^%"]', a) for a in argv[1:]):
             raise AppError("arguments with & | < > ^ % or quotes can't be passed safely to a .cmd/.bat program")
         argv = ["cmd", "/c", *argv]
-    return f"[{app.name}] " + _run(argv, _timeout(timeout))
+    res = _run(argv, _timeout(timeout))
+    if not res.startswith("exit 0\n"):
+        raise AppError(f"[{app.name}] failed - {res[:3000]}")
+    return f"[{app.name}] " + res
 
 
 def open_in_app(app_id: str, path: str) -> str:

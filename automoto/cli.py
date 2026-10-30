@@ -241,12 +241,15 @@ def _event_printer(console):
         t = ev["type"]
         if t == "model" and ev.get("switched"):
             _print(console, f"   ↪ switched AI: {'; '.join(ev['switched'])} → {ev['provider']}", "dim")
+        elif t == "plan" and ev.get("summary"):
+            _print(console, f"   ✦ {ev['summary']}", "dim")
         elif t == "say" and ev.get("text"):
             _print(console, f"   💭 {ev['text'][:300]}", "dim")
         elif t == "tool_call":
             d = ev["decision"]
             mark = {"allow": "▶", "ask": "?", "deny": "⛔"}[d["action"]]
-            _print(console, f"   {mark} {ev['name']} {format_args(ev['args'])}", "cyan")
+            label = ev.get("label") or ev["name"]
+            _print(console, f"   {mark} {label}: {ev['name']} {format_args(ev['args'])}", "cyan")
         elif t == "tool_result":
             out = (ev.get("output") or "").strip().splitlines()
             first = out[0][:160] if out else ""
@@ -326,9 +329,9 @@ def cmd_agent_chat(args) -> int:
             cmd_status(args)
             continue
         if line == "/tools":
-            from automoto.tools import text_manifest
+            from automoto.tools import offered, text_manifest
 
-            _print(console, text_manifest(agent.tools))
+            _print(console, text_manifest(offered(agent.tools)))
             continue
         if line == "/memory":
             for f in agent.memory.facts():
@@ -494,9 +497,9 @@ def cmd_open(_args) -> int:
 
 
 def cmd_tools(args) -> int:
-    from automoto.tools import build, text_manifest
+    from automoto.tools import build, offered, text_manifest
 
-    print(text_manifest(build(desktop=config.desktop_enabled())))
+    print(text_manifest(offered(build(desktop=config.desktop_enabled()))))
     return 0
 
 

@@ -374,6 +374,11 @@ def _col(df, name: str) -> str:
     low = {str(c).lower().strip(): c for c in df.columns}
     if name.lower().strip() in low:
         return low[name.lower().strip()]
+    # after aggregate={'Units': 'sum'} the column is 'Units_sum': sorting by 'Units' means that
+    agg = [c for c in df.columns if str(c).lower().startswith(name.lower().strip() + "_")
+           and str(c).rsplit("_", 1)[-1] in _AGGS]
+    if len(agg) == 1:
+        return agg[0]
     raise DataError(f"no column {name!r}; columns are: {', '.join(map(str, df.columns[:40]))}")
 
 

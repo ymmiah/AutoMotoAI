@@ -28,9 +28,9 @@ def _spec(spec: Any) -> dict[str, Any]:
 
 
 def _wrap(fn):
-    def inner(ctx: ToolContext, **kw: Any) -> str:
+    def inner(ctx: ToolContext, *args: Any, **kw: Any) -> str:
         try:
-            return fn(ctx, **kw)
+            return fn(ctx, *args, **kw)
         except office.OfficeError as exc:
             raise ToolFailed(str(exc)) from None
         except ImportError as exc:
@@ -130,8 +130,11 @@ def contact_sheet(pngs: list, max_width: int = 1800) -> bytes:
 
 
 @_wrap
-def review(ctx: ToolContext, path: str, pages: int = 4, focus: str = "") -> str:
+def review(ctx: ToolContext, path: str, pages: int = 4, focus: str = "", ai: bool = True) -> str:
     from automoto import router
+
+    if not ai or str(ai).lower() == "false":
+        return render(ctx, path, 1, max(1, min(int(pages or 4), 20)))
 
     pngs = office.render(path, 1, max(1, min(int(pages or 4), 6)), 70)
     ext = office.resolve_in(path).suffix.lower()
@@ -202,6 +205,7 @@ TOOLS: list[Tool] = [
          "formula errors, empty placeholders, slide text overflow, small fonts, fonts embedded, tagged PDF.",
          _obj({"path": S}, ["path"]), "safe", check, "office"),
     Tool("office_review", "Render the first pages and ask a vision model to critique the layout (overflow, alignment, "
-         "consistency). Use after office_check before calling something publication-ready.",
-         _obj({"path": S, "pages": I, "focus": S}, ["path"]), "safe", review, "office"),
+         "consistency). Use after office_check before calling something publication-ready. ai=false only renders "
+         "the pages to PNG (scratch/renders/) without a vision model.",
+         _obj({"path": S, "pages": I, "focus": S, "ai": {"type": "boolean"}}, ["path"]), "safe", review, "office"),
 ]

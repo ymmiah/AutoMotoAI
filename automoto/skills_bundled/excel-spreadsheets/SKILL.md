@@ -2,7 +2,7 @@
 name: excel-spreadsheets
 description: Build Excel (.xlsx) models, trackers and reports with live formulas, number formats, conditional formatting, validation and charts - and verify every formula.
 category: office
-tools: office_create_xlsx, office_edit, office_read, office_recalc, office_check, office_convert
+tools: office_create_xlsx, office_edit, read_file, office_recalc, office_check, office_convert
 optional_apps: libreoffice
 status: live
 ---
@@ -25,4 +25,4 @@ status: live
 6. `office_check` for missing sheets/external links; `office_convert to=pdf` if a printable copy is needed.
 7. Report the sheets, key outputs (with values from the recalc) and the file path.
 
-For data analysis of an existing file: `office_read` (formulas and values, a summary of numeric columns).
+For data analysis of an existing file: `read_file` (formulas and values, a summary of numeric columns).

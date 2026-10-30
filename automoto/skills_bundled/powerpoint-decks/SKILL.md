@@ -2,7 +2,7 @@
 name: powerpoint-decks
 description: Create PowerPoint (.pptx) presentations with a clear storyline, one idea per slide, a consistent theme, charts/tables/images and speaker notes - then export and review as PDF.
 category: office
-tools: office_create_pptx, office_edit, office_read, office_convert, office_check, office_render, office_review
+tools: office_create_pptx, office_edit, read_file, office_convert, office_check, office_review
 optional_apps: libreoffice
 status: live
 ---
@@ -27,6 +27,6 @@ status: live
 **Check**
 1. `office_check` - fix overflow warnings (split the slide or shorten), empty placeholders, small fonts,
    missing alt text, missing notes.
-2. `office_convert to=pdf` then `office_render`/`office_review` and look at every slide: nothing cut
+2. `office_convert to=pdf` then `office_review` and look at every slide: nothing cut
    off, text readable at a distance, charts labelled, consistent alignment.
 3. Report slide count, the storyline in one line per slide, and the .pptx/.pdf paths.

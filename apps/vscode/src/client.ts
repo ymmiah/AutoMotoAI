@@ -6,6 +6,10 @@ export interface AgentEvent {
   step?: number;
   id?: string;
   name?: string;
+  /** Plain-language step ("Reading your slides"), sent by AutoMoto 5.6.0b3+. */
+  label?: string;
+  /** For "plan" events: what the assistant is working with. */
+  summary?: string;
   args?: Record<string, unknown>;
   reason?: string;
   ok?: boolean;
