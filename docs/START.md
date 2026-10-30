@@ -326,6 +326,10 @@ holding.
 
 ![Account → My devices](gui-guide/63-app-my-devices.png)
 
+On a phone it's the same page: **☰ → Account**, scroll to **My devices**.
+
+<img src="gui-guide/73-phone-my-devices.png" width="260" alt="My devices on a phone">
+
 **Lost a phone or laptop?**
 
 1. On any other device, sign in and open **Account → My devices**.
