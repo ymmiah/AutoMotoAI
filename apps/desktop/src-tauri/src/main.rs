@@ -25,6 +25,9 @@ use url::Url;
 
 /// Default account server baked in at build time (repository variable AUTOMOTO_DEFAULT_SERVER in CI).
 const DEFAULT_SERVER: Option<&str> = option_env!("AUTOMOTO_DEFAULT_SERVER");
+/// The Windows app is a beta while the account server, engine and web GUI are stable releases.
+const CHANNEL: &str = "Beta";
+const TITLE: &str = "AutoMoto AI (Beta)";
 const GUIDE: &str = "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html";
 const LINKS: &[(&str, &str)] = &[
     ("guide", GUIDE),
@@ -113,6 +116,7 @@ fn app_info(app: AppHandle, webview: tauri::Webview) -> Result<Value, String> {
     let engine = local::find_engine();
     Ok(json!({
         "version": env!("CARGO_PKG_VERSION"),
+        "channel": CHANNEL,
         "default_server": DEFAULT_SERVER.unwrap_or(""),
         "server": server,
         "username": s.username,
@@ -245,6 +249,7 @@ fn install_engine(app: AppHandle, webview: tauri::Webview) -> Result<Value, Stri
         std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File"])
             .arg(script)
+            .args(["-Version", &engine_version(env!("CARGO_PKG_VERSION"))])
             .creation_flags(0x0000_0010) // CREATE_NEW_CONSOLE
             .spawn()
             .map_err(|e| format!("Couldn't open PowerShell: {e}"))?;
@@ -254,6 +259,15 @@ fn install_engine(app: AppHandle, webview: tauri::Webview) -> Result<Value, Stri
     {
         let _ = app;
         Ok(json!({"started": false, "command": "bash scripts/install.sh"}))
+    }
+}
+
+/// The engine release that matches this app: "5.6.0-beta.1" -> "5.6.0b1" (PEP 440), "5.6.0" -> "5.6.0".
+#[cfg_attr(not(windows), allow(dead_code))]
+fn engine_version(app_version: &str) -> String {
+    match app_version.split_once("-beta.") {
+        Some((base, n)) => format!("{base}b{n}"),
+        None => app_version.to_string(),
     }
 }
 
@@ -277,7 +291,7 @@ async fn check_updates(app: AppHandle, interactive: bool) {
             let version = update.version.clone();
             let app2 = app.clone();
             app.dialog()
-                .message(format!("AutoMoto AI {version} is available (you have {}).\n\nInstall it now? The app restarts when it's done.",
+                .message(format!("AutoMoto AI app {version} ({CHANNEL}) is available (you have {}).\n\nInstall it now? The app restarts when it's done.",
                                  env!("CARGO_PKG_VERSION")))
                 .title("Update available")
                 .buttons(MessageDialogButtons::OkCancelCustom("Install update".into(), "Later".into()))
@@ -329,7 +343,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let help = Submenu::with_items(app, "Help", true, &[
         &MenuItem::with_id(app, "guide", "Step-by-step guide", true, Some("F1"))?,
         &MenuItem::with_id(app, "log", "Open the local engine log", true, None::<&str>)?,
-        &MenuItem::with_id(app, "about", "About AutoMoto AI", true, None::<&str>)?,
+        &MenuItem::with_id(app, "about", "About AutoMoto AI (Beta)", true, None::<&str>)?,
     ])?;
     Menu::with_items(app, &[&file, &edit, &help])
 }
@@ -365,10 +379,10 @@ fn on_menu(app: &AppHandle, id: &str) {
         }
         "about" => {
             app.dialog()
-                .message(format!("AutoMoto AI {}\n\nYour AI cousin - an agent that actually does the work.\n\n\
+                .message(format!("AutoMoto AI app {} - {CHANNEL}\n\nYour AI cousin - an agent that actually does the work.\n\n\
                                   Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)\nMIT licence · github.com/ymmiah/AutoMotoAI",
                                  env!("CARGO_PKG_VERSION")))
-                .title("About AutoMoto AI")
+                .title("About AutoMoto AI (Beta)")
                 .show(|_| {});
         }
         _ => {}
@@ -406,7 +420,7 @@ fn main() {
             let start = if local_flag { "index.html?auto=local" } else { "index.html" };
             let menu = build_menu(&handle)?;
             let w = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(start.into()))
-                .title("AutoMoto AI")
+                .title(TITLE)
                 .inner_size(1200.0, 820.0)
                 .min_inner_size(720.0, 520.0)
                 .menu(menu)
@@ -445,4 +459,13 @@ fn main() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn engine_version_follows_the_app() {
+        assert_eq!(super::engine_version("5.6.0-beta.1"), "5.6.0b1");
+        assert_eq!(super::engine_version("5.6.0"), "5.6.0");
+    }
 }

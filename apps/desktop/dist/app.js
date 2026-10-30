@@ -21,7 +21,8 @@ function errText(e) { return typeof e === "string" ? e : (e && e.message) || Str
 let info = null;
 
 function draw() {
-  $("#ver").textContent = `Version ${info.version}`;
+  $("#ver").textContent = `Windows app ${info.version} ${info.channel || ""}`.trim();
+  $("#chan").hidden = !info.channel;
   $("#server").value = info.server || "";
   $("#username").value = info.username || "";
   $("#device").value = info.device_name || "";

@@ -15,7 +15,7 @@ Everything here is free. Latest release: **v5.5.0** ([downloads](https://github.
 
 | You want… | Use | Time |
 |---|---|---|
-| The **Windows app** — sign in to an AutoMoto account, or Local mode | The installer from Releases ([section 3](#windows-app)) | ~2 min |
+| The **Windows app** — sign in to an AutoMoto account, or Local mode | The beta installer from Releases ([section 3](#windows-app)) | ~2 min |
 | AutoMoto for **yourself** on Windows / macOS / Linux | The **installer script** for your OS (sections 3–5) | ~5 min |
 | An isolated setup, or the same steps on every OS | **Docker Compose** (section 6) | ~10 min |
 | Friends / classmates use it, with a **1-hour daily limit** | **Hosted mode** (section 7) | ~20 min |
@@ -51,15 +51,15 @@ Never share a key or paste it into a chat, an issue or a Git commit.
 
 ### Windows app
 
-The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an AutoMoto account.
+**Beta** (5.6.0 Beta 1). The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an AutoMoto account.
 
-1. Download from the [latest release](https://github.com/ymmiah/AutoMotoAI/releases/latest):
-   * `AutoMoto-AI_5.6.0_x64-setup.exe` — installs for you only, no admin (recommended), or
-   * `AutoMoto-AI_5.6.0_x64_en-US.msi` — installs for all users (admin; good for school/work PCs and silent installs).
+1. Download from the [5.6.0 Beta 1 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1):
+   * `AutoMoto-AI_5.6.0-beta.1_x64-setup.exe` — installs for you only, no admin (recommended), or
+   * `AutoMoto-AI_5.6.0-beta.1_x64_en-US.msi` — installs for all users (admin; good for school/work PCs and silent installs).
 2. Optional — check it against `SHA256SUMS.txt` from the same release:
 
    ```powershell
-   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0_x64-setup.exe").Hash
+   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.1_x64-setup.exe").Hash
    ```
 
 3. Run it. The app isn't code-signed yet, so SmartScreen says *"Windows protected your PC"* → **More info → Run anyway**
@@ -69,15 +69,16 @@ The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an
 Silent installs (IT, scripts):
 
 ```powershell
-.\AutoMoto-AI_5.6.0_x64-setup.exe /S                                       # per-user, no admin
-msiexec /i AutoMoto-AI_5.6.0_x64_en-US.msi /qn /norestart                  # all users, admin PowerShell
+.\AutoMoto-AI_5.6.0-beta.1_x64-setup.exe /S                                       # per-user, no admin
+msiexec /i AutoMoto-AI_5.6.0-beta.1_x64_en-US.msi /qn /norestart                  # all users, admin PowerShell
 ```
 
 **Local mode** runs AutoMoto on this PC without an account. It needs the engine from step 2 below; the app's
-**Install the local engine** button runs the same official installer for you (it ships inside the app). The app
+**Install the local engine** button runs the same official installer for you (it ships inside the app) and installs
+the matching beta engine (`-Version 5.6.0b1`). The app
 starts the engine when you pick Local mode and stops it when you close the window.
 
-**Updates:** the app checks GitHub Releases on start and asks before updating; updates are signature-checked.
+**Updates:** the beta app checks the beta channel on start and asks before updating; updates are signature-checked.
 **Uninstall:** *Settings → Apps → AutoMoto AI → Uninstall* (your account and its chats stay on the server; Local mode
 data stays in `%USERPROFILE%\.automoto`).
 
@@ -447,7 +448,7 @@ HTTP is only OK on a network you trust; for anything else use option A or B.
 
 | Platform | How | Status |
 |---|---|---|
-| **VS Code extension** (any OS) | Download `automoto-ai-5.6.0.vsix` from the release → `code --install-extension automoto-ai-5.6.0.vsix` (or *Extensions → … → Install from VSIX*). Start `automoto serve` first; the extension finds it by itself. | ✅ tested in CI (real VS Code on Linux) |
+| **VS Code extension** (any OS) | Download `automoto-ai-5.5.0.vsix` from the release → `code --install-extension automoto-ai-5.5.0.vsix` (or *Extensions → … → Install from VSIX*). Start `automoto serve` first; the extension finds it by itself. | ✅ tested in CI (real VS Code on Linux) |
 | **VS Code Remote-SSH / WSL / Dev Containers / Codespaces** | The extension runs on the **remote** side, so install and start AutoMoto **there** (Linux steps). VS Code's port forwarding keeps `localhost:8765` working for the web app over SSH. | 🟡 should work, not tested |
 | **Cursor / VSCodium** | Same `.vsix` (Open VSX listing coming once published). | 🟡 not tested |
 | **ChromeOS** | *Settings → About ChromeOS → Developers → Linux development environment → Turn on*, then the Debian steps in section 5 inside the Linux terminal. If Chrome can't open `127.0.0.1:8765`, enable it under *Linux → Port forwarding*, or install a browser inside Linux (`sudo apt install chromium`). | 🟡 not tested |

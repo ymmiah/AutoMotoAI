@@ -1,4 +1,6 @@
-# AutoMoto AI — Windows app (Tauri 2)
+# AutoMoto AI — Windows app (Tauri 2) — Beta
+
+> **Beta** (5.6.0-beta.1). The window title, sign-in screen, About and installer names say so.
 
 The **AutoMoto AI app** is a small native window (Tauri 2, the system WebView2 on Windows) that opens on a
 **sign-in screen** with two choices:
@@ -48,8 +50,8 @@ Code extension) instead of starting a second one.
 * **Navigation:** the window may show only the app page, the signed-in server's origin and the local engine; every
   other link (and `target=_blank`) opens in the default browser.
 * **Network:** rustls, no redirects followed, credentials never put in URLs.
-* **Updates** come from GitHub Releases (`latest.json`) and are checked against the public key in
-  `tauri.conf.json`; an update without a valid signature is refused. The private key exists only as the repo
+* **Updates** come from the **beta channel** (`packaging/updater/beta.json`, the signed `latest.json` of the newest
+  beta release) and are checked against the public key in `tauri.conf.json`; an update without a valid signature is refused. The private key exists only as the repo
   secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (and Yasin's offline backup).
 * The installers contain no keys or secrets. The default server address can be baked in at build time with the repo
   variable `AUTOMOTO_DEFAULT_SERVER`.

@@ -1,5 +1,6 @@
 # On a version tag: attach the Windows installers and a signed updater manifest (latest.json) to the release.
-# The release is created as a draft if it doesn't exist yet; a maintainer publishes it.
+# The release is created as a draft if it doesn't exist yet (a pre-release for -beta.N tags); a maintainer
+# publishes it. For betas, latest.json is also what packaging/updater/beta.json must be updated to.
 param([string]$Dir = "out", [string]$Tag, [string]$Repo)
 $ErrorActionPreference = "Stop"
 $ver = $Tag.TrimStart("v")
@@ -22,7 +23,12 @@ $manifest = [ordered]@{
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM "$Dir/latest.json"
 gh release view $Tag --repo $Repo *> $null
 if ($LASTEXITCODE) {
-  gh release create $Tag --repo $Repo --draft --verify-tag --title "AutoMoto AI $ver" --notes "Windows app and engine $ver. Notes: CHANGELOG.md"
+  $flags = @("--draft", "--verify-tag")
+  $title = "AutoMoto AI $ver"
+  if ($ver -match '-beta\.(\d+)$') {   # betas are pre-releases and never become "latest"
+    $flags += @("--prerelease", "--latest=false"); $title = "AutoMoto AI $($ver -replace '-beta\.\d+$', '') Beta $($Matches[1])"
+  }
+  gh release create $Tag --repo $Repo @flags --title $title --notes "AutoMoto AI $ver. Notes: CHANGELOG.md"
   if ($LASTEXITCODE) { throw "could not create the release" }
 }
 gh release upload $Tag --repo $Repo --clobber (Get-ChildItem $Dir -File | ForEach-Object FullName)

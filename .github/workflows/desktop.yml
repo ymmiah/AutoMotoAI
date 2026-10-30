@@ -45,8 +45,10 @@ jobs:
           $cargo = (Select-String -Path apps/desktop/src-tauri/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
           $pkg = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
           "pyproject $py · tauri.conf $conf · Cargo $cargo · package.json $pkg"
-          if (($py, $conf, $cargo, $pkg | Sort-Object -Unique).Count -ne 1) { throw "versions differ" }
-          if ($env:GITHUB_REF -like "refs/tags/v*" -and $env:GITHUB_REF_NAME -ne "v$py") { throw "tag $env:GITHUB_REF_NAME is not v$py" }
+          if (($conf, $cargo, $pkg | Sort-Object -Unique).Count -ne 1) { throw "app versions differ" }
+          # the engine uses PEP 440 for the same version: 5.6.0-beta.1 <-> 5.6.0b1
+          if (($conf -replace '-beta\.', 'b') -ne $py) { throw "app $conf doesn't match the engine $py" }
+          if ($env:GITHUB_REF -like "refs/tags/v*" -and $env:GITHUB_REF_NAME -ne "v$conf") { throw "tag $env:GITHUB_REF_NAME is not v$conf" }
       - name: Rust unit tests and lint
         working-directory: apps/desktop/src-tauri
         run: |

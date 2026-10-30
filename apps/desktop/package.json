@@ -1,7 +1,7 @@
 {
   "name": "automoto-desktop",
   "private": true,
-  "version": "5.6.0",
+  "version": "5.6.0-beta.1",
   "description": "AutoMoto AI desktop app (Tauri 2): sign in to your AutoMoto account, or run locally",
   "scripts": {
     "dev": "tauri dev",

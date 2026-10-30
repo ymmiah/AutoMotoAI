@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AutoMoto AI",
   "mainBinaryName": "AutoMoto AI",
-  "version": "5.6.0",
+  "version": "5.6.0-beta.1",
   "identifier": "com.ymmiah.automoto",
   "build": {
     "frontendDist": "../dist"
@@ -46,7 +46,8 @@
         "displayLanguageSelector": false
       },
       "wix": {
-        "language": "en-US"
+        "language": "en-US",
+        "version": "5.6.0"
       }
     }
   },
@@ -54,7 +55,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBMUJBOTQ5Njg2OEQxOTEKUldTUjBXaG9TYWticWlzb3BEWEtIU1RNYkY4cjFlN3NUZkthZ1ZjeDF2QmJZRnRZWWF2d3VwTVcK",
       "endpoints": [
-        "https://github.com/ymmiah/AutoMotoAI/releases/latest/download/latest.json"
+        "https://raw.githubusercontent.com/ymmiah/AutoMotoAI/main/packaging/updater/beta.json"
       ],
       "windows": {
         "installMode": "passive"

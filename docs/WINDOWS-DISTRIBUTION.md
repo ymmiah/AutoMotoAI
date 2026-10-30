@@ -1,6 +1,7 @@
 # Shipping the Windows app: SmartScreen, signing, winget and the Microsoft Store
 
-Status for **5.6.0** (checked 30 October 2026): the app is published **free on GitHub Releases**, as an NSIS
+Status for **5.6.0 Beta 1** (checked 30 October 2026): the app is a **beta**, published **free as a GitHub
+pre-release** (`v5.6.0-beta.1`; 5.5.0 stays the latest stable release), as an NSIS
 `.exe` and an `.msi`, **not code-signed**. Updates are signed with the Tauri updater key, so the app only installs
 updates that came from this repository's release workflow. A winget manifest is ready in `packaging/winget/` but
 **has not been submitted**. Nothing has been signed up for.
@@ -8,7 +9,7 @@ updates that came from this repository's release workflow. A winget manifest is 
 ## What users see today (SmartScreen)
 
 Windows SmartScreen checks downloaded programs. An **unsigned** program, or a new one without download reputation,
-shows **"Windows protected your PC"**. Users click **More info → Run anyway**. That's expected for 5.6.0.
+shows **"Windows protected your PC"**. Users click **More info → Run anyway**. That's expected for the 5.6.0 beta.
 
 * Reputation is built per signing certificate (or per file for unsigned files), over time and downloads.
   **EV certificates no longer skip this**: Microsoft says paying for EV just to avoid the warning "is no longer justified".
@@ -62,8 +63,9 @@ or **(b)** an MSIX build for the Store only. Both need Yasin to create the accou
 
 ## winget (Windows Package Manager)
 
-Manifests for 5.6.0 are in [`packaging/winget/manifests/y/ymmiah/AutoMotoAI/5.6.0/`](https://github.com/ymmiah/AutoMotoAI/tree/main/packaging/winget/manifests/y/ymmiah/AutoMotoAI/5.6.0)
-(schema 1.12, NSIS per-user installer, URL and SHA-256 of the release file). A submission is a pull request to
+Manifests for the beta are in [`packaging/winget/manifests/y/ymmiah/AutoMotoAI/Beta/5.6.0-beta.1/`](https://github.com/ymmiah/AutoMotoAI/tree/main/packaging/winget/manifests/y/ymmiah/AutoMotoAI/Beta/5.6.0-beta.1)
+as the package **`ymmiah.AutoMotoAI.Beta`** (winget-pkgs keeps pre-releases under their own identifier, so the stable
+`ymmiah.AutoMotoAI` can come later) (schema 1.12, NSIS per-user installer, URL and SHA-256 of the release file). A submission is a pull request to
 `microsoft/winget-pkgs`; an automated process validates the manifest, checks the package against the winget
 policies and checks it isn't known to be malicious (false positives can be sent to Microsoft Defender).
 — [Submit packages to Windows Package Manager](https://learn.microsoft.com/en-us/windows/package-manager/package/repository)
@@ -72,13 +74,21 @@ To submit (Yasin, when ready — this has **not** been done):
 
 ```powershell
 winget install wingetcreate
-winget validate --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\5.6.0
-winget install --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\5.6.0   # test install locally
-wingetcreate submit packaging\winget\manifests\y\ymmiah\AutoMotoAI\5.6.0           # opens a PR on microsoft/winget-pkgs
+winget validate --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.1
+winget install --manifest packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.1   # test install locally
+wingetcreate submit packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-beta.1           # opens a PR on microsoft/winget-pkgs
 ```
 
-For later versions: `wingetcreate update ymmiah.AutoMotoAI --version <new> --urls <setup.exe URL> --submit`.
+For later versions: `wingetcreate update ymmiah.AutoMotoAI.Beta --version <new> --urls <setup.exe URL> --submit`.
 Unsigned installers can be flagged by the SmartScreen part of the validation; if that happens, sign first (above).
+
+## Update channel
+
+The beta app checks `https://raw.githubusercontent.com/ymmiah/AutoMotoAI/main/packaging/updater/beta.json` (the
+signed `latest.json` of the newest beta, committed after each beta release). It does **not** use
+`releases/latest`, so a beta never becomes "latest" and stable users aren't offered betas. For a stable app
+release, point `plugins.updater.endpoints` in `tauri.conf.json` back to
+`https://github.com/ymmiah/AutoMotoAI/releases/latest/download/latest.json`.
 
 ## The updater key (keep it safe)
 

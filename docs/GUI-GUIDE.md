@@ -23,21 +23,21 @@ top-right corner, then paste it into your terminal.
 
 ## 0. The Windows app
 
-The **AutoMoto AI app for Windows** (new in 5.6.0) is a normal window you install like any other program. It opens
+The **AutoMoto AI app for Windows** (new in 5.6.0, **Beta**) is a normal window you install like any other program. It opens
 on a sign-in screen with two choices: **your AutoMoto account** (the same chats, files and usage time on every
 device) or **Local mode** (just this PC, no account).
 
-**Step 0.1** — download the installer from the [latest release](https://github.com/ymmiah/AutoMotoAI/releases/latest):
-`AutoMoto-AI_5.6.0_x64-setup.exe` (recommended, installs just for you, no admin) or
-`AutoMoto-AI_5.6.0_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
-published yet.)
+**Step 0.1** — download the installer from the [5.6.0 Beta 1 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.1):
+`AutoMoto-AI_5.6.0-beta.1_x64-setup.exe` (recommended, installs just for you, no admin) or
+`AutoMoto-AI_5.6.0-beta.1_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
+published yet.) It's a **beta**: please report problems at <https://github.com/ymmiah/AutoMotoAI/issues>.
 
 **Step 0.2** — run it. The app is **not code-signed yet**, so Windows SmartScreen shows *"Windows protected your PC"*.
 Click **More info → Run anyway**. (Why, and how that will go away: [WINDOWS-DISTRIBUTION.md](WINDOWS-DISTRIBUTION.md).)
 You can check the download first against `SHA256SUMS.txt` on the release page:
 
 ```powershell
-(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0_x64-setup.exe").Hash
+(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.1_x64-setup.exe").Hash
 ```
 
 **Step 0.3** — sign in. Type the **server address** your admin gave you (for example
@@ -81,7 +81,7 @@ The app starts the engine for you and stops it when you close the window.
 **Useful menu items** (menu **AutoMoto**): *Sign-in screen / switch mode* (`Ctrl+Shift+H`), *Reload* (`Ctrl+R`),
 *Check for updates…*, *Sign out of this device*. **Help** has this guide (`F1`) and the local engine's log.
 
-**Updates** — the app checks GitHub Releases when it starts and asks before installing a new version. Every update
+**Updates** — the beta app follows the **beta channel**: it checks for new beta builds when it starts and asks before installing a new version. Every update
 is signed; the app refuses one whose signature doesn't match.
 
 ---
@@ -215,7 +215,7 @@ automoto serve
 It prints something like this and opens your browser:
 
 ```text
-AutoMoto AI v5.6.0 "Agent" -> http://127.0.0.1:8765/
+AutoMoto AI v5.6.0b1 "Agent" -> http://127.0.0.1:8765/
 Open (one-time link): http://127.0.0.1:8765/?launch=…
 Workspace: ~/.automoto/workspace  ·  sandbox: local  ·  approvals: ask  ·  routines: on
 ```
@@ -560,11 +560,11 @@ Repack uploads/hello-plugin.zip as a clean zip with hello-plugin/ as the top fol
 
 ## 18. VS Code panel and commands
 
-**Step 18.1** — download `automoto-ai-5.6.0.vsix` from the
+**Step 18.1** — download `automoto-ai-5.5.0.vsix` from the
 [latest release](https://github.com/ymmiah/AutoMotoAI/releases/latest), then install it:
 
 ```bash
-code --install-extension automoto-ai-5.6.0.vsix
+code --install-extension automoto-ai-5.5.0.vsix
 ```
 
 (or **Extensions → … → Install from VSIX…**).
@@ -789,7 +789,7 @@ More fixes: [INSTALL.md → Troubleshooting](INSTALL.md#11-troubleshooting). Sti
 
 ---
 
-<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. Section 0: the 5.6.0
+<sub>Screenshots: AutoMoto AI 5.5.0 on Linux in Chromium and VS Code 1.143, 30 October 2026. Section 0: the 5.6.0 Beta 1
 app built from this repository on Linux (the Windows build looks the same; CI saves a Windows screenshot of every build). The example AI
 replies in the chat screenshots came from a scripted stand-in model so they stay the same every time; with a real
 key the wording will differ.</sub>

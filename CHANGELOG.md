@@ -1,7 +1,13 @@
 # AutoMoto AI - Version History & Changelog
 
-## 5.6.0 "Agent" — 30 October 2026
-**One account everywhere, and the Windows app.**
+## 5.6.0-beta.1 "Agent" — Beta — 30 October 2026
+**One account everywhere, and the Windows app. This whole release is a beta** (GitHub pre-release
+`v5.6.0-beta.1`; 5.5.0 stays the latest stable release).
+
+Version numbers: the app and the release are `5.6.0-beta.1`; the Python package is `5.6.0b1` (PEP 440); the VS Code
+extension is `5.6.0` packaged as a **pre-release** (`automoto-ai-5.6.0-beta.1.vsix`, VS Code's pre-release rules don't
+allow `-beta` in the version); the MSI's product version is `5.6.0` because Windows Installer needs plain numbers.
+Beta tags build everything but publish nothing to the VS Code Marketplace, Open VSX or PyPI.
 
 ### New — one account on every device
 - **Device sign-in for apps:** `POST /api/auth/device/login` gives an app a revocable device token (`amd_…`, stored
@@ -15,13 +21,17 @@
 - Chats, files, memory, usage time and bonus time were already stored per user on the server; now every client
   signs in to the same account (tested: two devices see the same chat and the same files).
 
-### New — Windows app (`apps/desktop`, Tauri 2)
+### New — Windows app (`apps/desktop`, Tauri 2) — Beta
+- Labelled **Beta** in the window title, the sign-in screen, About, and the installer names
+  (`AutoMoto-AI_5.6.0-beta.1_x64-setup.exe`, `AutoMoto-AI_5.6.0-beta.1_x64_en-US.msi`).
 - `.exe` (NSIS, per-user, no admin) and `.msi` installers on GitHub Releases, free.
 - Opens on a **sign-in screen**: server address (default baked in with the repo variable `AUTOMOTO_DEFAULT_SERVER`,
   editable), username, password, device name; the device token is kept in Windows Credential Manager.
 - **Local mode:** starts the AutoMoto engine installed on the PC and stops it on close; *Install the local engine*
   runs the bundled official `install.ps1`. Python isn't bundled (size and antivirus false positives).
-- **Auto-update** from GitHub Releases with signed `latest.json`; unsigned updates are refused.
+- **Auto-update** on a **beta channel** (`packaging/updater/beta.json`, a signed manifest pointing at the beta
+  release's files); unsigned updates are refused. Local mode installs the matching beta engine (`-Version 5.6.0b1`;
+  `install.ps1`/`install.sh` know the beta tag and pin its wheel's SHA-256; their default stays 5.5.0).
 - Security: 7 app commands only, for the bundled page only; strict CSP; no remote code; other sites open in the
   browser; HTTPS required for non-local servers; no secrets in the installer.
 - CI (`.github/workflows/desktop.yml`, windows-latest): version check, Rust tests + clippy, build, silent
@@ -35,7 +45,7 @@
 - A local one-time link opened from another site or the app (`&app=1`) answers with a short page instead of a
   redirect, so the browser keeps the SameSite=Strict sign-in cookie.
 
-### Also in 5.6.0 — install and deploy on every OS
+### Also in 5.6.0-beta.1 — install and deploy on every OS
 
 #### New
 - **docs/GUI-GUIDE.md:** beginner step-by-step guide to the web GUI and the VS Code panel (install, free key,

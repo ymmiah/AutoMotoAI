@@ -1,7 +1,8 @@
 # Changelog
 
-## 5.6.0
-- Version in step with AutoMoto AI 5.6.0 (one account everywhere, the Windows app). The panel is unchanged.
+## 5.6.0 (pre-release, part of AutoMoto AI 5.6.0-beta.1)
+- Packaged as a VS Code **pre-release** (`automoto-ai-5.6.0-beta.1.vsix`). Version in step with the AutoMoto AI
+  5.6.0 beta (one account everywhere, the Windows app). The panel itself is unchanged.
 
 ## 5.5.0
 - Marketplace / Open VSX ready: gallery banner, pricing, issue links; version in step with AutoMoto AI 5.5.0.

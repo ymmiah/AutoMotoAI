@@ -32,3 +32,4 @@ pre { background:var(--bg); border:1px solid var(--line); border-radius:9px; pad
 a { color:var(--acc); }
 .foot { margin-top:22px; text-align:center; } .foot div { margin-top:6px; }
 .ok-dot::before { content:"● "; color:var(--acc); } .no-dot::before { content:"● "; color:var(--dim); }
+.chan{display:inline-block;vertical-align:middle;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:#fff3cd;color:#7a5200;border:1px solid #e9c46a}
