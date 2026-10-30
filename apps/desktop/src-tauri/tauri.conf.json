@@ -1,28 +1,64 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AutoMoto AI",
-  "version": "5.5.0",
+  "mainBinaryName": "AutoMoto AI",
+  "version": "5.6.0",
   "identifier": "com.ymmiah.automoto",
   "build": {
     "frontendDist": "../dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; connect-src http://127.0.0.1:8765; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "freezePrototype": true
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
+    "publisher": "Yasin Mohammed Miah",
+    "copyright": "MIT licence - Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)",
+    "homepage": "https://github.com/ymmiah/AutoMotoAI",
+    "license": "MIT",
     "category": "Productivity",
-    "shortDescription": "Local AI agent with skills, apps and approvals",
+    "shortDescription": "AI agent: chat, research, Office files and tasks, with approvals",
+    "longDescription": "AutoMoto AI is an AI agent that does the work: it researches, writes Word/Excel/PowerPoint files, works on archives and data, and asks before risky steps. Sign in to your AutoMoto account to see the same chats and files on every device, or use Local mode on this PC.",
+    "resources": {
+      "../../../scripts/install.ps1": "resources/install.ps1"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBMUJBOTQ5Njg2OEQxOTEKUldTUjBXaG9TYWticWlzb3BEWEtIU1RNYkY4cjFlN3NUZkthZ1ZjeDF2QmJZRnRZWWF2d3VwTVcK",
+      "endpoints": [
+        "https://github.com/ymmiah/AutoMotoAI/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

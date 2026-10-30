@@ -1,7 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "No native commands are exposed to the web UI; it talks only to the local AutoMoto API.",
+  "description": "The bundled sign-in screen may call the app's seven commands. Nothing else: no plugin APIs, no file system, no shell. Server pages (remote) get no capability at all.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "local": true,
+  "permissions": [
+    "allow-app-info",
+    "allow-sign-in",
+    "allow-open-account",
+    "allow-sign-out",
+    "allow-start-local",
+    "allow-install-engine",
+    "allow-open-link"
+  ]
 }
