@@ -44,7 +44,10 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"   # much faster Invoke-WebRequest on Windows PowerShell 5.1
 
 $Repo = "ymmiah/AutoMotoAI"
-$Pinned = @{ "5.5.0" = "755bc31b8f8b6f1ed5330c5356b05e9509f94f0eafc3b6e9aa7eab443f223107" }
+$Pinned = @{
+    "5.5.0"   = "755bc31b8f8b6f1ed5330c5356b05e9509f94f0eafc3b6e9aa7eab443f223107"
+    "5.6.0b1" = "0c9529605b3d18e9739f408da745074a48dd77408fdc4526e241938955a13b22"   # beta (tag v5.6.0-beta.1)
+}
 $AppDir = Join-Path $env:LOCALAPPDATA "automoto-ai"
 $Venv = Join-Path $AppDir "venv"
 $BinDir = Join-Path $AppDir "bin"
@@ -164,7 +167,9 @@ if ($FromSource) {
     try {
         if ($Wheel) { Copy-Item $Wheel $File }
         else {
-            $Url = "https://github.com/$Repo/releases/download/v$Version/$Name"
+            # beta wheels (5.6.0b1) live under the tag v5.6.0-beta.1
+            $Tag = if ($Version -match '^(\d+\.\d+\.\d+)b(\d+)$') { "v$($Matches[1])-beta.$($Matches[2])" } else { "v$Version" }
+            $Url = "https://github.com/$Repo/releases/download/$Tag/$Name"
             Say "Downloading $Url"
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
             Invoke-WebRequest -Uri $Url -OutFile $File -UseBasicParsing
@@ -181,7 +186,7 @@ if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
 # ---- 5. the `automoto` command (reads %USERPROFILE%\.automoto\.env) ----------------------------------
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-$Code = "import os, sys; from dotenv import load_dotenv; d = os.environ.get('AUTOMOTO_DATA_DIR') or os.path.join(os.path.expanduser('~'), '.automoto'); load_dotenv(os.path.join(os.path.expanduser(d), '.env'), override=False); sys.argv[0] = 'automoto'; from automoto.cli import main; sys.exit(main())"
+$Code = "import os, sys; sys.path[:] = [p for p in sys.path if p not in ('', '.')]; from dotenv import load_dotenv; d = os.environ.get('AUTOMOTO_DATA_DIR') or os.path.join(os.path.expanduser('~'), '.automoto'); load_dotenv(os.path.join(os.path.expanduser(d), '.env'), override=False); sys.argv[0] = 'automoto'; from automoto.cli import main; sys.exit(main())"
 $Cmd = "@echo off`r`nrem AutoMoto AI launcher made by scripts\install.ps1 - loads keys from %USERPROFILE%\.automoto\.env`r`n`"$VPy`" -c `"$Code`" %*`r`n"
 [IO.File]::WriteAllText((Join-Path $BinDir "automoto.cmd"), $Cmd, [Text.Encoding]::ASCII)
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")

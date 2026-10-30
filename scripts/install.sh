@@ -18,6 +18,7 @@ REPO="ymmiah/AutoMotoAI"
 sha_for() {
   case "$1" in
     5.5.0) echo "755bc31b8f8b6f1ed5330c5356b05e9509f94f0eafc3b6e9aa7eab443f223107" ;;
+    5.6.0b1) echo "0c9529605b3d18e9739f408da745074a48dd77408fdc4526e241938955a13b22" ;;  # beta (tag v5.6.0-beta.1)
     *) echo "" ;;
   esac
 }
@@ -182,7 +183,9 @@ case "$SOURCE" in
     if [ -n "$WHEEL" ]; then
       cp "$WHEEL" "$TMP/$NAME"
     else
-      URL="https://github.com/$REPO/releases/download/v$VERSION/$NAME"
+      # beta wheels (5.6.0b1) live under the tag v5.6.0-beta.1
+      TAG="v$(printf %s "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)b([0-9]+)$/\1-beta.\2/')"
+      URL="https://github.com/$REPO/releases/download/$TAG/$NAME"
       say "Downloading $URL"
       "$VPY" - "$URL" "$TMP/$NAME" <<'PYDL'
 import sys, urllib.request
@@ -216,6 +219,7 @@ cat > "$BIN_DIR/automoto" <<WRAP
 #!/bin/sh
 # AutoMoto AI launcher made by scripts/install.sh - loads keys from \$AUTOMOTO_DATA_DIR/.env (default ~/.automoto/.env)
 exec "$VPY" -c 'import os, sys
+sys.path[:] = [p for p in sys.path if p not in ("", ".")]  # never pick up an automoto/ folder in the current directory
 from dotenv import load_dotenv
 d = os.environ.get("AUTOMOTO_DATA_DIR") or os.path.join(os.path.expanduser("~"), ".automoto")
 load_dotenv(os.path.join(os.path.expanduser(d), ".env"), override=False)

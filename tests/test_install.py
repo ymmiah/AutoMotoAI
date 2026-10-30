@@ -79,5 +79,7 @@ def test_install_scripts_pin_the_release_checksum():
     ps = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
     pin = "755bc31b8f8b6f1ed5330c5356b05e9509f94f0eafc3b6e9aa7eab443f223107"  # automoto_ai-5.5.0 wheel
     assert pin in sh and pin in ps
+    beta = "0c9529605b3d18e9739f408da745074a48dd77408fdc4526e241938955a13b22"  # automoto_ai-5.6.0b1 wheel
+    assert beta in sh and beta in ps and "-beta." in sh and "-beta." in ps  # beta wheels live under v5.6.0-beta.1
     for text in (sh, ps):  # never pipe downloads into a shell
         assert "| bash" not in text and "| sh" not in text and "iex" not in text.lower().replace("index", "")
