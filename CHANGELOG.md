@@ -4,6 +4,13 @@
 **Install and deploy on every OS.**
 
 ### New
+- **docs/GUI-GUIDE.md:** beginner step-by-step guide to the web GUI and the VS Code panel (install, free key,
+  every page, approval cards, files/CSV/archives, office docs, skills, connectors, routines, memory, settings,
+  hosted mode and the Admin panel, phones, troubleshooting) with 36 real screenshots. Published with copy buttons
+  on every command at https://ymmiah.github.io/AutoMotoAI/ (MkDocs Material, `.github/workflows/pages.yml`).
+- **Help / Guide** link in the GUI sidebar and the command palette (opens the guide in a new tab).
+- **Fix:** the agent no longer adds a stray "Done." turn when a final answer has a line ending in a colon
+  followed by a list.
 - **docs/INSTALL.md:** beginner step-by-step for Windows 10/11, macOS (Intel and Apple Silicon), Linux
   (Ubuntu/Debian, Fedora, Arch, openSUSE), Docker / Compose, hosted deploys (own PC + Cloudflare Tunnel, Oracle
   Cloud Always Free + Caddy, Render demo, phones on home Wi-Fi), VS Code (incl. remote), ChromeOS, Raspberry Pi,

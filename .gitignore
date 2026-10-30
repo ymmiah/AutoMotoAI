@@ -111,3 +111,6 @@ keys.json
 # the desktop shell loading page is source, not build output
 !apps/desktop/dist/
 !apps/desktop/dist/index.html
+
+# MkDocs build output
+site/

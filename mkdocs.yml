@@ -1,0 +1,47 @@
+site_name: AutoMoto AI docs
+site_description: Step-by-step guides for AutoMoto AI - install, the web GUI, VS Code, hosted multi-user mode.
+site_url: https://ymmiah.github.io/AutoMotoAI/
+repo_url: https://github.com/ymmiah/AutoMotoAI
+repo_name: ymmiah/AutoMotoAI
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+use_directory_urls: false   # page-relative images work the same on GitHub and on the site
+copyright: Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)
+nav:
+  - Home: index.md
+  - GUI guide: GUI-GUIDE.md
+  - Install: INSTALL.md
+  - Hosting: HOSTING.md
+  - Publishing: PUBLISHING.md
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: green
+      toggle: {icon: material/weather-sunny, name: Light mode}
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: green
+      toggle: {icon: material/weather-night, name: Dark mode}
+  features:
+    - content.code.copy
+    - navigation.top
+    - navigation.instant
+    - search.highlight
+    - toc.follow
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}  # same anchors as GitHub
+  - pymdownx.highlight:
+      anchor_linenums: false
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
