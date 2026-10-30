@@ -88,7 +88,7 @@ Every command waits for your **Approve**; dangerous ones (like `rm -rf /`) are a
 
 ## How this is tested
 
-Every example on this page is one of the **85 scenarios** in [`evals/scenarios.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/evals/scenarios.py).
+Every example on this page is one of the **86 scenarios** in [`evals/scenarios.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/evals/scenarios.py).
 `python -m evals` runs each one through the real agent loop with real sample files (a real `.pptx`, `.docx`,
 `.xlsx`, PDF, CSV, SQLite database, WordPress plugin zip, buggy Python project…) and checks the result: the
 right kind of task was recognised, the AI was only offered tools that fit, files were created and open cleanly,
@@ -98,7 +98,7 @@ the content is right, risky steps asked first and unsafe ones were refused. It a
 |---|---|---|
 | Tools the AI could see | all 48, every request (about 24 KB of tool descriptions) | 41 in total, but only **10-22 per task** (median 13, about 4-10 KB) |
 | Tools for reading files | 6 different ones (`office_read`, `pdf_text`, `data_read`, `text_tail`, `image_info`, `read_file`) | **1**: `read_file` reads anything |
-| Scripted-model scenarios | none | **85/85 pass** (84/85 with the right tools on the first try; the other one asks for more tools mid-task, as designed) |
+| Scripted-model scenarios | none | **86/86 pass** (85/86 with the right tools on the first try; the other one asks for more tools mid-task, as designed) |
 | Real-model scenarios | none | `python -m evals --real` runs the same requests against your own keys |
 
 `python -m evals --real` needs a working AI key in `.env`; it reports how many scenarios a real model gets right.

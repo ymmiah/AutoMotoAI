@@ -48,13 +48,13 @@
 - "table of contents" no longer makes a Word report look like a data task; `rm`, `sudo`, `ls` etc. are terminal.
 
 ### Tests and evaluation
-- **`python -m evals`**: 85 realistic scenarios (office, files, archives, data, coding, web, writing, images,
+- **`python -m evals`**: 86 realistic scenarios (office, files, archives, data, coding, web, writing, images,
   media, terminal, WordPress, connectors, routines, memory, safety) run through the real agent loop with real
   sample files and a scripted model that can only call tools it was offered. Checks: task recognised, files
   created and valid, content correct, risky steps asked, unsafe ones refused (`rm -rf /`, `169.254.169.254`,
-  `localhost`), plain-language labels. Result: **85/85**, 84/85 routed right on the first try. Runs in CI as
+  `localhost`), plain-language labels. Result: **86/86** on the build machine (CI skips the few that need LibreOffice, PHP or ImageMagick), 85/86 routed right on the first try. Runs in CI as
   `tests/test_scenarios.py`. `python -m evals --real` runs the same requests against real keys.
-- New `tests/test_planner.py`. 504 tests in total.
+- New `tests/test_planner.py`. 505 tests in total.
 - Plain-language catalogue for users: [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
 ## 5.6.0-beta.2 "Agent" — Beta — 30 October 2026
