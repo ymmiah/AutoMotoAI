@@ -66,7 +66,7 @@ _ANNOUNCE = re.compile(
     r"(?:\b(?:now|next|then|first)\b[^.!?\n]{0,40}\b(?:i'll|i will|i'm going to|let me|let's)\b"
     r"|^\s*(?:i'll|i will|let me|let's)\b[^.!?\n]{0,80}\b(?:now|next)\b"
     r"|\b(?:i'll|i will|let me)\s+(?:now\s+)?(?:create|build|write|generate|run|call|export|convert|make|save|fix|check|render|update|add)\b[^\n]{0,160}$"
-    r"|:\s*$)",
+    r"|:\s*\Z)",  # ends with a colon (not "Results:" followed by a list)
     re.I | re.M)
 CONTINUE_NUDGE = ("Continue: make that tool call now (don't describe it). "
                   "If the task is complete, reply with the final answer instead.")

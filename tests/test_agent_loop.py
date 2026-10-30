@@ -190,3 +190,10 @@ def test_nudge_is_limited_and_plain_answers_are_final():
     assert res.steps == 3 and res.stopped == "done"
     res = agent(scripted(("All done - the report is in scratch/r.docx.", []))).run("x")
     assert res.steps == 1
+
+
+def test_final_answer_with_a_list_after_a_colon_is_not_nudged():
+    from automoto.loop import _announces_action
+    assert not _announces_action("Saved 3 tips to `notes/tips.md`:\n\n1. Plan\n2. Practise\n3. Rest\n\nOpen Files to download it.")
+    assert _announces_action("The plan is ready. Here is what I'll do next:")
+    assert _announces_action("Now I'll create the document.")
