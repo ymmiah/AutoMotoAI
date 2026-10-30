@@ -220,7 +220,7 @@ jobs:
           $busy = (& $am serve --no-browser --port 8799 2>&1 | ForEach-Object { "$_" }) -join "`n"
           $ErrorActionPreference = "Stop"
           if ($busy -notmatch "already in use") { throw "no port-in-use message: $busy" }
-          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "automoto" -and $_.CommandLine -match "8799" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "automoto" -and $_.CommandLine -match "8799" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
           ./scripts/install.ps1 -Uninstall
           if (Test-Path $am) { throw "still installed" }
           exit 0   # the deliberate port-in-use run above left $LASTEXITCODE = 1
