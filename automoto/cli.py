@@ -63,7 +63,7 @@ def cmd_status(_args) -> int:
         for col in ("Provider", "Key", "Vision", "Free", "Text model", "Vision model"):
             t.add_column(col)
         for p in st["providers"]:
-            t.add_row(p["label"], "✅" if p["configured"] else f"— {p['env_keys'][0]}",
+            t.add_row(p["label"], "✅" if p["configured"] else ("— local, off" if p.get("local") else f"— {p['env_keys'][0]}"),
                       "👁 yes" if p["supports_vision"] else "no", "yes" if p["free_tier"] else "paid",
                       p["text_model"], p["vision_model"] or "—")
         console.print(t)
@@ -503,6 +503,60 @@ def cmd_tools(args) -> int:
     return 0
 
 
+def cmd_local(args) -> int:
+    """Offline AI: what fits this computer, what Ollama has, download / choose a model, Offline mode."""
+    from automoto import local_llm
+    from automoto import settings as settings_mod
+
+    act = args.action
+    if act == "pull":
+        if not args.model:
+            print("Which model? e.g. automoto local pull qwen2.5:3b")
+            return 2
+        print(f"Downloading {args.model} with Ollama (this can take a few minutes)…", flush=True)
+        st = local_llm.pull(args.model, wait=True)
+        if st["state"] != "done":
+            print(f"Download failed: {st.get('error')}")
+            return 1
+        settings_mod.update({"local_model": args.model})
+        print(f"Done. AutoMoto will now use {args.model} on this computer.")
+        return 0
+    if act == "use":
+        if not args.model:
+            print("Which model? e.g. automoto local use qwen2.5:3b")
+            return 2
+        settings_mod.update({"local_model": args.model})
+        print(f"AutoMoto will use {args.model} through Ollama.")
+        return 0
+    if act in ("offline", "online"):
+        settings_mod.update({"offline": act == "offline"})
+        print("Offline mode is ON: only AI on this computer, no web tools." if act == "offline"
+              else "Offline mode is OFF: online AI and web tools are back.")
+        return 0
+    if act == "off":
+        settings_mod.update({"local_model": None, "offline": False})
+        print("Ollama is no longer used (unless OLLAMA_MODEL is set).")
+        return 0
+    st = local_llm.status()
+    o, rec = st["ollama"], st["recommend"]
+    print(rec["why"])
+    print(f"Ollama: {'running ' + str(o['version']) if o['running'] else 'not running (install from https://ollama.com/download)'}")
+    if o["models"]:
+        print("Downloaded: " + ", ".join(m["name"] for m in o["models"]))
+    print("Models that fit:")
+    for m in rec["models"]:
+        print(f"  {'*' if m['recommended'] else ' '} {m['name']:<14} {m['download_gb']:>4} GB  {m['note']}")
+    print(f"In use: {st['model'] if st['ollama_enabled'] else 'none'} · Offline mode: {'on' if st['offline'] else 'off'}")
+    if st["local_server"]:
+        print(f"Local OpenAI-compatible server: {st['local_server']}")
+    have = {m["name"] for m in o["models"]}
+    if rec["best"] not in have and rec["best"] + ":latest" not in have:
+        print(f"Next: automoto local pull {rec['best']}")
+    elif not st["ollama_enabled"]:
+        print(f"Next: automoto local use {rec['best']}")
+    return 0
+
+
 def cmd_serve(args) -> int:
     if getattr(args, "hosted", False):
         import os
@@ -730,11 +784,14 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--image", action="append", help="attach an image (repeatable)")
     r = sub.add_parser("recommend", help="which AI would handle this task")
     r.add_argument("task")
+    lo = sub.add_parser("local", help="offline AI with Ollama: what fits, download, use, offline on/off")
+    lo.add_argument("action", nargs="?", default="status", choices=["status", "pull", "use", "offline", "online", "off"])
+    lo.add_argument("model", nargs="?")
     args = ap.parse_args(argv)
     handlers = {"serve": cmd_serve, "status": cmd_status, "ask": cmd_ask, "recommend": cmd_recommend, "doctor": cmd_doctor,
                 "do": cmd_do, "routines": cmd_routines, "memory": cmd_memory, "skills": cmd_skills,
                 "tools": cmd_tools, "apps": cmd_apps, "mcp": cmd_mcp, "open": cmd_open,
-                "admin": cmd_admin}
+                "admin": cmd_admin, "local": cmd_local}
     if args.cmd in handlers:
         return handlers[args.cmd](args)
     return cmd_chat(args) if args.plain else cmd_agent_chat(args)

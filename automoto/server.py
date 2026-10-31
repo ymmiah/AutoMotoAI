@@ -684,6 +684,28 @@ def settings_put(body: dict[str, Any], request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from None
 
 
+# -- offline / local AI (Ollama, llama.cpp) ---------------------------------------------
+@app.get("/api/local")
+def local_ai_status(request: Request) -> dict[str, Any]:
+    """Offline AI panel: hardware, recommended models, Ollama status, downloads in progress."""
+    _authorise(request, local_only=True)
+    from automoto import local_llm
+
+    return local_llm.status()
+
+
+@app.post("/api/local/pull")
+def local_ai_pull(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Download a model with the local Ollama (one click in Settings)."""
+    _authorise(request, local_only=True)
+    from automoto import local_llm
+
+    try:
+        return local_llm.pull(str(body.get("model") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
 @app.get("/api/skills")
 def skills_list(request: Request) -> dict[str, Any]:
     _authorise(request)

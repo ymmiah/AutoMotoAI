@@ -51,9 +51,14 @@ class ProviderSpec:
     # Ordered backup models per role ("text", "strong", "vision", "review", "agent"). Tried, in
     # order, after the (env-overridable) default when a model is missing for this key (404/410).
     fallbacks: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    local: bool = False  # runs on this computer (Ollama / llama.cpp): no key, works offline
 
     # -- resolved (env-overridable) values ---------------------------------
     def key(self, overrides: dict[str, str] | None = None) -> str | None:
+        if self.local:
+            from automoto import local_llm
+
+            return "local" if local_llm.enabled(self.id) else None
         if overrides:
             k = config.real_key(overrides.get(self.id))
             if k:
@@ -64,7 +69,23 @@ class ProviderSpec:
                 return k
         return None
 
+    def url(self) -> str | None:
+        """Base URL for openai-compatible calls (local servers read theirs from the environment)."""
+        if self.id == "ollama":
+            from automoto import local_llm
+
+            return local_llm.ollama_url() + "/v1"
+        if self.id == "local":
+            from automoto import local_llm
+
+            return local_llm.local_server_url()
+        return self.base_url
+
     def model_for(self, *, vision: bool = False, strong: bool = False) -> str:
+        if self.id == "ollama":
+            from automoto import local_llm
+
+            return local_llm.ollama_model()
         if vision and self.supports_vision:
             return (config.env(self.vision_env) if self.vision_env else None) or self.vision_model or self.text_model
         if strong:
@@ -126,6 +147,7 @@ class ProviderSpec:
             "unavailable": [m for m in self.all_models("agent") + self.all_models("review") if is_unavailable(self.id, m)],
             "signup_url": self.signup_url,
             "notes": self.notes,
+            "local": self.local,
         }
 
 
@@ -308,6 +330,48 @@ REGISTRY: dict[str, ProviderSpec] = {
             signup_url="https://console.anthropic.com/",
             notes="Paid. Used only if you add a key.",
         ),
+        ProviderSpec(
+            id="ollama",
+            label="Ollama (on this computer)",
+            env_keys=(),
+            kind="openai_compat",
+            base_url=None,
+            text_model="qwen2.5:3b",
+            vision_model=None,
+            strong_model=None,
+            supports_vision=False,
+            supports_tools=True,
+            supports_streaming=True,
+            free_tier=True,
+            priority=90,
+            speed=2,
+            strength=2,
+            model_env="OLLAMA_MODEL",
+            signup_url="https://ollama.com/download",
+            notes="Free and private. Runs on your computer, works offline. Pick a model in Settings.",
+            local=True,
+        ),
+        ProviderSpec(
+            id="local",
+            label="Local server (llama.cpp / LM Studio)",
+            env_keys=(),
+            kind="openai_compat",
+            base_url=None,
+            text_model="local-model",
+            vision_model=None,
+            strong_model=None,
+            supports_vision=False,
+            supports_tools=True,
+            supports_streaming=True,
+            free_tier=True,
+            priority=95,
+            speed=2,
+            strength=2,
+            model_env="LOCAL_LLM_MODEL",
+            signup_url="https://github.com/ggml-org/llama.cpp",
+            notes="Any OpenAI-compatible server on this computer. Set LOCAL_LLM_URL (and LOCAL_LLM_MODEL).",
+            local=True,
+        ),
     ]
 }
 
@@ -451,13 +515,23 @@ def _classify(provider: str, exc: Exception) -> ProviderError:
 # ---------------------------------------------------------------------------
 # Transports
 # ---------------------------------------------------------------------------
+def _timeout(spec: ProviderSpec, timeout: float) -> float:
+    """A model on a laptop CPU is slow: give local AI much longer (LOCAL_AI_TIMEOUT, default 600 s)."""
+    if not spec.local:
+        return timeout
+    try:
+        return max(float(timeout or 0), float(config.env("LOCAL_AI_TIMEOUT", "600")))
+    except ValueError:
+        return 600.0
+
+
 def _openai_compat(spec: ProviderSpec, messages, model, key, *, temperature, max_tokens, timeout) -> str:
     from openai import OpenAI
 
     client = OpenAI(
         api_key=key,
-        base_url=spec.base_url,
-        timeout=timeout,
+        base_url=spec.url(),
+        timeout=_timeout(spec, timeout),
         max_retries=0,  # failover is the router's job
         default_headers=spec.extra_headers or None,
     )
@@ -469,6 +543,10 @@ def _openai_compat(spec: ProviderSpec, messages, model, key, *, temperature, max
     )
     choice = resp.choices[0] if resp.choices else None
     text = (choice.message.content or "").strip() if choice and choice.message else ""
+    if spec.local:
+        from automoto.local_llm import strip_thinking
+
+        text = strip_thinking(text)
     if not text:
         raise ProviderError(spec.id, "empty response", retryable=True)
     return text
@@ -541,7 +619,7 @@ def _openai_turn(spec: ProviderSpec, messages, model, key, *, tools, native, tem
 
     from automoto import toolcalls as tc
 
-    client = OpenAI(api_key=key, base_url=spec.base_url, timeout=timeout, max_retries=0,
+    client = OpenAI(api_key=key, base_url=spec.url(), timeout=_timeout(spec, timeout), max_retries=0,
                     default_headers=spec.extra_headers or None)
     kwargs: dict[str, Any] = {"model": model, "temperature": temperature, "max_tokens": max_tokens}
     if native and tools:
@@ -555,6 +633,10 @@ def _openai_turn(spec: ProviderSpec, messages, model, key, *, tools, native, tem
     if not choice or not choice.message:
         raise ProviderError(spec.id, "empty response")
     text, calls = tc.parse_openai_message(choice.message)
+    if spec.local and text:
+        from automoto.local_llm import strip_thinking
+
+        text = strip_thinking(text)
     for c in calls:
         c["provider"] = spec.id  # a provider-specific "extra" (Gemini signature) is only replayed to it
     return text, calls

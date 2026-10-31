@@ -8,6 +8,8 @@ Settings that change behaviour:
   * ``provider_order`` - list of provider ids; reorders auto-mode failover priority
   * ``allowed_roots`` - extra folders (absolute paths) the agent may reach with approval,
     e.g. a VS Code project or ~/Documents. Sensitive folders are refused.
+  * ``offline`` - Offline mode: only AI on this computer (Ollama / local server), no web tools
+  * ``local_model`` - the Ollama model to use, e.g. ``qwen2.5:3b`` (turns Ollama on)
 UI-only: ``theme`` (dark | light | system), ``accent`` (#rrggbb), ``default_mode`` (agent | chat).
 """
 
@@ -23,7 +25,8 @@ from automoto import home
 
 _LOCK = threading.Lock()
 DEFAULTS: dict[str, Any] = {"theme": "dark", "accent": "#38f2a5", "default_mode": "agent",
-                            "approval_mode": None, "provider_order": [], "allowed_roots": []}
+                            "approval_mode": None, "provider_order": [], "allowed_roots": [],
+                            "offline": False, "local_model": None}
 SECRETISH = re.compile(r"(key|token|secret|password)", re.I)
 
 
@@ -68,6 +71,13 @@ def validate(patch: dict[str, Any]) -> dict[str, Any]:
                 raise SettingsError("provider_order must be a list of distinct provider ids")
         if k == "allowed_roots":
             v = _roots(v)
+        if k == "offline" and not isinstance(v, bool):
+            raise SettingsError("offline must be true or false")
+        if k == "local_model" and v is not None:
+            from automoto import local_llm
+
+            if not local_llm.valid_model_name(v):
+                raise SettingsError("local_model must be an Ollama model name like qwen2.5:3b")
         out[k] = v
     return out
 

@@ -462,6 +462,10 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
     if desktop and config.desktop_enabled():
         tools += DESKTOP
     tools += extra or []
+    from automoto import local_llm
+
+    if local_llm.offline():  # Offline mode: nothing that needs the internet (connectors included)
+        tools = [t for t in tools if t.name not in local_llm.ONLINE_TOOLS and not t.name.startswith("mcp__")]
     out = {t.name: t for t in tools}
     for name, into in MERGED.items():
         t = out.get(name)

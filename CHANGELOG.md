@@ -1,5 +1,21 @@
 # AutoMoto AI - Version History & Changelog
 
+## Unreleased (on `main`, after 5.6.0-beta.3) — Offline AI
+**Run a free AI model on your own computer: no key, no internet.** Not in a tagged build yet.
+
+- **Ollama provider** (`ollama`) and an **OpenAI-compatible local server** provider (`local`: llama.cpp
+  `llama-server`, LM Studio, Jan, vLLM…). Off until you turn them on (pick a model, `OLLAMA_MODEL`, or
+  `LOCAL_LLM_URL`). Local servers must be on this computer or your home network. Local models get a longer
+  timeout (`LOCAL_AI_TIMEOUT`, default 600 s) and Qwen 3 `<think>` blocks are removed from answers.
+- **Model picker that knows your computer.** Settings → *Offline AI* checks memory and graphics card and
+  recommends small models that can use tools (`qwen2.5:0.5b` … `qwen3:14b`, `llama3.2:3b`, `llama3.1:8b`),
+  with a one-click **Download** (Ollama pull with progress) and **Use this**.
+- **Offline mode** (Settings switch, `automoto local offline` or `AUTOMOTO_OFFLINE=1`): only local AI is used,
+  and web search, web pages, downloads, online services and connectors are switched off. The AI is told it is
+  offline. Approvals, the sandbox and the network guard are unchanged.
+- **CLI:** `automoto local [status|pull MODEL|use MODEL|offline|online|off]`.
+- **Docs:** [docs/OFFLINE.md](docs/OFFLINE.md), linked from Start here and the install guide.
+
 ## 5.6.0-beta.3 "Agent" — Beta — 30 October 2026
 **One smart assistant instead of an ocean of tools.** Still a pre-release (`v5.6.0-beta.3`, Python `5.6.0b3`);
 5.5.0 stays the latest stable release. The Windows app offers this update to beta 1 and beta 2 automatically.

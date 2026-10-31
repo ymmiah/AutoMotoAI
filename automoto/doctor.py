@@ -83,7 +83,7 @@ def check_provider(spec: ProviderSpec, key: str, *, transport: Callable[..., str
             suggest[env] = good
     key_ok = None if first["state"] == "error" else first["state"] != "key"
     return {"id": spec.id, "label": spec.label, "key_ok": key_ok, "signup_url": spec.signup_url,
-            "env_key": spec.env_keys[0], "models": results, "working": [r["model"] for r in results if r["ok"]],
+            "env_key": spec.env_keys[0] if spec.env_keys else "", "models": results, "working": [r["model"] for r in results if r["ok"]],
             "suggest": suggest}
 
 

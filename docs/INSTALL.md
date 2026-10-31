@@ -52,6 +52,9 @@ Never share a key or paste it into a chat, an issue or a Git commit.
 
 ---
 
+> **No key? No internet?** You can run a free AI model on your own computer with Ollama instead of
+> using a key. See **[Offline AI](OFFLINE.md)** (4 steps).
+
 ## 3. Windows 10/11
 
 ### Windows app

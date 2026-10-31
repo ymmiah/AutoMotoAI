@@ -153,7 +153,7 @@ def explain_failures(tried: list[dict[str, Any]]) -> list[str]:
         spec = REGISTRY.get(pid)
         label = spec.label if spec else pid
         signup = spec.signup_url if spec else ""
-        env = spec.env_keys[0] if spec else "the API key"
+        env = (spec.env_keys[0] if spec.env_keys else "a local model") if spec else "the API key"
         missing = list(dict.fromkeys(t["model"] for t in ts if t.get("missing")))
         busy = [t for t in ts if t.get("transient")]
         if any(t.get("status") in (401, 403) for t in ts):
@@ -178,7 +178,12 @@ def explain_failures(tried: list[dict[str, Any]]) -> list[str]:
         if not busy and not missing:
             last = ts[-1]
             lines.append(f"{label}: {last.get('error', 'failed')} (model {last['model']}).")
-    configured_free = {p.id for p in REGISTRY.values() if p.free_tier and p.key()}
+    if _offline():
+        if any(REGISTRY.get(t["provider"]) and REGISTRY[t["provider"]].local for t in tried):
+            lines.append("Small local models sometimes stumble: try again, split the task into smaller steps, or pick "
+                         "a bigger model in Settings > Offline AI.")
+        return lines
+    configured_free = {p.id for p in REGISTRY.values() if p.free_tier and p.key() and not p.local}
     if not ({"gemini", "groq"} & configured_free):
         lines.append(FREE_BACKUP_HINT)
     return lines
@@ -217,9 +222,24 @@ def _order_index(pid: str) -> int:
     return order.index(pid) if pid in order else len(order) + 100
 
 
+def _no_provider_message() -> str:
+    from automoto import local_llm
+
+    if local_llm.offline():
+        return ("Offline mode is on, but no AI is set up on this computer yet. Install Ollama and pick a model "
+                "in Settings > Offline AI (see docs/OFFLINE.md), or turn Offline mode off.")
+    return ("No AI provider key found. Add at least one key (e.g. NVIDIA_API_KEY, GEMINI_API_KEY, "
+            "GROQ_API_KEY or OPENROUTER_API_KEY) to .env - see .env.example - or use a free offline "
+            "model with Ollama (docs/OFFLINE.md).")
+
+
 def plan_order(*, need_vision: bool, prefer: str | None, task: str,
                keys: dict[str, str] | None = None) -> list[ProviderSpec]:
     configured = [p for p in REGISTRY.values() if p.key(keys)]
+    from automoto import local_llm
+
+    if local_llm.offline():  # Offline mode: only AI that runs on this computer
+        configured = [p for p in configured if p.local]
     if need_vision:
         configured = [p for p in configured if p.supports_vision]
     by_priority = sorted(configured, key=lambda p: (_order_index(p.id), p.priority))
@@ -263,10 +283,7 @@ def ask(messages: list[dict[str, Any]] | str, *, need_vision: bool = False, pref
     if not order:
         if need_vision and any(p.key(keys) for p in REGISTRY.values()):
             raise NoProviderError("This needs a vision-capable AI, but none of your configured providers support images.")
-        raise NoProviderError(
-            "No AI provider key found. Add at least one key (e.g. NVIDIA_API_KEY, GEMINI_API_KEY, "
-            "GROQ_API_KEY or OPENROUTER_API_KEY) to .env - see .env.example."
-        )
+        raise NoProviderError(_no_provider_message())
 
     tried: list[dict[str, Any]] = []
     budget = _Budget()
@@ -313,9 +330,16 @@ def ask(messages: list[dict[str, Any]] | str, *, need_vision: bool = False, pref
     raise AllProvidersFailed(tried)
 
 
+def _offline() -> bool:
+    from automoto import local_llm
+
+    return local_llm.offline()
+
+
 def status(keys: dict[str, str] | None = None) -> dict[str, Any]:
     return {
         "mode": config.ai_provider(),
+        "offline": _offline(),
         "providers": [p.public(keys) for p in sorted(REGISTRY.values(), key=lambda p: p.priority)],
     }
 
@@ -355,10 +379,7 @@ def ask_turn(messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, kno
     if not order:
         if need_vision and any(p.key(keys) for p in REGISTRY.values()):
             raise NoProviderError("This needs a vision-capable AI, but none of your configured providers support images.")
-        raise NoProviderError(
-            "No AI provider key found. Add at least one key (e.g. NVIDIA_API_KEY, GEMINI_API_KEY, "
-            "GROQ_API_KEY or OPENROUTER_API_KEY) to .env - see .env.example."
-        )
+        raise NoProviderError(_no_provider_message())
     mode_cfg = tool_mode()
     tried: list[dict[str, Any]] = []
     budget = _Budget()

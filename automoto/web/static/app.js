@@ -1219,6 +1219,8 @@ PAGES.settings = async () => {
         ${[["", "Default (env AUTOMOTO_APPROVAL or ask)"], ["ask", "Ask: risky tools need my approval"], ["readonly", "Read-only: deny every risky tool"], ["auto", "Auto: run risky tools without asking"]].map(([v, l]) => `<option value="${v}" ${(s.approval_mode || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="field"><span>Default mode for new chats</span><select class="input" id="modeSel" style="max-width:420px"><option value="agent" ${s.default_mode === "agent" ? "selected" : ""}>Agent (tools)</option><option value="chat" ${s.default_mode === "chat" ? "selected" : ""}>Chat (no tools)</option></select></label>
       <p class="muted" style="font-size:12.5px;margin:0">Blocked commands (like <code>rm -rf /</code>) never run in any mode. Network tools refuse private and local addresses.</p></div>
+    ${HOSTED ? "" : `<div class="card" id="offlineCard"><h3>${icon("cpu")} Offline AI (on this computer)</h3><p class="muted" style="font-size:13px;margin-top:0">Run a free AI model on your own computer with <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>. No key, no internet, nothing leaves your computer. <a href="https://github.com/ymmiah/AutoMotoAI/blob/main/docs/OFFLINE.md" target="_blank" rel="noopener">How it works</a></p>
+      <div id="offlineBody" class="muted" aria-live="polite">Checking this computer…</div></div>`}
     <div class="card"><h3>${icon("folder")} Files &amp; folders</h3><p class="muted" style="font-size:13px;margin-top:0">The agent works in its sandbox folder by default. Add project folders it may also use (for example a VS Code project). Anything outside the sandbox always asks first, and secrets (<code>~/.ssh</code>, <code>.env</code> files, keychains, browser profiles, system folders) stay blocked.</p>
       <div id="rootList"></div><form id="rootForm" class="row" style="margin-top:8px"><input class="input" name="p" placeholder="/home/me/code/project or C:\\Users\\me\\code\\project" aria-label="Folder path" style="flex:1;min-width:220px"><button class="btn sm primary">Add folder</button></form></div>
     <div class="card"><h3>${icon("link")} Connectors (MCP)</h3><p class="muted" style="font-size:13px;margin-top:0">Official servers where they exist. Remote ones sign in with OAuth in your browser on first use; tokens go in <code>.env</code> and are never shown here. Every connector tool asks before it runs.</p>
@@ -1230,7 +1232,7 @@ PAGES.settings = async () => {
     <div class="card"><h3>${icon("wrench")} Advanced (for developers)</h3><p class="muted" style="font-size:13px;margin-top:0">AutoMoto picks the right tools and skills for each task by itself, so you never need these. They are here if you want to look under the hood.</p>
       <div class="row"><a class="btn sm" href="#/tools">${icon("wrench")} Tools</a><a class="btn sm" href="#/skills">${icon("book")} Skills</a></div></div>
     <div class="card"><h3>${icon("key")} Bring your own keys</h3><p class="muted" style="font-size:13px;margin-top:0">Kept only in this browser tab (sessionStorage) and wiped when you close it. Sent with each request, never saved on the server. Server keys from <code>.env</code> work without this.</p>
-      <form id="keyForm">${st.providers.map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
+      <form id="keyForm">${st.providers.filter((p) => !p.local).map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
       <div class="row"><button class="btn primary">Use keys for this tab</button><button type="button" class="btn danger" id="forgetKeys">Forget keys</button></div></form></div>
     <div class="card"><h3>${icon("info")} About</h3><p style="margin:0 0 6px">AutoMoto AI v${esc(VERSION)}</p>
       <p class="muted" style="margin:0 0 10px">Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons) · <a href="https://github.com/ymmiah" target="_blank" rel="noopener">GitHub</a> · <a href="https://linkedin.com/in/ymmiah" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://ymmiah.com" target="_blank" rel="noopener">ymmiah.com</a></p>
@@ -1292,6 +1294,43 @@ PAGES.settings = async () => {
     e.preventDefault(); const v = String(new FormData(e.target).get("p") || "").trim(); if (!v) return;
     if (await saveSetting({ allowed_roots: [...roots, v] })) { const fresh = await api("/api/settings"); roots.splice(0, roots.length, ...(fresh.allowed_roots || [])); drawRoots(); e.target.reset(); toast("Folder added"); }
   };
+  const drawOffline = async () => {
+    const box = $("#offlineBody"); if (!box) return;
+    let d; try { d = await api("/api/local"); } catch (err) { box.innerHTML = `<span class="bad">${esc(err.message)}</span>`; return; }
+    const o = d.ollama, rec = d.recommend, have = new Set((o.models || []).map((m) => m.name));
+    const hw = rec.hardware || {};
+    const pull = (name) => (d.pulls || {})[name];
+    const row = (m) => { const pl = pull(m.name); const got = have.has(m.name) || (have.has(m.name + ":latest"));
+      const using = d.ollama_enabled && d.model === m.name;
+      const act = got ? (using ? statusPill("in use") : `<button class="btn sm primary" data-use="${esc(m.name)}">Use this</button>`)
+        : pl && pl.state === "downloading" ? `<span class="muted">Downloading ${pl.percent || 0}%</span>`
+        : `<button class="btn sm ${m.recommended ? "primary" : ""}" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download (${m.download_gb} GB)</button>`;
+      return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Best for this computer</span>' : ""} ${m.fast ? '<span class="pill">fast</span>' : ""}<br><span class="muted" style="font-size:12.5px">${esc(m.note)}</span>${pl && pl.state === "error" ? `<br><span class="bad" style="font-size:12.5px">${esc(pl.error)}</span>` : ""}</span>${act}</div>`; };
+    const bi = rec.models.findIndex((m) => m.recommended);
+    const isMain = (m, i) => m.recommended || have.has(m.name) || (i >= bi - 1 && i <= bi + 2);
+    const main = rec.models.filter(isMain), more = rec.models.filter((m, i) => !isMain(m, i));
+    box.classList.remove("muted");
+    box.innerHTML = `<p style="margin:0 0 8px">${o.running ? `${statusPill("on")} Ollama ${esc(o.version || "")} is running.` : `${statusPill("off")} Ollama isn't running. <a href="https://ollama.com/download" target="_blank" rel="noopener">Install Ollama</a>, open it, then press Check again.`}
+        <span class="muted" style="font-size:12.5px">${esc(rec.why)}</span></p>
+      ${main.map(row).join("")}
+      ${more.length ? `<details class="adv"><summary>More models (${more.length})</summary>${more.map(row).join("")}</details>` : ""}
+      ${d.model_from_env ? '<p class="muted" style="font-size:12.5px;margin:6px 0 0">The model is set by <code>OLLAMA_MODEL</code> in your .env, so "Use this" won\'t change it.</p>' : ""}
+      <label class="field" style="margin-top:10px"><span><input type="checkbox" id="offlineSw" ${d.offline ? "checked" : ""} ${d.offline_from_env ? "disabled" : ""}> Offline mode: use only the AI on this computer and switch off web tools${d.offline_from_env ? ' <span class="muted">(set by <code>AUTOMOTO_OFFLINE</code> in your .env)</span>' : ""}</span></label>
+      <div class="row"><button class="btn sm" id="offlineCheck">Check again</button>${d.ollama_enabled ? '<button class="btn sm" id="offlineOff">Stop using Ollama</button>' : ""}</div>`;
+    $$("#offlineBody [data-pull]").forEach((b) => b.onclick = async () => {
+      b.disabled = true; b.textContent = "Starting…";
+      try { await api("/api/local/pull", { model: b.dataset.pull }); toast("Download started. You can keep using the app."); } catch (err) { toast(err.message); }
+      const tick = async () => { const n = await api("/api/local").catch(() => null); const p = n && n.pulls[b.dataset.pull];
+        if (p && p.state === "downloading") { drawOffline(); setTimeout(tick, 2000); }
+        else { if (p && p.state === "done") { await saveSetting({ local_model: b.dataset.pull }); toast("Model ready - AutoMoto will use it"); refreshStatus(); } drawOffline(); } };
+      setTimeout(tick, 1500);
+    });
+    $$("#offlineBody [data-use]").forEach((b) => b.onclick = async () => { if (await saveSetting({ local_model: b.dataset.use })) { toast(`Using ${b.dataset.use}`); refreshStatus(); drawOffline(); } });
+    $("#offlineCheck").onclick = drawOffline;
+    if ($("#offlineOff")) $("#offlineOff").onclick = async () => { if (await saveSetting({ local_model: null, offline: false })) { toast("Ollama turned off"); refreshStatus(); drawOffline(); } };
+    $("#offlineSw").onchange = async (e) => { if (await saveSetting({ offline: e.target.checked })) { toast(e.target.checked ? "Offline mode on: local AI only, no web tools" : "Offline mode off"); refreshStatus(); drawOffline(); } };
+  };
+  drawOffline();
   const drawConns = async () => {
     try {
       const d = await api("/api/connectors");

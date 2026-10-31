@@ -14,6 +14,7 @@ nav:
   - GUI guide: GUI-GUIDE.md
   - What you can ask for: CAPABILITIES.md
   - Install: INSTALL.md
+  - Offline AI (no key, no internet): OFFLINE.md
   - Hosting: HOSTING.md
   - Windows app distribution: WINDOWS-DISTRIBUTION.md
   - Publishing: PUBLISHING.md

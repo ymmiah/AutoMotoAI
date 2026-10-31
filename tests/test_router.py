@@ -30,7 +30,7 @@ def fake_transport(fail=(), log=None):
 def test_registry_shape_and_vision_flags():
     assert {"nim", "gemini", "groq", "openrouter", "openai", "claude"} <= set(REGISTRY)
     for p in REGISTRY.values():
-        assert p.env_keys and p.text_model and isinstance(p.supports_vision, bool)
+        assert (p.env_keys or p.local) and p.text_model and isinstance(p.supports_vision, bool)
         if p.supports_vision:
             assert p.vision_model, f"{p.id} claims vision without a vision model"
     assert REGISTRY["nim"].supports_vision and "vision" in REGISTRY["nim"].vision_model

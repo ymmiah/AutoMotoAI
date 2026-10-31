@@ -1,6 +1,7 @@
 > [!IMPORTANT]
 > 🎉 **New: AutoMoto now supports Windows, in Beta!** Download **[AutoMoto AI 5.6.0 Beta 3](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)** (`.exe` or `.msi`), sign in once, and the same chats and files follow you to the Windows app, the web and your phone.
 > ✨ **Beta 3: one smart assistant.** Just say what you need or attach a file: AutoMoto works out the steps and picks the right tools by itself, and shows progress in plain words. [What it can do](docs/CAPABILITIES.md)
+> 🔌 **Coming next (on `main`, in testing): Offline AI.** Run a free model on your own computer with Ollama, with no key and no internet. [How](docs/OFFLINE.md)
 > 👉 New here? **[Start here: pick your device](https://ymmiah.github.io/AutoMotoAI/START.html)** · macOS and Linux apps are coming next. Beta means rough edges are possible; the stable version is [v5.5.0](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0).
 
 <div align="center">

@@ -24,7 +24,8 @@ Every code box has a **copy button** in its top-right corner. Click it, then pas
 * **Account**: a username and password on an **AutoMoto server** that someone runs (often your admin, teacher or
   Yasin). Your chats and files are saved **on that server**, so you see them on every device. You don't need your own
   AI key.
-* **Local mode**: AutoMoto runs **only on your own computer**, with no account. You need your own free AI key.
+* **Local mode**: AutoMoto runs **only on your own computer**, with no account. You need your own free AI key,
+  or a free AI model that runs on your computer with no key and no internet: see [Offline AI](OFFLINE.md).
   Phones can't use Local mode.
 
 ---
