@@ -1,10 +1,10 @@
 # Shipping the Windows app: SmartScreen, signing, winget and the Microsoft Store
 
-Status for **5.6.0 Beta 3** (checked 30 October 2026): the app is a **beta**, published **free as a GitHub
+Status for **5.6.0 Beta 3** (checked 31 October 2026): the app is a **beta**, published **free as a GitHub
 pre-release** (`v5.6.0-beta.3`; 5.5.0 stays the latest stable release), as an NSIS
 `.exe` and an `.msi`, **not code-signed**. Updates are signed with the Tauri updater key, so the app only installs
 updates that came from this repository's release workflow. A winget manifest is ready in `packaging/winget/` but
-**has not been submitted**. Nothing has been signed up for.
+**has not been submitted**. A Microsoft Store (MSIX) edition is prepared (below); nothing has been signed up for.
 
 ## What users see today (SmartScreen)
 
@@ -19,50 +19,70 @@ shows **"Windows protected your PC"**. Users click **More info → Run anyway**.
   Canada** — so not to an individual in the UK, who would need an OV certificate from a certificate authority.
   — same page, and [Code signing options for Windows app developers](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options)
 
-## Free code signing for open source: SignPath Foundation
+## Chosen route: the Microsoft Store (MSIX)
 
-[SignPath Foundation](https://signpath.org) signs releases of open-source projects for free, with a certificate
-issued to SignPath Foundation. What its [terms](https://signpath.org/terms.html) ask for (summary — read the page):
+Checked 31 October 2026. The plan is a **Microsoft Store edition** packaged as **MSIX**: Microsoft signs MSIX packages
+when they pass certification, so it needs **no certificate** and Store installs don't show the SmartScreen warning.
+The GitHub `.exe`/`.msi` stay as they are (unsigned) for people who don't use the Store.
 
-* an **OSI-approved licence** for every component, no commercial dual-licensing, and
-  **no proprietary code** in what's signed;
-  > **AutoMoto AI's licence:** after 5.6.0-beta.3 it is AGPL-3.0-only (OSI-approved) **and** offered under a paid
-  > [commercial licence](https://github.com/ymmiah/AutoMotoAI/blob/main/COMMERCIAL-LICENSE.md). SignPath's terms say "without commercial dual-licensing", so
-  > this may make the project ineligible for SignPath Foundation's free certificate. Ask SignPath before applying.
-* the project is **actively maintained**, **already released** in the form to be signed, and its functions are
-  **described on the download page**; for programs they also want "a certain verifiable reputation";
-* no malware or potentially unwanted programs, and **no hacking tools** (features that find or exploit security
-  holes or get around security measures) — be ready to explain AutoMoto's approval-gated shell and desktop tools;
-* everyone on the team uses **MFA** on SignPath and GitHub; roles (authors, reviewers, approvers) are declared, and
-  **every release is approved by hand** before it's signed; SignPath checks the files were built by CI from this
-  repository;
-* a **"Code signing policy"** section on the project's home page and release pages;
-* the certificate carries **SignPath Foundation's** name, so Windows shows them as the publisher.
+* **Free individual developer account** (no fee, also in the UK): start at <https://storedeveloper.microsoft.com>,
+  choose *Individual developer*, verify with a government ID and a selfie on your phone. That page is the only entry
+  to the free flow. — [Open a developer account](https://learn.microsoft.com/en-us/windows/apps/publish/partner-center/open-a-developer-account),
+  [What's new for individual developers](https://learn.microsoft.com/en-us/windows/apps/publish/whats-new-individual-developer)
+  (Individual accounts are meant for people publishing "not in relation to their business, trade, or profession".
+  The Store app itself is free; if selling commercial licences turns into a business, a Company account may be the
+  right type later.)
+* **MSIX vs EXE/MSI:** "For Store submissions, MSIX/AppX packages don't need a CA-trusted signature — Microsoft
+  re-signs the package". An EXE/MSI listing (policy 10.2.9) needs every file signed with a Trusted-Root CA
+  certificate, a versioned HTTPS download URL and a silent install. — [Publish your first Windows app](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/publish-first-app),
+  [Store policies 7.20](https://learn.microsoft.com/en-us/windows/apps/publish/store-policies)
+* **How it's built:** the *Windows app* workflow packs the Tauri app into
+  `AutoMoto-AI-<version>-Windows-x64.msixupload` (artifact `automoto-ai-msstore`) with
+  [`scripts/ci/pack-msix.ps1`](https://github.com/ymmiah/AutoMotoAI/blob/main/scripts/ci/pack-msix.ps1): the manifest
+  comes from [`packaging/msstore/msix.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/packaging/msstore/msix.py)
+  (brand.py), the tiles from `packaging/branding/generate.py`; `makeappx` validates it, and CI test-installs a
+  self-signed copy and launches it. The uploaded package itself is unsigned (the Store signs it).
+* **Identity:** Partner Center gives the package *Name*, *Publisher* (`CN=…`) and *Publisher display name* after you
+  reserve the app name. Put them in the repository **variables** `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`,
+  `MSSTORE_PUBLISHER_DISPLAY_NAME` and the reserved name in `MSSTORE_DISPLAY_NAME`. Until then a placeholder
+  identity is used (it builds, but Partner Center rejects it).
+* **Version numbers:** MSIX needs four numbers and the **last must be 0** for the Store ("reserved for Store use").
+  The beta keeps its version (`5.6.0-beta.3`); the package version is `X.Y.(Z×100+N).0`, and a stable release
+  uses `N = 99` so it is always higher than its betas: `5.6.0-beta.3 → 5.6.3.0`, `5.6.0 → 5.6.99.0`,
+  `5.6.1-beta.1 → 5.6.101.0`. — [App package requirements](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements)
+* **Updates:** the Store updates Store installs. The app detects that it runs from an MSIX package and switches its
+  own updater off (no automatic check; *Check for updates* says the Store handles it). Policy 10.2.5 (update only
+  through the Store) is written for games, but a second updater would install a separate non-Store copy anyway.
+* **Beta testing:** a **private audience** (only people whose Microsoft accounts you list can see and install it;
+  can be changed to public later, but not back) and, after the first publish, **package flights** for known-user
+  groups. — [Visibility options](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/visibility-options),
+  [Package flights](https://learn.microsoft.com/en-us/windows/apps/publish/package-flights)
+* **Optional automation:** a manual *Windows app* run with **store_upload** ticked uploads the package to Partner
+  Center as a **draft** (`msstore publish --noCommit`). It needs the secrets `AZURE_AD_TENANT_ID`,
+  `AZURE_AD_APPLICATION_CLIENT_ID`, `AZURE_AD_APPLICATION_SECRET`, `SELLER_ID` and the variable `MSSTORE_PRODUCT_ID`,
+  and works only after the first submission was published by hand. — [GitHub Actions for the Store](https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/github-actions)
+* **Listing kit** (descriptions, keywords, age-rating answers, screenshots, certification notes):
+  [`packaging/msstore/`](https://github.com/ymmiah/AutoMotoAI/tree/main/packaging/msstore). Privacy policy URL:
+  <https://ymmiah.github.io/AutoMotoAI/PRIVACY.html>.
 
-To apply (Yasin, when ready): fill in the application on signpath.org, link this repository and the release
-workflow, then add the SignPath GitHub Action between *Build the installers* and *Collect the installers* in
-`.github/workflows/desktop.yml`. The updater signature must be made **after** Authenticode signing (re-run
-`npx tauri signer sign` on the signed files), otherwise the update check fails.
+### Store policies that matter for AutoMoto
 
-## Microsoft Store
+* **10.1** the listing must describe what the app really does, including limits; **10.1.3** at most seven search terms.
+* **10.2.2** no downloading code that changes the described function: the optional *local engine* install (Python +
+  the AutoMoto engine from PyPI/GitHub, only after the user agrees) and the approval-gated terminal tool are
+  described in the listing and the certification notes.
+* **10.2.4** dependencies on other software must be stated **at the start of the description**: an AI provider key
+  or local AI model, and an AutoMoto account server or the local engine.
+* **10.5.1** a privacy policy URL is required (desktop/Win32 apps always need one).
+* **11.11** IARC age rating questionnaire; **11.16 live generative AI**: say so in the listing and in Partner
+  Center, and offer a way to report bad output (the app's *Report a problem* link and the *Report content* issue form).
+* **runFullTrust** is a restricted capability; explain in the submission notes that it's a desktop (Win32) app.
 
-* **Individual developer accounts are now free** — no registration fee; you verify with an ID document and a
-  selfie. Start at <https://storedeveloper.microsoft.com> — that is the only entry to the free flow; signing up via
-  Partner Center or Visual Studio still shows the old US$19 flow.
-  — [What's new for individual developers](https://learn.microsoft.com/en-us/windows/apps/publish/whats-new-individual-developer),
-  [Windows Developer Blog, 10 Sept 2025](https://blogs.windows.com/windowsdeveloper/2025/09/10/),
-  [Open a developer account](https://learn.microsoft.com/en-us/windows/apps/publish/partner-center/open-a-developer-account)
-* **An MSI or EXE listed in the Store must be Authenticode-signed** with a certificate that chains to the Microsoft
-  Trusted Root Program; self-signed isn't accepted. The Store links to your installer URL and checks it.
-  — [App package requirements for MSI/EXE apps](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msi/app-package-requirements)
-* An **MSIX** package is re-signed by Microsoft for free when you submit it, so no certificate is needed for the
-  Store itself. Tauri doesn't build MSIX directly; it would need an extra packaging step (MSIX Packaging Tool or
-  `makeappx`) and testing. Store-installed MSIX apps update through the Store, not the Tauri updater.
-  — [Code signing options](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options),
-  [Publish your first Windows app](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/overview)
+### Not applicable: SignPath Foundation
 
-So the realistic free paths are: **(a)** SignPath Foundation → signed `.exe`/`.msi` → Store listing of the MSI/EXE,
-or **(b)** an MSIX build for the Store only. Both need Yasin to create the accounts himself.
+SignPath Foundation's free certificates require "an OSI-approved Open Source license **without commercial
+dual-licensing**". AutoMoto AI is AGPL-3.0 **plus** a paid commercial licence, so it doesn't qualify; the SignPath
+steps were removed from the workflow. — [SignPath terms](https://signpath.org/terms.html)
 
 ## winget (Windows Package Manager)
 
@@ -83,7 +103,7 @@ wingetcreate submit packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-be
 ```
 
 For later versions: `wingetcreate update ymmiah.AutoMotoAI.Beta --version <new> --urls <setup.exe URL> --submit`.
-Unsigned installers can be flagged by the SmartScreen part of the validation; if that happens, sign first (above).
+Unsigned installers can be flagged by the SmartScreen part of the validation.
 
 ## Update channel
 

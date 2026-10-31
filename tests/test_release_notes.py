@@ -53,7 +53,7 @@ def test_changelog_section_found():
 
 
 def test_branding_text_files_up_to_date():
-    """installer-hooks.nsh, LICENSE-installer.txt and the SignPath artifact configuration come from brand.py."""
+    """installer-hooks.nsh and LICENSE-installer.txt come from brand.py."""
     import subprocess
     import sys
 

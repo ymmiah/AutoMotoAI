@@ -2,23 +2,26 @@ name: Windows app
 # Builds the Windows installers (.exe NSIS + .msi) on every change to the app or the engine, smoke-tests them
 # on a clean runner (silent install, launch, local engine health, close, uninstall), and on a version tag
 # attaches them plus the signed updater manifest (latest.json) to that tag's GitHub Release.
-# Code signing (SignPath Foundation, docs/CODE-SIGNING-POLICY.md): on a version tag, or a manual run with
-# "sign" ticked, the installers are sent to SignPath, a maintainer approves the request there, and the signed
-# files replace the unsigned ones before the smoke tests and the release. Without the SignPath secret and
-# variables the step prints a notice and the build carries on unsigned.
+# Also builds the Microsoft Store package (.msixupload, unsigned: the Store signs it) and test-installs it.
+# Optional: a manual run with "store_upload" ticked sends it to Partner Center as a DRAFT submission (needs the
+# AZURE_AD_* / SELLER_ID secrets and the MSSTORE_PRODUCT_ID variable; skipped with a notice otherwise).
 on:
   push:
     branches: [main]
     tags: ["v*"]
-    paths: ["apps/desktop/**", "automoto/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
+    paths: ["apps/desktop/**", "automoto/**", "packaging/msstore/**", "packaging/branding/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
   pull_request:
-    paths: ["apps/desktop/**", "automoto/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
+    paths: ["apps/desktop/**", "automoto/**", "packaging/msstore/**", "packaging/branding/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
   workflow_dispatch:
     inputs:
-      sign:
-        description: "Send the installers to SignPath for Authenticode signing (needs approval on signpath.io)"
+      store_upload:
+        description: "Upload the MSIX to Partner Center as a draft submission (needs the Store secrets)"
         type: boolean
         default: false
+      store_flight_id:
+        description: "Optional: package flight ID (for a beta flight) instead of the main submission"
+        type: string
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -27,10 +30,9 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 120   # includes waiting for the SignPath approval on tags
+    timeout-minutes: 75
     permissions:
       contents: write   # only used on tags, to attach the installers to the release
-      actions: read     # lets SignPath read this run and download the unsigned-installers artifact
     env:
       AUTOMOTO_DEFAULT_SERVER: ${{ vars.AUTOMOTO_DEFAULT_SERVER }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -96,77 +98,23 @@ jobs:
             $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($f.FullName)
             $icon.ToBitmap().Save("shots/icon-$($f.BaseName).png", [System.Drawing.Imaging.ImageFormat]::Png)
           }
-      - name: Code signing - is SignPath set up?
-        id: signgate
-        shell: pwsh
-        env:
-          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
-          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          WANT: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.sign == true }}
-        run: |
-          $ver = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          "version=$ver" >> $env:GITHUB_OUTPUT
-          if ($env:WANT -ne "true") { "::notice::Not a version tag - installers stay unsigned (run manually with 'sign' to test signing)"; "sign=false" >> $env:GITHUB_OUTPUT; exit 0 }
-          if (-not $env:SIGNPATH_API_TOKEN -or -not $env:SIGNPATH_ORGANIZATION_ID) {
-            "::notice::SignPath not set up (secret SIGNPATH_API_TOKEN / variable SIGNPATH_ORGANIZATION_ID missing) - installers stay unsigned"
-            "sign=false" >> $env:GITHUB_OUTPUT; exit 0
-          }
-          "sign=true" >> $env:GITHUB_OUTPUT
-      - name: Code signing - upload the unsigned installers for SignPath
-        id: unsigned
-        if: steps.signgate.outputs.sign == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: automoto-ai-windows-unsigned
-          path: |
-            out/*.exe
-            out/*.msi
-          if-no-files-found: error
-      - name: Code signing - SignPath (waits for the maintainer's approval)
-        id: signpath
-        if: steps.signgate.outputs.sign == 'true'
-        uses: signpath/github-action-submit-signing-request@v3
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'AutoMotoAI' }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
-          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 3600
-          output-artifact-directory: signed
-          parameters: |
-            version: ${{ toJSON(steps.signgate.outputs.version) }}
-      - name: Code signing - use the signed installers, re-sign the updater files, new checksums
-        if: steps.signgate.outputs.sign == 'true'
-        shell: pwsh
-        env:
-          VERSION: ${{ steps.signgate.outputs.version }}
-        run: |
-          foreach ($f in Get-ChildItem out/*.exe, out/*.msi) {
-            $s = Get-ChildItem -Recurse -File signed | Where-Object Name -eq $f.Name | Select-Object -First 1
-            if (-not $s) { throw "SignPath returned no $($f.Name)" }
-            $a = Get-AuthenticodeSignature $s.FullName
-            "$($f.Name): $($a.Status) - $($a.SignerCertificate.Subject)"
-            if ($a.Status -ne "Valid") { throw "$($f.Name) signature is $($a.Status)" }
-            Copy-Item $s.FullName $f.FullName -Force
-            # the updater signature must be over the final, Authenticode-signed file
-            if ($env:TAURI_SIGNING_PRIVATE_KEY) {
-              Remove-Item "$($f.FullName).sig" -ErrorAction SilentlyContinue
-              Push-Location apps/desktop
-              npx --no-install tauri signer sign --app-version $env:VERSION $f.FullName | Out-Null
-              $code = $LASTEXITCODE
-              Pop-Location
-              if ($code -or -not (Test-Path "$($f.FullName).sig")) { throw "could not re-sign $($f.Name) for the updater" }
-            }
-          }
-          ./scripts/ci/collect-windows.ps1 -Out out -HashOnly
-          "Signing request: ${{ steps.signpath.outputs.signing-request-web-url }}" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
           name: automoto-ai-windows
           path: out/*
+          if-no-files-found: error
+      - name: Microsoft Store package (MSIX) - build, validate, test-install
+        shell: pwsh
+        env:
+          MSSTORE_IDENTITY_NAME: ${{ vars.MSSTORE_IDENTITY_NAME }}
+          MSSTORE_PUBLISHER: ${{ vars.MSSTORE_PUBLISHER }}
+          MSSTORE_PUBLISHER_DISPLAY_NAME: ${{ vars.MSSTORE_PUBLISHER_DISPLAY_NAME }}
+          MSSTORE_DISPLAY_NAME: ${{ vars.MSSTORE_DISPLAY_NAME }}
+        run: ./scripts/ci/pack-msix.ps1 -Out msstore -TestInstall
+      - uses: actions/upload-artifact@v4
+        with:
+          name: automoto-ai-msstore
+          path: msstore/*
           if-no-files-found: error
       - name: Install the local engine (from this source) for the smoke test
         shell: pwsh
@@ -195,3 +143,45 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/ci/release-windows.ps1 -Dir out -Tag $env:GITHUB_REF_NAME -Repo $env:GITHUB_REPOSITORY
+
+  store-upload:
+    # manual only: upload the MSIX to Partner Center and leave the submission as a DRAFT (you review and submit it
+    # there). Works once the app's first submission was published by hand (Microsoft's rule for the API).
+    needs: windows
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.store_upload }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_AD_APPLICATION_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+      AZURE_AD_APPLICATION_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+      SELLER_ID: ${{ secrets.SELLER_ID }}
+      MSSTORE_PRODUCT_ID: ${{ vars.MSSTORE_PRODUCT_ID }}
+      FLIGHT_ID: ${{ inputs.store_flight_id }}
+    steps:
+      - name: Are the Store secrets set?
+        id: gate
+        shell: pwsh
+        run: |
+          $missing = @("AZURE_AD_TENANT_ID", "AZURE_AD_APPLICATION_CLIENT_ID", "AZURE_AD_APPLICATION_SECRET", "SELLER_ID", "MSSTORE_PRODUCT_ID") |
+            Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
+          if ($missing) { "::notice::Microsoft Store upload skipped - not set: $($missing -join ', ')"; "go=false" >> $env:GITHUB_OUTPUT }
+          else { "go=true" >> $env:GITHUB_OUTPUT }
+      - uses: actions/download-artifact@v4
+        if: steps.gate.outputs.go == 'true'
+        with:
+          name: automoto-ai-msstore
+          path: msstore
+      - uses: microsoft/microsoft-store-apppublisher@v1.1
+        if: steps.gate.outputs.go == 'true'
+      - name: Upload to Partner Center (draft, not submitted)
+        if: steps.gate.outputs.go == 'true'
+        shell: pwsh
+        run: |
+          msstore reconfigure --tenantId $env:AZURE_AD_TENANT_ID --sellerId $env:SELLER_ID --clientId $env:AZURE_AD_APPLICATION_CLIENT_ID --clientSecret $env:AZURE_AD_APPLICATION_SECRET
+          if ($LASTEXITCODE) { throw "msstore reconfigure failed" }
+          $pkg = (Get-ChildItem msstore/*.msixupload | Select-Object -First 1).FullName
+          $flight = @(); if ($env:FLIGHT_ID) { $flight = @("--flightId", $env:FLIGHT_ID) }
+          msstore publish $pkg --appId $env:MSSTORE_PRODUCT_ID --noCommit @flight
+          if ($LASTEXITCODE) { throw "msstore publish failed" }
+          "Uploaded as a draft. Open Partner Center to check it and press Submit." >> $env:GITHUB_STEP_SUMMARY

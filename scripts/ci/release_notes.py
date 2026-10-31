@@ -111,7 +111,7 @@ def notes(repo: str, tag: str) -> str:
                                                      "latest release." if beta else "."))
     parts = [head, table(repo, tag, files), "## What's new", changelog(version).replace("{repo}", repo),
              checksums(files),
-             f"Code signing policy: [{SITE}/CODE-SIGNING-POLICY.html]({SITE}/CODE-SIGNING-POLICY.html) · "
+             f"Privacy policy: [{SITE}/PRIVACY.html]({SITE}/PRIVACY.html) · "
              f"Full history: [CHANGELOG](https://github.com/{repo}/blob/main/CHANGELOG.md)"]
     return "\n\n".join(p for p in parts if p) + "\n"
 

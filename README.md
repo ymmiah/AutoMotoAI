@@ -64,7 +64,7 @@ SHA-256, install into a private virtualenv and create `~/.automoto/.env` for you
 
 | OS | Install | Then |
 |---|---|---|
-| **Windows app — Beta** (10/11, 64-bit) | `AutoMoto-AI_5.6.0-beta.3_x64-setup.exe` from the [5.6.0 Beta 3 release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (SmartScreen: *More info → Run anyway*, it isn't code-signed yet; see the [code signing policy](docs/CODE-SIGNING-POLICY.md)) | sign in to your account, or **Start local mode** ([steps](docs/START.md#a-windows-pc)) |
+| **Windows app — Beta** (10/11, 64-bit) | `AutoMoto-AI_5.6.0-beta.3_x64-setup.exe` from the [5.6.0 Beta 3 release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (SmartScreen: *More info → Run anyway*, it isn't code-signed; a Microsoft Store edition is on the way: [Windows distribution](docs/WINDOWS-DISTRIBUTION.md)) | sign in to your account, or **Start local mode** ([steps](docs/START.md#a-windows-pc)) |
 | **Windows 10/11** (PowerShell) | `winget install -e --id Python.Python.3.12` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` | `notepad $env:USERPROFILE\.automoto\.env` → add key · `automoto serve` |
 | **macOS** (Intel / Apple Silicon) | `brew install python@3.12 git` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `./scripts/install.sh` | `open -e ~/.automoto/.env` → add key · `automoto serve` |
 | **Linux** (Ubuntu/Debian, Fedora, Arch…) | `sudo apt install python3 python3-venv git` (or dnf / pacman) · clone · `./scripts/install.sh` | `nano ~/.automoto/.env` → add key · `automoto serve` |
@@ -579,9 +579,10 @@ risky tools are **auto-denied** unless you allow them in `AUTOMOTO_AUTO_APPROVE`
 
 ---
 
-## ✍️ Code signing policy
+## 🔏 Privacy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) (application in progress; current releases are not signed yet). Team roles, what is signed and the privacy policy (what the app connects to): **[Code signing policy](docs/CODE-SIGNING-POLICY.md)**.
+No telemetry, no analytics, no ads. The app only talks to the AI provider, web pages, connectors and account server
+**you** choose. Full list of connections: **[Privacy policy](docs/PRIVACY.md)**.
 
 ## 📜 Licence
 

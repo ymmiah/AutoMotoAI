@@ -6,7 +6,7 @@ Using it in a closed-source or commercial product or service without the AGPL ob
 
 Versions up to and including 5.6.0-beta.3 were released under the MIT licence and stay MIT for those copies.
 
-PRIVACY: AutoMoto AI has no telemetry. It only connects to the AI providers, web pages, connectors and account server you choose, checks this project's GitHub releases for updates (set AUTOMOTO_NO_UPDATE_CHECK=1 to turn the automatic check off), and downloads WebView2 from Microsoft during installation if it is missing. Full policy: https://ymmiah.github.io/AutoMotoAI/CODE-SIGNING-POLICY.html
+PRIVACY: AutoMoto AI has no telemetry. It only connects to the AI providers, web pages, connectors and account server you choose, checks this project's GitHub releases for updates (set AUTOMOTO_NO_UPDATE_CHECK=1 to turn the automatic check off), and downloads WebView2 from Microsoft during installation if it is missing. Full policy: https://ymmiah.github.io/AutoMotoAI/PRIVACY.html
 
 GNU AFFERO GENERAL PUBLIC LICENSE Version 3, 19 November 2007
 

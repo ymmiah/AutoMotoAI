@@ -16,7 +16,7 @@ Linux or VS Code.
 | **[GUI guide](GUI-GUIDE.md)** | Step by step with screenshots: install, add a free key, open the app, every page, VS Code, hosted mode and the admin panel. |
 | **[Install](INSTALL.md)** | Every OS in detail: Windows, macOS, Linux, Docker, Raspberry Pi, ChromeOS, phones. |
 | **[Windows app distribution](WINDOWS-DISTRIBUTION.md)** | SmartScreen, code signing, Microsoft Store and winget (for maintainers). |
-| **[Code signing policy](CODE-SIGNING-POLICY.md)** | Free code signing provided by SignPath.io, certificate by SignPath Foundation (applied for). Team roles and privacy policy. |
+| **[Privacy policy](PRIVACY.md)** | No telemetry. Everything the app connects to, and when. |
 | **[Hosting](HOSTING.md)** | Let other people use it with a daily limit; honest free-hosting comparison. |
 | **[Publishing](PUBLISHING.md)** | How releases reach GitHub, the VS Code Marketplace, Open VSX and PyPI. |
 

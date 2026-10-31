@@ -9,12 +9,17 @@
   5.6.0-beta.3 were MIT and stay MIT for those copies. The web interface now has a **Source code** link (AGPL
   section 13; `AUTOMOTO_SOURCE_URL` for changed copies), the installers show the new licence, and contributions need a
   sign-off that allows commercial licensing (CONTRIBUTING.md).
-- **Code signing (SignPath Foundation), ready once approved.** New [code signing policy](docs/CODE-SIGNING-POLICY.md)
-  (team roles, privacy policy, every outside connection listed). The Windows app workflow sends the installers to
-  SignPath on version tags (skipped with a notice until `SIGNPATH_API_TOKEN` / `SIGNPATH_ORGANIZATION_ID` exist),
-  waits for the signed files, checks their Authenticode signatures and re-signs the updater `.sig` files over them,
-  so `latest.json` and `SHA256SUMS.txt` match what users download. Artifact configuration:
-  `packaging/signpath/artifact-configuration.xml`. `AUTOMOTO_NO_UPDATE_CHECK=1` turns off the app's update check.
+- **Microsoft Store edition (MSIX), prepared.** The Windows app workflow now also builds
+  `AutoMoto-AI-<version>-Windows-x64.msixupload` (unsigned: the Store signs it), validates it with `makeappx` and
+  test-installs and launches a self-signed copy. Manifest and tiles come from `automoto/brand.py`
+  (`packaging/msstore/msix.py`, `packaging/branding/generate.py`); the Store identity comes from the `MSSTORE_*`
+  repository variables. MSIX version mapping keeps the beta numbering: `5.6.0-beta.3 → 5.6.3.0`. When it runs from
+  the Store package the app's own updater is off (the Store updates it). Optional draft upload to Partner Center
+  (manual run, needs the Store secrets). Listing kit in `packaging/msstore/`.
+- **Privacy policy** moved to its own page, [docs/PRIVACY.md](docs/PRIVACY.md) (the Store needs its URL), with a
+  *Report a problem* link in the web interface and a *Report content* issue form for AI output.
+  `AUTOMOTO_NO_UPDATE_CHECK=1` turns off the GitHub app's update check. The SignPath code-signing steps were removed:
+  SignPath Foundation doesn't accept projects with a commercial licence option.
 - **Branded Windows installers and app icon.** New logo and multi-size icon; NSIS installer with header, sidebar,
   welcome/finish text, licence page, Start-menu folder, a getting-started link, uninstaller icon and full
   Add/Remove Programs details (publisher, homepage, support link); MSI banner, dialog image and licence. All of it is

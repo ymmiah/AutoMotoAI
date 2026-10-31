@@ -1,0 +1,32 @@
+name: Report content
+description: Report harmful, offensive or inappropriate AI output, or a safety problem in AutoMoto AI
+title: "[Content report] "
+labels: ["content-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please **don't paste passwords, keys or private data**. If the problem is a security
+        hole, see SECURITY.md instead of posting it here.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What happened?
+      options:
+        - The AI produced harmful, offensive or inappropriate content
+        - The app did something without asking, or did something unsafe
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What you asked, what came back (a short quote or screenshot is enough), and which AI provider/model you used.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version and edition
+      placeholder: "5.6.0-beta.3, Microsoft Store / Windows installer / web / VS Code"
