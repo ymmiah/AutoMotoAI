@@ -16,6 +16,8 @@ Security model
 
 from __future__ import annotations
 
+from automoto import brand  # product display name (one place)
+
 import base64
 import hmac
 import ipaddress
@@ -316,6 +318,14 @@ def _count_images(messages: list[dict[str, Any]]) -> int:
 
 def _run_chat(messages, *, prefer, need_vision, keys, client, desktop: bool, meter: Any = None) -> dict[str, Any]:
     msgs = [m for m in messages if m.get("role") in ("user", "assistant")]
+    learnt = []
+    if msgs and msgs[-1].get("role") == "user":
+        from automoto import automemory
+
+        try:
+            learnt = automemory.learn(Memory(), automemory.user_text(msgs[-1].get("content")), source="chat")
+        except Exception:
+            learnt = []
     t0 = time.monotonic()
     try:
         ans = ask(msgs, need_vision=need_vision, prefer=prefer, keys=keys,
@@ -330,7 +340,7 @@ def _run_chat(messages, *, prefer, need_vision, keys, client, desktop: bool, met
         chars = sum(len(m["content"]) if isinstance(m.get("content"), str) else 2000 for m in msgs) + len(ans.text)
         meter.add(time.monotonic() - t0, requests=1, tokens=chars // 4, kind="chat", detail=f"{ans.provider}/{ans.model}")
     text, actions = split_actions(ans.text) if desktop else (ans.text, [])
-    return {**ans.as_dict(), "text": text, "actions": actions}
+    return {**ans.as_dict(), "text": text, "actions": actions, "learnt": learnt}
 
 
 class AgentIn(BaseModel):
@@ -412,12 +422,12 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
         got = hosted.current_user(request)
         if not got:
             html = (WEB_DIR / "login.html").read_text(encoding="utf-8").replace("__AUTOMOTO_VERSION__", __version__)
-            return HTMLResponse(html, headers=base_headers)
+            return HTMLResponse(brand.fill(html), headers=base_headers)
         html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
         meta = (f'<meta name="automoto-csrf" content="{got[1]}" />\n'
                 '<meta name="automoto-mode" content="multiuser" />\n')
         html = html.replace("__AUTOMOTO_VERSION__", __version__).replace("</title>", "</title>\n" + meta, 1)
-        return HTMLResponse(html, headers=base_headers)
+        return HTMLResponse(brand.fill(html), headers=base_headers)
     if launch is not None:
         if not _is_loopback(request) or not _use_launch_token(launch):
             return HTMLResponse(LOCKED_PAGE, status_code=403, headers=base_headers)
@@ -437,7 +447,7 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
         return HTMLResponse(LOCKED_PAGE, status_code=401, headers=base_headers)
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace("__AUTOMOTO_TOKEN__", "").replace("__AUTOMOTO_VERSION__", __version__)
-    return HTMLResponse(html, headers=base_headers)
+    return HTMLResponse(brand.fill(html), headers=base_headers)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -462,7 +472,7 @@ app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "app": APP_NAME, "codename": CODENAME, "version": __version__, "os": OS_LABEL}
+    return {"ok": True, "app": APP_NAME, "brand": brand.name(), "codename": CODENAME, "version": __version__, "os": OS_LABEL}
 
 
 @app.get("/api/status")
@@ -752,6 +762,23 @@ def memory_get(request: Request) -> dict[str, Any]:
 def memory_add(body: FactIn, request: Request) -> dict[str, Any]:
     _authorise(request)
     return Memory().remember(body.text, body.tags)
+
+
+class FactEdit(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)
+    tags: str | None = Field(None, max_length=200)
+
+
+@app.put("/api/memory/{fact_id}")
+def memory_edit(fact_id: int, body: FactEdit, request: Request) -> dict[str, Any]:
+    _authorise(request)
+    try:
+        ok = Memory().update(fact_id, body.text, body.tags)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    if not ok:
+        raise HTTPException(404, "no such fact")
+    return {"ok": True}
 
 
 @app.delete("/api/memory/{fact_id}")
@@ -1281,7 +1308,7 @@ def run(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) ->
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"  # nosec B104 - display URL only
     launch = f"{url}?launch={new_launch_token(ttl=3600)}"
     write_session_file(url, port)
-    print(f"{APP_NAME} v{__version__} \"{CODENAME}\" -> {url}", flush=True)
+    print(f"{brand.name()} v{__version__} \"{CODENAME}\" -> {url}", flush=True)
     print(f"Open (one-time link): {launch}", flush=True)
     tools, errors = mcp_mod.connect_all()
     MCP_TOOLS[:] = tools
@@ -1308,7 +1335,7 @@ def run_hosted(host: str, port: int) -> None:
     made = accounts.bootstrap_admin_from_env()
     accounts.prune()
     hosts = sorted(_allowed_hosts() - LOCAL_HOSTS)
-    print(f"{APP_NAME} v{__version__} \"{CODENAME}\" - HOSTED (multi-user) mode on {host}:{port}", flush=True)
+    print(f"{brand.name()} v{__version__} \"{CODENAME}\" - HOSTED (multi-user) mode on {host}:{port}", flush=True)
     if made:
         print(f"Created the first admin '{made}' from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD.", flush=True)
     if accounts.admin_count() == 0:

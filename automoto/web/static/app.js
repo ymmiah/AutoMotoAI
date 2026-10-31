@@ -4,6 +4,9 @@ import { icon, hydrateIcons, TOOL_ICONS } from "./icons.js";
 // Auth: the HttpOnly session cookie set by the one-time launch link (the page never sees a token).
 const TOKEN = document.querySelector('meta[name="automoto-token"]')?.content || "";
 const VERSION = document.querySelector('meta[name="automoto-version"]').content;
+// Product name from ONE place (automoto/brand.py, env AUTOMOTO_BRAND_NAME / AUTOMOTO_BRAND_SHORT).
+const BRAND = document.querySelector('meta[name="automoto-brand"]')?.content || "AutoMoto AI";
+const BRAND_SHORT = document.querySelector('meta[name="automoto-brand-short"]')?.content || "AutoMoto";
 // Hosted (multi-user) mode: a per-session CSRF token is put in the page; the session itself is an HttpOnly cookie.
 const CSRF = document.querySelector('meta[name="automoto-csrf"]')?.content || "";
 const HOSTED = document.querySelector('meta[name="automoto-mode"]')?.content === "multiuser";
@@ -249,7 +252,7 @@ function setMode(m, persist = true) {
   $$("#modeSeg button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === m)));
   if (persist) localStorage.setItem("automoto_mode", m);
   const ta = $("#composerInput");
-  if (ta) ta.placeholder = m === "agent" ? "Give AutoMoto a goal…" : "Message AutoMoto…";
+  if (ta) ta.placeholder = m === "agent" ? `Give ${BRAND_SHORT} a goal…` : `Message ${BRAND_SHORT}…`;
   if (persist && state.cur?.id) api(`/api/conversations/${state.cur.id}`, { mode: m }, "PATCH").catch(() => {});
 }
 $("#modeSeg").addEventListener("click", (e) => { const b = e.target.closest("button[data-mode]"); if (b) setMode(b.dataset.mode); });
@@ -344,7 +347,7 @@ function renderChat(conv) {
       <form class="composer" id="composer" aria-label="Message composer">
         <div class="attachments" id="attachments" aria-label="Attachments"></div>
         <label class="sr" for="composerInput">Message</label>
-        <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? "Give AutoMoto a goal…" : "Message AutoMoto…"}"></textarea>
+        <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? `Give ${BRAND_SHORT} a goal…` : `Message ${BRAND_SHORT}…`}"></textarea>
         <div class="bar">
           <input type="file" id="fileInput" accept="image/*,.docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.tsv,.pptx,.ppt,.odp,.pdf,.md,.txt,.log,.json,.jsonl,.yaml,.yml,.toml,.xml,.parquet,.sqlite,.db,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar" multiple hidden>
           <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach image or file" title="Attach an image, Word, Excel, PowerPoint or PDF file (or paste / drop)">${icon("clip")}</button>
@@ -353,7 +356,7 @@ function renderChat(conv) {
           <button class="send" id="sendBtn" aria-label="Send message" title="Send">${icon("send")}</button>
         </div>
       </form>
-      <div class="footer-note">AutoMoto can make mistakes. Risky actions always ask you first.</div>
+      <div class="footer-note">${BRAND_SHORT} can make mistakes. Risky actions always ask you first.</div>
     </div></div>`;
   const thread = $("#thread");
   if (!conv || !conv.messages?.length) {
@@ -414,7 +417,9 @@ const STEP_FALLBACK = { read_file: "Reading a file", list_dir: "Looking at your 
   search_files: "Searching your files", web_search: "Searching the web", fetch_url: "Reading a web page", run_shell: "Running a command",
   office_read: "Reading your file", office_create_docx: "Writing your Word document", office_create_xlsx: "Building your spreadsheet",
   office_create_pptx: "Building your slides", remember: "Saving to memory", recall: "Checking my memory", load_skill: "Getting the playbook",
-  more_tools: "Getting more abilities" };
+  more_tools: "Getting more abilities", library_add: "Saving to your library", library_search: "Searching your library",
+  discover: "Checking developer sites", read_feed: "Reading the feed", project_inspect: "Inspecting the project",
+  page_inspect: "Inspecting the page", server_setup: "Preparing your server setup" };
 const stepLabel = (name, args) => STEP_FALLBACK[name] || String(name || "step").replace(/^mcp__\w+?__/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 function stepCard(ev) {
   const d = document.createElement("details");
@@ -494,6 +499,19 @@ function renderEvent(ctx, ev) {
     }
     case "nudge": { const n = document.createElement("div"); n.className = "note"; n.innerHTML = `${icon("refresh")} The AI's tool call was broken, asking it to retry properly.`; steps.appendChild(n); break; }
     case "cancelled": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("stop")} Stopped by you.`; steps.appendChild(n); break; }
+    case "memory": {
+      if (!ev.facts?.length) break;
+      const n = document.createElement("div"); n.className = "note";
+      n.innerHTML = `${icon("sparkle")} Remembered: ${ev.facts.map((f) => esc(f.text)).join(" · ")} <a href="#/memory">(edit in Memory)</a>`;
+      steps.appendChild(n); break;
+    }
+    case "artifacts": {
+      if (!ev.files?.length) break;
+      const n = document.createElement("div"); n.className = "note artifacts";
+      const kb = (b) => b == null ? "" : b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+      n.innerHTML = `${icon("file")} <b>Files made</b><ul>${ev.files.slice(0, 30).map((f) => `<li><a href="/api/files/download?path=${encodeURIComponent(f.path)}" download title="${esc(f.path)}">${esc(f.name || f.path)}</a> <span class="muted">${esc(f.path)} · ${kb(f.bytes)}</span></li>`).join("")}</ul>`;
+      steps.appendChild(n); break;
+    }
     case "error": ctx.error = ev.error; break;
   }
   if (ctx.live) updateInfo(ctx);
@@ -572,7 +590,7 @@ async function streamTask(tid, el, convId) {
   $$(".approve:not(.done) .row", el).forEach((row) => row.innerHTML = '<span class="pill">expired</span>');
   if (convId) state.running.delete(convId);
   if (activeCtx === ctx) { activeCtx = null; setBusy(false); }
-  if (t?.status === "done" && document.hidden) document.title = "✓ AutoMoto AI";
+  if (t?.status === "done" && document.hidden) document.title = "✓ " + BRAND;
   loadConvs(); refreshBadge();
 }
 async function answerApproval(ctx, callId, ok, card) {
@@ -801,7 +819,7 @@ PAGES.account = async () => {
       It resets ${esc(resetText(q.resets_at))}.${q.request_cap ? ` Request cap: ${q.requests}/${q.request_cap}.` : ""}${q.token_cap ? ` Token cap (estimated): ${q.tokens.toLocaleString()}/${q.token_cap.toLocaleString()}.` : ""}</p></div>
     <div class="card"><h3>${icon("folder")} Limits</h3><p class="muted small">Uploads up to ${esc(state.limits?.max_upload_mb)} MB · storage ${esc(state.limits?.storage_mb)} MB · ${esc(state.limits?.max_tasks)} runs at a time.
       On this shared server the agent can research the web and work on Office, archive and data files in your own workspace. It can't run shell commands or control a computer.</p></div>
-    <div class="card"><h3>${icon("wrench")} Advanced (for developers)</h3><p class="muted small">AutoMoto picks the right tools and skills for each task by itself. Look under the hood here.</p>
+    <div class="card"><h3>${icon("wrench")} Advanced (for developers)</h3><p class="muted small">${BRAND_SHORT} picks the right tools and skills for each task by itself. Look under the hood here.</p>
       <div class="row"><a class="btn sm" href="#/tools">${icon("wrench")} Tools</a><a class="btn sm" href="#/skills">${icon("book")} Skills</a></div></div>
     <div class="card"><h3>${icon("monitor")} My devices</h3>
       <p class="muted small">Apps (Windows, Mac, Linux, phone, VS Code) and browsers signed in to this account. They all see the same chats, files and usage time. Sign out any you don't recognise.</p>
@@ -948,18 +966,24 @@ PAGES.tasks = async () => {
 };
 
 PAGES.memory = async () => {
-  const root = page("Memory", "Facts AutoMoto keeps between chats, plus a journal of what it did. Stored locally in SQLite.",
+  const root = page("Memory", `Facts ${BRAND_SHORT} keeps between chats, plus a journal of what it did. Stored locally in SQLite.`,
     `<form class="card" id="factForm"><div class="row"><input class="input" name="text" placeholder="e.g. I live in Birmingham and prefer metric units" aria-label="New fact" required maxlength="500" style="flex:1;min-width:200px">
       <input class="input" name="tags" placeholder="tags (optional)" aria-label="Tags" style="width:160px"><button class="btn primary">${icon("plus")} Remember</button></div></form>
-     <div class="toolbar"><b>Facts</b><span class="spacer"></span><input class="input" id="factFilter" type="search" placeholder="Filter facts" aria-label="Filter facts" style="width:200px"></div>
+     <div class="toolbar"><b>Facts</b><label class="auto-mem muted" style="font-size:13px;display:flex;gap:6px;align-items:center;margin-left:12px" title="Learn your name, preferences, likes and work from what you say. Passwords, keys, card numbers and e-mail addresses are never saved."><input type="checkbox" id="autoMem"> Learn from my messages</label><span class="spacer"></span><input class="input" id="factFilter" type="search" placeholder="Filter facts" aria-label="Filter facts" style="width:200px"></div>
      <div id="facts"></div><div class="toolbar" style="margin-top:22px"><b>Journal</b></div><div class="timeline" id="journal"></div>`);
   let facts = [];
   const drawFacts = () => {
     const q = $("#factFilter").value.toLowerCase();
     const f = facts.filter((x) => !q || (x.text + " " + x.tags).toLowerCase().includes(q));
-    $("#facts").innerHTML = f.length ? f.map((x) => `<div class="card"><div class="row"><span style="flex:1">${esc(x.text)}</span>${x.tags ? x.tags.split(",").filter(Boolean).map((t) => `<span class="pill">${esc(t.trim())}</span>`).join("") : ""}
-      <span class="muted" style="font-size:12px">${timeAgo(x.created)}</span><button class="icon-btn sm" data-forget="${x.id}" aria-label="Forget this fact" title="Forget">${icon("trash")}</button></div></div>`).join("")
+    $("#facts").innerHTML = f.length ? f.map((x) => `<div class="card"><div class="row"><span style="flex:1">${esc(x.text)}</span>${x.tags ? x.tags.split(",").filter(Boolean).map((t) => `<span class="pill${t.trim() === "auto" ? " done" : ""}" ${t.trim() === "auto" ? 'title="Learnt automatically from your messages"' : ""}>${esc(t.trim())}</span>`).join("") : ""}
+      <span class="muted" style="font-size:12px">${timeAgo(x.updated || x.created)}</span><button class="icon-btn sm" data-edit="${x.id}" aria-label="Edit this fact" title="Edit">${icon("edit")}</button><button class="icon-btn sm" data-forget="${x.id}" aria-label="Forget this fact" title="Forget">${icon("trash")}</button></div></div>`).join("")
       : `<div class="card muted">${facts.length ? "No facts match." : "Nothing remembered yet. Add a fact above or tell the agent \"remember that…\"."}</div>`;
+    $$("[data-edit]").forEach((b) => b.onclick = async () => {
+      const cur = facts.find((x) => String(x.id) === b.dataset.edit); if (!cur) return;
+      const v = prompt("Edit this fact", cur.text);
+      if (v == null || !v.trim() || v.trim() === cur.text) return;
+      try { await api(`/api/memory/${cur.id}`, { text: v.trim() }, "PUT"); toast("Updated"); load(); } catch (err) { toast(err.message, "bad"); }
+    });
     $$("[data-forget]").forEach((b) => b.onclick = async () => {
       if (!(await confirmDialog("Forget this fact?", { ok: "Forget" }))) return;
       await api(`/api/memory/${b.dataset.forget}`, undefined, "DELETE"); toast("Forgotten"); load();
@@ -970,6 +994,11 @@ PAGES.memory = async () => {
     $("#journal").innerHTML = d.journal.length ? d.journal.map((j) => `<div class="ev"><div class="when">${fmtTime(j.ts)} · ${esc(j.kind)}</div><div>${esc(j.text)}</div></div>`).join("") : '<p class="muted">No journal entries yet.</p>';
   };
   $("#factFilter").oninput = drawFacts;
+  try {
+    const st = await api("/api/settings"); $("#autoMem").checked = st.auto_memory !== false;
+    if (document.body.classList.contains("hosted")) $("#autoMem").disabled = true;
+  } catch { $(".auto-mem").hidden = true; }
+  $("#autoMem").onchange = async (e) => { if (await saveSetting({ auto_memory: e.target.checked })) toast(e.target.checked ? "I'll learn from your messages" : "Automatic memory is off"); else e.target.checked = !e.target.checked; };
   $("#factForm").onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
     try { await api("/api/memory", { text: f.get("text"), tags: f.get("tags") || "" }); e.target.reset(); toast("Remembered"); load(); }
@@ -1096,7 +1125,7 @@ PAGES.skills = async () => {
 };
 
 PAGES.tools = async () => {
-  page("Tools (advanced)", "For developers: the building blocks behind the assistant. You never pick these yourself, AutoMoto chooses the few each task needs. <b>safe</b> runs on its own, <b>risky</b> asks you first (unless approvals are set to auto), <b>blocked</b> never runs.", '<div id="tlList"></div>');
+  page("Tools (advanced)", `For developers: the building blocks behind the assistant. You never pick these yourself, ${BRAND_SHORT} chooses the few each task needs. <b>safe</b> runs on its own, <b>risky</b> asks you first (unless approvals are set to auto), <b>blocked</b> never runs.`, '<div id="tlList"></div>');
   const d = await api("/api/agent/info");
   const groups = {};
   d.tools.filter((t) => !t.hidden).forEach((t) => (groups[t.group || "other"] ||= []).push(t));
@@ -1119,7 +1148,7 @@ PAGES.tools = async () => {
 };
 
 PAGES.files = async () => {
-  page("Files", "Your AutoMoto workspace. Upload Office files, PDFs, CSV/JSON/YAML data, logs and ZIP/tar archives (for example WordPress plugins and themes) for the agent; preview, extract, re-pack and download what it made. Uploads are checked (size, zip-slip, symlinks, zip bombs, XXE) and macros are never run.",
+  page("Files", `Your ${BRAND_SHORT} workspace. Upload Office files, PDFs, CSV/JSON/YAML data, logs and ZIP/tar archives (for example WordPress plugins and themes) for the agent; preview, extract, re-pack and download what it made. Uploads are checked (size, zip-slip, symlinks, zip bombs, XXE) and macros are never run.`,
     `<div class="toolbar"><span id="fBreadcrumb" class="muted"></span><span style="flex:1"></span>
       <input type="file" id="fUpload" multiple hidden accept=".docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.tsv,.pptx,.ppt,.odp,.pdf,.md,.txt,.log,.json,.jsonl,.yaml,.yml,.toml,.xml,.parquet,.sqlite,.db,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar,image/*">
       <button class="btn" id="fRefresh">${icon("refresh")} Refresh</button>
@@ -1227,14 +1256,14 @@ PAGES.settings = async () => {
       <div id="connList" class="muted">Loading…</div><div class="row" style="margin-top:8px"><button class="btn sm" id="connReload">Reconnect now</button></div></div>
     <div class="card"><h3>${icon("cpu")} Provider order</h3><p class="muted" style="font-size:13px;margin-top:0">Auto tries providers top to bottom and fails over on errors.</p>
       <div id="orderList"></div><div class="row"><button class="btn primary sm" id="orderSave">Save order</button><button class="btn sm" id="orderReset">Reset to recommended</button></div></div>
-    ${HOSTED ? "" : `<div class="card"><h3>${icon("bolt")} Test keys</h3><p class="muted" style="font-size:13px;margin-top:0">Sends one tiny (1-token) request to every model AutoMoto may use with your keys and shows which answer. Models that are not available to your key (404) are skipped automatically for an hour.</p>
+    ${HOSTED ? "" : `<div class="card"><h3>${icon("bolt")} Test keys</h3><p class="muted" style="font-size:13px;margin-top:0">Sends one tiny (1-token) request to every model ${BRAND_SHORT} may use with your keys and shows which answer. Models that are not available to your key (404) are skipped automatically for an hour.</p>
       <div class="row"><button class="btn sm primary" id="doctorRun">Test keys</button></div><div id="doctorOut" style="margin-top:8px" aria-live="polite"></div></div>`}
-    <div class="card"><h3>${icon("wrench")} Advanced (for developers)</h3><p class="muted" style="font-size:13px;margin-top:0">AutoMoto picks the right tools and skills for each task by itself, so you never need these. They are here if you want to look under the hood.</p>
+    <div class="card"><h3>${icon("wrench")} Advanced (for developers)</h3><p class="muted" style="font-size:13px;margin-top:0">${BRAND_SHORT} picks the right tools and skills for each task by itself, so you never need these. They are here if you want to look under the hood.</p>
       <div class="row"><a class="btn sm" href="#/tools">${icon("wrench")} Tools</a><a class="btn sm" href="#/skills">${icon("book")} Skills</a></div></div>
     <div class="card"><h3>${icon("key")} Bring your own keys</h3><p class="muted" style="font-size:13px;margin-top:0">Kept only in this browser tab (sessionStorage) and wiped when you close it. Sent with each request, never saved on the server. Server keys from <code>.env</code> work without this.</p>
       <form id="keyForm">${st.providers.filter((p) => !p.local).map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
       <div class="row"><button class="btn primary">Use keys for this tab</button><button type="button" class="btn danger" id="forgetKeys">Forget keys</button></div></form></div>
-    <div class="card"><h3>${icon("info")} About</h3><p style="margin:0 0 6px">AutoMoto AI v${esc(VERSION)}</p>
+    <div class="card"><h3>${icon("info")} About</h3><p style="margin:0 0 6px">${esc(BRAND)} v${esc(VERSION)}</p>
       <p class="muted" style="margin:0 0 10px">Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons) · <a href="https://github.com/ymmiah" target="_blank" rel="noopener">GitHub</a> · <a href="https://linkedin.com/in/ymmiah" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://ymmiah.com" target="_blank" rel="noopener">ymmiah.com</a></p>
       <dl class="kv" style="margin:0"><dt><kbd>${mod}+K</kbd></dt><dd>Command palette</dd><dt><kbd>${mod}+N</kbd></dt><dd>New chat (in Chrome use <kbd>${mod}+Shift+O</kbd>)</dd><dt><kbd>${mod}+B</kbd></dt><dd>Toggle sidebar</dd><dt><kbd>Enter</kbd></dt><dd>Send · <kbd>Shift+Enter</kbd> new line</dd><dt><kbd>Esc</kbd></dt><dd>Stop a run / close dialogs</dd></dl></div>`);
 
@@ -1322,7 +1351,7 @@ PAGES.settings = async () => {
       try { await api("/api/local/pull", { model: b.dataset.pull }); toast("Download started. You can keep using the app."); } catch (err) { toast(err.message); }
       const tick = async () => { const n = await api("/api/local").catch(() => null); const p = n && n.pulls[b.dataset.pull];
         if (p && p.state === "downloading") { drawOffline(); setTimeout(tick, 2000); }
-        else { if (p && p.state === "done") { await saveSetting({ local_model: b.dataset.pull }); toast("Model ready - AutoMoto will use it"); refreshStatus(); } drawOffline(); } };
+        else { if (p && p.state === "done") { await saveSetting({ local_model: b.dataset.pull }); toast(`Model ready - ${BRAND_SHORT} will use it`); refreshStatus(); } drawOffline(); } };
       setTimeout(tick, 1500);
     });
     $$("#offlineBody [data-use]").forEach((b) => b.onclick = async () => { if (await saveSetting({ local_model: b.dataset.use })) { toast(`Using ${b.dataset.use}`); refreshStatus(); drawOffline(); } });
@@ -1434,7 +1463,7 @@ async function refreshBadge() {
   state.running = new Map(live.filter((t) => t.conversation_id).map((t) => [t.conversation_id, t.id]));
   if ([...state.running.keys()].join() !== before) renderConvs();
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "AutoMoto AI"; });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = BRAND; });
 
 async function boot() {
   if (HOSTED) { await refreshMe(); setupHosted(); }

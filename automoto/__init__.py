@@ -5,5 +5,5 @@ Built by Yasin Mohammed Miah (ymmiah), Student of BCU, BSc Computing Top-Up (Hon
 """
 
 __version__ = "5.6.0b3"
-APP_NAME = "AutoMoto AI"
+APP_NAME = "AutoMoto AI"  # default display name; runtime code uses automoto.brand.name() (env-overridable)
 CODENAME = "Agent"

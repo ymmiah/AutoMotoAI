@@ -3,6 +3,7 @@
     ~/.automoto/
       workspace/      the sandbox - every file and shell tool is jailed here
       workspace/scratch/   writes here never need approval
+      workspace/artifacts/ files the assistant makes (see automoto/layout.py for the full layout)
       memory.db       SQLite: profile facts + dated journal
       skills/         your own SKILL.md folders (bundled examples ship in the package)
       routines.json   scheduled agent prompts
@@ -42,6 +43,10 @@ def workspace() -> Path:
     ws = (t.home / "workspace") if t is not None else None
     p = Path(ws or config.env("AUTOMOTO_WORKSPACE") or home() / "workspace").expanduser()
     (p / "scratch").mkdir(parents=True, exist_ok=True)
+    if not (p / "artifacts").is_dir():  # first use: lay out uploads/ artifacts/ projects/ memory/ skills/ logs/
+        from automoto import layout
+
+        layout.ensure(p)
     return p.resolve()
 
 

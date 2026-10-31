@@ -25,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-from automoto import APP_NAME, CODENAME, __version__, config
+from automoto import CODENAME, __version__, brand, config
 
 
 def _console():
@@ -59,7 +59,7 @@ def cmd_status(_args) -> int:
     if console:
         from rich.table import Table
 
-        t = Table(title=f"{APP_NAME} v{__version__} — mode: {st['mode']}")
+        t = Table(title=f"{brand.name()} v{__version__} — mode: {st['mode']}")
         for col in ("Provider", "Key", "Vision", "Free", "Text model", "Vision model"):
             t.add_column(col)
         for p in st["providers"]:
@@ -178,7 +178,7 @@ def cmd_chat(args) -> int:
     from automoto.router import AllProvidersFailed, NoProviderError, ask
 
     console = _console()
-    _print(console, f"🤖 {APP_NAME} v{__version__} \"{CODENAME}\" — mode {args.prefer or config.ai_provider()}. "
+    _print(console, f"🤖 {brand.name()} v{__version__} \"{CODENAME}\" — mode {args.prefer or config.ai_provider()}. "
                     "Type /image <path> to attach, /status, /exit.", "bold green")
     history: list[dict] = []
     pending_images: list[dict] = []
@@ -308,7 +308,7 @@ def cmd_agent_chat(args) -> int:
 
     console = _console()
     agent = _agent(args, desktop=config.desktop_enabled())
-    _print(console, f"🤖 {APP_NAME} v{__version__} \"{CODENAME}\" — your AI cousin. Tools: {len(agent.tools)} · "
+    _print(console, f"🤖 {brand.name()} v{__version__} \"{CODENAME}\" — your AI cousin. Tools: {len(agent.tools)} · "
                     f"sandbox: {sandbox.mode()} ({sandbox.root()}) · approvals: {policy.mode()}", "bold green")
     _print(console, "Ask me to do things. /image <path> attaches, /memory, /tools, /plain, /exit.", "dim")
     history: list[dict] = []
@@ -739,7 +739,7 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(errors="replace")  # type: ignore[union-attr]
         except (AttributeError, ValueError):
             pass
-    ap = argparse.ArgumentParser(prog="automoto", description=f"{APP_NAME} v{__version__} \"{CODENAME}\"")
+    ap = argparse.ArgumentParser(prog="automoto", description=f"{brand.name()} v{__version__} \"{CODENAME}\"")
     ap.add_argument("--version", action="version", version=__version__)
     ap.add_argument("--prefer", help="provider id to try first (nim, gemini, groq, openrouter, openai, claude)")
     ap.add_argument("--plain", action="store_true", help="plain chat without tools (v4 behaviour)")

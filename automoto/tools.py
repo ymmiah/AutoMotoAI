@@ -459,6 +459,13 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
         from automoto import services as services_mod
 
         tools += services_mod.TOOLS
+    from automoto import research
+
+    tools += research.TOOLS
+    if local_apps:  # the user's own computer only (never hosted)
+        from automoto import devbrowser, server_setup
+
+        tools += devbrowser.TOOLS + server_setup.TOOLS
     if desktop and config.desktop_enabled():
         tools += DESKTOP
     tools += extra or []

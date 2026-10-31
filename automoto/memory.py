@@ -40,6 +40,10 @@ class Memory:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._conn()) as c, c:
             c.executescript(SCHEMA)
+            cols = {r["name"] for r in c.execute("PRAGMA table_info(facts)")}
+            for col, ddl in (("key", "TEXT"), ("source", "TEXT NOT NULL DEFAULT ''"), ("updated", "REAL")):
+                if col not in cols:  # older memory.db files
+                    c.execute(f"ALTER TABLE facts ADD COLUMN {col} {ddl}")  # nosec B608 - fixed names
 
     def _conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(self.path, timeout=10)
@@ -59,6 +63,66 @@ class Memory:
             cur = c.execute("INSERT INTO facts(text, tags, created) VALUES (?,?,?)", (text, tags[:200], time.time()))
             return {"id": cur.lastrowid, "text": text}
 
+    def upsert(self, text: str, *, key: str | None = None, tags: str = "", source: str = "") -> dict[str, Any]:
+        """Save a learnt fact: same *key* -> replace it; near-duplicate text (>= 90% similar) -> skip."""
+        import difflib
+
+        text = (text or "").strip()[:1000]
+        if not text:
+            raise ValueError("nothing to remember")
+        key = (key or "")[:80] or None
+        with _LOCK, closing(self._conn()) as c, c:
+            rows = c.execute("SELECT id, text, key FROM facts").fetchall()
+            low = text.lower()
+            old = next((r for r in rows if key and r["key"] == key), None)
+            for r in rows:
+                if r["text"].lower() == low or (old is None and
+                                                difflib.SequenceMatcher(None, r["text"].lower(), low).ratio() >= 0.9):
+                    return {"id": r["id"], "text": r["text"], "duplicate": True}
+            if old:
+                c.execute("UPDATE facts SET text=?, tags=?, source=?, updated=? WHERE id=?",
+                          (text, tags[:200], source[:40], time.time(), old["id"]))
+                return {"id": old["id"], "text": text, "replaced": old["text"]}
+            cur = c.execute("INSERT INTO facts(text, tags, created, key, source) VALUES (?,?,?,?,?)",
+                            (text, tags[:200], time.time(), key, source[:40]))
+            return {"id": cur.lastrowid, "text": text}
+
+    def update(self, fact_id: int, text: str, tags: str | None = None) -> bool:
+        text = (text or "").strip()[:1000]
+        if not text:
+            raise ValueError("a fact can't be empty")
+        with _LOCK, closing(self._conn()) as c, c:
+            if tags is None:
+                n = c.execute("UPDATE facts SET text=?, updated=?, source='edited' WHERE id=?",
+                              (text, time.time(), int(fact_id))).rowcount
+            else:
+                n = c.execute("UPDATE facts SET text=?, tags=?, updated=?, source='edited' WHERE id=?",
+                              (text, tags[:200], time.time(), int(fact_id))).rowcount
+        if n:
+            self.mirror()
+        return n > 0
+
+    def mirror(self) -> Path | None:
+        """Write a read-only copy grouped by category to ``memory/MEMORY.md`` in the workspace (best effort)."""
+        try:
+            from automoto import layout, sandbox
+
+            if self.path.resolve() != Path(home.memory_db()).resolve() or not (sandbox.default_root() / "memory").is_dir():
+                return None  # only the user's own memory, only into a laid-out workspace
+            groups: dict[str, list[str]] = {}
+            for f in self.facts():
+                tags = [t for t in (f.get("tags") or "").split(",") if t and t != "auto"]
+                groups.setdefault(tags[0] if tags else "Saved by you", []).append(f"- {f['text']}  (#{f['id']})")
+            body = ["# What I remember", "", "A copy for reading. Edit or delete facts in Memory (left menu); "
+                    "changes here are overwritten.", ""]
+            for g, items in sorted(groups.items()):
+                body += [f"## {g}", *items, ""]
+            out = layout.folder("memory") / "MEMORY.md"
+            out.write_text("\n".join(body), encoding="utf-8")
+            return out
+        except Exception:
+            return None
+
     def recall(self, query: str = "", limit: int = 10) -> list[dict[str, Any]]:
         words = [w for w in (query or "").lower().split() if len(w) > 1][:8]
         with closing(self._conn()) as c:
@@ -76,7 +140,10 @@ class Memory:
 
     def forget(self, fact_id: int) -> bool:
         with _LOCK, closing(self._conn()) as c, c:
-            return c.execute("DELETE FROM facts WHERE id=?", (int(fact_id),)).rowcount > 0
+            ok = c.execute("DELETE FROM facts WHERE id=?", (int(fact_id),)).rowcount > 0
+        if ok:
+            self.mirror()
+        return ok
 
     def facts(self) -> list[dict[str, Any]]:
         return self.recall("", limit=500)

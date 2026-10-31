@@ -17,6 +17,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from automoto import config, policy, router
@@ -32,12 +33,12 @@ MAX_RESULT_CHARS = 12000
 
 # Outputs of these tools are data from outside sources: they are fenced as untrusted in the
 # prompt, and reading web / third-party content "taints" the run (see policy.decide).
-UNTRUSTED_TOOLS = {"fetch_url", "web_search", "read_file", "search_files", "list_dir", "run_shell", "run_app",
+UNTRUSTED_TOOLS = {"fetch_url", "web_search", "discover", "read_feed", "library_add", "library_search", "project_inspect", "page_inspect", "read_file", "search_files", "list_dir", "run_shell", "run_app",
                    "office_read", "office_check", "office_review", "office_recalc",
                    "archive_list", "archive_inspect", "archive_read", "archive_extract", "download_file",
                    "wp_validate", "wp_security_review", "data_inspect", "data_query", "data_read", "sqlite_query",
                    "text_search", "text_tail", "pdf_text", "image_info"}
-TAINTING_TOOLS = {"fetch_url", "web_search", "download_file"}
+TAINTING_TOOLS = {"fetch_url", "web_search", "download_file", "discover", "read_feed", "library_add", "page_inspect"}
 UNTRUSTED_GROUPS = ("mcp:", "services")
 
 
@@ -121,10 +122,11 @@ class AgentResult:
     stopped: str = "done"  # done | max_steps | cancelled | error
     events: list[dict[str, Any]] = field(default_factory=list)
     history: list[dict[str, Any]] = field(default_factory=list)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)  # files this run made or changed
 
     def as_dict(self) -> dict[str, Any]:
         return {"text": self.text, "steps": self.steps, "provider": self.provider, "model": self.model,
-                "stopped": self.stopped}
+                "stopped": self.stopped, "artifacts": self.artifacts}
 
 
 class Agent:
@@ -170,6 +172,8 @@ class Agent:
 
     def _run(self, messages, *, max_steps, approver, on_event, keys, prefer, cancel) -> AgentResult:
         self.tainted = False
+        self._t0 = time.time() - 1
+        self._touched: list[str] = []
         self.ctx.keys = {k: v for k, v in (keys or {}).items() if isinstance(v, str)}
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
@@ -189,6 +193,15 @@ class Agent:
 
         goal = next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), "")
         goal_text = goal if isinstance(goal, str) else " ".join(p.get("text", "") for p in goal if isinstance(p, dict))
+        if self.client not in ("routine", "eval"):
+            from automoto import automemory
+
+            try:
+                learnt = automemory.learn(self.memory, goal_text, source=self.client)
+            except Exception:
+                learnt = []
+            if learnt:
+                emit({"type": "memory", "facts": learnt})
         known = set(self.tools)  # every tool can run if called (incl. merged names); only the plan's are offered
         plan = None
         if planner_enabled():
@@ -280,10 +293,11 @@ class Agent:
                     note = ("I couldn't finish this: the AI kept writing its tool call in a broken format, so the "
                             "tool never ran. Please try again (or pick another AI in the model menu).")
                     turn.text = f"{shown}\n\n{note}" if shown and not tc._PROMISE_RE.search(shown) else note
+                files = self._artifacts(emit, step)
                 emit({"type": "final", "step": step, "text": turn.text})
-                self._journal(goal_text, turn.text, step)
+                self._journal(goal_text, turn.text, step, files)
                 return AgentResult(turn.text, step, *last, events=events, history=history + [
-                    {"role": "assistant", "content": turn.text}])
+                    {"role": "assistant", "content": turn.text}], artifacts=files)
             if turn.text:
                 emit({"type": "say", "step": step, "text": turn.text})
             history.append({"role": "assistant", "content": turn.text, "tool_calls": turn.tool_calls})
@@ -298,9 +312,11 @@ class Agent:
         t_sum = time.monotonic()
         summary = self._summarise(history, keys=keys, prefer=prefer)
         self._meter(time.monotonic() - t_sum, history, summary, "model", "summary")
+        files = self._artifacts(emit, max_steps)
         emit({"type": "final", "step": max_steps, "text": summary})
-        self._journal(goal_text, summary, max_steps)
-        return AgentResult(summary, max_steps, *last, stopped="max_steps", events=events, history=history)
+        self._journal(goal_text, summary, max_steps, files)
+        return AgentResult(summary, max_steps, *last, stopped="max_steps", events=events, history=history,
+                           artifacts=files)
 
     # ------------------------------------------------------------------------
     def _run_call(self, call: dict[str, Any], step: int, approver: Approver, emit: EventSink) -> dict[str, Any]:
@@ -356,6 +372,8 @@ class Agent:
         if ok and (name in TAINTING_TOOLS or tool.group.startswith(UNTRUSTED_GROUPS) or decision.level == "risky"
                    and name in ("read_file", "search_files", "list_dir")):
             self.tainted = True
+        if ok:
+            self._note_files(args, out)
         content = out if ok else f"ERROR: {out}\n{tools_mod.usage(tool)} Fix the call and try again, or explain the problem."
         if is_untrusted(tool):
             content = fence_untrusted(name, content)
@@ -382,11 +400,76 @@ class Agent:
         except Exception as exc:
             return f"Stopped after the step limit ({exc.__class__.__name__} while summarising)."
 
-    def _journal(self, goal: str, answer: str, steps: int) -> None:
+    def _journal(self, goal: str, answer: str, steps: int, files: list[dict[str, Any]] | None = None) -> None:
         try:
             self.memory.log(self.client, f"{goal[:200]} → {answer[:300]} ({steps} steps)")
         except Exception:
             pass
+        try:
+            from automoto import layout, sandbox
+
+            if sandbox.root().joinpath("logs").is_dir():
+                made = ", ".join(f["path"] for f in (files or [])[:8])
+                layout.log(f"{' '.join(goal.split())[:160]} ({steps} steps)" + (f" → {made}" if made else ""))
+        except Exception:
+            pass
+
+    _PATH_KEYS = ("path", "out", "output", "dest", "destination", "to_path", "target", "folder")
+
+    def _note_files(self, args: Any, out: str) -> None:
+        """Remember paths a successful tool call named, so the chat can link what was made."""
+        cands = [str(args.get(k)) for k in self._PATH_KEYS if isinstance(args, dict) and isinstance(args.get(k), str)]
+        try:
+            j = json.loads(out) if out[:1] in "{[" else None
+            if isinstance(j, dict):
+                cands += [str(x) for x in j.get("files", []) if isinstance(x, str)][:50]
+                cands += [str(j[k]) for k in ("path", "out", "output", "folder") if isinstance(j.get(k), str)]
+        except ValueError:
+            pass
+        self._touched += cands[:60]
+
+    def _artifacts(self, emit: EventSink, step: int) -> list[dict[str, Any]]:
+        """Files created or changed during this run (named by tools, or new in artifacts/), newest first."""
+        from automoto import sandbox
+
+        found: dict[str, dict[str, Any]] = {}
+
+        def add(p: Path) -> None:
+            try:
+                if p.is_file() and p.stat().st_mtime >= self._t0 and not sandbox.is_outside(p) \
+                        and not sandbox.in_scratch(p) and not sandbox.sensitive(p):
+                    found.setdefault(sandbox.rel(p), {"path": sandbox.rel(p), "name": p.name,
+                                                      "bytes": p.stat().st_size, "mtime": p.stat().st_mtime})
+            except (OSError, ValueError):
+                pass
+
+        for c in getattr(self, "_touched", []):
+            try:
+                p = sandbox.resolve(c)
+            except Exception:
+                continue
+            if p.is_dir():
+                for i, q in enumerate(p.rglob("*")):
+                    if i > 200:
+                        break
+                    add(q)
+            else:
+                add(p)
+        try:
+            art = sandbox.root() / "artifacts"
+            if art.is_dir():
+                for i, q in enumerate(art.rglob("*")):
+                    if i > 2000:
+                        break
+                    add(q)
+        except OSError:
+            pass
+        files = sorted(found.values(), key=lambda f: -f["mtime"])[:30]
+        for f in files:
+            f.pop("mtime", None)
+        if files:
+            emit({"type": "artifacts", "step": step, "files": files})
+        return files
 
 
 def format_args(args: dict[str, Any], limit: int = 160) -> str:

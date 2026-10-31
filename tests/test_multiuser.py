@@ -352,7 +352,7 @@ def test_users_are_isolated(monkeypatch):
     assert a.post("/api/files/upload", {"name": "secret.txt", "data": "c2VjcmV0"}).status_code == 200
     assert a.get("/api/files/download?path=uploads/secret.txt").content == b"secret"
     assert b.get("/api/files/download?path=uploads/secret.txt").status_code == 404
-    assert all(i["name"] != "uploads" for i in b.get("/api/files").json()["items"])
+    assert all(i["name"] != "secret.txt" for i in b.get("/api/files?dir=uploads").json()["items"])  # own empty uploads/
     rel = "../" + a.user.id + "/workspace/uploads/secret.txt"
     assert b.get("/api/files/download", params={"path": rel}).status_code == 400
     assert b.get("/api/files/download", params={"path": str(accounts.user_home(a.user.id) / "workspace/uploads/secret.txt")}).status_code == 400

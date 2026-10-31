@@ -35,7 +35,7 @@ from automoto import config
 
 DEFAULT_OLLAMA = "http://127.0.0.1:11434"
 # Tools that need the internet - removed from the agent in Offline mode.
-ONLINE_TOOLS = frozenset({"web_search", "fetch_url", "download_file", "service_api", "open_url"})
+ONLINE_TOOLS = frozenset({"web_search", "fetch_url", "download_file", "service_api", "open_url", "discover", "read_feed"})
 
 
 # ---------------------------------------------------------------------------

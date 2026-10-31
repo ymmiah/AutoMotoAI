@@ -1,6 +1,34 @@
 # AutoMoto AI - Version History & Changelog
 
-## Unreleased (on `main`, after 5.6.0-beta.3) — Offline AI
+## Unreleased (on `main`, after 5.6.0-beta.3) — one central assistant, memory, artifacts, your own server
+**Coming in the next beta.** Not in a tagged build yet.
+
+- **Engineering Studio overlay reviewed and folded in** (no separate studio mode or endpoints). Kept, rewritten into
+  the planner/tool/policy architecture: a per-user research library (`library_add`, `library_search`: SQLite FTS5
+  in `memory/library.sqlite3`, docs crawl that respects `robots.txt` and stays on one site, `.srt/.vtt` transcripts,
+  versions kept side by side), public developer discovery (`discover`: GitHub, Stack Overflow, Hacker News, Bluesky),
+  RSS/Atom (`read_feed`, defusedxml), static project inspection (`project_inspect`, never runs code) and a single
+  local dev-page inspector (`page_inspect`: risky, loopback origins in `AUTOMOTO_BROWSER_ORIGINS` only, off in
+  hosted mode, Playwright optional). All web results are fenced as untrusted and taint the run; Offline mode
+  removes `discover`/`read_feed`. Rejected: the separate studio API/UI (its apply endpoint bypassed approvals),
+  the long-lived clicking browser pool with an env-chosen executable, the installer that patched the repo, and
+  duplicate engines.
+- **Planner:** new *Research library* and *Your own server* capabilities; plain-language step labels for the new
+  tools; the prompt tells the AI where to save files.
+- **Workspace layout:** `uploads/ artifacts/ projects/ memory/ skills/ logs/ scratch/` with a README. New files
+  in `artifacts/` need no approval (overwrites and edits still ask). Each run emits an `artifacts` event and the
+  chat shows **Files made** links; `logs/<YYYY-MM>.md` gets one line per task.
+- **Automatic memory:** facts and preferences are learnt from your own messages (no AI call; secrets, card and
+  phone numbers and e-mail addresses are skipped), deduplicated, keyed facts replaced (new name, new city), mirrored
+  to `memory/MEMORY.md`. Memory page: edit buttons, an *auto* tag and a *Learn from my messages* switch
+  (`auto_memory` setting). New `PUT /api/memory/{id}` (also in hosted mode, per user).
+- **Server helper:** `server_setup` tool + `server-setup` skill: read-only readiness check, plans and generated
+  files for local, Cloudflare Tunnel, Docker, Oracle Always Free and Render (demo) in `artifacts/server-setup/`.
+  It never runs commands itself. Guide: [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md).
+- **Name in one place:** `automoto/brand.py` (`AUTOMOTO_BRAND_NAME`, `AUTOMOTO_BRAND_SHORT`) feeds the page
+  title, header, login page, CLI banner and UI text. Package, CLI, repo and installer IDs are unchanged.
+
+## Earlier on `main` — Offline AI
 **Run a free AI model on your own computer: no key, no internet.** Not in a tagged build yet.
 
 - **Ollama provider** (`ollama`) and an **OpenAI-compatible local server** provider (`local`: llama.cpp

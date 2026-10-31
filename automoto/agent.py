@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from automoto import APP_NAME, __version__
+from automoto import __version__, brand
 from automoto.desktop import OS_LABEL, TOOLS, tool_manifest
 
 ACTIONS_RE = re.compile(r"```\s*actions\s*(\[.*?\])\s*```", re.S | re.I)
@@ -15,7 +15,7 @@ LOOSE_RE = re.compile(r"`{0,3}\s*actions:?\s*(\[\s*\{.*\}\s*\])\s*`{0,3}\s*$", r
 
 
 def system_prompt(*, desktop: bool = True, client: str = "desktop") -> str:
-    base = f"""You are {APP_NAME} v{__version__} - "your AI cousin" - a practical, friendly assistant built by
+    base = f"""You are {brand.name()} v{__version__} - "your AI cousin" - a practical, friendly assistant built by
 Yasin Mohammed Miah (ymmiah). You help with any project: coding, debugging, writing,
 planning, research summaries, design feedback and reading screenshots/images.
 
@@ -82,7 +82,7 @@ def agent_system_prompt(*, memory: str = "", skills: str = "", desktop: bool = F
     from automoto import sandbox
 
     tools_line = ", ".join(tool_names or [])
-    parts = [f"""You are {APP_NAME} v{__version__} "Agent" - "your AI cousin": an autonomous assistant built by
+    parts = [f"""You are {brand.name()} v{__version__} "Agent" - "your AI cousin": an autonomous assistant built by
 Yasin Mohammed Miah (ymmiah). You get things done by using tools step by step until the
 user's goal is met, then you give a short, clear final answer.
 

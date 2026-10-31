@@ -9,6 +9,7 @@ Settings that change behaviour:
   * ``allowed_roots`` - extra folders (absolute paths) the agent may reach with approval,
     e.g. a VS Code project or ~/Documents. Sensitive folders are refused.
   * ``offline`` - Offline mode: only AI on this computer (Ollama / local server), no web tools
+  * ``auto_memory`` - learn lasting facts and preferences from your messages (default on)
   * ``local_model`` - the Ollama model to use, e.g. ``qwen2.5:3b`` (turns Ollama on)
 UI-only: ``theme`` (dark | light | system), ``accent`` (#rrggbb), ``default_mode`` (agent | chat).
 """
@@ -26,7 +27,7 @@ from automoto import home
 _LOCK = threading.Lock()
 DEFAULTS: dict[str, Any] = {"theme": "dark", "accent": "#38f2a5", "default_mode": "agent",
                             "approval_mode": None, "provider_order": [], "allowed_roots": [],
-                            "offline": False, "local_model": None}
+                            "offline": False, "local_model": None, "auto_memory": True}
 SECRETISH = re.compile(r"(key|token|secret|password)", re.I)
 
 
@@ -71,6 +72,8 @@ def validate(patch: dict[str, Any]) -> dict[str, Any]:
                 raise SettingsError("provider_order must be a list of distinct provider ids")
         if k == "allowed_roots":
             v = _roots(v)
+        if k == "auto_memory" and not isinstance(v, bool):
+            raise SettingsError("auto_memory must be true or false")
         if k == "offline" and not isinstance(v, bool):
             raise SettingsError("offline must be true or false")
         if k == "local_model" and v is not None:

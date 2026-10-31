@@ -86,9 +86,32 @@ Every command waits for your **Approve**; dangerous ones (like `rm -rf /`) are a
 * *list my open github issues* · *summarise my notion meeting notes page* (after you connect the service in
   **Settings → Connectors**; AutoMoto asks before every connector call)
 
+## Coming in the next beta
+
+These are on `main` and will be in the next beta build.
+
+* **It learns about you as you chat.** Say *my name is Sam*, *I prefer British English*, *I live in Leeds* or
+  *always use metric units* and it remembers (you'll see "Remembered: …" under the answer). Passwords, keys, card
+  numbers and e-mail addresses are never saved. See, edit or delete every fact in **Memory**, or switch
+  *Learn from my messages* off.
+* **Tidy folders.** Your workspace has `uploads/` (your files), `artifacts/` (everything it makes, one folder per
+  task and date, e.g. `artifacts/2026-10-31-budget-report/`), `projects/`, `memory/` (with a readable
+  `MEMORY.md` copy and your research library), `skills/`, `logs/` (one line per task) and `scratch/`. New files in
+  `artifacts/` need no approval; overwriting or editing still asks. Each answer ends with **Files made** links.
+* **Your own research library.** *save the FastAPI docs to my library* (follows `robots.txt`, same site only) ·
+  *add uploads/lecture.srt to my library* · *search my library for middleware* · *what are developers saying on
+  hacker news / stack overflow / github / bluesky about local LLMs* · *read this RSS feed*.
+* **Code checks without running anything.** *inspect my project for risky code* (TLS checks off, `eval`, shell
+  calls, secrets in files) · *check the header on my local site http://127.0.0.1:3000* (only sites you allow in
+  `AUTOMOTO_BROWSER_ORIGINS`; asks first; never in hosted mode).
+* **Help running your own server.** *help me run AutoMoto on Oracle Cloud for free* · *I want to use it from my
+  phone* · *is my computer ready to host it?* It checks your computer, makes the files (Docker Compose, Cloudflare
+  Tunnel scripts, Oracle cloud-init, Caddy, a checklist) and walks you through it, asking before any command.
+  Kid-simple guide: [SERVER-SETUP.md](SERVER-SETUP.md).
+
 ## How this is tested
 
-Every example on this page is one of the **86 scenarios** in [`evals/scenarios.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/evals/scenarios.py).
+Every example on this page is one of the **92 scenarios** in [`evals/scenarios.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/evals/scenarios.py).
 `python -m evals` runs each one through the real agent loop with real sample files (a real `.pptx`, `.docx`,
 `.xlsx`, PDF, CSV, SQLite database, WordPress plugin zip, buggy Python project…) and checks the result: the
 right kind of task was recognised, the AI was only offered tools that fit, files were created and open cleanly,

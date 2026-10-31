@@ -91,6 +91,10 @@ def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
             return "risky", f"writes outside the workspace: {p}"
         if sandbox.in_scratch(p):
             return "safe", "write inside scratch/"
+        from automoto import layout
+
+        if layout.in_artifacts(p) and not p.exists() and tool == "write_file":
+            return "safe", "new file in artifacts/"
         if tool == "edit_file":
             return "risky", f"edits {sandbox.rel(p)}"
         if p.exists():
@@ -98,6 +102,8 @@ def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
         return "risky", f"creates {sandbox.rel(p)}" + (" outside scratch/" if sandbox.is_default_root() else "")
     if tool in ("office_create_docx", "office_create_xlsx", "office_create_pptx"):
         return classify("write_file", base, {"path": args.get("path", "")})
+    if tool == "server_setup" and args.get("action") == "write":
+        return "safe", "writes new setup files into artifacts/server-setup/"
     if tool == "office_edit":
         lvl, why = classify("write_file", base, {"path": args.get("path", "")})
         return ("risky" if lvl == "safe" and not _in_scratch(args.get("path", "")) else lvl), why.replace("overwrites", "edits")
@@ -168,6 +174,8 @@ def classify(tool: str, base: str, args: dict[str, Any]) -> tuple[str, str]:
         if lvl == "blocked":
             return lvl, why
         return "risky", f"downloads {str(args.get('url', ''))[:120]} into {dest}"
+    if tool == "project_inspect" or (tool == "library_add" and args.get("path")):
+        return classify("read_file", base, {"path": args.get("path") or "."})
     if tool in ("office_read", "office_check", "office_render", "office_review"):
         return classify("read_file", base, {"path": args.get("path", "")})
     if tool in ("read_file", "list_dir", "search_files"):

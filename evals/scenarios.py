@@ -308,6 +308,23 @@ SCENARIOS: list[S] = [
     S("github-issues", "connectors", "list my open github issues", caps=("connectors",),
       steps=[("service_api", {"service": "github", "path": "/issues"})], deny=("service_api",)),
     S("notion-page", "connectors", "summarise my notion meeting notes page", caps=("connectors",)),
+    # ---------------------------------------------------------------- central assistant: server, library, memory, artifacts
+    S("server-oracle", "server", "help me put automoto on oracle cloud for free so its always on", caps=("server",),
+      steps=[("server_setup", {"action": "check"}), ("server_setup", {"action": "write", "target": "oracle"})],
+      expect={"server_setup": ["artifacts/server-setup/oracle"]},
+      files_ok=("artifacts/server-setup/oracle/compose.yaml",),
+      contains={"artifacts/server-setup/oracle/.env.template": ["AUTOMOTO_MODE=multiuser", "<paste your key>"]}),
+    S("server-phone", "server", "i want to use it from my phone when im out, whats the free way", caps=("server",),
+      steps=[("server_setup", {"action": "plan", "target": "tunnel"})], expect={"server_setup": ["cloudflared"]}),
+    S("library-notes", "library", "save my notes to my library then search the library for beta",
+      attach=("uploads/notes.md",), caps=("library",),
+      steps=[("library_add", {"path": "uploads/notes.md"}), ("library_search", {"query": "beta"})],
+      expect={"library_search": ["notes.md"]}),
+    S("discover-hn", "library", "what are developers saying on hacker news about local llms", caps=("library",)),
+    S("memory-learn", "memory", "my name is Sam and I prefer short answers. what's 2+2", caps=("memory",)),
+    S("artifact-note", "files", "write a short packing list for my trip",
+      steps=[("write_file", {"path": "artifacts/2026-10-31-packing-list-trip/packing.md", "content": "- passport\n- charger\n"})],
+      contains={"artifacts/2026-10-31-packing-list-trip/packing.md": ["passport"]}),
     # ---------------------------------------------------------------- mixed / tricky phrasing
     S("typo-slides", "office", "can u make a presntation abt dogs 3 slids", caps=("slides",),
       steps=[("office_create_pptx", {"path": "out/dogs.pptx", "spec": {"slides": [

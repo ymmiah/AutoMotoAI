@@ -15,6 +15,7 @@ nav:
   - What you can ask for: CAPABILITIES.md
   - Install: INSTALL.md
   - Offline AI (no key, no internet): OFFLINE.md
+  - Your own server (easy guide): SERVER-SETUP.md
   - Hosting: HOSTING.md
   - Windows app distribution: WINDOWS-DISTRIBUTION.md
   - Publishing: PUBLISHING.md
