@@ -18,6 +18,6 @@ Dependencies:
 Installers:
 - Architecture: x64
   InstallerUrl: https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0-beta.3/AutoMoto-AI_5.6.0-beta.3_x64-setup.exe
-  InstallerSha256: 44D94AF3563E95E28F5CCB3D169105B866D16B994BD6A345B489CAAF5FCEE23F
+  InstallerSha256: F63F66D1A52372AF1A20B1EF728DC844940E9EC61A7360951A41497FF6DE1A17
 ManifestType: installer
 ManifestVersion: 1.12.0
