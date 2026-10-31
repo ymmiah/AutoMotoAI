@@ -7,7 +7,7 @@ edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site
 use_directory_urls: false   # page-relative images work the same on GitHub and on the site
-copyright: Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)
+copyright: Copyright &copy; 2025-2026 Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons) · <a href="https://github.com/ymmiah/AutoMotoAI/blob/main/LICENSE">AGPL-3.0</a> · <a href="https://github.com/ymmiah/AutoMotoAI/blob/main/COMMERCIAL-LICENSE.md">Commercial licence</a>
 nav:
   - Home: index.md
   - Start here - pick your device: START.md

@@ -21,7 +21,7 @@ sign in once and the same chats and files follow you to the app, the web and you
 
 [![Version](https://img.shields.io/badge/version-5.6.0--beta.3_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0_·_commercial-blue?style=for-the-badge)](#-licence)
 ![Platforms](https://img.shields.io/badge/Windows_·_macOS_·_Linux-555?style=for-the-badge)
 
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -583,6 +583,20 @@ risky tools are **auto-denied** unless you allow them in `AUTOMOTO_AUTO_APPROVE`
 
 Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) (application in progress; current releases are not signed yet). Team roles, what is signed and the privacy policy (what the app connects to): **[Code signing policy](docs/CODE-SIGNING-POLICY.md)**.
 
+## 📜 Licence
+
+Copyright (C) 2025-2026 Yasin Mohammed Miah. AutoMoto AI is **dual-licensed**:
+
+* **Free under the [GNU AGPL v3](LICENSE)** (`AGPL-3.0-only`, see [NOTICE](NOTICE)) for personal, educational and
+  open-source use. If you change it and run it as a service for others, you must offer them your source code: the
+  web interface's **Source code** link does this (set `AUTOMOTO_SOURCE_URL` to your copy).
+* **Commercial licence** for companies or people who want to use, embed, modify or host it in a closed-source or
+  commercial product or service without the AGPL obligations. Contact via [GitHub](https://github.com/ymmiah) or
+  [ymmiah.com](https://ymmiah.com). Details: [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
+Versions up to and including **5.6.0-beta.3** were released under the **MIT licence** and stay MIT for those copies.
+Contributions need a sign-off that allows commercial licensing ([CONTRIBUTING.md](CONTRIBUTING.md#licence-of-contributions)).
+
 ## 🔒 Security model
 
 | Layer | What protects you |
@@ -702,6 +716,6 @@ Dockerfile · compose.yaml · render.yaml · scripts/install.sh + install.ps1 ·
 
 More projects: [GhostWires](https://github.com/ymmiah/GhostWires) (OSINT recon, [live](https://ghostwires.onrender.com)) · [AegisSec](https://github.com/ymmiah/AegisSec) (security problem registry)
 
-MIT licensed ([LICENSE](LICENSE)) · Contributions welcome ([CONTRIBUTING.md](CONTRIBUTING.md))
+Copyright (C) 2025-2026 Yasin Mohammed Miah · [AGPL-3.0](LICENSE) or [commercial licence](COMMERCIAL-LICENSE.md) · Contributions welcome with a sign-off ([CONTRIBUTING.md](CONTRIBUTING.md#licence-of-contributions))
 
 </div>

@@ -81,6 +81,7 @@ admin can't be removed.
 | `AUTOMOTO_COOKIE_SECURE` | auto (https) | force the `Secure` cookie flag (the Docker image sets `1`; use HTTPS) |
 | `AUTOMOTO_FORWARDED_ALLOW_IPS` | `127.0.0.1` | proxies whose `X-Forwarded-For` is trusted (for per-IP sign-in limits). `*` only when the app is reachable **only** through the platform's proxy (Render, Koyeb, HF) |
 | `PORT` / `AUTOMOTO_PORT` | `8765` | listen port (`PORT` is set by most hosts) |
+| `AUTOMOTO_SOURCE_URL` | the GitHub repo | where the **Source code** link in the web interface points. AutoMoto AI is AGPL-3.0: if you run a **changed** copy for other people, set this to where they can get your changed source (or get a [commercial licence](https://github.com/ymmiah/AutoMotoAI/blob/main/COMMERCIAL-LICENSE.md)) |
 
 Do **not** set `AUTOMOTO_NET_ALLOW_CIDRS` on a public server — it would let users' web tools reach private networks.
 

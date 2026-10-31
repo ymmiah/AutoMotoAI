@@ -213,7 +213,7 @@ def sidebar(w: int = 164, h: int = 314) -> Image.Image:
         d.text(((w - d.textlength(line, font=f2)) / 2, y), line, font=f2, fill=rgb(C["dim"]))
         y += 14
     f3 = font("reg", 9)
-    for i, line in enumerate(("Open source · MIT", f"by {PUB}")):
+    for i, line in enumerate(("Open source · AGPL-3.0", f"by {PUB}")):
         d.text(((w - d.textlength(line, font=f3)) / 2, h - 34 + i * 13), line, font=f3, fill=rgb("#66727f"))
     d.rectangle((0, h - 4, w, h), fill=rgb(C["accent"]))
     return im.convert("RGB")
@@ -270,7 +270,13 @@ def license_texts() -> tuple[str, str]:
                "account server you choose, checks this project's GitHub releases for updates "
                "(set AUTOMOTO_NO_UPDATE_CHECK=1 to turn the automatic check off), and downloads WebView2 from Microsoft "
                "during installation if it is missing. Full policy: " + brand.HOMEPAGE + "CODE-SIGNING-POLICY.html")
-    txt = f"{NAME} - licence and privacy\n\n{lic}\n\n{privacy}\n"
+    head = (f"{NAME} - {brand.COPYRIGHT}\n\n"
+            f"{NAME} is free software: you can redistribute it and/or modify it under the terms of the GNU Affero "
+            "General Public License version 3 (AGPL-3.0-only), printed below. It comes with NO WARRANTY.\n\n"
+            "Using it in a closed-source or commercial product or service without the AGPL obligations needs a "
+            f"commercial licence: {brand.COMMERCIAL_URL}\n\n"
+            "Versions up to and including 5.6.0-beta.3 were released under the MIT licence and stay MIT for those copies.")
+    txt = f"{head}\n\n{privacy}\n\n{lic}\n"
     if not txt.isascii():
         raise SystemExit("LICENSE-installer.txt must be plain ASCII (Tauri turns it into the MSI's RTF)")
     return txt.replace("\n", "\r\n"), privacy

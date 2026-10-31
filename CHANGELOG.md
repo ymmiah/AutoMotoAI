@@ -3,6 +3,12 @@
 ## Unreleased (on `main`, after 5.6.0-beta.3) — one central assistant, memory, artifacts, your own server
 **Coming in the next beta.** Not in a tagged build yet.
 
+- **New licence: AGPL-3.0-only, with a paid commercial licence.** Copyright (C) 2025-2026 Yasin Mohammed Miah
+  (see `NOTICE`). Free for personal, educational and open-source use under the AGPL; closed-source or commercial use
+  without the AGPL obligations needs a [commercial licence](COMMERCIAL-LICENSE.md). Versions up to and including
+  5.6.0-beta.3 were MIT and stay MIT for those copies. The web interface now has a **Source code** link (AGPL
+  section 13; `AUTOMOTO_SOURCE_URL` for changed copies), the installers show the new licence, and contributions need a
+  sign-off that allows commercial licensing (CONTRIBUTING.md).
 - **Code signing (SignPath Foundation), ready once approved.** New [code signing policy](docs/CODE-SIGNING-POLICY.md)
   (team roles, privacy policy, every outside connection listed). The Windows app workflow sends the installers to
   SignPath on version tags (skipped with a notice until `SIGNPATH_API_TOKEN` / `SIGNPATH_ORGANIZATION_ID` exist),

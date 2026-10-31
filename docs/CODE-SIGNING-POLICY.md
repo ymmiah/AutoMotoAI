@@ -52,6 +52,6 @@ What it connects to, and when:
 Offline mode (Settings) switches all web and connector traffic off. Keys you type in the app stay on your computer
 (or in the browser tab) and are never sent to the project.
 
-Source: [github.com/ymmiah/AutoMotoAI](https://github.com/ymmiah/AutoMotoAI) · License: [MIT](https://github.com/ymmiah/AutoMotoAI/blob/main/LICENSE) ·
+Source: [github.com/ymmiah/AutoMotoAI](https://github.com/ymmiah/AutoMotoAI) · Licence: [AGPL-3.0-only](https://github.com/ymmiah/AutoMotoAI/blob/main/LICENSE) (OSI-approved; versions up to 5.6.0-beta.3 were MIT) ·
 Report a problem: [GitHub issues](https://github.com/ymmiah/AutoMotoAI/issues). To report a signed file that breaks this
 policy, write to support@signpath.io.

@@ -13,6 +13,7 @@ Thank you for your interest in contributing to AutoMoto AI! We welcome contribut
 - [Documentation](#documentation)
 - [Testing](#testing)
 - [Style Guidelines](#style-guidelines)
+- [Licence of contributions](#licence-of-contributions)
 
 ## 🤝 Code of Conduct
 
@@ -344,6 +345,24 @@ def oa(ap):
 - Document parameters, return values, and exceptions
 - Keep documentation up to date
 
+## Licence of contributions
+
+AutoMoto AI is free under the [AGPL-3.0](LICENSE) **and** sold under a [commercial licence](COMMERCIAL-LICENSE.md).
+That only works if the maintainer may license every contribution both ways. So, by sending a contribution you agree
+to this short **contributor licence grant**:
+
+1. **You may contribute it.** You wrote it, or you have the right to submit it under these terms, as in the
+   [Developer Certificate of Origin 1.1](https://developercertificate.org/).
+2. **AGPL for everyone.** Your contribution is licensed under AGPL-3.0-only, like the rest of the project.
+3. **Commercial rights for the maintainer.** You also give Yasin Mohammed Miah (the copyright holder) and his
+   successors a perpetual, worldwide, non-exclusive, royalty-free, irrevocable licence to use, change, sublicense
+   and relicense your contribution under any other terms, including paid commercial licences.
+4. **You keep your copyright.** You can still use your own contribution however you like.
+
+**How to agree:** sign off every commit with `git commit -s`. That adds a line like
+`Signed-off-by: Your Name <you@example.com>` and means you agree to the four points above. Pull requests without
+a sign-off on every commit can't be merged. (Forgot? `git rebase --signoff main`, then push to your branch.)
+
 ## 📞 Getting Help
 
 ### Communication Channels
@@ -376,7 +395,7 @@ Contributors will be recognized in:
 - [ ] Commit messages are clear
 - [ ] PR description explains changes
 - [ ] No sensitive information included
-- [ ] License headers included (if new files)
+- [ ] Every commit signed off (`git commit -s`, see [Licence of contributions](#licence-of-contributions))
 
 ---
 

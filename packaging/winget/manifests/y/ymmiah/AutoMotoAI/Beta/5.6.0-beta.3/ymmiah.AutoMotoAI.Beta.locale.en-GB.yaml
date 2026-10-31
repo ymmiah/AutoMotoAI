@@ -10,7 +10,7 @@ Author: Yasin Mohammed Miah
 PackageName: AutoMoto AI (Beta)
 PackageUrl: https://github.com/ymmiah/AutoMotoAI
 License: MIT
-LicenseUrl: https://github.com/ymmiah/AutoMotoAI/blob/main/LICENSE
+LicenseUrl: https://github.com/ymmiah/AutoMotoAI/blob/v5.6.0-beta.3/LICENSE
 Copyright: Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)
 ShortDescription: (Beta) AI agent for research, Word/Excel/PowerPoint files and tasks, with approvals.
 Description: |-

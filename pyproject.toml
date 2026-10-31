@@ -8,8 +8,8 @@ version = "5.6.0b3"
 description = "AutoMoto AI v5 'Agent' - a local AI agent with skills, an Office suite (Word, Excel, PowerPoint, PDF), local apps, service connectors, a VS Code extension, approvals, memory and routines over a multi-AI router with auto-failover - plus an optional hosted multi-user mode with per-user usage limits"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
-license-files = ["LICENSE"]
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Yasin Mohammed Miah (ymmiah)" }]
 keywords = ["ai", "agent", "assistant", "llm", "nvidia-nim", "office", "multi-user"]
 classifiers = [

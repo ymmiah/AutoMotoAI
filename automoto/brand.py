@@ -20,6 +20,9 @@ TAGLINE = "The AI agent that does the work, and asks before anything risky"
 HOMEPAGE = "https://ymmiah.github.io/AutoMotoAI/"
 REPO_URL = "https://github.com/ymmiah/AutoMotoAI"
 SUPPORT_URL = REPO_URL + "/issues"
+LICENSE_ID = "AGPL-3.0-only"
+COPYRIGHT = "Copyright (C) 2025-2026 Yasin Mohammed Miah"
+COMMERCIAL_URL = REPO_URL + "/blob/main/COMMERCIAL-LICENSE.md"
 COLORS = {"bg": "#0a0d12", "bg2": "#0e1219", "panel": "#131922", "line": "#222c39", "text": "#e8edf3",
           "dim": "#93a0ae", "accent": "#38f2a5", "accent2": "#7c5cff", "on_accent": "#04110b"}
 
@@ -38,7 +41,17 @@ def short() -> str:
     return DEFAULT_SHORT if n == DEFAULT_NAME else n
 
 
+def source_url() -> str:
+    """Where users of this server can get its source code (AGPL-3.0 section 13).
+
+    A server running a MODIFIED copy must point users at that modified source: set ``AUTOMOTO_SOURCE_URL``.
+    """
+    v = (os.getenv("AUTOMOTO_SOURCE_URL") or "").strip()[:300]
+    return v if v.startswith(("https://", "http://")) else REPO_URL
+
+
 def fill(text: str, *, escape: bool = True) -> str:
-    """Replace ``__BRAND__`` / ``__BRAND_SHORT__`` placeholders (HTML-escaped by default)."""
+    """Replace ``__BRAND__`` / ``__BRAND_SHORT__`` / ``__SOURCE_URL__`` placeholders (HTML-escaped by default)."""
     f = html.escape if escape else (lambda s: s)
-    return text.replace("__BRAND_SHORT__", f(short())).replace("__BRAND__", f(name()))
+    return (text.replace("__BRAND_SHORT__", f(short())).replace("__BRAND__", f(name()))
+            .replace("__SOURCE_URL__", f(source_url())))

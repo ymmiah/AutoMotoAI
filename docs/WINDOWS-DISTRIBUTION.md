@@ -24,8 +24,11 @@ shows **"Windows protected your PC"**. Users click **More info → Run anyway**.
 [SignPath Foundation](https://signpath.org) signs releases of open-source projects for free, with a certificate
 issued to SignPath Foundation. What its [terms](https://signpath.org/terms.html) ask for (summary — read the page):
 
-* an **OSI-approved licence** for every component, no commercial dual-licensing (AutoMoto AI is MIT), and
+* an **OSI-approved licence** for every component, no commercial dual-licensing, and
   **no proprietary code** in what's signed;
+  > **AutoMoto AI's licence:** after 5.6.0-beta.3 it is AGPL-3.0-only (OSI-approved) **and** offered under a paid
+  > [commercial licence](https://github.com/ymmiah/AutoMotoAI/blob/main/COMMERCIAL-LICENSE.md). SignPath's terms say "without commercial dual-licensing", so
+  > this may make the project ineligible for SignPath Foundation's free certificate. Ask SignPath before applying.
 * the project is **actively maintained**, **already released** in the form to be signed, and its functions are
   **described on the download page**; for programs they also want "a certain verifiable reputation";
 * no malware or potentially unwanted programs, and **no hacking tools** (features that find or exploit security
