@@ -279,9 +279,38 @@ fn open_link(app: AppHandle, webview: tauri::Webview, which: String) -> Result<(
 }
 
 // -- updates (signed; verified by the updater plugin with the public key in tauri.conf.json) ---------------
+/// True when this copy runs from an MSIX package (the Microsoft Store build). The Store updates those itself,
+/// so the app's own updater stays off (its NSIS installer would install a second, separate copy).
+#[cfg(windows)]
+fn store_package() -> bool {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentPackageFullName(len: *mut u32, name: *mut u16) -> i32;
+    }
+    const APPMODEL_ERROR_NO_PACKAGE: i32 = 15700;
+    let mut len: u32 = 0;
+    // SAFETY: asking for the length only (null buffer, len = 0) is the documented way to call it
+    unsafe { GetCurrentPackageFullName(&mut len, std::ptr::null_mut()) != APPMODEL_ERROR_NO_PACKAGE }
+}
+
+#[cfg(not(windows))]
+fn store_package() -> bool {
+    false
+}
+
 #[cfg(desktop)]
 async fn check_updates(app: AppHandle, interactive: bool) {
     use tauri_plugin_updater::UpdaterExt;
+    if store_package() {
+        if interactive {
+            app.dialog()
+                .message(format!("This copy of AutoMoto AI ({}) comes from the Microsoft Store, which installs updates for it automatically.",
+                                 env!("CARGO_PKG_VERSION")))
+                .title("Updates")
+                .show(|_| {});
+        }
+        return;
+    }
     let res = match app.updater() {
         Ok(u) => u.check().await,
         Err(e) => Err(e),
@@ -440,9 +469,9 @@ fn main() {
             }
             handle.on_menu_event(|app, ev| on_menu(app, ev.id().as_ref()));
             // automatic update check a few seconds after start; AUTOMOTO_NO_UPDATE_CHECK=1 turns it off
-            // (the menu's "Check for updates" still works)
+            // (the menu's "Check for updates" still works). Never in the Microsoft Store build: the Store updates it.
             #[cfg(all(desktop, not(debug_assertions)))]
-            if std::env::var_os("AUTOMOTO_NO_UPDATE_CHECK").is_none_or(|v| v.is_empty() || v == "0") {
+            if !store_package() && std::env::var_os("AUTOMOTO_NO_UPDATE_CHECK").is_none_or(|v| v.is_empty() || v == "0") {
                 let h = handle.clone();
                 tauri::async_runtime::spawn(async move {
                     std::thread::sleep(std::time::Duration::from_secs(4));
