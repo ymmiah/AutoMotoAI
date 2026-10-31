@@ -2,6 +2,10 @@ name: Windows app
 # Builds the Windows installers (.exe NSIS + .msi) on every change to the app or the engine, smoke-tests them
 # on a clean runner (silent install, launch, local engine health, close, uninstall), and on a version tag
 # attaches them plus the signed updater manifest (latest.json) to that tag's GitHub Release.
+# Code signing (SignPath Foundation, docs/CODE-SIGNING-POLICY.md): on a version tag, or a manual run with
+# "sign" ticked, the installers are sent to SignPath, a maintainer approves the request there, and the signed
+# files replace the unsigned ones before the smoke tests and the release. Without the SignPath secret and
+# variables the step prints a notice and the build carries on unsigned.
 on:
   push:
     branches: [main]
@@ -10,6 +14,11 @@ on:
   pull_request:
     paths: ["apps/desktop/**", "automoto/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
   workflow_dispatch:
+    inputs:
+      sign:
+        description: "Send the installers to SignPath for Authenticode signing (needs approval on signpath.io)"
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -18,9 +27,10 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 120   # includes waiting for the SignPath approval on tags
     permissions:
       contents: write   # only used on tags, to attach the installers to the release
+      actions: read     # lets SignPath read this run and download the unsigned-installers artifact
     env:
       AUTOMOTO_DEFAULT_SERVER: ${{ vars.AUTOMOTO_DEFAULT_SERVER }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -71,6 +81,88 @@ jobs:
       - name: Collect the installers
         shell: pwsh
         run: ./scripts/ci/collect-windows.ps1 -Out out
+      - name: Branding check (version info and icons of the app and the installers)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force shots | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $app = Get-Item "apps/desktop/src-tauri/target/release/AutoMoto AI.exe"
+          foreach ($f in @($app) + @(Get-ChildItem out/*.exe)) {
+            $v = $f.VersionInfo
+            "{0}: ProductName='{1}' FileDescription='{2}' CompanyName='{3}' LegalCopyright='{4}' ProductVersion='{5}' FileVersion='{6}'" -f `
+              $f.Name, $v.ProductName, $v.FileDescription, $v.CompanyName, $v.LegalCopyright, $v.ProductVersion, $v.FileVersion
+            if ($v.ProductName -ne "AutoMoto AI") { "::warning::$($f.Name) ProductName is '$($v.ProductName)'" }
+            if ($v.CompanyName -ne "Yasin Mohammed Miah") { "::warning::$($f.Name) CompanyName is '$($v.CompanyName)'" }
+            $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($f.FullName)
+            $icon.ToBitmap().Save("shots/icon-$($f.BaseName).png", [System.Drawing.Imaging.ImageFormat]::Png)
+          }
+      - name: Code signing - is SignPath set up?
+        id: signgate
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          WANT: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.sign == true }}
+        run: |
+          $ver = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          if ($env:WANT -ne "true") { "::notice::Not a version tag - installers stay unsigned (run manually with 'sign' to test signing)"; "sign=false" >> $env:GITHUB_OUTPUT; exit 0 }
+          if (-not $env:SIGNPATH_API_TOKEN -or -not $env:SIGNPATH_ORGANIZATION_ID) {
+            "::notice::SignPath not set up (secret SIGNPATH_API_TOKEN / variable SIGNPATH_ORGANIZATION_ID missing) - installers stay unsigned"
+            "sign=false" >> $env:GITHUB_OUTPUT; exit 0
+          }
+          "sign=true" >> $env:GITHUB_OUTPUT
+      - name: Code signing - upload the unsigned installers for SignPath
+        id: unsigned
+        if: steps.signgate.outputs.sign == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: automoto-ai-windows-unsigned
+          path: |
+            out/*.exe
+            out/*.msi
+          if-no-files-found: error
+      - name: Code signing - SignPath (waits for the maintainer's approval)
+        id: signpath
+        if: steps.signgate.outputs.sign == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'AutoMotoAI' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+          parameters: |
+            version: ${{ toJSON(steps.signgate.outputs.version) }}
+      - name: Code signing - use the signed installers, re-sign the updater files, new checksums
+        if: steps.signgate.outputs.sign == 'true'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.signgate.outputs.version }}
+        run: |
+          foreach ($f in Get-ChildItem out/*.exe, out/*.msi) {
+            $s = Get-ChildItem -Recurse -File signed | Where-Object Name -eq $f.Name | Select-Object -First 1
+            if (-not $s) { throw "SignPath returned no $($f.Name)" }
+            $a = Get-AuthenticodeSignature $s.FullName
+            "$($f.Name): $($a.Status) - $($a.SignerCertificate.Subject)"
+            if ($a.Status -ne "Valid") { throw "$($f.Name) signature is $($a.Status)" }
+            Copy-Item $s.FullName $f.FullName -Force
+            # the updater signature must be over the final, Authenticode-signed file
+            if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+              Remove-Item "$($f.FullName).sig" -ErrorAction SilentlyContinue
+              Push-Location apps/desktop
+              npx --no-install tauri signer sign --app-version $env:VERSION $f.FullName | Out-Null
+              $code = $LASTEXITCODE
+              Pop-Location
+              if ($code -or -not (Test-Path "$($f.FullName).sig")) { throw "could not re-sign $($f.Name) for the updater" }
+            }
+          }
+          ./scripts/ci/collect-windows.ps1 -Out out -HashOnly
+          "Signing request: ${{ steps.signpath.outputs.signing-request-web-url }}" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
           name: automoto-ai-windows
@@ -93,6 +185,10 @@ jobs:
           name: smoke-test-screenshots-and-logs
           path: shots/*
           if-no-files-found: ignore
+      - name: Release notes generator works (dry run)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        run: python scripts/ci/release_notes.py names (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
       - name: Attach to the GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh

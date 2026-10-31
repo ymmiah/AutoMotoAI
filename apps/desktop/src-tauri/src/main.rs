@@ -439,8 +439,10 @@ fn main() {
                 *handle.state::<AppState>().home.lock().unwrap() = Some(u);
             }
             handle.on_menu_event(|app, ev| on_menu(app, ev.id().as_ref()));
+            // automatic update check a few seconds after start; AUTOMOTO_NO_UPDATE_CHECK=1 turns it off
+            // (the menu's "Check for updates" still works)
             #[cfg(all(desktop, not(debug_assertions)))]
-            {
+            if std::env::var_os("AUTOMOTO_NO_UPDATE_CHECK").is_none_or(|v| v.is_empty() || v == "0") {
                 let h = handle.clone();
                 tauri::async_runtime::spawn(async move {
                     std::thread::sleep(std::time::Duration::from_secs(4));

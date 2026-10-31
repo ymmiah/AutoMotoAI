@@ -13,6 +13,16 @@ import os
 DEFAULT_NAME = "AutoMoto AI"
 DEFAULT_SHORT = "AutoMoto"
 
+# Installer / Windows app branding (packaging/branding/generate.py reads these; re-run it after a change)
+PUBLISHER = "Yasin Mohammed Miah"
+CREDIT = "Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)"
+TAGLINE = "The AI agent that does the work, and asks before anything risky"
+HOMEPAGE = "https://ymmiah.github.io/AutoMotoAI/"
+REPO_URL = "https://github.com/ymmiah/AutoMotoAI"
+SUPPORT_URL = REPO_URL + "/issues"
+COLORS = {"bg": "#0a0d12", "bg2": "#0e1219", "panel": "#131922", "line": "#222c39", "text": "#e8edf3",
+          "dim": "#93a0ae", "accent": "#38f2a5", "accent2": "#7c5cff", "on_accent": "#04110b"}
+
 
 def name() -> str:
     """Full display name, e.g. 'AutoMoto AI'."""

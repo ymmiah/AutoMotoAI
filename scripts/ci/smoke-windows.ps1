@@ -25,7 +25,7 @@ Remove-Item -Recurse -Force "$env:APPDATA\com.ymmiah.automoto" -ErrorAction Sile
 
 # 1. install silently
 if ($Kind -eq "nsis") {
-  $setup = Get-ChildItem "$Dir/*-setup.exe" | Select-Object -First 1
+  $setup = Get-ChildItem "$Dir/*.exe" | Select-Object -First 1
   $p = Start-Process $setup.FullName -ArgumentList "/S" -Wait -PassThru
   if ($p.ExitCode) { throw "NSIS installer exit code $($p.ExitCode)" }
   $exe = Join-Path $env:LOCALAPPDATA "AutoMoto AI\AutoMoto AI.exe"

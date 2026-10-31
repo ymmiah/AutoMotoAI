@@ -21,7 +21,7 @@
     "createUpdaterArtifacts": true,
     "publisher": "Yasin Mohammed Miah",
     "copyright": "MIT licence - Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)",
-    "homepage": "https://github.com/ymmiah/AutoMotoAI",
+    "homepage": "https://ymmiah.github.io/AutoMotoAI/",
     "license": "MIT",
     "category": "Productivity",
     "shortDescription": "AI agent: chat, research, Office files and tasks, with approvals",
@@ -43,13 +43,23 @@
       },
       "nsis": {
         "installMode": "currentUser",
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "../../../packaging/branding/out/uninstall.ico",
+        "headerImage": "../../../packaging/branding/out/nsis-header.bmp",
+        "uninstallerHeaderImage": "../../../packaging/branding/out/nsis-header.bmp",
+        "sidebarImage": "../../../packaging/branding/out/nsis-sidebar.bmp",
+        "startMenuFolder": "AutoMoto AI",
+        "installerHooks": "../../../packaging/branding/out/installer-hooks.nsh"
       },
       "wix": {
         "language": "en-US",
-        "version": "5.6.0"
+        "version": "5.6.0",
+        "bannerPath": "../../../packaging/branding/out/wix-banner.bmp",
+        "dialogImagePath": "../../../packaging/branding/out/wix-dialog.bmp"
       }
-    }
+    },
+    "licenseFile": "../../../packaging/branding/out/LICENSE-installer.txt"
   },
   "plugins": {
     "updater": {

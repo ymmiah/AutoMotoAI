@@ -18,6 +18,7 @@ nav:
   - Your own server (easy guide): SERVER-SETUP.md
   - Hosting: HOSTING.md
   - Windows app distribution: WINDOWS-DISTRIBUTION.md
+  - Code signing policy: CODE-SIGNING-POLICY.md
   - Publishing: PUBLISHING.md
 theme:
   name: material

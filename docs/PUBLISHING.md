@@ -21,8 +21,26 @@ The **Publish** workflow (`.github/workflows/publish.yml`) then:
 | Build sdist + wheel, `twine check` | always | — |
 | PyPI (trusted publishing, no token) | repo **variable** `PYPI_PUBLISH` = `true` | not set |
 
-Attach the files to a GitHub Release (web: *Releases → Draft a new release*, or
-`gh release create v5.5.0 apps/vscode/automoto-ai-5.5.0.vsix dist/* --notes-file notes.md`).
+| Attach the `.vsix`, wheel and sdist to the tag's GitHub Release (a draft) and write the notes | every `v*` tag | — |
+
+The **Windows app** workflow (`.github/workflows/desktop.yml`) builds and smoke-tests the installers; on a tag it
+sends them to SignPath for code signing (see [Code signing policy](CODE-SIGNING-POLICY.md); skipped with a notice
+until the `SIGNPATH_*` secret and variables exist; you approve each request on signpath.io), re-signs the updater
+`.sig` files over the signed installers, and attaches everything plus `latest.json` and `SHA256SUMS.txt`.
+
+**Release file names** (from 5.6.0 Beta 4 on; older releases keep their names):
+
+| File | For |
+|---|---|
+| `AutoMoto-AI-Setup-<version>-Windows-x64.exe` (+ `.sig`) | Windows, most people |
+| `AutoMoto-AI-<version>-Windows-x64.msi` (+ `.sig`) | Windows, IT / all users |
+| `AutoMoto-AI-<version>-VSCode.vsix` | VS Code |
+| `automoto_ai-<pep440>-py3-none-any.whl`, `automoto_ai-<pep440>.tar.gz` | pip (names pip needs) |
+| `latest.json`, `SHA256SUMS.txt` | the app's updater; checksums |
+
+The notes start with a **"Which file do I need?"** table, then the CHANGELOG section and the SHA-256 of every
+file (`scripts/ci/release_notes.py`; the names are defined there too). The release stays a **draft** until you
+publish it. For a beta, copy its `latest.json` to `packaging/updater/beta.json` afterwards.
 
 ## 1. VS Code Marketplace (free)
 

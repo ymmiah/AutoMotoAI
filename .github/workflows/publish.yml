@@ -2,6 +2,7 @@ name: Publish
 # Runs when a version tag (v5.5.0, ...) is pushed. Every store is optional: a step only runs when its
 # secret / variable exists, otherwise it prints a notice and skips. See docs/PUBLISHING.md.
 # Beta tags (v5.6.0-beta.1, any tag with a '-') only build the files: nothing goes to a store.
+# On every v* tag the files are also attached to the tag's GitHub Release (a draft until a maintainer publishes it).
 on:
   push:
     tags: ["v*"]
@@ -59,6 +60,42 @@ jobs:
         with:
           name: python-dist
           path: dist/*
+
+  release-assets:
+    # attach the VS Code extension (as AutoMoto-AI-<version>-VSCode.vsix) and the Python wheel + sdist (pip's own
+    # names) to the tag's GitHub Release, then rewrite the notes ("Which file do I need?", changes, checksums).
+    # The Windows installers are attached by the "Windows app" workflow; whichever finishes last writes the notes.
+    needs: [vsix, python]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          name: automoto-ai-vsix
+          path: vsix
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist
+      - name: Attach to the release and write the notes
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          vsix_name=$(python scripts/ci/release_notes.py names "$ver" | python -c 'import json,sys; print(json.load(sys.stdin)["vsix"])')
+          mkdir -p up
+          cp vsix/*.vsix "up/$vsix_name"
+          cp dist/* up/
+          python scripts/ci/release_notes.py ensure --repo "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber up/*
+          python scripts/ci/release_notes.py notes --repo "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --out notes.md
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
 
   pypi:
     # optional: PyPI "trusted publishing" (no token stored). Turn on with the repository variable PYPI_PUBLISH=true

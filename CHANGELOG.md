@@ -3,6 +3,19 @@
 ## Unreleased (on `main`, after 5.6.0-beta.3) — one central assistant, memory, artifacts, your own server
 **Coming in the next beta.** Not in a tagged build yet.
 
+- **Code signing (SignPath Foundation), ready once approved.** New [code signing policy](docs/CODE-SIGNING-POLICY.md)
+  (team roles, privacy policy, every outside connection listed). The Windows app workflow sends the installers to
+  SignPath on version tags (skipped with a notice until `SIGNPATH_API_TOKEN` / `SIGNPATH_ORGANIZATION_ID` exist),
+  waits for the signed files, checks their Authenticode signatures and re-signs the updater `.sig` files over them,
+  so `latest.json` and `SHA256SUMS.txt` match what users download. Artifact configuration:
+  `packaging/signpath/artifact-configuration.xml`. `AUTOMOTO_NO_UPDATE_CHECK=1` turns off the app's update check.
+- **Branded Windows installers and app icon.** New logo and multi-size icon; NSIS installer with header, sidebar,
+  welcome/finish text, licence page, Start-menu folder, a getting-started link, uninstaller icon and full
+  Add/Remove Programs details (publisher, homepage, support link); MSI banner, dialog image and licence. All of it is
+  generated from `automoto/brand.py` by `packaging/branding/generate.py` (previews in `packaging/branding/previews/`).
+- **Tidier release downloads.** New releases use `AutoMoto-AI-Setup-<version>-Windows-x64.exe`,
+  `AutoMoto-AI-<version>-Windows-x64.msi` and `AutoMoto-AI-<version>-VSCode.vsix` (pip files keep their names), and the
+  notes open with a "Which file do I need?" table (`scripts/ci/release_notes.py`). Older releases keep their names.
 - **Engineering Studio overlay reviewed and folded in** (no separate studio mode or endpoints). Kept, rewritten into
   the planner/tool/policy architecture: a per-user research library (`library_add`, `library_search`: SQLite FTS5
   in `memory/library.sqlite3`, docs crawl that respects `robots.txt` and stays on one site, `.srt/.vtt` transcripts,
