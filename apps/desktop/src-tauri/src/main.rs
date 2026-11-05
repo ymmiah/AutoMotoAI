@@ -252,12 +252,27 @@ fn install_engine(app: AppHandle, webview: tauri::Webview) -> Result<Value, Stri
             .path()
             .resolve("resources/install.ps1", tauri::path::BaseDirectory::Resource)
             .map_err(|e| e.to_string())?;
-        // a visible PowerShell window: the user sees (and answers) every step of the official installer
-        std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File"])
+        // The Store MSIX ships the matching engine wheel. Prefer that audited, packaged file:
+        // unreleased betas may not have a downloadable GitHub release yet.
+        let engine_ver = engine_version(env!("CARGO_PKG_VERSION"));
+        let mut cmd = std::process::Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File"])
             .arg(script)
-            .args(["-Version", &engine_version(env!("CARGO_PKG_VERSION"))])
-            .creation_flags(0x0000_0010) // CREATE_NEW_CONSOLE
+            .args(["-Version", &engine_ver]);
+        let wheel_file = format!("resources/automoto_ai-{engine_ver}-py3-none-any.whl");
+        if let Ok(wheel) = app.path().resolve(&wheel_file, tauri::path::BaseDirectory::Resource) {
+            let sha_file = wheel.with_extension("whl.sha256");
+            if wheel.is_file() && sha_file.is_file() {
+                let checksum = std::fs::read_to_string(&sha_file)
+                    .map_err(|e| format!("Couldn't read bundled engine checksum: {e}"))?;
+                let checksum = checksum.trim();
+                if checksum.len() != 64 || !checksum.chars().all(|c| c.is_ascii_hexdigit()) {
+                    return Err("The bundled engine checksum is invalid".into());
+                }
+                cmd.arg("-Wheel").arg(wheel).arg("-Sha256").arg(checksum);
+            }
+        }
+        cmd.creation_flags(0x0000_0010) // CREATE_NEW_CONSOLE
             .spawn()
             .map_err(|e| format!("Couldn't open PowerShell: {e}"))?;
         Ok(json!({"started": true}))
