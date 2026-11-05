@@ -124,10 +124,12 @@ pub async fn launch_url(origin: &Url, token: &str) -> Result<Launch, String> {
     Ok(Launch::Url(full))
 }
 
-pub async fn device_logout(origin: &Url, token: &str) {
+pub async fn device_logout(origin: &Url, token: &str) -> bool {
     if let Ok(url) = origin.join("api/auth/device/logout") {
-        let _ = post(url, Some(token), json!({})).await;
+        return matches!(post(url, Some(token), json!({})).await,
+                        Ok((status, _)) if status.is_success() || status == reqwest::StatusCode::UNAUTHORIZED);
     }
+    false
 }
 
 // -- the OS credential store (Windows Credential Manager, macOS Keychain) ------------------------------
