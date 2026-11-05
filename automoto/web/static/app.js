@@ -50,14 +50,14 @@ function toast(msg, kind = "") {
   $("#toasts").appendChild(t);
   setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 300); }, kind === "bad" ? 5200 : 3000);
 }
-function openModal(html, { onMount, label = "Dialog" } = {}) {
+function openModal(html, { onMount, onDismiss, label = "Dialog" } = {}) {
   const m = $("#modal");
   const prev = document.activeElement;
   m.innerHTML = `<div class="modal-box">${html}</div>`;
   m.setAttribute("aria-label", label);
   m.hidden = false;
   hydrateIcons(m);
-  const close = () => { m.hidden = true; m.innerHTML = ""; prev?.focus?.(); };
+  const close = () => { m.hidden = true; m.innerHTML = ""; prev?.focus?.(); onDismiss?.(); };
   m.onclick = (e) => { if (e.target === m) close(); };
   m.onkeydown = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
   onMount?.(m, close);
@@ -68,9 +68,10 @@ function confirmDialog(text, { ok = "Delete", danger = true } = {}) {
   return new Promise((res) => {
     openModal(`<h3>${esc(text)}</h3><div class="row"><button class="btn" data-a="no">Cancel</button><button class="btn ${danger ? "danger" : "primary"}" data-a="yes">${esc(ok)}</button></div>`, {
       label: text,
+      onDismiss: () => res(false),
       onMount: (m, close) => {
         $('[data-a="no"]', m).onclick = () => { close(); res(false); };
-        $('[data-a="yes"]', m).onclick = () => { close(); res(true); };
+        $('[data-a="yes"]', m).onclick = () => { res(true); close(); };
         $('[data-a="yes"]', m).focus();
       },
     });
@@ -80,10 +81,11 @@ function promptDialog(title, value = "", { ok = "Save" } = {}) {
   return new Promise((res) => {
     openModal(`<h3>${esc(title)}</h3><form><input class="input" name="v" value="${esc(value)}" aria-label="${esc(title)}" maxlength="120"><div class="row"><button type="button" class="btn" data-a="no">Cancel</button><button class="btn primary">${esc(ok)}</button></div></form>`, {
       label: title,
+      onDismiss: () => res(null),
       onMount: (m, close) => {
         const inp = $("input", m); inp.select();
         $('[data-a="no"]', m).onclick = () => { close(); res(null); };
-        $("form", m).onsubmit = (e) => { e.preventDefault(); const v = inp.value.trim(); close(); res(v || null); };
+        $("form", m).onsubmit = (e) => { e.preventDefault(); const v = inp.value.trim(); res(v || null); close(); };
       },
     });
   });
