@@ -8,6 +8,17 @@ status: live
 ---
 # Graphic design
 
+**Core generation modes**
+- `image_models`: detect a separately installed local ComfyUI service and its checkpoint models.
+- `image_generate`: create genuinely new, original artwork via that installed local diffusion
+  model. Checkpoints and ComfyUI are prerequisites; don't claim they are bundled, free of
+  compute costs, or capable of preserving an exact reference identity.
+- `image_compose`: compose the original user-supplied photo and/or logo with **exact** text
+  and deliberate spacing. It never generatively redraws faces, changes body proportions,
+  modifies brand marks, crops a photo, or replaces text. Preferred for identity fidelity.
+- When visual text is part of the work, render it as text in the output layout rather than
+  asking diffusion to paint letters (text-to-image spelling is unreliable).
+
 1. Clarify size and use (e.g. 1200×630 social card, 512×512 icon, 1920×1080 banner), colours, text.
 2. Draw vector first: `write_file` an SVG (`viewBox`, simple shapes, `<text>` with a common font family,
    2-3 brand colours, generous margins). Keep text ≥ 5% of the height so it reads on phones.
