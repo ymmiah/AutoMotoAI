@@ -170,7 +170,7 @@ SPEC_XLSX = ("JSON spec: {properties:{title,author}, theme:{header_fill, font}, 
              "names:[{name, ref:'Sheet!$B$2'}]}. Then run office_recalc to verify every formula.")
 SPEC_PPTX = ("JSON spec: {aspect:'16:9', theme:{primary, accent, text, background, heading, font, heading_font}, "
              "footer, slide_numbers:true, slides:[{layout:'title'|'section'|'bullets'|'two_content'|'comparison'|"
-             "'image'|'table'|'chart'|'statement'|'quote'|'cards'|'metrics'|'steps'|'image_text'|'hero', "
+             "'image'|'table'|'chart'|'statement'|'quote'|'cards'|'metrics'|'steps'|'image_text'|'hero'|'canvas', "
              "title, subtitle, icon:'check'|'shield'|'idea'|'chart'|'users'|'clock'|'target'|'cloud'|'file'|'folder'|"
              "'image'|'sparkle'|'arrow'|'globe'|'code'|'lock'|'settings', "
              "cards:[{title,text,icon}], metrics:[{value,label}], steps:[{title,text}], "
