@@ -241,7 +241,7 @@ def load_table(path: str | os.PathLike, *, sheet: str | None = None, encoding: s
             t = table or (tables[0] if len(tables) == 1 else None)
             if not t or t not in tables:
                 raise DataError(f"give table=… (one of {', '.join(tables[:20])})")
-            df = pd.read_sql_query(f'SELECT * FROM "{t}" LIMIT {cap + 1}', con)  # nosec B608 - name checked against sqlite_master
+            df = pd.read_sql_query(f"SELECT * FROM {_quote_ident(t)} LIMIT {int(cap) + 1}", con)  # nosec B608 - name checked against sqlite_master, quoted
             info["table"] = t
         finally:
             con.close()
@@ -820,15 +820,21 @@ def sqlite_connect(p: Path) -> sqlite3.Connection:
     return con
 
 
+def _quote_ident(name: str) -> str:
+    """An SQL identifier in double quotes, with embedded quotes doubled (names come from the user's file)."""
+    return '"' + str(name).replace('"', '""') + '"'
+
+
 def sqlite_schema(p: Path) -> list[dict]:
     con = sqlite_connect(p)
     try:
         out = []
         for name, typ in con.execute("SELECT name, type FROM sqlite_master WHERE type IN ('table','view') "
                                      "AND name NOT LIKE 'sqlite_%' ORDER BY name"):
-            cols = [f"{r[1]} {r[2]}".strip() for r in con.execute(f'PRAGMA table_info("{name}")')]
+            q = _quote_ident(name)
+            cols = [f"{r[1]} {r[2]}".strip() for r in con.execute(f"PRAGMA table_info({q})")]
             try:
-                n = con.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]  # nosec B608 - name from sqlite_master
+                n = con.execute(f"SELECT COUNT(*) FROM {q}").fetchone()[0]  # nosec B608 - quoted name from sqlite_master
             except sqlite3.DatabaseError:
                 n = None
             out.append({"name": name, "type": typ, "rows": n, "columns": cols})

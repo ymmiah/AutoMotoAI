@@ -190,7 +190,7 @@ function renderConvs() {
     const g = group(c.updated);
     if (g !== last) { html += `<div class="group-label">${g}</div>`; last = g; }
     const active = state.cur?.id === c.id ? " active" : "";
-    html += `<div class="conv${active}" role="listitem" tabindex="0" data-id="${c.id}" title="${esc(c.title)}">
+    html += `<div class="conv${active}" role="listitem" tabindex="0" data-id="${esc(c.id)}" title="${esc(c.title)}">
       ${state.running.has(c.id) ? '<span class="running" aria-label="running"></span>' : icon(c.mode === "chat" ? "chat" : "bolt")}
       <span class="t">${esc(c.title)}</span>
       <span class="acts"><button class="icon-btn sm" data-act="rename" aria-label="Rename chat">${icon("edit")}</button><button class="icon-btn sm" data-act="delete" aria-label="Delete chat">${icon("trash")}</button></span></div>`;
@@ -723,7 +723,7 @@ async function addFiles(files) {
 }
 function renderAttachments() {
   const box = $("#attachments"); if (!box) return;
-  box.innerHTML = state.attachments.map((u, i) => `<div class="thumb"><img src="${u}" alt="attachment ${i + 1}"><button type="button" data-i="${i}" aria-label="Remove image ${i + 1}">${icon("x")}</button></div>`).join("") +
+  box.innerHTML = state.attachments.map((u, i) => `<div class="thumb"><img src="${esc(u)}" alt="attachment ${i + 1}"><button type="button" data-i="${i}" aria-label="Remove image ${i + 1}">${icon("x")}</button></div>`).join("") +
     state.files.map((p, i) => `<div class="filechip">${icon("file")}<span>${esc(p.split("/").pop())}</span><button type="button" data-f="${i}" aria-label="Remove ${esc(p)}">${icon("x")}</button></div>`).join("");
   $$("button[data-i]", box).forEach((b) => b.onclick = () => { state.attachments.splice(+b.dataset.i, 1); renderAttachments(); });
   $$("button[data-f]", box).forEach((b) => b.onclick = () => { state.files.splice(+b.dataset.f, 1); renderAttachments(); drawFileIdeas(); });
