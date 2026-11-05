@@ -18,10 +18,19 @@ status: live
 
 **Build with `office_create_pptx`**
 - One idea per slide; 3-6 bullets, ≤ 12 words each; sub-points only when needed.
-- Layouts: `title`, `section` (dividers), `bullets`, `two_content`/`comparison` (before vs after,
-  options), `image` (with alt + caption), `table` (≤ 7 rows), `chart` (column/bar/line/pie/stacked
-  with real numbers), `statement`/`quote` (big message).
-- Theme: one `primary`, one `accent` colour, one font for the whole deck; slide numbers on.
+- Prefer **native editorial layouts** over bullet dumps. Use `cards` (1-6 cards, each title/text/icon),
+  `metrics` (1-4 facts), `steps` (2-5 stage names), `image_text`/`hero` (existing real
+  image + exact copy), and `canvas` (per-element `type,x,y,w,h` in inches for exact placement).
+  Also available: `title`, `section`, `bullets`, `two_content`, `comparison`,
+  `image`, `table`, `chart`, `statement`, `quote`.
+- **Icons:** add `icon:'shield'` or `'idea'`, `'chart'`, `'users'`, `'clock'`, `'target'`,
+  `'cloud'`, `'file'`, `'image'`, `'sparkle'`, `'globe'`, `'check'`, etc. They're
+  editable PowerPoint vector shapes; no icon-font or network dependency.
+- Theme: readable `primary`, `accent`, `background`, `text`, `heading`, font and
+  heading font. On dark backgrounds, use contrasting pale headings and body text.
+- Visual variety: establish an art direction, avoid identical layouts in sequence, show
+  genuine evidence/diagrams instead of tables when unnecessary, and use ample negative space.
+  No invented figures: metrics/charts need supplied or verifiable data.
 - `notes` on every content slide: what to say (2-5 sentences), the source of any figure, timings.
 
 **Check**
