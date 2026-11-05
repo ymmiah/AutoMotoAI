@@ -731,6 +731,7 @@ function prefer() { const v = $("#providerPick").value; return v === "auto" ? nu
 async function send() {
   const ta = $("#composerInput");
   let text = ta.value.trim();
+  const draftText = text;
   if (!text && !state.attachments.length && !state.files.length) return;
   if (!state.providers.some((p) => p.configured) && !Object.keys(keys()).length) {
     if (HOSTED) { toast("This server has no AI provider configured yet - tell the admin.", "bad"); return; }
@@ -751,7 +752,7 @@ async function send() {
       history.replaceState(null, "", `#/c/${conv.id}`); state.route = location.hash;
     }
   } catch (e) {
-    ta.value = text; state.attachments.unshift(...images); state.files.unshift(...attached);
+    ta.value = draftText; state.attachments.unshift(...images); state.files.unshift(...attached);
     autosize(); renderAttachments(); drawFileIdeas(); toast(e.message, "bad"); return;
   }
   $(".hero")?.remove();
@@ -1414,7 +1415,7 @@ PAGES.settings = async () => {
     <div class="row"><button class="btn sm primary" id="localCloud" ${d.offline_from_env ? "disabled" : ""}>Use cloud AI / server providers</button>${d.ollama_enabled ? '<button class="btn sm" id="offlineOff">Disable local model</button>' : ""}</div>
     ${d.offline_from_env ? '<p class="muted small">AUTOMOTO_OFFLINE in .env controls offline mode. Change that setting to enable cloud mode.</p>' : ""}
     ${d.model_from_env ? '<p class="muted small">OLLAMA_MODEL in .env locks the selected model. Remove it to change models here.</p>' : ""}`;
-  $("#offlineCheck").onclick = offlinePanel;
+  $("#offlineCheck").onclick = drawOffline;
   if ($("#localStart")) $("#localStart").onclick = async (e) => {
     const button = e.currentTarget;
     button.disabled = true; button.textContent = "Starting…";
@@ -1422,13 +1423,13 @@ PAGES.settings = async () => {
       const r = await api("/api/local/start", {});
       toast(r.started ? "Local AI is running" : (r.message || "Local AI did not start"), r.started ? "" : "bad");
     } catch (err) { toast(err.message, "bad"); }
-    await offlinePanel();
+    await drawOffline();
     await refreshStatus();
   };
   const setModel = async (name) => {
     if (await saveSetting({ local_model: name })) {
       toast(`Selected ${name}`);
-      await refreshStatus(); await offlinePanel();
+      await refreshStatus(); await drawOffline();
     }
   };
   $$("[data-use]", box).forEach((b) => b.onclick = () => setModel(b.dataset.use));
@@ -1454,7 +1455,7 @@ PAGES.settings = async () => {
       const progressItem = $$("[data-pull]", box).find((e) => e.dataset.pull === name);
       if (progressItem) progressItem.textContent = `Downloading ${job?.percent || 0}%`;
       if (job?.state === "done") { await setModel(name); return; }
-      if (job?.state === "error") { toast(job.error || "Download failed", "bad"); await offlinePanel(); return; }
+      if (job?.state === "error") { toast(job.error || "Download failed", "bad"); await drawOffline(); return; }
     }
   };
   $$("[data-pull]", box).forEach((b) => b.onclick = () => { b.disabled = true; beginPull(b.dataset.pull); });
@@ -1467,21 +1468,21 @@ PAGES.settings = async () => {
     const checked = e.target.checked;
     if (await saveSetting({ offline: checked })) {
       localStorage.setItem("automoto_prefer", "auto");
-      await refreshStatus(); await offlinePanel();
+      await refreshStatus(); await drawOffline();
       toast(checked ? "Offline only: cloud AI and web tools disabled" : "Cloud AI enabled");
     } else e.target.checked = !checked;
   };
   $("#localCloud").onclick = async () => {
     if (await saveSetting({ offline: false })) {
       localStorage.setItem("automoto_prefer", "auto");
-      await refreshStatus(); await offlinePanel();
+      await refreshStatus(); await drawOffline();
       toast("Cloud providers available. Choose an AI from the top of chat.");
     }
   };
   if ($("#offlineOff")) $("#offlineOff").onclick = async () => {
     if (await saveSetting({ offline: false, local_model: null })) {
       localStorage.setItem("automoto_prefer", "auto");
-      await refreshStatus(); await offlinePanel();
+      await refreshStatus(); await drawOffline();
       toast("Local model disabled; cloud providers are available.");
     }
   };
