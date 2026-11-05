@@ -171,30 +171,53 @@ class LocalModel:
     note: str
 
 
+# Free, open-weights models from the Ollama library (sizes are the default download, checked Nov 2026).
+# ``tools`` = the Ollama library lists tool calling for it; the others still work, through the text protocol.
 CATALOG: tuple[LocalModel, ...] = (
     LocalModel("qwen2.5:0.5b", "Qwen 2.5 0.5B", 0.4, 2, True, "Tiny and very fast. Fine for short chats; weak at tasks."),
     LocalModel("qwen2.5:1.5b", "Qwen 2.5 1.5B", 1.0, 4, True, "Small and quick. OK for simple tasks."),
-    LocalModel("gemma3:1b", "Google Gemma 3 1B", 0.8, 4, True, "Free local language model. Best for short chat; tool support varies."),
+    LocalModel("qwen3.5:0.8b", "Qwen 3.5 0.8B", 1.3, 4, True, "Newest tiny Qwen: quick, reads images, long memory."),
+    LocalModel("gemma3:1b", "Google Gemma 3 1B", 0.8, 4, False, "Short chats only; no tool calling."),
     LocalModel("llama3.2:1b", "Llama 3.2 1B", 1.3, 4, True, "Small and quick."),
-    LocalModel("qwen2.5:3b", "Qwen 2.5 3B", 1.9, 8, True, "Best small all-rounder. Good tool use."),
+    LocalModel("qwen2.5:3b", "Qwen 2.5 3B", 1.9, 8, True, "Fast small all-rounder. Good tool use, even on a CPU."),
     LocalModel("llama3.2:3b", "Llama 3.2 3B", 2.0, 8, True, "Good small all-rounder."),
-    LocalModel("qwen3:4b", "Qwen 3 4B", 2.5, 8, True, "Smarter, a bit slower (thinks before answering)."),
-    LocalModel("gemma3:4b", "Google Gemma 3 4B", 3.4, 8, True, "Free multilingual chat and image understanding; tool support varies."),
+    LocalModel("qwen3:4b", "Qwen 3 4B", 2.5, 8, True, "Smarter, a bit slower."),
+    LocalModel("qwen3.5:2b", "Qwen 3.5 2B", 3.1, 8, True, "Newer small Qwen with image understanding."),
+    LocalModel("gemma3:4b", "Google Gemma 3 4B", 3.4, 8, False, "Multilingual chat and images; no tool calling, so tasks are slower."),
+    LocalModel("qwen3.5:4b", "Qwen 3.5 4B", 4.0, 8, True, "Best quality for most laptops: tools, images, long documents."),
+    LocalModel("mistral:7b", "Mistral 7B", 4.4, 16, True, "Solid European all-rounder."),
     LocalModel("qwen2.5:7b", "Qwen 2.5 7B", 4.7, 16, True, "Strong at tasks and documents."),
-    LocalModel("qwen3:8b", "Qwen 3 8B", 5.2, 16, True, "Strong reasoning; slower on CPU."),
     LocalModel("llama3.1:8b", "Llama 3.1 8B", 4.9, 16, True, "Strong general model."),
-    LocalModel("qwen3:14b", "Qwen 3 14B", 9.3, 32, True, "Best quality here; needs a big computer or GPU."),
+    LocalModel("deepseek-r1:8b", "DeepSeek R1 8B", 5.2, 16, True, "Reasons step by step: good at maths and logic, slower."),
+    LocalModel("qwen3:8b", "Qwen 3 8B", 5.2, 16, True, "Strong reasoning; slower on CPU."),
+    LocalModel("qwen3.5:9b", "Qwen 3.5 9B", 7.6, 16, True, "Excellent all-rounder for a graphics card or 32 GB PC."),
+    LocalModel("gemma4:e2b", "Google Gemma 4 E2B", 7.5, 16, True, "Google's newest small model: tools, images, audio."),
+    LocalModel("gemma4:12b", "Google Gemma 4 12B", 8.0, 16, True, "Google's newest: strong writing and reasoning."),
+    LocalModel("gemma4:e4b", "Google Gemma 4 E4B", 9.5, 16, True, "Google's newest, more capable than E2B."),
+    LocalModel("qwen3:14b", "Qwen 3 14B", 9.3, 32, True, "High quality; needs a big computer or GPU."),
+    LocalModel("gpt-oss:20b", "OpenAI gpt-oss 20B", 14.0, 24, True, "OpenAI's open-weights model (Apache 2.0). Needs 16 GB+ graphics memory to be quick."),
+    LocalModel("qwen3.5:27b", "Qwen 3.5 27B", 20.0, 32, True, "Near cloud quality; needs a 24 GB graphics card or a 32 GB Mac."),
 )
 # The one we pick: by graphics memory when there is a GPU (fast), else by RAM (CPU is slower,
 # so we stay smaller). Computers report a bit less than the label (16 GB shows as ~15.5).
-_GPU_BEST = ((11, "qwen3:14b"), (5.5, "qwen2.5:7b"), (2.5, "qwen2.5:3b"))
-_RAM_BEST = ((30, "qwen2.5:7b"), (7, "qwen2.5:3b"), (3.5, "qwen2.5:1.5b"), (0, "qwen2.5:0.5b"))
-_APPLE_BEST = ((30, "qwen3:14b"), (15, "qwen2.5:7b"), (7, "qwen2.5:3b"), (3.5, "qwen2.5:1.5b"), (0, "qwen2.5:0.5b"))
+_GPU_BEST = ((22, "qwen3.5:27b"), (11, "qwen3.5:9b"), (5.5, "qwen3.5:4b"), (2.5, "qwen2.5:3b"))
+_RAM_BEST = ((30, "qwen3.5:9b"), (15, "qwen3.5:4b"), (7, "qwen2.5:3b"), (3.5, "qwen2.5:1.5b"), (0, "qwen2.5:0.5b"))
+_APPLE_BEST = ((30, "qwen3.5:27b"), (15, "qwen3.5:9b"), (7, "qwen2.5:3b"), (3.5, "qwen2.5:1.5b"), (0, "qwen2.5:0.5b"))
+
+
+_HW: dict[str, Any] = {}
+
+
+def _hardware_cached() -> dict[str, Any]:
+    """hardware() runs nvidia-smi: do it once per process, not on every chat turn."""
+    if not _HW:
+        _HW.update(hardware())
+    return dict(_HW)
 
 
 def recommend(hw: dict[str, Any] | None = None) -> dict[str, Any]:
     """Models that fit this computer. ``best`` is the one we suggest downloading first."""
-    hw = hw or hardware()
+    hw = hw or _hardware_cached()
     ram = hw.get("ram_gb") or 8.0
     gpu = hw.get("gpu") or {}
     vram = gpu.get("vram_gb") or 0
@@ -265,6 +288,123 @@ def ollama_status() -> dict[str, Any]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Which model actually runs, and how (context size, tools, thinking)
+# ---------------------------------------------------------------------------
+_TAGS_CACHE: dict[str, Any] = {"at": 0.0, "names": None, "url": None}
+_INFO_CACHE: dict[str, dict[str, Any]] = {}
+DEFAULT_CONTEXT = 8192  # Ollama's own default (2-4k on most PCs) cuts off the agent's ~4k-token prompt
+
+
+def installed_models(max_age: float = 5.0) -> list[str] | None:
+    """Names Ollama has downloaded (cached a few seconds), or None when Ollama can't be reached."""
+    now, url = time.monotonic(), ollama_url()
+    if _TAGS_CACHE["names"] is not None and _TAGS_CACHE["url"] == url and now - _TAGS_CACHE["at"] < max_age:
+        return list(_TAGS_CACHE["names"])
+    try:
+        names = [m.get("name") for m in (_get("/api/tags").get("models") or []) if m.get("name")]
+    except (urllib.error.URLError, OSError, ValueError):
+        names = None
+    _TAGS_CACHE.update(at=now, names=names, url=url)
+    return list(names) if names is not None else None
+
+
+def forget_installed() -> None:
+    """Call after a download or a model change so the next turn sees it at once."""
+    _TAGS_CACHE.update(at=0.0, names=None, url=None)
+    _INFO_CACHE.clear()
+
+
+def _is_installed(name: str, names: list[str]) -> bool:
+    return name in names or f"{name}:latest" in names or (name.endswith(":latest") and name[:-7] in names)
+
+
+def _best_installed(names: list[str]) -> str | None:
+    """The most useful downloaded model: our pick for this computer, else the biggest catalogue model
+    that fits and can use tools, else any chat model (embedding models can't chat)."""
+    rec = recommend()
+    if _is_installed(rec["best"], names):
+        return rec["best"]
+    for m in reversed(rec["models"]):
+        if m["tools"] and _is_installed(m["name"], names):
+            return m["name"]
+    for m in reversed(rec["models"]):
+        if _is_installed(m["name"], names):
+            return m["name"]
+    return next((n for n in names if "embed" not in n.lower()), None)
+
+
+def active_model() -> str:
+    """The Ollama model a chat will really use.
+
+    ``OLLAMA_MODEL`` in .env is a lock and always wins. Otherwise the model picked in Settings (or our
+    default) is used when it is downloaded; when it isn't, the best downloaded model is used instead of
+    failing with "model not found" (e.g. Offline mode turned on before a model was chosen, or a
+    picked model that was deleted in Ollama)."""
+    locked = config.env("OLLAMA_MODEL")
+    if locked:
+        return locked
+    chosen = ollama_model()
+    names = installed_models()
+    if not names or _is_installed(chosen, names):
+        return chosen
+    return _best_installed(names) or chosen
+
+
+def model_info(name: str) -> dict[str, Any]:
+    """Capabilities (``tools``, ``thinking``, ``vision``…) and the trained context length, from
+    Ollama's /api/show. Cached per model; empty when unknown (old Ollama, not downloaded)."""
+    key = f"{ollama_url()}|{name}"
+    if key in _INFO_CACHE:
+        return _INFO_CACHE[key]
+    info: dict[str, Any] = {}
+    try:
+        req = urllib.request.Request(ollama_url() + "/api/show", data=json.dumps({"model": name}).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=5) as r:  # noqa: S310  # nosec B310 - validated local address only
+            data = json.loads(r.read().decode("utf-8") or "{}")
+        caps = data.get("capabilities")
+        if isinstance(caps, list):
+            info["capabilities"] = [str(c) for c in caps]
+        ctx = [v for k, v in (data.get("model_info") or {}).items() if k.endswith(".context_length")]
+        if ctx and isinstance(ctx[0], int):
+            info["context_length"] = ctx[0]
+    except (urllib.error.URLError, OSError, ValueError):
+        return {}  # not cached: Ollama may just be starting
+    _INFO_CACHE[key] = info
+    return info
+
+
+def supports(name: str, capability: str) -> bool | None:
+    """True / False when Ollama says so, None when it can't tell (then we just try)."""
+    caps = model_info(name).get("capabilities")
+    return None if caps is None else capability in caps
+
+
+def context_size(name: str) -> int:
+    """Context window to ask for: LOCAL_AI_CONTEXT (default 8192), never above what the model knows."""
+    try:
+        want = int(config.env("LOCAL_AI_CONTEXT") or DEFAULT_CONTEXT)
+    except ValueError:
+        want = DEFAULT_CONTEXT
+    want = max(2048, want)
+    trained = model_info(name).get("context_length")
+    return min(want, trained) if isinstance(trained, int) and trained >= 2048 else want
+
+
+def request_options(name: str) -> dict[str, Any]:
+    """Extra /api/chat fields shared by chats and the Test button, so both load the model the same way
+    (a different context size makes Ollama reload the model)."""
+    extra: dict[str, Any] = {"options": {"num_ctx": context_size(name)}}
+    # Thinking models (Qwen 3/3.5, DeepSeek R1, gpt-oss) can spend minutes "thinking" on a laptop CPU
+    # before every step. Off unless LOCAL_AI_THINK=1; only sent to models that support the switch.
+    if supports(name, "thinking"):
+        think = (config.env("LOCAL_AI_THINK") or "").lower() in ("1", "true", "yes", "on")
+        # gpt-oss can't switch thinking off, only turn it down: it takes "low" / "medium" / "high"
+        extra["think"] = ("medium" if think else "low") if name.startswith("gpt-oss") else think
+    return extra
+
+
 _SAFE_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-/]{0,80}(:[A-Za-z0-9._\-]{1,40})?$")
 _PULLS: dict[str, dict[str, Any]] = {}
 _PULL_LOCK = threading.Lock()
@@ -302,6 +442,10 @@ def pull(name: str, *, wait: bool = False) -> dict[str, Any]:
                     if ev.get("total"):
                         st["percent"] = int(100 * (ev.get("completed") or 0) / ev["total"])
             st.update(state="done", status="success", percent=100)
+            forget_installed()
+            from automoto import providers
+
+            providers.clear_unavailable("ollama")  # an earlier "not found" for this model is now wrong
         except urllib.error.URLError:
             st.update(state="error", error="Ollama isn't running. Install it from ollama.com and open it, then try again.")
         except Exception as e:  # noqa: BLE001
@@ -356,6 +500,7 @@ def start_ollama() -> dict[str, Any]:
         time.sleep(0.2)
         current = ollama_status()
         if current["running"]:
+            forget_installed()
             return {"started": True, "already_running": False, "ollama": current}
         if _OLLAMA_CHILD and _OLLAMA_CHILD.poll() is not None:
             break
@@ -373,26 +518,49 @@ def test_ollama(name: str) -> dict[str, Any]:
     installed = {m["name"] for m in status["models"]}
     if name not in installed and name + ":latest" not in installed:
         raise ValueError("That model is not downloaded yet.")
-    request = urllib.request.Request(
-        ollama_url() + "/api/generate",
-        data=json.dumps({"model": name, "prompt": "Reply only OK.", "stream": False,
-                         "options": {"num_predict": 12}}).encode("utf-8"),
-        headers={"Content-Type": "application/json"}, method="POST")
+    # Same endpoint and options as a real chat, so a passing test also leaves the model loaded for it.
+    body: dict[str, Any] = {"model": name, "messages": [{"role": "user", "content": "Reply only OK."}],
+                            "stream": False, **request_options(name)}
+    body["options"]["num_predict"] = 32
+    request = urllib.request.Request(ollama_url() + "/api/chat", data=json.dumps(body).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+    started = time.monotonic()
     try:
-        with urllib.request.urlopen(request, timeout=90) as response:
+        with urllib.request.urlopen(request, timeout=300) as response:  # noqa: S310  # nosec B310 - local only
             data = json.load(response)
+    except urllib.error.HTTPError as exc:
+        raise ValueError(f"Local model could not load: {_ollama_error(exc)}") from exc
     except (OSError, urllib.error.URLError, ValueError) as exc:
         raise ValueError(f"Local model could not load: {exc}") from exc
     if data.get("error"):
         raise ValueError(str(data["error"])[:250])
-    return {"ok": True, "model": name, "reply": str(data.get("response", "")).strip()[:150]}
+    reply = strip_thinking(str((data.get("message") or {}).get("content", "")))
+    from automoto import providers
+
+    providers.clear_unavailable("ollama")
+    return {"ok": True, "model": name, "reply": reply.strip()[:150], "seconds": round(time.monotonic() - started, 1),
+            "context": body["options"]["num_ctx"], "tools": supports(name, "tools")}
+
+
+def _ollama_error(exc: urllib.error.HTTPError) -> str:
+    """Ollama's own words from an error response ({"error": "..."}), else the HTTP status."""
+    try:
+        data = json.loads(exc.read().decode("utf-8") or "{}")
+        msg = data.get("error")
+        if isinstance(msg, dict):
+            msg = msg.get("message")
+        if msg:
+            return str(msg)[:250]
+    except (OSError, ValueError):
+        pass
+    return f"HTTP {exc.code}"
 
 
 def status() -> dict[str, Any]:
     """Everything the Settings page needs."""
     return {"offline": offline(), "offline_from_env": bool(config.env("AUTOMOTO_OFFLINE")),
             "model_from_env": bool(config.env("OLLAMA_MODEL")),
-            "model": ollama_model(), "ollama_enabled": enabled("ollama"),
+            "model": active_model(), "chosen_model": ollama_model(), "ollama_enabled": enabled("ollama"),
             "local_server": local_server_url(), "ollama": ollama_status(), "recommend": recommend(),
             "pulls": pull_progress()}
 

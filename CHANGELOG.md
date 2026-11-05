@@ -3,6 +3,21 @@
 ## Unreleased (on `main`, after 5.6.0-beta.3) — one central assistant, memory, artifacts, your own server
 **Coming in the next beta.** Not in a tagged build yet.
 
+- **Offline AI fixed: local models now load and work.** Four bugs made Ollama models fail or misbehave:
+  (1) AutoMoto always asked Ollama for `qwen2.5:3b` (or the last picked model) even when only another model was
+  downloaded, so Offline mode failed with "model not found" — it now uses the best downloaded model instead
+  (`OLLAMA_MODEL` in `.env` still locks it); (2) that one "not found" hid the local model for an **hour**, so
+  downloading it didn't help — local models are now retried after 30 s and a finished download clears it at once;
+  (3) Ollama's default context (2–4k tokens on most PCs) silently cut off the agent's ~4k-token instructions and
+  tool list — Ollama is now called through its native `/api/chat` with `num_ctx` 8192 (`LOCAL_AI_CONTEXT`);
+  (4) models without tool calling (Gemma 3) wasted a failing request on every step — Ollama's `/api/show`
+  capabilities now decide. Thinking models no longer think for minutes before each step on a CPU
+  (`LOCAL_AI_THINK=1` to allow it), an installed Ollama that isn't running is started once automatically, and the
+  **Test** button loads the model exactly as a chat will (and reports the time).
+- **Newest free local models in Settings → Offline AI:** Qwen 3.5 (0.8B–27B, tools and images), Google Gemma 4
+  (E2B, E4B, 12B), OpenAI gpt-oss 20B, DeepSeek R1 8B and Mistral 7B join Qwen 2.5/3, Llama 3.x and Gemma 3.
+  Recommendations by hardware now prefer Qwen 3.5 from 16 GB of memory or a 6 GB graphics card up.
+
 - **New licence: AGPL-3.0-only, with a paid commercial licence.** Copyright (C) 2025-2026 Yasin Mohammed Miah
   (see `NOTICE`). Free for personal, educational and open-source use under the AGPL; closed-source or commercial use
   without the AGPL obligations needs a [commercial licence](COMMERCIAL-LICENSE.md). Versions up to and including

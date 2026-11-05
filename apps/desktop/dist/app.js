@@ -32,10 +32,14 @@ function draw() {
   if (signed) { $("#siUser").textContent = info.username || "you"; $("#siServer").textContent = info.server; }
   const e = info.engine;
   $("#engineState").className = "small " + (e || info.engine_running ? "ok-dot" : "no-dot");
-  $("#engineState").textContent = info.engine_running ? "An AutoMoto engine is already running on this PC."
-    : e ? `Engine found (${e.how}).` : "The local engine is not installed yet.";
+  const old = !!(e && e.outdated);
+  $("#engineState").textContent = old
+    ? `Engine ${e.version} found, but this app uses ${e.wanted}. Update it to get Offline AI and the latest fixes.`
+    : info.engine_running ? "An AutoMoto engine is already running on this PC."
+    : e ? `Engine found (${e.how}${e.version ? ", " + e.version : ""}).` : "The local engine is not installed yet.";
   const missing = !e && !info.engine_running;
-  $("#installBtn").hidden = !missing || !info.windows;
+  $("#installBtn").hidden = !(missing || old) || !info.windows;
+  $("#installBtn").textContent = old ? "Update the local engine" : "Install the local engine";
   $("#installHelp").hidden = !missing;
   if (!info.windows) {
     $("#cmd").textContent = "bash scripts/install.sh";
@@ -88,7 +92,9 @@ async function main() {
   });
   $("#localBtn").addEventListener("click", startLocal);
   $("#installBtn").addEventListener("click", async () => {
-    try { await invoke("install_engine"); note("PowerShell opened with the installer. Answer its questions; when it says it is done, click Start local mode.", true); }
+    try { await invoke("install_engine"); note(info.engine && info.engine.outdated
+      ? "PowerShell opened to update the engine. When it says it is done, click Start local mode."
+      : "PowerShell opened with the installer. Answer its questions; when it says it is done, click Start local mode.", true); }
     catch (e) { note(errText(e)); }
   });
   document.querySelectorAll("[data-link]").forEach((a) => a.addEventListener("click", (ev) => { ev.preventDefault(); invoke("open_link", { which: a.dataset.link }).catch((e) => note(errText(e))); }));
@@ -98,7 +104,8 @@ async function main() {
   if (params.get("auto") === "local") return startLocal();
   if (params.get("home") === "1") return;
   if (info.mode === "account" && info.signed_in) return openAccount();
-  if (info.mode === "local" && (info.engine || info.engine_running)) return startLocal();
+  // an outdated engine stays on this screen once, so the Update button is seen
+  if (info.mode === "local" && (info.engine || info.engine_running) && !(info.engine && info.engine.outdated)) return startLocal();
   (info.server ? $("#username") : $("#server")).focus();
 }
 

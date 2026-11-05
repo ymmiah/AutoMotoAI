@@ -119,6 +119,7 @@ fn app_info(app: AppHandle, webview: tauri::Webview) -> Result<Value, String> {
     let server = if s.server.is_empty() { DEFAULT_SERVER.unwrap_or("").to_string() } else { s.server.clone() };
     let signed_in = account::server_origin(&server).ok().and_then(|o| account::load_token(&o)).is_some();
     let engine = local::find_engine();
+    let wanted = engine_version(env!("CARGO_PKG_VERSION"));
     Ok(json!({
         "version": env!("CARGO_PKG_VERSION"),
         "channel": CHANNEL,
@@ -128,7 +129,13 @@ fn app_info(app: AppHandle, webview: tauri::Webview) -> Result<Value, String> {
         "device_name": if s.device_name.is_empty() { device_default_name() } else { s.device_name },
         "mode": s.mode,
         "signed_in": signed_in,
-        "engine": engine.as_ref().map(|(p, how)| json!({"path": p.display().to_string(), "how": how})),
+        "engine": engine.as_ref().map(|(p, how)| {
+            // An engine installed by an older app (e.g. from the Store) doesn't update itself when the app does,
+            // and so lacks newer features such as Offline AI: offer to update it. A custom AUTOMOTO_PYTHON is left alone.
+            let version = local::installed_version(p);
+            let outdated = *how != "AUTOMOTO_PYTHON" && version.as_deref().is_some_and(|v| v != wanted);
+            json!({"path": p.display().to_string(), "how": how, "version": version, "wanted": wanted, "outdated": outdated})
+        }),
         "engine_running": local::port_busy(),
         "windows": cfg!(windows),
         "mac": cfg!(target_os = "macos"),
@@ -270,7 +277,6 @@ fn install_engine(app: AppHandle, webview: tauri::Webview) -> Result<Value, Stri
 }
 
 /// The engine release that matches this app: "5.6.0-beta.1" -> "5.6.0b1" (PEP 440), "5.6.0" -> "5.6.0".
-#[cfg_attr(not(windows), allow(dead_code))]
 fn engine_version(app_version: &str) -> String {
     match app_version.split_once("-beta.") {
         Some((base, n)) => format!("{base}b{n}"),
