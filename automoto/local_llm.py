@@ -379,7 +379,7 @@ def test_ollama(name: str) -> dict[str, Any]:
                          "options": {"num_predict": 12}}).encode("utf-8"),
         headers={"Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=90) as response:
+        with urllib.request.urlopen(request, timeout=90) as response:  # nosec B310 - request URL is validated local Ollama address
             data = json.load(response)
     except (OSError, urllib.error.URLError, ValueError) as exc:
         raise ValueError(f"Local model could not load: {exc}") from exc
