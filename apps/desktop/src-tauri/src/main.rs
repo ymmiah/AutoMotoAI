@@ -60,6 +60,11 @@ fn same_origin(a: &Url, b: &Url) -> bool {
 
 /// Where the window may go. Everything else opens in the normal web browser.
 fn navigation_allowed(app: &AppHandle, u: &Url) -> bool {
+    if u.scheme() == "automoto" && u.host_str() == Some("switch-mode") {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move { go_home(&handle, ""); });
+        return false;
+    }
     if is_app_page(u) || u.as_str() == "about:blank" {
         return true;
     }
@@ -352,7 +357,7 @@ async fn check_updates(app: AppHandle, interactive: bool) {
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let file = Submenu::with_items(app, "AutoMoto", true, &[
-        &MenuItem::with_id(app, "home", "Sign-in screen / switch mode", true, Some("CmdOrCtrl+Shift+H"))?,
+        &MenuItem::with_id(app, "home", "Switch Local / Cloud / Server", true, Some("CmdOrCtrl+Shift+H"))?,
         &MenuItem::with_id(app, "reload", "Reload", true, Some("CmdOrCtrl+R"))?,
         &PredefinedMenuItem::separator(app)?,
         &MenuItem::with_id(app, "updates", "Check for updates…", true, None::<&str>)?,
