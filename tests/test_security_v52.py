@@ -62,7 +62,9 @@ def test_expired_launch_token_refused(client):
 def test_rate_limit(monkeypatch, client):
     monkeypatch.setenv("AUTOMOTO_RATE_LIMIT", "5")
     server._HITS.clear()
-    codes = [client.get("/api/status", headers=H).status_code for _ in range(8)]
+    # Status probes local AI runtimes and can exceed the 60-second window on Windows.
+    # Settings exercises the same middleware bucket without unrelated network discovery.
+    codes = [client.get("/api/settings", headers=H).status_code for _ in range(8)]
     server._HITS.clear()
     assert codes[:5] == [200] * 5 and codes[-1] == 429
 
