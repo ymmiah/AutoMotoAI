@@ -549,7 +549,7 @@ function renderEvent(ctx, ev) {
       const kb = (b) => b == null ? "" : b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
       n.innerHTML = `${icon("file")} <b>Files made</b><ul>${ev.files.slice(0, 30).map((f) => `<li><button type="button" class="linkish" data-open-file="${esc(f.path)}">Open ${esc(f.name || f.path)}</button> · <a href="/api/files/download?path=${encodeURIComponent(f.path)}" download>Download</a><span class="muted"> · ${esc(f.path)} · ${kb(f.bytes)}</span></li>`).join("")}</ul>`;
       steps.appendChild(n);
-      $("[data-open-file]", n).forEach((b) => b.onclick = () => openWorkspaceFile(b.dataset.openFile)); break;
+      n.querySelectorAll("[data-open-file]").forEach((b) => { b.onclick = () => openWorkspaceFile(b.dataset.openFile); }); break;
     }
     case "error": ctx.error = ev.error; break;
   }
