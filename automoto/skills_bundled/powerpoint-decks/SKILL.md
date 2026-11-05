@@ -33,6 +33,18 @@ status: live
   No invented figures: metrics/charts need supplied or verifiable data.
 - `notes` on every content slide: what to say (2-5 sentences), the source of any figure, timings.
 
+**Photos, image generation and exact-copy preservation**
+- First check `uploads/` for the user's photograph, logo, brand image or approved asset.
+  `image_text` and `canvas` insert those **original image bytes** with aspect-fit.
+  Do not regenerate a reference person's face/body, embellish the logo or make up text.
+- For original photographic or illustrated art with no identity-critical subject, use
+  `image_models` then `image_generate` if the user has configured local ComfyUI and a
+  compatible checkpoint. It is NOT bundled with AutoMoto and cannot guarantee face identity.
+  If unavailable, say so; use editable native icon/shape graphics instead.
+- If the user wants a visual graphic from their own photo and exact wording, use
+  `image_compose`: it respects the original source and produces a new file.
+- A professional deck has actual visual variation, not black slides with plain white text.
+
 **Check**
 1. `office_check` - fix overflow warnings (split the slide or shorten), empty placeholders, small fonts,
    missing alt text, missing notes.
