@@ -174,10 +174,12 @@ class LocalModel:
 CATALOG: tuple[LocalModel, ...] = (
     LocalModel("qwen2.5:0.5b", "Qwen 2.5 0.5B", 0.4, 2, True, "Tiny and very fast. Fine for short chats; weak at tasks."),
     LocalModel("qwen2.5:1.5b", "Qwen 2.5 1.5B", 1.0, 4, True, "Small and quick. OK for simple tasks."),
+    LocalModel("gemma3:1b", "Google Gemma 3 1B", 0.8, 4, True, "Free local language model. Best for short chat; tool support varies."),
     LocalModel("llama3.2:1b", "Llama 3.2 1B", 1.3, 4, True, "Small and quick."),
     LocalModel("qwen2.5:3b", "Qwen 2.5 3B", 1.9, 8, True, "Best small all-rounder. Good tool use."),
     LocalModel("llama3.2:3b", "Llama 3.2 3B", 2.0, 8, True, "Good small all-rounder."),
     LocalModel("qwen3:4b", "Qwen 3 4B", 2.5, 8, True, "Smarter, a bit slower (thinks before answering)."),
+    LocalModel("gemma3:4b", "Google Gemma 3 4B", 3.4, 8, True, "Free multilingual chat and image understanding; tool support varies."),
     LocalModel("qwen2.5:7b", "Qwen 2.5 7B", 4.7, 16, True, "Strong at tasks and documents."),
     LocalModel("qwen3:8b", "Qwen 3 8B", 5.2, 16, True, "Strong reasoning; slower on CPU."),
     LocalModel("llama3.1:8b", "Llama 3.1 8B", 4.9, 16, True, "Strong general model."),
@@ -294,6 +296,74 @@ def pull_progress(name: str | None = None) -> dict[str, Any]:
     if name:
         return dict(_PULLS.get(name) or {"model": name, "state": "idle"})
     return {k: dict(v) for k, v in _PULLS.items()}
+
+
+_OLLAMA_START_LOCK = threading.Lock()
+_OLLAMA_CHILD: subprocess.Popen[Any] | None = None
+
+
+def start_ollama() -> dict[str, Any]:
+    """Start an already installed Ollama locally, only after the user requests it."""
+    global _OLLAMA_CHILD
+    from urllib.parse import urlparse
+
+    u = urlparse(ollama_url())
+    if u.hostname not in ("127.0.0.1", "localhost", "::1"):
+        raise ValueError("Automatic start is available only for Ollama running on this computer.")
+    current = ollama_status()
+    if current["running"]:
+        return {"started": True, "already_running": True, "ollama": current}
+    binary = shutil.which("ollama")
+    if not binary:
+        raise ValueError("Ollama is not installed. Download the official installer from https://ollama.com/download.")
+    with _OLLAMA_START_LOCK:
+        if _OLLAMA_CHILD is None or _OLLAMA_CHILD.poll() is not None:
+            env = os.environ.copy()
+            env["OLLAMA_HOST"] = u.netloc
+            options: dict[str, Any] = {"env": env, "stdin": subprocess.DEVNULL,
+                                        "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+            if os.name == "nt":
+                options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            else:
+                options["start_new_session"] = True
+            try:
+                _OLLAMA_CHILD = subprocess.Popen([binary, "serve"], **options)
+            except OSError as exc:
+                raise ValueError(f"Could not start Ollama: {exc}") from exc
+    for _ in range(25):
+        time.sleep(0.2)
+        current = ollama_status()
+        if current["running"]:
+            return {"started": True, "already_running": False, "ollama": current}
+        if _OLLAMA_CHILD and _OLLAMA_CHILD.poll() is not None:
+            break
+    return {"started": False, "message": "Ollama did not become ready. Check Ollama installation and logs.",
+            "ollama": current}
+
+
+def test_ollama(name: str) -> dict[str, Any]:
+    """Small local inference smoke test with an explicit, bounded timeout."""
+    if not valid_model_name(name):
+        raise ValueError("Invalid model name.")
+    status = ollama_status()
+    if not status["running"]:
+        raise ValueError("Ollama is not running. Click Start local AI first.")
+    installed = {m["name"] for m in status["models"]}
+    if name not in installed and name + ":latest" not in installed:
+        raise ValueError("That model is not downloaded yet.")
+    request = urllib.request.Request(
+        ollama_url() + "/api/generate",
+        data=json.dumps({"model": name, "prompt": "Reply only OK.", "stream": False,
+                         "options": {"num_predict": 12}}).encode("utf-8"),
+        headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            data = json.load(response)
+    except (OSError, urllib.error.URLError, ValueError) as exc:
+        raise ValueError(f"Local model could not load: {exc}") from exc
+    if data.get("error"):
+        raise ValueError(str(data["error"])[:250])
+    return {"ok": True, "model": name, "reply": str(data.get("response", "")).strip()[:150]}
 
 
 def status() -> dict[str, Any]:
