@@ -1,5 +1,13 @@
 # AutoMoto AI - Version History & Changelog
 
+## 5.6.0-beta.5 — Desktop workspace and Microsoft Store update
+
+- Redesigned native launcher and chat workspace, filterable ideas, setup status, quick commands and themes.
+- Preserve unsent message drafts during navigation and contain keyboard focus in dialogs.
+- Refresh engine installation status without overwriting sign-in drafts.
+- Bundle the matching Python engine wheel and SHA-256 in the Store MSIX; align runtime and package versions.
+- Add browser regression checks and screenshots. See [Store release notes](docs/RELEASE-5.6.0-beta.5-MSSTORE.md).
+
 ## Unreleased (on `main`, after 5.6.0-beta.3) — one central assistant, memory, artifacts, your own server
 **Coming in the next beta.** Not in a tagged build yet.
 

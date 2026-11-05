@@ -82,3 +82,18 @@ def test_store_screenshots_are_big_enough():
     for s in shots:
         w, h = Image.open(s).size
         assert w >= 1366 and h >= 768
+
+
+def test_release_versions_agree():
+    from automoto import __version__
+
+    app = json.loads((ROOT / "apps/desktop/src-tauri/tauri.conf.json").read_text())["version"]
+    engine = app.replace("-beta.", "b")
+    assert __version__ == engine
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert re.search(r'^version = "([^"]+)"', pyproject, re.M)[1] == engine
+    for path in ("apps/desktop/package.json", "apps/desktop/package-lock.json"):
+        assert json.loads((ROOT / path).read_text())["version"] == app
+    for path in ("apps/desktop/src-tauri/Cargo.toml", "apps/desktop/src-tauri/Cargo.lock"):
+        text = (ROOT / path).read_text()
+        assert re.search(r'name = "automoto-desktop"\s+version = "([^"]+)"', text)[1] == app

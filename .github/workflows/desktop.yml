@@ -9,9 +9,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-    paths: ["apps/desktop/**", "automoto/**", "packaging/msstore/**", "packaging/branding/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
+    paths: ["apps/desktop/**", "automoto/**", "pyproject.toml", "packaging/msstore/**", "packaging/branding/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
   pull_request:
-    paths: ["apps/desktop/**", "automoto/**", "packaging/msstore/**", "packaging/branding/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
+    paths: ["apps/desktop/**", "automoto/**", "pyproject.toml", "packaging/msstore/**", "packaging/branding/**", "scripts/install.ps1", "scripts/ci/**", ".github/workflows/desktop.yml"]
   workflow_dispatch:
     inputs:
       store_upload:
@@ -59,8 +59,19 @@ jobs:
           "pyproject $py · tauri.conf $conf · Cargo $cargo · package.json $pkg"
           if (($conf, $cargo, $pkg | Sort-Object -Unique).Count -ne 1) { throw "app versions differ" }
           # the engine uses PEP 440 for the same version: 5.6.0-beta.1 <-> 5.6.0b1
+          $engine = (Select-String -Path automoto/__init__.py -Pattern '^__version__ = "(.+)"').Matches[0].Groups[1].Value
+          if ($engine -ne $py) { throw "Runtime engine version $engine differs from wheel $py" }
           if (($conf -replace '-beta\.', 'b') -ne $py) { throw "app $conf doesn't match the engine $py" }
           if ($env:GITHUB_REF -like "refs/tags/v*" -and $env:GITHUB_REF_NAME -ne "v$conf") { throw "tag $env:GITHUB_REF_NAME is not v$conf" }
+      - name: Build matching Python engine wheel
+        shell: pwsh
+        run: |
+          python -m pip wheel --no-deps --wheel-dir engine-wheel .
+          if ($LASTEXITCODE) { throw "Could not build the bundled engine" }
+          $py = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $wheel = "engine-wheel/automoto_ai-$py-py3-none-any.whl"
+          if (-not (Test-Path $wheel)) { throw "Missing matching engine wheel" }
+          (Get-FileHash $wheel -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -Encoding ascii "$wheel.sha256"
       - name: Rust unit tests and lint
         working-directory: apps/desktop/src-tauri
         run: |
@@ -72,13 +83,17 @@ jobs:
         run: |
           npm ci --no-fund --no-audit
           node --check dist/app.js
+          # Include the matching engine in the standalone installers as well as the Store MSIX.
+          $config = @{ bundle = @{ resources = @{
+            "../../../scripts/install.ps1" = "resources/install.ps1"
+            "../../../engine-wheel/" = "resources/"
+          } } }
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-            "::notice::No updater signing key (fork PR) - building without update signatures"
-            '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Encoding ascii no-updater.json
-            npx tauri build --bundles nsis,msi --config no-updater.json
-          } else {
-            npx tauri build --bundles nsis,msi
+            "::notice::No updater signing key - building without update signatures"
+            $config.bundle.createUpdaterArtifacts = $false
           }
+          $config | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 engine-bundle.json
+          npx tauri build --bundles nsis,msi --config engine-bundle.json
           if ($LASTEXITCODE) { exit 1 }
       - name: Collect the installers
         shell: pwsh

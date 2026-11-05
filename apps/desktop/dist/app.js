@@ -19,13 +19,28 @@ function note(text, ok = false) {
 function errText(e) { return typeof e === "string" ? e : (e && e.message) || String(e); }
 
 let info = null;
+let refreshing = false;
+let installing = false;
 
-function draw() {
-  $("#ver").textContent = `Windows app ${info.version} ${info.channel || ""}`.trim();
+// Recheck after the external installer finishes without overwriting a sign-in draft.
+async function refreshInfo() {
+  if (refreshing || !$("#busy").hidden) return;
+  refreshing = true;
+  $("#refreshBtn").disabled = true;
+  try { info = await invoke("app_info"); draw(false); }
+  catch (e) { note(errText(e)); }
+  finally { refreshing = false; $("#refreshBtn").disabled = false; }
+}
+
+function draw(fillForm = true) {
+  const platform = info.windows ? "Windows" : info.mac ? "macOS" : "Linux";
+  $("#ver").textContent = `${platform} app ${info.version} ${info.channel || ""}`.trim();
   $("#chan").hidden = !info.channel;
-  $("#server").value = info.server || "";
-  $("#username").value = info.username || "";
-  $("#device").value = info.device_name || "";
+  if (fillForm) {
+    $("#server").value = info.server || "";
+    $("#username").value = info.username || "";
+    $("#device").value = info.device_name || "";
+  }
   const signed = info.signed_in && info.server;
   $("#signedIn").hidden = !signed;
   $("#signForm").hidden = !!signed;
@@ -40,7 +55,7 @@ function draw() {
   const missing = !e && !info.engine_running;
   $("#installBtn").hidden = !(missing || old) || !info.windows;
   $("#installBtn").textContent = old ? "Update the local engine" : "Install the local engine";
-  $("#installHelp").hidden = !missing;
+  $("#installHelp").hidden = !(missing || old);
   if (!info.windows) {
     $("#cmd").textContent = "bash scripts/install.sh";
     $("#cmdHint").textContent = "Run the installer in a terminal (from the AutoMotoAI folder):";
@@ -60,7 +75,7 @@ async function startLocal() {
   busy("Starting AutoMoto on this PC… (the first start can take a minute)");
   try {
     const r = await invoke("start_local");
-    if (r && r.missing) { busy(""); info.engine = null; draw(); note("Install the local engine first (see the Local mode box)."); }
+    if (r && r.missing) { busy(""); info.engine = null; info.engine_running = false; draw(false); note("Install the local engine first (see Work on this computer)."); }
   } catch (e) { busy(""); note(errText(e)); }
 }
 
@@ -71,6 +86,12 @@ async function signIn(ev) {
   try {
     await invoke("sign_in", { server: $("#server").value, username: $("#username").value, password: $("#password").value, deviceName: $("#device").value });
     $("#password").value = "";
+    $("#password").type = "password";
+    $("#showPassword").textContent = "Show";
+    $("#showPassword").setAttribute("aria-pressed", "false");
+    $("#showPassword").setAttribute("aria-label", "Show password");
+    // Keep the launcher consistent if opening the account fails after a successful login.
+    info = await invoke("app_info"); draw();
     await openAccount();
   } catch (e) { busy(""); note(errText(e)); $("#password").select(); }
 }
@@ -91,11 +112,22 @@ async function main() {
     } catch (e) { busy(""); note(errText(e)); }
   });
   $("#localBtn").addEventListener("click", startLocal);
+  $("#refreshBtn").addEventListener("click", refreshInfo);
+  window.addEventListener("focus", () => { if (installing) refreshInfo(); });
+  $("#showPassword").addEventListener("click", () => {
+    const show = $("#password").type === "password";
+    $("#password").type = show ? "text" : "password";
+    $("#showPassword").textContent = show ? "Hide" : "Show";
+    $("#showPassword").setAttribute("aria-label", show ? "Hide password" : "Show password");
+    $("#showPassword").setAttribute("aria-pressed", String(show));
+  });
   $("#installBtn").addEventListener("click", async () => {
-    try { await invoke("install_engine"); note(info.engine && info.engine.outdated
+    busy("Opening the engine installer…");
+    try { await invoke("install_engine"); installing = true; note(info.engine && info.engine.outdated
       ? "PowerShell opened to update the engine. When it says it is done, click Start local mode."
       : "PowerShell opened with the installer. Answer its questions; when it says it is done, click Start local mode.", true); }
     catch (e) { note(errText(e)); }
+    finally { busy(""); }
   });
   document.querySelectorAll("[data-link]").forEach((a) => a.addEventListener("click", (ev) => { ev.preventDefault(); invoke("open_link", { which: a.dataset.link }).catch((e) => note(errText(e))); }));
   if (params.get("note") === "signed-out") note("Signed out of this device.", true);
