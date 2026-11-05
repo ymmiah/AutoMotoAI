@@ -426,6 +426,8 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
         html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
         meta = (f'<meta name="automoto-csrf" content="{got[1]}" />\n'
                 '<meta name="automoto-mode" content="multiuser" />\n')
+        if request.cookies.get("automoto_shell") == "desktop":
+            meta += '<meta name="automoto-shell" content="desktop" />\\n\n'.replace("\\n", "\n")
         html = html.replace("__AUTOMOTO_VERSION__", __version__).replace("</title>", "</title>\n" + meta, 1)
         return HTMLResponse(brand.fill(html), headers=base_headers)
     if launch is not None:
@@ -439,6 +441,9 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
             resp: Any = HTMLResponse(hosted._OPENING, headers=base_headers)
         else:
             resp = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
+        if request.query_params.get("app") == "1":
+            resp.set_cookie("automoto_shell", "desktop", httponly=True, samesite="strict", path="/",
+                            secure=request.url.scheme == "https")
         resp.set_cookie(COOKIE, SESSION_TOKEN, httponly=True, samesite="strict", path="/",
                         secure=request.url.scheme == "https")
         return resp
@@ -446,6 +451,8 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
     if not (_is_loopback(request) and cookie and hmac.compare_digest(cookie, SESSION_TOKEN)):
         return HTMLResponse(LOCKED_PAGE, status_code=401, headers=base_headers)
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    if request.cookies.get("automoto_shell") == "desktop":
+        html = html.replace("</title>", '</title>\n<meta name="automoto-shell" content="desktop" />', 1)
     html = html.replace("__AUTOMOTO_TOKEN__", "").replace("__AUTOMOTO_VERSION__", __version__)
     return HTMLResponse(brand.fill(html), headers=base_headers)
 
