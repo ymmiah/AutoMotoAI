@@ -180,6 +180,8 @@ def _image(path: str):
         raise ToolFailed("Input image is too large (24 MB limit)")
     try:
         with Image.open(p) as opened:
+            if opened.width * opened.height > 36_000_000:
+                raise ToolFailed("Input image has too many pixels (36 MP limit)")
             return ImageOps.exif_transpose(opened).convert("RGBA")
     except OSError as exc:
         raise ToolFailed(f"Unable to read image: {exc}") from None
