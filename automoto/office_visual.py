@@ -289,3 +289,52 @@ def render_image_text(slide, spec, theme, add_image, width=13.333, height=7.5):
         _textbox(slide, str(spec["caption"]), image_x+.22, 6.23, picture_w-.44, .30,
                  11, p["secondary"], font=p["font"], align=PP_ALIGN.CENTER)
     return image
+
+
+def render_canvas(slide, spec, theme, add_image, width=13.333, height=7.5):
+    """Place individually editable text/shape/icon objects at explicit positions in inches.
+
+    A layout contract makes coordinates testable and prevents clipped content; all
+    source images are inserted with aspect-fit and their originals are untouched.
+    """
+    items = spec.get("elements")
+    if not isinstance(items, list) or not 1 <= len(items) <= 30:
+        raise OfficeError("canvas slide needs 1-30 positioned elements")
+    p = _palette(theme)
+    for element in items:
+        if not isinstance(element, dict):
+            raise OfficeError("canvas elements must be objects")
+        t = str(element.get("type") or "")
+        if t not in ("text", "image", "icon", "rectangle"):
+            raise OfficeError("canvas element type must be text, image, icon or rectangle")
+        try:
+            x, y, w, h = [float(element[key]) for key in ("x", "y", "w", "h")]
+        except (KeyError, TypeError, ValueError):
+            raise OfficeError("each canvas element needs numeric x, y, w and h in inches") from None
+        if (not all(math.isfinite(v) for v in (x,y,w,h)) or x < .20 or y < 1.60 or
+                w < .10 or h < .10 or x+w > width-.20 or y+h > height-.62):
+            raise OfficeError("canvas element must fit inside the slide content area (in inches)")
+        if t == "text":
+            txt = str(element.get("text") or "")
+            if len(txt) > 2500:
+                raise OfficeError("canvas text is too long")
+            sz = float(element.get("font_size") or 21)
+            if not 12 <= sz <= 80:
+                raise OfficeError("canvas text size must be 12-80 pt")
+            _textbox(slide, txt, x, y, w, h, sz, str(element.get("colour") or p["ink"]),
+                     bool(element.get("bold", False)), font=p["font"],
+                     valign=MSO_ANCHOR.TOP)
+        elif t == "image":
+            name = str(element.get("path") or "")
+            if not name:
+                raise OfficeError("image canvas element needs a source path")
+            add_image(slide, name, x, y, w, h,
+                      element.get("alt") or "Unmodified source image")
+        elif t == "icon":
+            add_icon(slide, element.get("name") or "sparkle", x, y, min(w, h),
+                     str(element.get("colour") or p["accent"]))
+        else:
+            _shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h,
+                   fill=str(element.get("fill") or p["card"]),
+                   line=str(element.get("line") or p["border"]))
+    return len(items)
