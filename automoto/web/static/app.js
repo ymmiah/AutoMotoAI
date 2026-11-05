@@ -1371,42 +1371,121 @@ PAGES.settings = async () => {
     e.preventDefault(); const v = String(new FormData(e.target).get("p") || "").trim(); if (!v) return;
     if (await saveSetting({ allowed_roots: [...roots, v] })) { const fresh = await api("/api/settings"); roots.splice(0, roots.length, ...(fresh.allowed_roots || [])); drawRoots(); e.target.reset(); toast("Folder added"); }
   };
-  const drawOffline = async () => {
-    const box = $("#offlineBody"); if (!box) return;
-    let d; try { d = await api("/api/local"); } catch (err) { box.innerHTML = `<span class="bad">${esc(err.message)}</span>`; return; }
-    const o = d.ollama, rec = d.recommend, have = new Set((o.models || []).map((m) => m.name));
-    const hw = rec.hardware || {};
-    const pull = (name) => (d.pulls || {})[name];
-    const row = (m) => { const pl = pull(m.name); const got = have.has(m.name) || (have.has(m.name + ":latest"));
-      const using = d.ollama_enabled && d.model === m.name;
-      const act = got ? (using ? statusPill("in use") : `<button class="btn sm primary" data-use="${esc(m.name)}">Use this</button>`)
-        : pl && pl.state === "downloading" ? `<span class="muted">Downloading ${pl.percent || 0}%</span>`
-        : `<button class="btn sm ${m.recommended ? "primary" : ""}" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download (${m.download_gb} GB)</button>`;
-      return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Best for this computer</span>' : ""} ${m.fast ? '<span class="pill">fast</span>' : ""}<br><span class="muted" style="font-size:12.5px">${esc(m.note)}</span>${pl && pl.state === "error" ? `<br><span class="bad" style="font-size:12.5px">${esc(pl.error)}</span>` : ""}</span>${act}</div>`; };
-    const bi = rec.models.findIndex((m) => m.recommended);
-    const isMain = (m, i) => m.recommended || have.has(m.name) || (i >= bi - 1 && i <= bi + 2);
-    const main = rec.models.filter(isMain), more = rec.models.filter((m, i) => !isMain(m, i));
-    box.classList.remove("muted");
-    box.innerHTML = `<p style="margin:0 0 8px">${o.running ? `${statusPill("on")} Ollama ${esc(o.version || "")} is running.` : `${statusPill("off")} Ollama isn't running. <a href="https://ollama.com/download" target="_blank" rel="noopener">Install Ollama</a>, open it, then press Check again.`}
-        <span class="muted" style="font-size:12.5px">${esc(rec.why)}</span></p>
-      ${main.map(row).join("")}
-      ${more.length ? `<details class="adv"><summary>More models (${more.length})</summary>${more.map(row).join("")}</details>` : ""}
-      ${d.model_from_env ? '<p class="muted" style="font-size:12.5px;margin:6px 0 0">The model is set by <code>OLLAMA_MODEL</code> in your .env, so "Use this" won\'t change it.</p>' : ""}
-      <label class="field" style="margin-top:10px"><span><input type="checkbox" id="offlineSw" ${d.offline ? "checked" : ""} ${d.offline_from_env ? "disabled" : ""}> Offline mode: use only the AI on this computer and switch off web tools${d.offline_from_env ? ' <span class="muted">(set by <code>AUTOMOTO_OFFLINE</code> in your .env)</span>' : ""}</span></label>
-      <div class="row"><button class="btn sm" id="offlineCheck">Check again</button>${d.ollama_enabled ? '<button class="btn sm" id="offlineOff">Stop using Ollama</button>' : ""}</div>`;
-    $$("#offlineBody [data-pull]").forEach((b) => b.onclick = async () => {
-      b.disabled = true; b.textContent = "Starting…";
-      try { await api("/api/local/pull", { model: b.dataset.pull }); toast("Download started. You can keep using the app."); } catch (err) { toast(err.message); }
-      const tick = async () => { const n = await api("/api/local").catch(() => null); const p = n && n.pulls[b.dataset.pull];
-        if (p && p.state === "downloading") { drawOffline(); setTimeout(tick, 2000); }
-        else { if (p && p.state === "done") { await saveSetting({ local_model: b.dataset.pull }); toast(`Model ready - ${BRAND_SHORT} will use it`); refreshStatus(); } drawOffline(); } };
-      setTimeout(tick, 1500);
-    });
-    $$("#offlineBody [data-use]").forEach((b) => b.onclick = async () => { if (await saveSetting({ local_model: b.dataset.use })) { toast(`Using ${b.dataset.use}`); refreshStatus(); drawOffline(); } });
-    $("#offlineCheck").onclick = drawOffline;
-    if ($("#offlineOff")) $("#offlineOff").onclick = async () => { if (await saveSetting({ local_model: null, offline: false })) { toast("Ollama turned off"); refreshStatus(); drawOffline(); } };
-    $("#offlineSw").onchange = async (e) => { if (await saveSetting({ offline: e.target.checked })) { toast(e.target.checked ? "Offline mode on: local AI only, no web tools" : "Offline mode off"); refreshStatus(); drawOffline(); } };
+  const drawOffline = async function() {
+  const box = $("#offlineBody");
+  if (!box) return;
+  let d;
+  try { d = await api("/api/local"); }
+  catch (err) { if (box.isConnected) box.textContent = `Could not check local AI: ${err.message}`; return; }
+  if (!box.isConnected) return;
+  const o = d.ollama, rec = d.recommend;
+  const present = new Set((o.models || []).map((m) => m.name));
+  const models = [...(rec.models || [])];
+  for (const m of o.models || []) {
+    if (!models.some((x) => x.name === m.name)) {
+      models.unshift({ name: m.name, label: m.name, download_gb: m.size_gb,
+                       note: "Installed model on this computer.", recommended: false });
+    }
+  }
+  const progress = d.pulls || {};
+  const modelRow = (m) => {
+    const ready = present.has(m.name) || present.has(m.name + ":latest");
+    const pulling = progress[m.name]?.state === "downloading";
+    const error = progress[m.name]?.state === "error" ? progress[m.name].error : "";
+    const active = d.ollama_enabled && (d.model === m.name || d.model + ":latest" === m.name);
+    const action = ready
+      ? `<button class="btn sm ${active ? "" : "primary"}" data-use="${esc(m.name)}" ${d.model_from_env ? "disabled" : ""}>${active ? "Selected" : "Use model"}</button><button class="btn sm" data-test="${esc(m.name)}">Test</button>`
+      : pulling
+        ? `<span class="muted" aria-live="polite">Downloading ${progress[m.name].percent || 0}%</span>`
+        : `<button class="btn sm" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download ${m.download_gb || "?"} GB</button>`;
+    return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Recommended</span>' : ""}<span class="muted small"> · ${esc(m.name)}</span><div class="muted small">${esc(m.note || "")}</div>${error ? `<span class="bad small">${esc(error)}</span>` : ""}</span>${action}</div>`;
   };
+  box.classList.remove("muted");
+  box.innerHTML = `
+    <p class="muted small">Status: ${o.running ? "Ollama running locally" : o.installed ? "Ollama installed but not running" : "Ollama runtime not installed"}. ${esc(rec.why || "")}</p>
+    ${o.running ? `<p class="muted small">Ollama ${esc(o.version || "")} · ${present.size} downloaded model(s).</p>`
+      : o.installed
+        ? `<button class="btn primary" id="localStart">Start local AI</button><p class="muted small">Starts Ollama on this computer. No cloud service is involved.</p>`
+        : `<p>Install the free official inference runtime once, then download a model from this screen. No additional Python packages or API keys are needed.</p><a class="btn primary" href="https://ollama.com/download" target="_blank" rel="noopener">Download official Ollama installer</a>`}
+    <div class="toolbar"><b>Models available on this computer</b><span class="spacer"></span><button class="btn sm" id="offlineCheck">Refresh models</button></div>
+    ${models.length ? models.map(modelRow).join("") : '<p class="muted">No recommended models found for this device.</p>'}
+    ${o.running ? `<form id="localCustom" class="row" style="margin-top:12px"><input class="input" name="name" style="flex:1;min-width:200px" aria-label="Ollama library model name" placeholder="Other model (e.g. gemma3:4b)" required><button class="btn sm">Download by name</button></form>` : ""}
+    <label class="field" style="margin-top:14px"><span><input type="checkbox" id="offlineSw" ${d.offline ? "checked" : ""} ${d.offline_from_env ? "disabled" : ""}> Offline only: disable cloud models and web tools</span></label>
+    <div class="row"><button class="btn sm primary" id="localCloud" ${d.offline_from_env ? "disabled" : ""}>Use cloud AI / server providers</button>${d.ollama_enabled ? '<button class="btn sm" id="offlineOff">Disable local model</button>' : ""}</div>
+    ${d.offline_from_env ? '<p class="muted small">AUTOMOTO_OFFLINE in .env controls offline mode. Change that setting to enable cloud mode.</p>' : ""}
+    ${d.model_from_env ? '<p class="muted small">OLLAMA_MODEL in .env locks the selected model. Remove it to change models here.</p>' : ""}`;
+  $("#offlineCheck").onclick = offlinePanel;
+  if ($("#localStart")) $("#localStart").onclick = async (e) => {
+    const button = e.currentTarget;
+    button.disabled = true; button.textContent = "Starting…";
+    try {
+      const r = await api("/api/local/start", {});
+      toast(r.started ? "Local AI is running" : (r.message || "Local AI did not start"), r.started ? "" : "bad");
+    } catch (err) { toast(err.message, "bad"); }
+    await offlinePanel();
+    await refreshStatus();
+  };
+  const setModel = async (name) => {
+    if (await saveSetting({ local_model: name })) {
+      toast(`Selected ${name}`);
+      await refreshStatus(); await offlinePanel();
+    }
+  };
+  $$("[data-use]", box).forEach((b) => b.onclick = () => setModel(b.dataset.use));
+  $$("[data-test]", box).forEach((b) => b.onclick = async () => {
+    b.disabled = true; b.textContent = "Testing…";
+    try {
+      const test = await api("/api/local/test", { model: b.dataset.test });
+      toast(test.ok ? `${test.model} responded: ${test.reply || "ready"}` : "Model failed to respond", test.ok ? "" : "bad");
+    } catch (err) { toast(err.message, "bad"); }
+    finally { b.disabled = false; b.textContent = "Test"; }
+  });
+  const beginPull = async (name) => {
+    try {
+      await api("/api/local/pull", { model: name });
+      toast(`Downloading ${name} to this computer`);
+    } catch (err) { toast(err.message, "bad"); return; }
+    for (let i = 0; i < 1800 && box.isConnected; i++) {
+      await sleep(2000);
+      if (!box.isConnected) return;
+      let next;
+      try { next = await api("/api/local"); } catch { continue; }
+      const job = next.pulls?.[name];
+      const progressItem = $$("[data-pull]", box).find((e) => e.dataset.pull === name);
+      if (progressItem) progressItem.textContent = `Downloading ${job?.percent || 0}%`;
+      if (job?.state === "done") { await setModel(name); return; }
+      if (job?.state === "error") { toast(job.error || "Download failed", "bad"); await offlinePanel(); return; }
+    }
+  };
+  $$("[data-pull]", box).forEach((b) => b.onclick = () => { b.disabled = true; beginPull(b.dataset.pull); });
+  if ($("#localCustom")) $("#localCustom").onsubmit = (e) => {
+    e.preventDefault();
+    const name = new FormData(e.currentTarget).get("name")?.trim();
+    if (name) beginPull(name);
+  };
+  $("#offlineSw").onchange = async (e) => {
+    const checked = e.target.checked;
+    if (await saveSetting({ offline: checked })) {
+      localStorage.setItem("automoto_prefer", "auto");
+      await refreshStatus(); await offlinePanel();
+      toast(checked ? "Offline only: cloud AI and web tools disabled" : "Cloud AI enabled");
+    } else e.target.checked = !checked;
+  };
+  $("#localCloud").onclick = async () => {
+    if (await saveSetting({ offline: false })) {
+      localStorage.setItem("automoto_prefer", "auto");
+      await refreshStatus(); await offlinePanel();
+      toast("Cloud providers available. Choose an AI from the top of chat.");
+    }
+  };
+  if ($("#offlineOff")) $("#offlineOff").onclick = async () => {
+    if (await saveSetting({ offline: false, local_model: null })) {
+      localStorage.setItem("automoto_prefer", "auto");
+      await refreshStatus(); await offlinePanel();
+      toast("Local model disabled; cloud providers are available.");
+    }
+  };
+};
   drawOffline();
   const drawConns = async () => {
     try {
