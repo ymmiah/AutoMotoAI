@@ -196,7 +196,7 @@ def render_cards(slide, spec, theme, width=13.333, height=7.5):
         raise OfficeError("cards slide needs 1-6 cards with title, text and optional icon")
     p = _palette(theme)
     count = len(cards)
-    cols = min(3, count) if count > 2 else count
+    cols = 2 if count == 4 else (3 if count > 2 else count)
     rows = math.ceil(count / cols)
     left, gap = .66, .20
     top, region_h = 1.82, height - 2.40
