@@ -18,6 +18,14 @@ New-Item -ItemType Directory -Force $stage, "$stage\Assets", "$stage\resources",
 $release = "apps/desktop/src-tauri/target/release"
 Copy-Item "$release/AutoMoto AI.exe" $stage
 Copy-Item scripts/install.ps1 "$stage\resources\install.ps1"   # same place Tauri's bundle puts it
+# Ship the matching Python engine inside the Store MSIX, so the desktop UI does not depend on
+# a separate Beta release being published before local mode can be installed.
+$pyver = $ver -replace '-beta\.', 'b'
+$wheel = "engine-wheel/automoto_ai-$pyver-py3-none-any.whl"
+if (-not (Test-Path $wheel)) { throw "Missing the matching engine wheel $wheel" }
+Copy-Item $wheel "$stage\resources\"
+(Get-FileHash -Path $wheel -Algorithm SHA256).Hash.ToLowerInvariant() |
+    Set-Content -Encoding ascii "$stage\resources\automoto_ai-$pyver-py3-none-any.whl.sha256"
 Copy-Item packaging/branding/out/msix/*.png "$stage\Assets"
 Copy-Item LICENSE, NOTICE $stage
 python packaging/msstore/msix.py manifest --version $ver --out "$stage\AppxManifest.xml"
@@ -37,7 +45,10 @@ if ($LASTEXITCODE) { throw "makeappx pack failed (see the errors above: manifest
 $unpacked = Join-Path $env:RUNNER_TEMP "msix-unpacked"
 & "$bin\makeappx.exe" unpack /p $msix /d $unpacked /o | Out-Null
 if ($LASTEXITCODE) { throw "makeappx unpack failed" }
-foreach ($f in @("AutoMoto AI.exe", "AppxManifest.xml", "resources\install.ps1", "Assets\StoreLogo.png", "Assets\Square44x44Logo.png")) {
+foreach ($f in @("AutoMoto AI.exe", "AppxManifest.xml", "resources\install.ps1",
+                 "resources\automoto_ai-$pyver-py3-none-any.whl",
+                 "resources\automoto_ai-$pyver-py3-none-any.whl.sha256",
+                 "Assets\StoreLogo.png", "Assets\Square44x44Logo.png")) {
   if (-not (Test-Path (Join-Path $unpacked $f))) { throw "package is missing $f" }
 }
 # .msixupload = a zip with the .msix inside: what Partner Center asks for
