@@ -183,21 +183,23 @@ async fn open_account(app: AppHandle, webview: tauri::Webview) -> Result<Value, 
 #[tauri::command]
 async fn sign_out(app: AppHandle, webview: tauri::Webview) -> Result<Value, String> {
     check_caller(&webview)?;
-    sign_out_inner(&app).await;
-    Ok(json!({"ok": true}))
+    let revoked = sign_out_inner(&app).await;
+    Ok(json!({"ok": true, "revoked": revoked}))
 }
 
-async fn sign_out_inner(app: &AppHandle) {
+async fn sign_out_inner(app: &AppHandle) -> bool {
     let mut s = settings::load(app);
+    let mut revoked = true;
     if let Ok(origin) = account::server_origin(&s.server) {
         if let Some(tok) = account::load_token(&origin) {
-            account::device_logout(&origin, &tok).await; // the server forgets this device too
+            revoked = account::device_logout(&origin, &tok).await;
         }
         account::forget_token(&origin);
     }
     *app.state::<AppState>().server.lock().unwrap() = None;
     s.mode.clear();
     let _ = settings::save(app, &s);
+    revoked
 }
 
 #[tauri::command]
@@ -398,8 +400,8 @@ fn on_menu(app: &AppHandle, id: &str) {
         "signout" => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
-                sign_out_inner(&app).await;
-                go_home(&app, "signed-out");
+                let revoked = sign_out_inner(&app).await;
+                go_home(&app, if revoked { "signed-out" } else { "revocation-unconfirmed" });
             });
         }
         "guide" => {
