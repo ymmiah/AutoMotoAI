@@ -149,3 +149,31 @@ def test_visual_tools_are_not_reachable_to_hosted_image_engine():
     assert {"image_generate", "image_models", "image_compose"} <= set(all_local)
     assert "image_generate" not in hosted and "image_models" not in hosted
     assert "image_compose" in hosted
+
+
+def test_canvas_exact_element_coordinates_and_bounds(original):
+    src, _ = original
+    from pptx import Presentation
+    from pptx.util import Inches
+    out = src.parent / "canvas-regression.pptx"
+    spec = {"slides": [{"layout": "canvas", "title": "Exact positioning",
+                        "elements": [
+                            {"type": "image", "x": 0.6, "y": 1.75, "w": 5.5, "h": 4.45,
+                             "path": str(src), "alt": "Unmodified source photo"},
+                            {"type": "text", "x": 6.40, "y": 2.0, "w": 5.0, "h": 1.2,
+                             "text": "EXACT wording", "font_size": 29, "bold": True},
+                            {"type": "icon", "x": 6.45, "y": 3.55, "w": 0.6, "h": 0.6, "name": "shield"},
+                        ], "notes": "Check placement"}]}
+    office_build.create_pptx(spec, out)
+    prs = Presentation(out)
+    s = prs.slides[0]
+    exact = [v for v in s.shapes if v.has_text_frame and v.text_frame.text == "EXACT wording"]
+    assert len(exact) == 1 and abs(exact[0].left - Inches(6.40)) < Inches(.01)
+    pictures = [v for v in s.shapes if v.shape_type == 13]
+    assert len(pictures) == 1
+    assert pictures[0].left >= Inches(.6) and pictures[0].left + pictures[0].width <= Inches(6.1)
+    assert "extends past the slide edge" not in office_check.check(str(out))
+    with pytest.raises(OfficeError, match="must fit inside"):
+        office_build.create_pptx({"slides": [{"layout": "canvas", "title": "Overflows",
+                                 "elements": [{"type": "text", "x": 11.5, "y": 6.0,
+                                               "w": 4.0, "h": 1.0, "text": "no"}]}]}, out)
