@@ -918,10 +918,10 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
         kind = s.get("layout", "bullets")
         base = {"image": "title_only", "table": "title_only", "chart": "title_only", "statement": "title_only",
                 "quote": "title_only"}.get(kind, kind)
-        premium = {"cards", "metrics", "steps", "image_text", "hero"}
+        premium = {"cards", "metrics", "steps", "image_text", "hero", "canvas"}
         if base not in L and kind not in premium:
             raise OfficeError(f"unknown layout '{kind}'. Use title, section, bullets, two_content, comparison, "
-                              "image, table, chart, statement, quote, blank, cards, metrics, steps, image_text, hero")
+                              "image, table, chart, statement, quote, blank, cards, metrics, steps, image_text, hero, canvas")
         slide = prs.slides.add_slide(prs.slide_layouts[L["title_only"] if kind in premium else L[base]])
         decorate(slide, i, kind)
         title = slide.shapes.title
@@ -1020,6 +1020,12 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
                 for k, ser in enumerate(chart.plots[0].series):
                     ser.format.fill.solid()
                     ser.format.fill.fore_color.rgb = _rgb([accent, primary, "A5A5A5", "FFC000", "70AD47"][k % 5])
+        elif kind == "canvas":
+            office_visual.render_canvas(
+                slide, s, theme,
+                lambda target, path, x, y, w, h, alt: _add_picture(
+                    target, _image(path), Inches(x), Inches(y), Inches(w), Inches(h), alt),
+                W.inches, H.inches)
         elif kind == "cards":
             office_visual.render_cards(slide, s, theme, W.inches, H.inches)
         elif kind == "metrics":
