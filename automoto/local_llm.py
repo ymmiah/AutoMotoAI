@@ -228,9 +228,31 @@ def _get(path: str, timeout: float = 3.0) -> Any:
         return json.loads(r.read().decode("utf-8") or "{}")
 
 
+def ollama_binary() -> str | None:
+    """Find Ollama even when a GUI installer hasn't refreshed the user's PATH yet."""
+    found = shutil.which("ollama")
+    if found:
+        return found
+    paths: list[str] = []
+    if sys.platform == "win32":
+        local_app = os.environ.get("LOCALAPPDATA")
+        progfiles = os.environ.get("ProgramFiles")
+        if local_app:
+            paths.append(os.path.join(local_app, "Programs", "Ollama", "ollama.exe"))
+        if progfiles:
+            paths.append(os.path.join(progfiles, "Ollama", "ollama.exe"))
+    elif sys.platform == "darwin":
+        paths.extend(("/Applications/Ollama.app/Contents/Resources/ollama",
+                      os.path.expanduser("~/.local/bin/ollama")))
+    else:
+        paths.extend(("/usr/local/bin/ollama", "/usr/bin/ollama",
+                      os.path.expanduser("~/.local/bin/ollama")))
+    return next((candidate for candidate in paths if os.path.isfile(candidate)), None)
+
+
 def ollama_status() -> dict[str, Any]:
     """Is Ollama running, which version, and which models are already downloaded."""
-    out: dict[str, Any] = {"url": ollama_url(), "running": False, "installed": shutil.which("ollama") is not None,
+    out: dict[str, Any] = {"url": ollama_url(), "running": False, "installed": ollama_binary() is not None,
                            "version": None, "models": []}
     try:
         out["version"] = _get("/api/version").get("version")
@@ -313,7 +335,7 @@ def start_ollama() -> dict[str, Any]:
     current = ollama_status()
     if current["running"]:
         return {"started": True, "already_running": True, "ollama": current}
-    binary = shutil.which("ollama")
+    binary = ollama_binary()
     if not binary:
         raise ValueError("Ollama is not installed. Download the official installer from https://ollama.com/download.")
     with _OLLAMA_START_LOCK:
