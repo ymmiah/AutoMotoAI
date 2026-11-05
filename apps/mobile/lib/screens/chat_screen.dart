@@ -106,9 +106,11 @@ class _ChatScreenState extends State<ChatScreen> {
         trailing: IconButton(
           tooltip: 'New chat',
           icon: const Icon(Icons.refresh),
-          onPressed: () => setState(() {
+          onPressed: _busy ? null : () => setState(() {
             _view.clear();
             _history.clear();
+            _pendingImage = null;
+            _pendingBytes = null;
           }),
         ),
       ),
