@@ -427,7 +427,7 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
         meta = (f'<meta name="automoto-csrf" content="{got[1]}" />\n'
                 '<meta name="automoto-mode" content="multiuser" />\n')
         if request.cookies.get("automoto_shell") == "desktop":
-            meta += '<meta name="automoto-shell" content="desktop" />\\n\n'.replace("\\n", "\n")
+            meta += '<meta name="automoto-shell" content="desktop" />\n'
         html = html.replace("__AUTOMOTO_VERSION__", __version__).replace("</title>", "</title>\n" + meta, 1)
         return HTMLResponse(brand.fill(html), headers=base_headers)
     if launch is not None:
