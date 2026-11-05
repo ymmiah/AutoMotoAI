@@ -38,6 +38,8 @@ let browser;
   await page.locator('.hero h2').waitFor();
   assert.equal(await page.locator('.chip').count(), 8);
   assert.equal(await page.locator('#msgs').evaluate(el => el.scrollTop), 0, 'home must start at its heading');
+  await page.locator('#msgs').evaluate(el => { el.scrollTop = el.scrollHeight; });
+  assert.equal(await page.locator('#jumpLatest').isVisible(), false, 'starting ideas must not offer a latest reply');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
   assert.equal(await page.locator('.chip').count(), 3);
   await page.getByRole('button', { name: 'Make slides' }).click();

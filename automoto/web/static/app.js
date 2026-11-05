@@ -412,7 +412,7 @@ function scrollDown(force=false) {
 }
 function showLatestButton() {
   const button = document.querySelector("#jumpLatest");
-  if (button) button.hidden = followChat;
+  if (button) button.hidden = followChat || !!document.querySelector(".hero");
 }
 function initChatScroll() {
   followChat = true;
@@ -420,6 +420,7 @@ function initChatScroll() {
   const m = document.querySelector("#msgs");
   if (!m) return;
   m.addEventListener("scroll", () => {
+    if (m.querySelector(".hero")) return;
     followChat = m.scrollHeight - m.scrollTop - m.clientHeight <= 90;
     showLatestButton();
   }, { passive: true });
