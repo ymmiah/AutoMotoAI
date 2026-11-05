@@ -711,7 +711,10 @@ def _ollama_post(spec: ProviderSpec, body: dict[str, Any], timeout: float, *, st
                             transient=False) from None
     except (urllib.error.URLError, ConnectionError, OSError) as exc:
         # Installed but not running (e.g. after a restart): start it once, as the user chose a local model.
-        if not started and local_llm.ollama_binary():
+        # Never on a hosted server: a signed-in visitor must not be able to start programs on the host.
+        from automoto import tenancy
+
+        if not started and not tenancy.multiuser() and local_llm.ollama_binary():
             try:
                 if local_llm.start_ollama().get("started"):
                     return _ollama_post(spec, body, timeout, started=True)
