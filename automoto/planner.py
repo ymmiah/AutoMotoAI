@@ -55,7 +55,7 @@ CAPS: tuple[Capability, ...] = (
     Capability("slides", "Presentations", r"\b(slides?|deck|presentation|powerpoint|pptx?|odp|viva|pitch|keynote)\b",
                (".pptx", ".ppt", ".odp"),
                ("office_create_pptx", "office_edit", "office_convert", "office_check", "office_review",
-                "image_compose", "image_generate", "image_models"),
+                "image_compose", "image_generate"),
                skills=("powerpoint-decks",),
                how="Read with read_file (slides + notes). Build visually polished slides using cards, metrics, "
                    "steps, editable vector icons, image_text and original assets; do not produce only black "
