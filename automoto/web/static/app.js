@@ -10,6 +10,7 @@ const BRAND_SHORT = document.querySelector('meta[name="automoto-brand-short"]')?
 // Hosted (multi-user) mode: a per-session CSRF token is put in the page; the session itself is an HttpOnly cookie.
 const CSRF = document.querySelector('meta[name="automoto-csrf"]')?.content || "";
 const HOSTED = document.querySelector('meta[name="automoto-mode"]')?.content === "multiuser";
+const DESKTOP_SHELL = document.querySelector('meta[name="automoto-shell"]')?.content === "desktop";
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1597,6 +1598,7 @@ async function boot() {
   if (HOSTED) { await refreshMe(); setupHosted(); }
   hydrateIcons(document);
   $("#verLabel").textContent = `v${VERSION}`;
+  $("#switchLocation").hidden = !DESKTOP_SHELL;
   if (!isMac) $$("kbd").forEach((k) => (k.textContent = k.textContent.replace("⌘", "Ctrl+")));
   try {
     const s = await api("/api/settings");
