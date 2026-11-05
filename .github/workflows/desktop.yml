@@ -61,6 +61,14 @@ jobs:
           # the engine uses PEP 440 for the same version: 5.6.0-beta.1 <-> 5.6.0b1
           if (($conf -replace '-beta\.', 'b') -ne $py) { throw "app $conf doesn't match the engine $py" }
           if ($env:GITHUB_REF -like "refs/tags/v*" -and $env:GITHUB_REF_NAME -ne "v$conf") { throw "tag $env:GITHUB_REF_NAME is not v$conf" }
+      - name: Build matching Python engine wheel for Store distribution
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force engine-wheel | Out-Null
+          python -m pip wheel --no-deps --wheel-dir engine-wheel .
+          if ($LASTEXITCODE) { throw "Could not package the local Python engine" }
+          $py = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if (-not (Test-Path "engine-wheel/automoto_ai-$py-py3-none-any.whl")) { throw "Missing engine wheel for $py" }
       - name: Rust unit tests and lint
         working-directory: apps/desktop/src-tauri
         run: |
