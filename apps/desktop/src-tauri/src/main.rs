@@ -60,6 +60,11 @@ fn same_origin(a: &Url, b: &Url) -> bool {
 
 /// Where the window may go. Everything else opens in the normal web browser.
 fn navigation_allowed(app: &AppHandle, u: &Url) -> bool {
+    if u.scheme() == "automoto" && u.host_str() == Some("switch-mode") {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move { go_home(&handle, ""); });
+        return false;
+    }
     if is_app_page(u) || u.as_str() == "about:blank" {
         return true;
     }
@@ -178,21 +183,23 @@ async fn open_account(app: AppHandle, webview: tauri::Webview) -> Result<Value, 
 #[tauri::command]
 async fn sign_out(app: AppHandle, webview: tauri::Webview) -> Result<Value, String> {
     check_caller(&webview)?;
-    sign_out_inner(&app).await;
-    Ok(json!({"ok": true}))
+    let revoked = sign_out_inner(&app).await;
+    Ok(json!({"ok": true, "revoked": revoked}))
 }
 
-async fn sign_out_inner(app: &AppHandle) {
+async fn sign_out_inner(app: &AppHandle) -> bool {
     let mut s = settings::load(app);
+    let mut revoked = true;
     if let Ok(origin) = account::server_origin(&s.server) {
         if let Some(tok) = account::load_token(&origin) {
-            account::device_logout(&origin, &tok).await; // the server forgets this device too
+            revoked = account::device_logout(&origin, &tok).await;
         }
         account::forget_token(&origin);
     }
     *app.state::<AppState>().server.lock().unwrap() = None;
     s.mode.clear();
     let _ = settings::save(app, &s);
+    revoked
 }
 
 #[tauri::command]
@@ -352,7 +359,7 @@ async fn check_updates(app: AppHandle, interactive: bool) {
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let file = Submenu::with_items(app, "AutoMoto", true, &[
-        &MenuItem::with_id(app, "home", "Sign-in screen / switch mode", true, Some("CmdOrCtrl+Shift+H"))?,
+        &MenuItem::with_id(app, "home", "Switch Local / Cloud / Server", true, Some("CmdOrCtrl+Shift+H"))?,
         &MenuItem::with_id(app, "reload", "Reload", true, Some("CmdOrCtrl+R"))?,
         &PredefinedMenuItem::separator(app)?,
         &MenuItem::with_id(app, "updates", "Check for updates…", true, None::<&str>)?,
@@ -393,8 +400,8 @@ fn on_menu(app: &AppHandle, id: &str) {
         "signout" => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
-                sign_out_inner(&app).await;
-                go_home(&app, "signed-out");
+                let revoked = sign_out_inner(&app).await;
+                go_home(&app, if revoked { "signed-out" } else { "revocation-unconfirmed" });
             });
         }
         "guide" => {

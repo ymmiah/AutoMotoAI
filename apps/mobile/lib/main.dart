@@ -52,7 +52,7 @@ class _HomeShellState extends State<HomeShell> {
       SettingsScreen(api: api),
     ];
     return Scaffold(
-      body: SafeArea(child: pages[index]),
+      body: SafeArea(child: IndexedStack(index: index, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => setState(() => index = i),

@@ -37,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final x = await _picker.pickImage(source: src, maxWidth: 1600, imageQuality: 80);
     if (x == null) return;
     final bytes = await x.readAsBytes();
+    if (!mounted) return;
     setState(() {
       _pendingBytes = bytes;
       _pendingImage = 'data:image/jpeg;base64,${base64Encode(bytes)}';
@@ -63,6 +64,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final start = _history.length > 20 ? _history.length - 20 : 0;
       final r = await widget.api.chat(_history.sublist(start));
+      if (!mounted) return;
       final switched = r.tried.length > 1
           ? ' · switched: ${r.tried.map((t) => t['provider']).join(' → ')}'
           : '';
@@ -71,15 +73,27 @@ class _ChatScreenState extends State<ChatScreen> {
         _view.add(_Msg('assistant', r.text, meta: '${r.provider} · ${r.model} · ${r.task}$switched'));
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _history.removeLast();
         _view.add(_Msg('assistant', '✗ $e', error: true));
       });
     } finally {
-      setState(() => _busy = false);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      if (mounted) {
+        setState(() => _busy = false);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (mounted && _scroll.hasClients) {
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
   }
 
   @override
@@ -92,9 +106,11 @@ class _ChatScreenState extends State<ChatScreen> {
         trailing: IconButton(
           tooltip: 'New chat',
           icon: const Icon(Icons.refresh),
-          onPressed: () => setState(() {
+          onPressed: _busy ? null : () => setState(() {
             _view.clear();
             _history.clear();
+            _pendingImage = null;
+            _pendingBytes = null;
           }),
         ),
       ),

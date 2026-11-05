@@ -78,8 +78,13 @@ async function main() {
   $("#openBtn").addEventListener("click", openAccount);
   $("#outBtn").addEventListener("click", async () => {
     busy("Signing out…");
-    try { await invoke("sign_out"); } catch (e) { note(errText(e)); }
-    busy(""); info.signed_in = false; draw(); note("Signed out. This device's key was cancelled on the server.", true);
+    try {
+      const result = await invoke("sign_out");
+      busy(""); info.signed_in = false; draw();
+      note(result.revoked
+        ? "Signed out. The device token was cancelled on the server."
+        : "Signed out locally, but the server could not confirm revocation. Open Account → My devices once connected to revoke this device.", result.revoked);
+    } catch (e) { busy(""); note(errText(e)); }
   });
   $("#localBtn").addEventListener("click", startLocal);
   $("#installBtn").addEventListener("click", async () => {
@@ -88,6 +93,7 @@ async function main() {
   });
   document.querySelectorAll("[data-link]").forEach((a) => a.addEventListener("click", (ev) => { ev.preventDefault(); invoke("open_link", { which: a.dataset.link }).catch((e) => note(errText(e))); }));
   if (params.get("note") === "signed-out") note("Signed out of this device.", true);
+  if (params.get("note") === "revocation-unconfirmed") note("Signed out locally. Server revocation could not be confirmed; revoke this device in Account → My devices when connected.");
   // open what was used last time, unless the user came back here on purpose
   if (params.get("auto") === "local") return startLocal();
   if (params.get("home") === "1") return;

@@ -130,8 +130,11 @@ textarea.input { resize: vertical; min-height: 90px; font-family: var(--mono); f
 .order-item .nm { flex: 1; }
 
 /* chat */
-.chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.messages { flex: 1; overflow: auto; padding: 22px 18px 8px; scroll-behavior: smooth; }
+.chat { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.messages { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 22px 18px 8px; scroll-behavior: auto; }
+.jump-latest { position: absolute; right: 24px; bottom: 158px; z-index: 3; border: 1px solid var(--line2); border-radius: 999px; background: var(--panel2); color: var(--text); box-shadow: var(--shadow); padding: 8px 15px; font-weight: 600; }
+.jump-latest:hover { border-color: var(--accent); }
+.jump-latest[hidden] { display: none; }
 .thread { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 .msg { display: flex; gap: 12px; animation: rise .28s var(--ease); }
 .msg.user { justify-content: flex-end; }
@@ -278,6 +281,7 @@ textarea.input { resize: vertical; min-height: 90px; font-family: var(--mono); f
   .topbar { padding: 8px 10px; gap: 6px; }
   .page { padding: 16px; }
   .messages { padding: 14px 10px 6px; }
+  .jump-latest { right: 12px; bottom: 135px; }
   .composer-wrap { padding: 6px 8px 10px; }
   .composer .hint { display: none; }
   .msg.user .bubble { max-width: 90%; }
@@ -399,3 +403,9 @@ pre.code { font-size: 12px; white-space: pre-wrap; word-break: break-word; backg
 .approve details.adv { margin: 0 0 10px; }
 .approve details.adv summary { cursor: pointer; color: var(--dim); font-size: 12.5px; margin-bottom: 6px; }
 a.btn { text-decoration: none; }
+
+.top-quick { display:inline-flex; align-items:center; gap:5px; color:var(--dim); padding:5px 8px; border-radius:8px; font-size:12px; text-decoration:none; }
+.top-quick:hover { color:var(--text); background:var(--hover); }
+.top-quick[hidden] { display:none; }
+.top-quick .svg { width:15px; height:15px; }
+@media(max-width:760px) { .top-quick .top-label { display:none; } .top-quick {padding:6px 3px;} }

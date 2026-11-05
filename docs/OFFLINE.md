@@ -1,13 +1,12 @@
 # Offline AI: use AutoMoto with no internet and no key
 
-> **⚠️ Beta.** Offline AI is new and is in testing on `main` (after 5.6.0 Beta 3). If your
-> version has no **Offline AI** card in Settings, you need a newer build.
+> **⚠️ Beta.** These newer controls are being tested on `fix/chat-scroll-offline-navigation-files` and may not yet be part of the installed Microsoft Store version. If your Settings page lacks **Offline AI**, update to a build containing the feature.
 
 AutoMoto can use a free AI model that runs **on your own computer**. You don't need an AI key.
 Once the model is downloaded you don't need the internet either, and your chats and files never
 leave your computer.
 
-It uses **[Ollama](https://ollama.com)**, a free app that runs AI models.
+It uses **[Ollama](https://ollama.com)**, a free local inference runtime. AutoMoto needs that runtime installed on the PC (a one-time dependency), but it can start an installed copy and download models through Settings. No paid API or cloud account is required for local inference.
 
 ## What you need
 
@@ -33,13 +32,11 @@ for your computer and install it like any other app.
   ```
 
 **2. Open AutoMoto, then go to Settings → Offline AI (on this computer).**
-It checks your computer and shows the models that fit. The one marked
-**Best for this computer** is the one to get.
+It checks your computer and shows recommended models **and models already downloaded**. If Ollama is installed but not running, click **Start local AI**. Choose a model marked **Recommended**, or download another supported Ollama model by name.
 
 <img src="gui-offline-ai.png" alt="Settings, Offline AI card: Ollama is running, Qwen 2.5 3B is marked Best for this computer with a Use this button, other models have Download buttons, and an Offline mode tick box" width="720">
 
-**3. Click Download** next to that model. It takes a few minutes (about 2 GB). You can keep
-using AutoMoto while it downloads. When it's done, AutoMoto starts using it.
+**3. Click Download** next to a model. The size and time depend on the model and connection. After downloading, click **Use model**, then **Test** for a small real inference check. You can choose another installed model later without downloading it again.
 
 **4. (Optional) Turn on Offline mode.** Tick **Offline mode** on the same card. Now AutoMoto:
 
@@ -47,7 +44,7 @@ using AutoMoto while it downloads. When it's done, AutoMoto starts using it.
 * switches off everything that needs the internet: web search, opening web pages,
   downloading files, online services and connectors.
 
-Untick it to go back to normal.
+Untick it or click **Use cloud AI / server providers** to return to available cloud models. If `AUTOMOTO_OFFLINE=1` is defined in the environment, remove or change that server setting first; the UI cannot override it.
 
 That's it. Start a new chat and ask something.
 
@@ -57,13 +54,13 @@ AutoMoto picks for you, but here is the idea:
 
 | Your computer | Good model | Download |
 |---|---|---|
-| 4 GB memory | `qwen2.5:1.5b` | 1 GB |
-| 8–16 GB memory (most laptops) | `qwen2.5:3b` (or `llama3.2:3b`) | 2 GB |
+| 4 GB memory | `qwen2.5:1.5b` or `gemma3:1b` | Around 1 GB |
+| 8–16 GB memory (most laptops) | `qwen2.5:3b`, `llama3.2:3b` or `gemma3:4b` | Around 2–3.5 GB |
 | 32 GB memory, or a graphics card with 6 GB+ | `qwen2.5:7b` | 4.7 GB |
 | Graphics card with 12 GB+ | `qwen3:14b` | 9.3 GB |
 | Mac with Apple chip, 16 GB | `qwen2.5:7b` | 4.7 GB |
 
-All of these can **use tools**, so they can read your files and make documents, not just chat.
+Qwen and Llama variants are useful for tool-based tasks. **Gemma 3** is best considered a free local chat and multimodal model; tool-calling reliability depends on the model and runtime, so validate it with the **Test** button before relying on it for agent tasks.
 
 ## The same thing from the command line
 
@@ -98,11 +95,15 @@ For safety, AutoMoto only talks to local servers on **your computer or your home
 
 | What you see | What to do |
 |---|---|
-| "Ollama isn't running" | Open the Ollama app (Windows/Mac), or run `ollama serve` (Linux). Then press **Check again**. |
-| The Download button is greyed out | Same: Ollama has to be running first. |
+| "Ollama isn't running" | Click **Start local AI** if installed; otherwise install from [ollama.com/download](https://ollama.com/download). |
+| The Download button is greyed out | Start Ollama locally first. Network access is needed to download a new model, but not to use a downloaded model. |
 | "Offline mode is on, but no AI is set up" | Download a model in Settings → Offline AI, or untick Offline mode. |
 | Answers are very slow | Pick a smaller model (`qwen2.5:1.5b`). Close big apps. The first answer is always slowest while the model loads. |
 | It gives up halfway through a long task | Small models find long tasks hard. Split it into smaller steps, or use a bigger model. |
 | It says it can't search the web | That's Offline mode. Untick it if you want web search. |
+
+**Switch between local PC mode and cloud/server accounts:** in the new Windows desktop build, use the top-bar **Local / Server** link or the app menu **Switch Local / Cloud / Server**. This returns to the mode-choice screen; it does not merge your local and hosted chat history automatically.
+
+**Microsoft Store:** [AutoMoto AI Windows listing](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB). Store releases may lag behind source changes.
 
 More help: [Start here](START.md) · [Install guide](INSTALL.md)

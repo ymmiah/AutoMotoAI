@@ -46,7 +46,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                     ),
                     title: Text('${p['label']}${p['supports_vision'] == true ? '  👁' : ''}'),
                     subtitle: Text(
-                      '${p['configured'] == true ? 'Ready' : 'Add ${(p['env_keys'] as List).first}'}'
+                      '${p['configured'] == true ? 'Ready' : (p['local'] == true ? 'Select a downloaded model on the server' : 'Add ${((p['env_keys'] as List?)?.isNotEmpty ?? false) ? (p['env_keys'] as List).first : 'API key'}')}'
                       ' · ${p['free_tier'] == true ? 'free tier' : 'paid'}\n'
                       'text: ${p['text_model']}'
                       '${p['vision_model'] != null ? '\nvision: ${p['vision_model']}' : ''}',

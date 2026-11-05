@@ -364,6 +364,8 @@ def open_device_window(request: Request, code: str, headers: dict[str, str]):
     tok, _ = accounts.new_session(user, ip, device_id=did)
     resp = HTMLResponse(_OPENING, headers={**headers, "Referrer-Policy": "no-referrer"})
     _cookie(resp, request, tok, int(accounts.session_days() * 86400))  # type: ignore[arg-type]
+    resp.set_cookie("automoto_shell", "desktop", httponly=True, samesite="strict", path="/",
+                    secure=request.url.scheme == "https")
     return resp
 
 
