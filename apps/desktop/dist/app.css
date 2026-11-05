@@ -65,3 +65,20 @@ a { color:inherit; text-underline-offset:3px; } a:hover { color:var(--acc); }
 .card { min-width:0; }
 .arrow { width:16px; height:16px; stroke:currentColor; stroke-width:1.7; fill:none; }
 .logo span { right:4px; top:3px; } .logo .arrow { width:12px; height:12px; }
+/* Keep workspace actions in view on laptops and smaller Windows displays. */
+@media (min-width:761px) and (max-height:850px) {
+  .wrap { padding:20px 32px; }
+  .brand { padding-bottom:16px; }
+  .welcome { padding:20px 0; }
+  .welcome h2 { font-size:34px; line-height:1.2; margin:9px 0; letter-spacing:-1.2px; }
+  .welcome h2 br,.welcome p br,.workflow { display:none; }
+  .welcome em { margin-left:.25em; }
+  .welcome p { font-size:12px; max-width:none; }
+  .card { padding:20px; }
+  .card-head { margin-bottom:12px; }
+  .card>.dim { margin-bottom:12px; }
+  label { margin-top:10px; }
+  input { padding:9px 12px; }
+  .local-features { margin:16px 0; gap:10px; font-size:12px; }
+  .foot { margin-top:18px; }
+}
