@@ -342,6 +342,7 @@ function renderChat(conv) {
   renderTitle();
   $("#view").innerHTML = `<div class="chat">
     <div class="messages" id="msgs" role="log" aria-live="polite" aria-label="Conversation"><div class="thread" id="thread"></div></div>
+    <button type="button" class="jump-latest" id="jumpLatest" hidden>Latest reply ↓</button>
     <div class="composer-wrap">
       <div class="file-ideas" id="fileIdeas" aria-live="polite"></div>
       <form class="composer" id="composer" aria-label="Message composer">
@@ -356,7 +357,7 @@ function renderChat(conv) {
           <button class="send" id="sendBtn" aria-label="Send message" title="Send">${icon("send")}</button>
         </div>
       </form>
-      <div class="footer-note">${BRAND_SHORT} can make mistakes. Risky actions always ask you first.</div>
+      <div class="footer-note"><a href="#/files">Browse files</a> · <a href="#/memory">Saved memory</a> · ${BRAND_SHORT} can make mistakes. Risky actions always ask you first.</div>
     </div></div>`;
   const thread = $("#thread");
   if (!conv || !conv.messages?.length) {
@@ -370,13 +371,47 @@ function renderChat(conv) {
     updateInfoFromConv(conv);
   }
   wireComposer();
+  initChatScroll();
   renderAttachments();
   scrollDown(true);
   if (!mobile()) $("#composerInput").focus();
 }
-function scrollDown(force) {
-  const m = $("#msgs"); if (!m) return;
-  if (force || m.scrollHeight - m.scrollTop - m.clientHeight < 260) m.scrollTop = m.scrollHeight;
+let followChat = true;
+let chatResizeObserver = null;
+function scrollDown(force=false) {
+  const m = document.querySelector("#msgs");
+  if (!m) return;
+  if (force) followChat = true;
+  if (!followChat) return;
+  requestAnimationFrame(() => {
+    if (!m.isConnected || !followChat) return;
+    m.scrollTop = m.scrollHeight;
+    showLatestButton();
+  });
+}
+function showLatestButton() {
+  const button = document.querySelector("#jumpLatest");
+  if (button) button.hidden = followChat;
+}
+function initChatScroll() {
+  followChat = true;
+  chatResizeObserver?.disconnect();
+  const m = document.querySelector("#msgs");
+  if (!m) return;
+  m.addEventListener("scroll", () => {
+    followChat = m.scrollHeight - m.scrollTop - m.clientHeight <= 90;
+    showLatestButton();
+  }, { passive: true });
+  chatResizeObserver = new ResizeObserver(() => { if (followChat) scrollDown(); });
+  chatResizeObserver.observe(m.querySelector("#thread") || m);
+  const button = document.querySelector("#jumpLatest");
+  if (button) button.onclick = () => scrollDown(true);
+  showLatestButton();
+}
+function openWorkspaceFile(path) {
+  sessionStorage.setItem("automoto_focus_file", path);
+  if (location.hash === "#/files") PAGES.files();
+  else location.hash = "#/files";
 }
 function ensureThread() {
   if (!$("#thread")) $("#msgs").innerHTML = '<div class="thread" id="thread"></div>';
@@ -509,8 +544,9 @@ function renderEvent(ctx, ev) {
       if (!ev.files?.length) break;
       const n = document.createElement("div"); n.className = "note artifacts";
       const kb = (b) => b == null ? "" : b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
-      n.innerHTML = `${icon("file")} <b>Files made</b><ul>${ev.files.slice(0, 30).map((f) => `<li><a href="/api/files/download?path=${encodeURIComponent(f.path)}" download title="${esc(f.path)}">${esc(f.name || f.path)}</a> <span class="muted">${esc(f.path)} · ${kb(f.bytes)}</span></li>`).join("")}</ul>`;
-      steps.appendChild(n); break;
+      n.innerHTML = `${icon("file")} <b>Files made</b><ul>${ev.files.slice(0, 30).map((f) => `<li><button type="button" class="linkish" data-open-file="${esc(f.path)}">Open ${esc(f.name || f.path)}</button> · <a href="/api/files/download?path=${encodeURIComponent(f.path)}" download>Download</a><span class="muted"> · ${esc(f.path)} · ${kb(f.bytes)}</span></li>`).join("")}</ul>`;
+      steps.appendChild(n);
+      $("[data-open-file]", n).forEach((b) => b.onclick = () => openWorkspaceFile(b.dataset.openFile)); break;
     }
     case "error": ctx.error = ev.error; break;
   }
@@ -712,7 +748,10 @@ async function send() {
       conv.messages = []; state.cur = conv;
       history.replaceState(null, "", `#/c/${conv.id}`); state.route = location.hash;
     }
-  } catch (e) { toast(e.message, "bad"); return; }
+  } catch (e) {
+    ta.value = text; state.attachments.unshift(...images); state.files.unshift(...attached);
+    autosize(); renderAttachments(); drawFileIdeas(); toast(e.message, "bad"); return;
+  }
   $(".hero")?.remove();
   addUser(message);
   const el = addBot();
@@ -1154,7 +1193,9 @@ PAGES.files = async () => {
       <button class="btn" id="fRefresh">${icon("refresh")} Refresh</button>
       <button class="btn primary" id="fUploadBtn">${icon("upload")} Upload</button></div>
      <div id="fNote" class="muted" style="font-size:13px;margin:6px 0 12px"></div><div class="grid files-grid" id="fList"></div>`);
-  let dir = sessionStorage.getItem("automoto_files_dir") || ".";
+  const focus = sessionStorage.getItem("automoto_focus_file");
+  sessionStorage.removeItem("automoto_focus_file");
+  let dir = focus ? (focus.includes("/") ? focus.split("/").slice(0, -1).join("/") : ".") : (sessionStorage.getItem("automoto_files_dir") || ".");
   const fmt = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`;
   const prevUrl = (p) => `/api/files/preview?path=${encodeURIComponent(p)}&page=1`;
   const dlUrl = (p) => `/api/files/download?path=${encodeURIComponent(p)}`;
@@ -1227,6 +1268,11 @@ PAGES.files = async () => {
     e.target.value = ""; draw();
   };
   await draw();
+  if (focus && $("#fList")) {
+    const match = $("[data-view]", $("#fList")).find((b) => b.dataset.view === focus);
+    if (match) await viewFile(focus);
+    else toast(`File located in ${dir}: ${focus.split("/").pop()} — use Download to open it on your device.`);
+  }
 };
 
 const ACCENTS = ["#38f2a5", "#4da3ff", "#a78bfa", "#ff7ab6", "#ffb020", "#ff5d5d", "#22d3ee"];
