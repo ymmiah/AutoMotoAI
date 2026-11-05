@@ -406,5 +406,6 @@ a.btn { text-decoration: none; }
 
 .top-quick { display:inline-flex; align-items:center; gap:5px; color:var(--dim); padding:5px 8px; border-radius:8px; font-size:12px; text-decoration:none; }
 .top-quick:hover { color:var(--text); background:var(--hover); }
+.top-quick[hidden] { display:none; }
 .top-quick .svg { width:15px; height:15px; }
 @media(max-width:760px) { .top-quick .top-label { display:none; } .top-quick {padding:6px 3px;} }
