@@ -716,6 +716,30 @@ def local_ai_pull(body: dict[str, Any], request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from None
 
 
+@app.post("/api/local/start")
+def local_ai_start(request: Request) -> dict[str, Any]:
+    """Start Ollama on this computer by an explicit user action."""
+    _authorise(request, local_only=True)
+    from automoto import local_llm
+
+    try:
+        return local_llm.start_ollama()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/test")
+def local_ai_test(request: Request, body: dict[str, Any]) -> dict[str, Any]:
+    """Check that a downloaded local model can actually answer."""
+    _authorise(request, local_only=True)
+    from automoto import local_llm
+
+    try:
+        return local_llm.test_ollama(str(body.get("model") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
 @app.get("/api/skills")
 def skills_list(request: Request) -> dict[str, Any]:
     _authorise(request)
