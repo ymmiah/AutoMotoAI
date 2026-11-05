@@ -174,6 +174,8 @@ SPEC_PPTX = ("JSON spec: {aspect:'16:9', theme:{primary, accent, text, backgroun
              "title, subtitle, icon:'check'|'shield'|'idea'|'chart'|'users'|'clock'|'target'|'cloud'|'file'|'folder'|"
              "'image'|'sparkle'|'arrow'|'globe'|'code'|'lock'|'settings', "
              "cards:[{title,text,icon}], metrics:[{value,label}], steps:[{title,text}], "
+             "elements:[{type:'text'|'image'|'icon'|'rectangle', x,y,w,h (inches), text, path, name, "
+             "font_size, colour, bold, fill, line, alt}], "
              "image:'workspace/image.png', image_side:'right'|'left', brand_logo:'workspace/logo.png', "
              "caption, alt, bullets:['point', ['sub-point', 1]], left, right, right_image, rows:[[…]], "
              "chart:{type:'column'|'bar'|'line'|'pie'|'stacked', categories, series:[{name, values}]}, "
