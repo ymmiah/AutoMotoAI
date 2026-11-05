@@ -168,11 +168,20 @@ SPEC_XLSX = ("JSON spec: {properties:{title,author}, theme:{header_fill, font}, 
              "range, operator, values, formula}], validation:[{range, values:[…]}], charts:[{type:'column'|'bar'|'line'|'pie'|'scatter', "
              "data:'B1:C13' or ['C1:C13','F1:F13'] for non-adjacent columns (row 1 = series names), categories:'A2:A13', title, x_title, y_title, anchor:'F2'}], tab_color, landscape}], "
              "names:[{name, ref:'Sheet!$B$2'}]}. Then run office_recalc to verify every formula.")
-SPEC_PPTX = ("JSON spec: {aspect:'16:9', theme:{primary, accent, text, background, font, heading_font}, footer, slide_numbers:true, "
-             "slides:[{layout:'title'|'section'|'bullets'|'two_content'|'comparison'|'image'|'table'|'chart'|'statement'|'quote', "
-             "title, subtitle, bullets:['point', ['sub-point', 1]], left, right, left_title, right_title, right_image, image, caption, "
-             "alt, rows:[[…]], chart:{type:'column'|'bar'|'line'|'pie'|'stacked', categories, series:[{name, values}], number_format}, "
-             "text, attribution, notes:'speaker notes'}]}. Keep 3-6 bullets per slide, one idea per slide; put detail in notes.")
+SPEC_PPTX = ("JSON spec: {aspect:'16:9', theme:{primary, accent, text, background, heading, font, heading_font}, "
+             "footer, slide_numbers:true, slides:[{layout:'title'|'section'|'bullets'|'two_content'|'comparison'|"
+             "'image'|'table'|'chart'|'statement'|'quote'|'cards'|'metrics'|'steps'|'image_text'|'hero', "
+             "title, subtitle, icon:'check'|'shield'|'idea'|'chart'|'users'|'clock'|'target'|'cloud'|'file'|'folder'|"
+             "'image'|'sparkle'|'arrow'|'globe'|'code'|'lock'|'settings', "
+             "cards:[{title,text,icon}], metrics:[{value,label}], steps:[{title,text}], "
+             "image:'workspace/image.png', image_side:'right'|'left', brand_logo:'workspace/logo.png', "
+             "caption, alt, bullets:['point', ['sub-point', 1]], left, right, right_image, rows:[[…]], "
+             "chart:{type:'column'|'bar'|'line'|'pie'|'stacked', categories, series:[{name, values}]}, "
+             "text, attribution, notes:'speaker notes'}]}. "
+             "Create premium visually balanced layouts: use cards/metrics/steps/image_text instead of only bullets; "
+             "include actual existing assets and icons, never fabricate image paths. "
+             "For strict face/body/logo/text preservation, use the exact supplied image as-is and avoid generative redraws. "
+             "When a dark background is requested, use high-contrast text. One insight per slide; speaker notes for detail.")
 
 TOOLS: list[Tool] = [
     Tool("office_create_docx", "Create a Word .docx (reports, essays, letters) with real heading styles, title page, TOC, "
