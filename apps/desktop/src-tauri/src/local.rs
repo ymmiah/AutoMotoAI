@@ -2,7 +2,7 @@
 // AutoMoto engine that the official installer (scripts/install.ps1 / install.sh) put on this computer,
 // or signs in to one that is already running. See apps/desktop/README.md for why.
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -41,6 +41,26 @@ pub fn find_engine() -> Option<(PathBuf, &'static str)> {
         let p = data.join("automoto-ai/venv/bin/python");
         if p.is_file() {
             return Some((p, "installed by install.sh"));
+        }
+    }
+    None
+}
+
+/// The AutoMoto version installed next to `python` (its `automoto_ai-<version>.dist-info` folder), e.g.
+/// "5.6.0b3". Reads folder names only: no process is started. None if it can't tell.
+pub fn installed_version(python: &Path) -> Option<String> {
+    let venv = python.parent()?.parent()?; // Scripts\python.exe or bin/python -> the venv
+    let mut dirs = vec![venv.join("Lib").join("site-packages")];
+    if let Ok(entries) = std::fs::read_dir(venv.join("lib")) {
+        dirs.extend(entries.flatten().map(|e| e.path().join("site-packages")));
+    }
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if let Some(v) = name.strip_prefix("automoto_ai-").and_then(|r| r.strip_suffix(".dist-info")) {
+                return Some(v.to_string());
+            }
         }
     }
     None
@@ -158,4 +178,22 @@ pub async fn launch_running() -> Result<Url, String> {
     }
     link.query_pairs_mut().append_pair("app", "1");
     Ok(link)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn installed_version_reads_the_dist_info_folder() {
+        let root = std::env::temp_dir().join(format!("automoto-venv-test-{}", std::process::id()));
+        let win = root.join("win");
+        std::fs::create_dir_all(win.join("Scripts")).unwrap();
+        std::fs::create_dir_all(win.join("Lib/site-packages/automoto_ai-5.6.0b3.dist-info")).unwrap();
+        assert_eq!(super::installed_version(&win.join("Scripts/python.exe")).as_deref(), Some("5.6.0b3"));
+        let unix = root.join("unix");
+        std::fs::create_dir_all(unix.join("bin")).unwrap();
+        std::fs::create_dir_all(unix.join("lib/python3.12/site-packages/automoto_ai-5.6.0b4.dist-info")).unwrap();
+        assert_eq!(super::installed_version(&unix.join("bin/python")).as_deref(), Some("5.6.0b4"));
+        assert_eq!(super::installed_version(&root.join("none/bin/python")), None);
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

@@ -22,16 +22,23 @@ def hw(ram, vram=None, kind=None):
 
 
 @pytest.mark.parametrize("h,best", [
-    (hw(2), "qwen2.5:0.5b"), (hw(4), "qwen2.5:1.5b"), (hw(7.6), "qwen2.5:3b"), (hw(15.5), "qwen2.5:3b"),
-    (hw(32), "qwen2.5:7b"), (hw(16, 4), "qwen2.5:3b"), (hw(16, 8), "qwen2.5:7b"), (hw(32, 12), "qwen3:14b"),
-    (hw(16, None, "apple"), "qwen2.5:7b"), (hw(8, None, "apple"), "qwen2.5:3b"),
+    (hw(2), "qwen2.5:0.5b"), (hw(4), "qwen2.5:1.5b"), (hw(7.6), "qwen2.5:3b"), (hw(15.5), "qwen3.5:4b"),
+    (hw(32), "qwen3.5:9b"), (hw(16, 4), "qwen2.5:3b"), (hw(16, 8), "qwen3.5:4b"), (hw(32, 12), "qwen3.5:9b"),
+    (hw(64, 24), "qwen3.5:27b"), (hw(16, None, "apple"), "qwen3.5:9b"), (hw(8, None, "apple"), "qwen2.5:3b"),
 ])
 def test_recommend_fits_the_computer(h, best):
     r = local_llm.recommend(h)
     assert r["best"] == best
-    assert any(m["name"] == best and m["recommended"] for m in r["models"])
-    assert all(m["tools"] for m in r["models"])  # only models that can use tools
+    assert any(m["name"] == best and m["recommended"] and m["tools"] for m in r["models"])  # picks can use tools
     assert "GB" in r["why"]
+
+
+def test_catalogue_has_the_current_free_families():
+    names = {m.name for m in local_llm.CATALOG}
+    assert {"qwen3.5:4b", "qwen3.5:9b", "gemma4:e4b", "gpt-oss:20b", "deepseek-r1:8b", "llama3.2:3b"} <= names
+    assert len(names) == len(local_llm.CATALOG) and all(local_llm.valid_model_name(n) for n in names)
+    gemma3 = {m.name: m.tools for m in local_llm.CATALOG if m.name.startswith("gemma3")}
+    assert gemma3 and not any(gemma3.values())  # Ollama lists no tool calling for Gemma 3
 
 
 def test_small_computer_is_not_offered_big_models():

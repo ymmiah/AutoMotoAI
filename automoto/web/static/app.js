@@ -1438,7 +1438,7 @@ PAGES.settings = async () => {
     b.disabled = true; b.textContent = "Testing…";
     try {
       const test = await api("/api/local/test", { model: b.dataset.test });
-      toast(test.ok ? `${test.model} responded: ${test.reply || "ready"}` : "Model failed to respond", test.ok ? "" : "bad");
+      toast(test.ok ? `${test.model} is ready (answered in ${test.seconds ?? "?"} s${test.tools === false ? "; no tool calling, so tasks run slower" : ""})` : "Model failed to respond", test.ok ? "" : "bad");
     } catch (err) { toast(err.message, "bad"); }
     finally { b.disabled = false; b.textContent = "Test"; }
   });

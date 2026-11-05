@@ -50,17 +50,30 @@ That's it. Start a new chat and ask something.
 
 ## Which model should I pick?
 
-AutoMoto picks for you, but here is the idea:
+AutoMoto picks for you (Settings marks it **Recommended**), and if the model you picked isn't downloaded it
+quietly uses the best one you *do* have instead of failing. All of these are free, open-weights models from the
+[Ollama library](https://ollama.com/library):
 
 | Your computer | Good model | Download |
 |---|---|---|
-| 4 GB memory | `qwen2.5:1.5b` or `gemma3:1b` | Around 1 GB |
-| 8–16 GB memory (most laptops) | `qwen2.5:3b`, `llama3.2:3b` or `gemma3:4b` | Around 2–3.5 GB |
-| 32 GB memory, or a graphics card with 6 GB+ | `qwen2.5:7b` | 4.7 GB |
-| Graphics card with 12 GB+ | `qwen3:14b` | 9.3 GB |
-| Mac with Apple chip, 16 GB | `qwen2.5:7b` | 4.7 GB |
+| 4 GB memory | `qwen2.5:1.5b` or `qwen3.5:0.8b` | 1–1.3 GB |
+| 8 GB memory (most laptops) | `qwen2.5:3b` (fastest) or `llama3.2:3b` | About 2 GB |
+| 16 GB memory, or a graphics card with 6 GB+ | `qwen3.5:4b` (reads images too) | About 4 GB |
+| 32 GB memory, a graphics card with 12 GB+, or a 16 GB Mac | `qwen3.5:9b`, `gemma4:12b` or `deepseek-r1:8b` | 5–8 GB |
+| A graphics card with 16–24 GB | `gpt-oss:20b` or `qwen3.5:27b` | 14–20 GB |
 
-Qwen and Llama variants are useful for tool-based tasks. **Gemma 3** is best considered a free local chat and multimodal model; tool-calling reliability depends on the model and runtime, so validate it with the **Test** button before relying on it for agent tasks.
+Qwen, Llama, Mistral, Gemma **4**, DeepSeek R1 and gpt-oss can call AutoMoto's tools directly. **Gemma 3** can't
+(Ollama lists no tool calling for it), so AutoMoto uses its slower text protocol with it automatically. You can
+also type any other Ollama model name into **Download by name**.
+
+**Thinking models** (Qwen 3 / 3.5, DeepSeek R1, gpt-oss) normally "think" for a long time before each step, which
+is very slow on a laptop CPU. AutoMoto turns thinking off (gpt-oss: down to *low*). Set `LOCAL_AI_THINK=1` to
+let them think.
+
+**Context window:** Ollama's own default (2–4 thousand tokens on most PCs) is smaller than AutoMoto's
+instructions and tool list, which made small models "forget" how to work. AutoMoto now asks for **8,192 tokens**
+on every request (`LOCAL_AI_CONTEXT=16384` for long documents if you have the memory; never more than the model
+supports).
 
 ## The same thing from the command line
 
@@ -98,7 +111,11 @@ For safety, AutoMoto only talks to local servers on **your computer or your home
 | "Ollama isn't running" | Click **Start local AI** if installed; otherwise install from [ollama.com/download](https://ollama.com/download). |
 | The Download button is greyed out | Start Ollama locally first. Network access is needed to download a new model, but not to use a downloaded model. |
 | "Offline mode is on, but no AI is set up" | Download a model in Settings → Offline AI, or untick Offline mode. |
-| Answers are very slow | Pick a smaller model (`qwen2.5:1.5b`). Close big apps. The first answer is always slowest while the model loads. |
+| "… is not downloaded on this computer yet" | Download it in Settings → Offline AI, or pick one with **Use model**. It works straight after the download finishes. |
+| "Ollama isn't running" in a chat | AutoMoto starts an installed Ollama by itself once; if that fails, click **Start local AI** or open Ollama from the Start menu. |
+| "timed out" | The model is too big for this computer. Pick a smaller one, or raise `LOCAL_AI_TIMEOUT` (seconds, default 600). |
+| Answers are very slow | Pick a smaller model (`qwen2.5:3b` or `qwen2.5:1.5b`). Close big apps. The first answer is always slowest while the model loads; **Test** loads it ahead of time. |
+| The Windows app has no **Offline AI** card | Your local engine is older than this feature. Update the app, then click **Install the local engine** again to update the engine too. |
 | It gives up halfway through a long task | Small models find long tasks hard. Split it into smaller steps, or use a bigger model. |
 | It says it can't search the web | That's Offline mode. Untick it if you want web search. |
 

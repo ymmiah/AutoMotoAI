@@ -85,7 +85,7 @@ class ProviderSpec:
         if self.id == "ollama":
             from automoto import local_llm
 
-            return local_llm.ollama_model()
+            return local_llm.active_model()
         if vision and self.supports_vision:
             return (config.env(self.vision_env) if self.vision_env else None) or self.vision_model or self.text_model
         if strong:
@@ -379,7 +379,7 @@ REGISTRY: dict[str, ProviderSpec] = {
             id="ollama",
             label="Ollama (on this computer)",
             env_keys=(),
-            kind="openai_compat",
+            kind="ollama",
             base_url=None,
             text_model="qwen2.5:3b",
             vision_model=None,
@@ -462,6 +462,9 @@ _MODEL_MISSING = re.compile(
 
 
 def mark_unavailable(provider: str, model: str, ttl: float | None = None) -> None:
+    spec = REGISTRY.get(provider)
+    if ttl is None and spec is not None and spec.local:
+        ttl = 30.0  # a local model can be downloaded a minute later: don't hide it for an hour
     with _UNAVAILABLE_LOCK:
         _UNAVAILABLE[(provider, model)] = time.monotonic() + (UNAVAILABLE_TTL_S if ttl is None else ttl)
 
@@ -636,7 +639,117 @@ def _anthropic(spec: ProviderSpec, messages, model, key, *, temperature, max_tok
     return text
 
 
-TRANSPORTS: dict[str, Callable[..., str]] = {"openai_compat": _openai_compat, "anthropic": _anthropic}
+# -- Ollama (native /api/chat) -------------------------------------------------------
+# Ollama's OpenAI-compatible endpoint can't set the context window, and Ollama's default (2-4k tokens on
+# most PCs) silently cuts off the start of the agent's prompt - the instructions and the tool list - so
+# small models "forget" how to use tools. /api/chat takes num_ctx per request (and a thinking switch).
+def _ollama_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """OpenAI-style messages -> Ollama /api/chat messages (images as base64, tool arguments as objects)."""
+    import json
+
+    names: dict[str, str] = {}
+    out: list[dict[str, Any]] = []
+    for m in messages:
+        role = m.get("role") or "user"
+        content = m.get("content")
+        msg: dict[str, Any] = {"role": role}
+        if isinstance(content, list):
+            texts, images = [], []
+            for p in content:
+                if not isinstance(p, dict):
+                    continue
+                if p.get("type") == "text":
+                    texts.append(p.get("text", ""))
+                elif p.get("type") == "image_url":
+                    url = (p.get("image_url") or {}).get("url", "")
+                    if url.startswith("data:") and ";base64," in url:
+                        images.append(url.split(";base64,", 1)[1])
+            msg["content"] = "\n".join(t for t in texts if t)
+            if images:
+                msg["images"] = images
+        else:
+            msg["content"] = "" if content is None else str(content)
+        if role == "assistant" and m.get("tool_calls"):
+            calls = []
+            for c in m["tool_calls"]:
+                fn = c.get("function") or {}
+                args = fn.get("arguments")
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args or "{}")
+                    except ValueError:
+                        args = {}
+                names[c.get("id", "")] = fn.get("name", "")
+                calls.append({"function": {"name": fn.get("name", ""), "arguments": args or {}}})
+            msg["tool_calls"] = calls
+        if role == "tool":
+            name = names.get(m.get("tool_call_id", ""))
+            if name:
+                msg["tool_name"] = name
+        out.append(msg)
+    return out
+
+
+def _ollama_post(spec: ProviderSpec, body: dict[str, Any], timeout: float, *, started: bool = False) -> dict[str, Any]:
+    import json
+    import urllib.error
+    import urllib.request
+
+    from automoto import local_llm
+
+    req = urllib.request.Request(local_llm.ollama_url() + "/api/chat", data=json.dumps(body).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310  # nosec B310 - validated local address only
+            data = json.loads(r.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        msg = local_llm._ollama_error(exc)
+        raise ProviderError(spec.id, msg, status=exc.code, transient=exc.code in (500, 502, 503)) from None
+    except TimeoutError:  # socket.timeout is TimeoutError since Python 3.10
+        raise ProviderError(spec.id, f"timed out after {int(timeout)} s - this model is too slow for this computer; "
+                            "pick a smaller one in Settings > Offline AI (or raise LOCAL_AI_TIMEOUT)",
+                            transient=False) from None
+    except (urllib.error.URLError, ConnectionError, OSError) as exc:
+        # Installed but not running (e.g. after a restart): start it once, as the user chose a local model.
+        if not started and local_llm.ollama_binary():
+            try:
+                if local_llm.start_ollama().get("started"):
+                    return _ollama_post(spec, body, timeout, started=True)
+            except ValueError:
+                pass
+        hint = ("Ollama isn't running. Open Settings > Offline AI and click Start local AI."
+                if local_llm.ollama_binary() else
+                "Ollama isn't installed. Get the free installer at https://ollama.com/download.")
+        raise ProviderError(spec.id, f"{hint} ({getattr(exc, 'reason', exc)})", transient=False) from None
+    if data.get("error"):
+        raise ProviderError(spec.id, str(data["error"])[:240])
+    return data
+
+
+def _ollama_body(spec: ProviderSpec, messages, model, *, tools, temperature, max_tokens) -> dict[str, Any]:
+    from automoto import local_llm
+
+    body: dict[str, Any] = {"model": model, "messages": _ollama_messages(messages), "stream": False,
+                            **local_llm.request_options(model)}
+    body["options"].update({"temperature": temperature, "num_predict": max_tokens})
+    if tools:
+        body["tools"] = tools
+    return body
+
+
+def _ollama_complete(spec: ProviderSpec, messages, model, key, *, temperature, max_tokens, timeout) -> str:
+    from automoto.local_llm import strip_thinking
+
+    data = _ollama_post(spec, _ollama_body(spec, messages, model, tools=None, temperature=temperature,
+                                           max_tokens=max_tokens), _timeout(spec, timeout))
+    text = strip_thinking(str((data.get("message") or {}).get("content") or "")).strip()
+    if not text:
+        raise ProviderError(spec.id, "empty response", retryable=True)
+    return text
+
+
+TRANSPORTS: dict[str, Callable[..., str]] = {"openai_compat": _openai_compat, "anthropic": _anthropic,
+                                             "ollama": _ollama_complete}
 
 
 def complete(spec: ProviderSpec, messages, model: str, key: str, *, temperature: float | None = None,
@@ -712,7 +825,29 @@ def _anthropic_turn(spec: ProviderSpec, messages, model, key, *, tools, native, 
     return text.strip(), calls
 
 
-TURN_TRANSPORTS: dict[str, Callable[..., tuple[str, list]]] = {"openai_compat": _openai_turn, "anthropic": _anthropic_turn}
+def _ollama_turn(spec: ProviderSpec, messages, model, key, *, tools, native, temperature, max_tokens, timeout):
+    from automoto import toolcalls as tc
+    from automoto.local_llm import strip_thinking
+
+    if native and tools:
+        msgs, send_tools = tc.render_openai(messages, provider=spec.id), tools
+    else:
+        msgs, send_tools = tc.render_text(messages, tools), None
+    data = _ollama_post(spec, _ollama_body(spec, msgs, model, tools=send_tools, temperature=temperature,
+                                           max_tokens=max_tokens), _timeout(spec, timeout))
+    message = data.get("message") or {}
+    text = strip_thinking(str(message.get("content") or "")).strip()
+    calls = []
+    for c in message.get("tool_calls") or []:
+        fn = (c or {}).get("function") or {}
+        if fn.get("name"):
+            calls.append({"id": c.get("id") or tc.new_id(), "name": fn["name"], "arguments": tc._args(fn.get("arguments")),
+                          "provider": spec.id})
+    return text, calls
+
+
+TURN_TRANSPORTS: dict[str, Callable[..., tuple[str, list]]] = {"openai_compat": _openai_turn, "anthropic": _anthropic_turn,
+                                                               "ollama": _ollama_turn}
 
 
 def complete_turn(spec: ProviderSpec, messages, model: str, key: str, *, tools: list[dict[str, Any]] | None,

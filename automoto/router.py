@@ -170,6 +170,10 @@ def explain_failures(tried: list[dict[str, Any]]) -> list[str]:
             again = (f"retried {n} time{'s' if n != 1 else ''} with backoff" if n else "not retried")
             lines.append(f"{label}: {codes} = {what} (not your key) on {models} - {again}, then moved on. "
                          "Try again in a minute.")
+        if missing and spec and spec.local:
+            lines.append(f"{label}: {', '.join(missing)} is not downloaded on this computer yet. Download it (or pick "
+                         "one you already have) in Settings > Offline AI, then press Test.")
+            continue
         if missing:
             env_hint = spec.model_env if spec and spec.model_env else "the model setting"
             lines.append(f"{label}: model not available to this key (404) - tried {', '.join(missing)}. "
@@ -394,7 +398,12 @@ def ask_turn(messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, kno
         for model in models:
             if tried and tried[-1]["provider"] == spec.id and tried[-1].get("status") in (401, 403, 429):
                 break  # bad or rate-limited key: don't try this provider's other models
-            modes = [True, False] if native_first and mode_cfg == "auto" else [native_first]
+            native_ok = native_first
+            if native_ok and spec.local and spec.id == "ollama":
+                from automoto import local_llm
+
+                native_ok = local_llm.supports(model, "tools") is not False  # e.g. Gemma 3: straight to text
+            modes = [True, False] if native_ok and mode_cfg == "auto" else [native_ok]
             for native in modes:
                 t0 = time.monotonic()
                 try:
