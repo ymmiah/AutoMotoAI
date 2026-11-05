@@ -101,6 +101,18 @@ For more information, see [Offline AI](docs/OFFLINE.md).
 
 ---
 
+## Visual design improvements in development
+
+> The [visual design upgrade](docs/VISUAL-DESIGN.md) is on a separate feature branch and **is not yet included** in the published Windows/Microsoft Store release.
+
+- **Better PowerPoint design:** editable vector icons, premium feature cards, metrics and process diagrams; explicit canvas positioning for shapes, text and reference images.
+- **More readable themes:** automatic light text on dark slides when text colours are not supplied; consistent page margins, original images and logos kept at their natural aspect ratios.
+- **Real local artwork:** an optional ComfyUI checkpoint can generate new image files, entirely on the computer after setup. ComfyUI and its model must be installed separately.
+- **Surgical source preservation:** `image_compose` places a supplied photograph/logo with exact text and no AI face or brand redraws. Original source files remain unchanged. Generated images cannot be guaranteed to preserve a reference person's identity.
+- **Quality checks:** `office_check` plus rendered slide review before release.
+
+---
+
 ## ✨ What it can do
 
 - **🪄 One smart assistant, no tool list to learn.** Say what you need in your own words (typos are fine) or attach a file. A built-in planner works out the kind of task (Word, Excel, slides, PDF, data, zip, WordPress, code, web research, images, terminal, routines, memory, connectors) and gives the AI only the 10-18 tools and the skill that task needs, so prompts stay small and even small models pick the right tool. If it needs more mid-task, it asks for them. See **[what you can ask for](docs/CAPABILITIES.md)**.

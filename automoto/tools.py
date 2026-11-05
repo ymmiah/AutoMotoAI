@@ -455,6 +455,12 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
         from automoto import archive_tools, data_tools, wp_tools
 
         tools += archive_tools.TOOLS + wp_tools.TOOLS + data_tools.TOOLS
+    # Reference-faithful PNG compositions work wherever a workspace is available.
+    # The ComfyUI generator is intentionally local-app-only: never expose the host's
+    # loopback inference server to multi-user hosted accounts or remote clients.
+    from automoto import visual_tools
+
+    tools += [t for t in visual_tools.TOOLS if local_apps or t.name == "image_compose"]
     if services:
         from automoto import services as services_mod
 

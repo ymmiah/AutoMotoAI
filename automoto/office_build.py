@@ -812,9 +812,16 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
     primary = _hex(theme.get("primary"), "1F3864")
     accent = _hex(theme.get("accent"), "2E75B6")
     bg = theme.get("background")
-    text_color = _hex(theme.get("text"), "262626")
-    font = theme.get("font", "Calibri")
+    # With a dark slide background, unreadable dark text was previously the default.
+    # Pick a contrasting foreground unless the author explicitly chose their colours.
+    bg_hex = _hex(bg, "FFFFFF")
+    bg_rgb = tuple(int(bg_hex[j:j + 2], 16) for j in (0, 2, 4))
+    dark = (0.2126 * bg_rgb[0] + 0.7152 * bg_rgb[1] + 0.0722 * bg_rgb[2]) < 112
+    text_color = _hex(theme.get("text"), "F8FAFC" if dark else "262626")
+    heading_color = _hex(theme.get("heading"), "FFFFFF" if dark else primary)
+    font = theme.get("font", "Aptos")
     head_font = theme.get("heading_font", font)
+    from automoto import office_visual
     prs = pptx.Presentation()
     old_w = prs.slide_width
     if spec.get("aspect", "16:9") == "16:9":
@@ -911,20 +918,21 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
         kind = s.get("layout", "bullets")
         base = {"image": "title_only", "table": "title_only", "chart": "title_only", "statement": "title_only",
                 "quote": "title_only"}.get(kind, kind)
-        if base not in L:
+        premium = {"cards", "metrics", "steps", "image_text", "hero", "canvas"}
+        if base not in L and kind not in premium:
             raise OfficeError(f"unknown layout '{kind}'. Use title, section, bullets, two_content, comparison, "
-                              "image, table, chart, statement, quote, blank")
-        slide = prs.slides.add_slide(prs.slide_layouts[L[base]])
+                              "image, table, chart, statement, quote, blank, cards, metrics, steps, image_text, hero, canvas")
+        slide = prs.slides.add_slide(prs.slide_layouts[L["title_only"] if kind in premium else L[base]])
         decorate(slide, i, kind)
         title = slide.shapes.title
         if title is not None:
             title.text_frame.text = str(s.get("title", ""))
-            style_text(title.text_frame, None, primary, True, head_font)
+            style_text(title.text_frame, None, heading_color, True, head_font)
             if kind not in ("title", "section"):
                 title.top, title.height = Inches(0.35), Inches(1.1)
-                title.left, title.width = Inches(0.6), W - Inches(1.2)
+                title.left, title.width = Inches(0.6), W - Inches(2.00)
                 title.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
-                style_text(title.text_frame, title_pt, primary, True, head_font)
+                style_text(title.text_frame, title_pt, heading_color, True, head_font)
             autofit(title.text_frame)
         phs = {p.placeholder_format.idx: p for p in slide.placeholders}
         if kind in ("title", "section"):
@@ -934,6 +942,7 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
                 style_text(sub.text_frame, 22 if kind == "title" else 20, accent, False)
                 if not s.get("subtitle"):
                     sub._element.getparent().remove(sub._element)
+            office_visual.title_decoration(slide, s, theme, W.inches, H.inches)
         elif kind == "bullets":
             fill_bullets(phs[1].text_frame, s.get("bullets") or [])
         elif kind in ("two_content", "comparison"):
@@ -975,9 +984,10 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
                     cell = tbl.cell(r_i, c_i)
                     cell.text = str(r[c_i]) if c_i < len(r) and r[c_i] is not None else ""
                     style_text(cell.text_frame, fs, "FFFFFF" if r_i == 0 else text_color, r_i == 0)
-                    if r_i == 0:
-                        cell.fill.solid()
-                        cell.fill.fore_color.rgb = _rgb(primary)
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = _rgb(primary if r_i == 0 else
+                        ("1E293B" if dark and r_i % 2 else "263549" if dark else
+                         "F0F5FA" if r_i % 2 else "FFFFFF"))
         elif kind == "chart":
             ch = s.get("chart") or {}
             cd = CategoryChartData()
@@ -1010,6 +1020,26 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
                 for k, ser in enumerate(chart.plots[0].series):
                     ser.format.fill.solid()
                     ser.format.fill.fore_color.rgb = _rgb([accent, primary, "A5A5A5", "FFC000", "70AD47"][k % 5])
+        elif kind == "canvas":
+            office_visual.render_canvas(
+                slide, s, theme,
+                lambda target, path, x, y, w, h, alt: _add_picture(
+                    target, _image(path), Inches(x), Inches(y), Inches(w), Inches(h), alt),
+                W.inches, H.inches)
+        elif kind == "cards":
+            office_visual.render_cards(slide, s, theme, W.inches, H.inches)
+        elif kind == "metrics":
+            office_visual.render_metrics(slide, s, theme, W.inches, H.inches)
+        elif kind == "steps":
+            office_visual.render_steps(slide, s, theme, W.inches, H.inches)
+        elif kind in ("image_text", "hero"):
+            # Embed the exact source image; never regenerate, beautify, crop, or
+            # reshape supplied people/logos. Fit within the allotted area.
+            office_visual.render_image_text(
+                slide, s, theme,
+                lambda target, path, x, y, w, h, alt: _add_picture(
+                    target, _image(path), Inches(x), Inches(y), Inches(w), Inches(h), alt),
+                W.inches, H.inches)
         elif kind in ("statement", "quote"):
             l_, t_, w_, h_ = content_box(slide)
             tb = slide.shapes.add_textbox(l_ + Inches(0.5), t_ + Inches(0.4), w_ - Inches(1), h_ - Inches(0.8))
@@ -1025,6 +1055,13 @@ def create_pptx(spec: dict[str, Any], out: Path) -> str:
                 for r in p.runs:
                     r.font.size, r.font.color.rgb, r.font.name = Pt(20), _rgb("595959"), font
             autofit(tb.text_frame)
+        if kind not in ("title", "section", "blank") and not s.get("brand_logo"):
+            office_visual.heading_icon(slide, s, theme, W.inches)
+        if s.get("brand_logo"):
+            # Keep the original logo file pixels and aspect ratio intact.
+            _add_picture(slide, _image(str(s["brand_logo"])),
+                         W - Inches(1.47), Inches(.24), Inches(.94), Inches(.80),
+                         s.get("brand_logo_alt") or "Original supplied brand logo")
         # unused empty placeholders confuse readers and screen readers - remove them
         for ph in list(slide.placeholders):
             if ph.has_text_frame and not ph.text_frame.text.strip():

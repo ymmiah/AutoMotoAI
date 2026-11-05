@@ -18,11 +18,32 @@ status: live
 
 **Build with `office_create_pptx`**
 - One idea per slide; 3-6 bullets, ≤ 12 words each; sub-points only when needed.
-- Layouts: `title`, `section` (dividers), `bullets`, `two_content`/`comparison` (before vs after,
-  options), `image` (with alt + caption), `table` (≤ 7 rows), `chart` (column/bar/line/pie/stacked
-  with real numbers), `statement`/`quote` (big message).
-- Theme: one `primary`, one `accent` colour, one font for the whole deck; slide numbers on.
+- Prefer **native editorial layouts** over bullet dumps. Use `cards` (1-6 cards, each title/text/icon),
+  `metrics` (1-4 facts), `steps` (2-5 stage names), `image_text`/`hero` (existing real
+  image + exact copy), and `canvas` (per-element `type,x,y,w,h` in inches for exact placement).
+  Also available: `title`, `section`, `bullets`, `two_content`, `comparison`,
+  `image`, `table`, `chart`, `statement`, `quote`.
+- **Icons:** add `icon:'shield'` or `'idea'`, `'chart'`, `'users'`, `'clock'`, `'target'`,
+  `'cloud'`, `'file'`, `'image'`, `'sparkle'`, `'globe'`, `'check'`, etc. They're
+  editable PowerPoint vector shapes; no icon-font or network dependency.
+- Theme: readable `primary`, `accent`, `background`, `text`, `heading`, font and
+  heading font. On dark backgrounds, use contrasting pale headings and body text.
+- Visual variety: establish an art direction, avoid identical layouts in sequence, show
+  genuine evidence/diagrams instead of tables when unnecessary, and use ample negative space.
+  No invented figures: metrics/charts need supplied or verifiable data.
 - `notes` on every content slide: what to say (2-5 sentences), the source of any figure, timings.
+
+**Photos, image generation and exact-copy preservation**
+- First check `uploads/` for the user's photograph, logo, brand image or approved asset.
+  `image_text` and `canvas` insert those **original image bytes** with aspect-fit.
+  Do not regenerate a reference person's face/body, embellish the logo or make up text.
+- For original photographic or illustrated art with no identity-critical subject, use
+  `image_models` then `image_generate` if the user has configured local ComfyUI and a
+  compatible checkpoint. It is NOT bundled with AutoMoto and cannot guarantee face identity.
+  If unavailable, say so; use editable native icon/shape graphics instead.
+- If the user wants a visual graphic from their own photo and exact wording, use
+  `image_compose`: it respects the original source and produces a new file.
+- A professional deck has actual visual variation, not black slides with plain white text.
 
 **Check**
 1. `office_check` - fix overflow warnings (split the slide or shorten), empty placeholders, small fonts,
