@@ -1,7 +1,7 @@
 > [!IMPORTANT]
-> 🎉 **New: AutoMoto now supports Windows, in Beta!** Download **[AutoMoto AI 5.6.0 Beta 3](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)** (`.exe` or `.msi`), sign in once, and the same chats and files follow you to the Windows app, the web and your phone.
+> 🎉 **AutoMoto AI for Windows is listed on the [Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB).** Prefer the Store listing for a straightforward installation. You can also download the [5.6.0 Beta 3 GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (`.exe` / `.msi`). Desktop sign-in can connect to a hosted AutoMoto account, while local mode keeps its own chats and workspace on the PC.
 > ✨ **Beta 3: one smart assistant.** Just say what you need or attach a file: AutoMoto works out the steps and picks the right tools by itself, and shows progress in plain words. [What it can do](docs/CAPABILITIES.md)
-> 🔌 **Coming next (on `main`, in testing): Offline AI.** Run a free model on your own computer with Ollama, with no key and no internet. [How](docs/OFFLINE.md)
+> 🔌 **Offline AI is available in newer source builds and still being tested for the next release.** Run free downloaded models locally through Ollama, including Qwen and Google Gemma, without an API key or internet *after the runtime and model are installed*. [How](docs/OFFLINE.md)
 > 👉 New here? **[Start here: pick your device](https://ymmiah.github.io/AutoMotoAI/START.html)** · macOS and Linux apps are coming next. Beta means rough edges are possible; the stable version is [v5.5.0](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0).
 
 <div align="center">
@@ -16,7 +16,7 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 
 **New here? 👉 [Step-by-step GUI guide](docs/GUI-GUIDE.md)** · [docs site with copy buttons](https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html)
 
-**🪟 Windows app (Beta):** [download the installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe`) —
+**🪟 Windows app:** [Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB) · [GitHub Beta 3 installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe`) —
 sign in once and the same chats and files follow you to the app, the web and your phone. [How to](docs/GUI-GUIDE.md#0-the-windows-app)
 
 [![Version](https://img.shields.io/badge/version-5.6.0--beta.3_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
@@ -64,7 +64,7 @@ SHA-256, install into a private virtualenv and create `~/.automoto/.env` for you
 
 | OS | Install | Then |
 |---|---|---|
-| **Windows app — Beta** (10/11, 64-bit) | `AutoMoto-AI_5.6.0-beta.3_x64-setup.exe` from the [5.6.0 Beta 3 release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (SmartScreen: *More info → Run anyway*, it isn't code-signed; a Microsoft Store edition is on the way: [Windows distribution](docs/WINDOWS-DISTRIBUTION.md)) | sign in to your account, or **Start local mode** ([steps](docs/START.md#a-windows-pc)) |
+| **Windows app** (10/11, 64-bit) | **[Install from the Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB)** (Store listing ID `9N9J7FLSSFG8`), or download the [GitHub Beta 3 installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) directly. | Sign in to your account, or select **Start local mode** ([steps](docs/START.md#a-windows-pc)). Existing Store releases may not yet include the changes on this fix branch. |
 | **Windows 10/11** (PowerShell) | `winget install -e --id Python.Python.3.12` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` | `notepad $env:USERPROFILE\.automoto\.env` → add key · `automoto serve` |
 | **macOS** (Intel / Apple Silicon) | `brew install python@3.12 git` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `./scripts/install.sh` | `open -e ~/.automoto/.env` → add key · `automoto serve` |
 | **Linux** (Ubuntu/Debian, Fedora, Arch…) | `sudo apt install python3 python3-venv git` (or dnf / pacman) · clone · `./scripts/install.sh` | `nano ~/.automoto/.env` → add key · `automoto serve` |
@@ -75,6 +75,29 @@ SHA-256, install into a private virtualenv and create `~/.automoto/.env` for you
 
 Optional extras: `--system-deps` (`-SystemDeps` on Windows) installs LibreOffice, poppler, 7-Zip and PHP;
 `--service` (`-AutoStart`) starts AutoMoto at login.
+
+---
+
+## 🧪 Upcoming usability and provider improvements (fix branch)
+
+> **Development status:** The improvements below are implemented or under test on branch `fix/chat-scroll-offline-navigation-files`. They are **not** claims about features available in the current Microsoft Store release. Review the pull request and CI before release.
+
+- **Chat scrolling:** real-time replies follow the bottom while you remain near the latest message. Scrolling up pauses automatic following; **Latest reply** restores it. The chat pane no longer smooth-scrolls against the scrollbar.
+- **Files from chat:** generated-file cards offer **Open** in the workspace and **Download**. Files and Memory have shortcuts in the chat header and message composer. Clicking Open navigates to the containing folder, with a preview for supported file types.
+- **Local AI:** Settings displays downloaded Ollama models, not just a recommendation list; you can download a model, start an existing Ollama installation, select a model and run a small response test. The free **Gemma 3** family joins Qwen and Llama choices.
+- **Switching providers:** offline mode can be disabled from Settings to return to cloud providers, provided `AUTOMOTO_OFFLINE` is not forcibly set by the environment. The desktop application offers a **Local / Server** switch to return to the sign-in / mode-choice screen, without deleting data.
+- **More cloud APIs:** **Z.ai GLM** and **Moonshot Kimi** are optional, key-authenticated providers. Use `ZAI_API_KEY` and `MOONSHOT_API_KEY` respectively, or enter a key under Settings for the current browser tab. Their pricing, quota and model availability are determined by the providers.
+- **Stability:** confirmation dialogs now return a cancellation result when dismissed, chat drafts survive failed conversation creation, and mobile chat state is preserved while switching tabs.
+
+### Free local model setup
+
+1. Open **Settings → Offline AI**. Install the official [Ollama runtime](https://ollama.com/download) if the app indicates it is missing. This is a one-time native runtime requirement, not a cloud subscription.
+2. Click **Start local AI** if the runtime is installed but not running. Download a supported free model such as `qwen2.5:3b` or `gemma3:4b`, then choose **Use model** and **Test**.
+3. Optionally enable **Offline only**; once a model is installed, inference works without internet access. To use cloud models again, choose **Use cloud AI / server providers**. For hosted-account versus local-PC mode, use **Local / Server** in the desktop application.
+
+**Important:** AutoMoto is not a standalone model engine. Its Python backend and a local inference runtime are needed for the offline path; the installer/runtime and model must first be downloaded. Gemma is an open-weights local model family, whereas Gamma (the presentation platform) is not a local LLM that AutoMoto can download.
+
+For more information, see [Offline AI](docs/OFFLINE.md).
 
 ---
 
@@ -92,7 +115,7 @@ Optional extras: `--system-deps` (`-SystemDeps` on Windows) installs LibreOffice
 - **🔌 Reach your services.** Built-in REST calls for GitHub, GitLab, Vercel, Figma, Notion and Zotero, and a one-click catalogue of official MCP connectors (GitHub, GitLab, Notion, Figma, Canva, Vercel, Google Drive, OneDrive, Zotero). Amazon, eBay, Etsy and Booking.com are research-only: **AutoMoto never buys or books.**
 - **📂 Work in your own folders when you allow it.** Add project folders in Settings → Files. Anything outside the sandbox asks first, and secrets (`~/.ssh`, `.env` files, keychains, browser profiles, system folders) stay blocked.
 - **🛠 Work like an agent, not a chat box.** It plans, calls tools, reads the results and repeats until the goal is met (with a step limit so it can't loop forever).
-- **🔀 Use every AI you have a key for.** NVIDIA NIM, Gemini, Groq, OpenRouter (free tiers) plus OpenAI and Claude. It picks the best one for each step and **fails over mid-task** on rate limits, 5xx errors, bad keys or timeouts.
+- **🔀 Use the AI providers you configure.** NVIDIA NIM, Gemini, Groq, OpenRouter (where free tiers exist), OpenAI and Claude. **Z.ai GLM and Moonshot Kimi** have been added on the fix branch; both require their own API credentials and may incur charges. Auto mode can fail over between configured providers. Offline options include free, downloadable Qwen and Google Gemma models.
 - **👁 Know which AIs can see.** Screenshots and photos only go to vision-capable models.
 - **🔎 Research with sources.** Free web search (DuckDuckGo, no key) and page fetching behind an SSRF guard.
 - **📁 Have its own little computer.** Files and shell commands are jailed to a sandbox workspace, with an optional throwaway Docker container.
