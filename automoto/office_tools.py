@@ -56,7 +56,17 @@ def create_xlsx(ctx: ToolContext, path: str, spec: Any) -> str:
 def create_pptx(ctx: ToolContext, path: str, spec: Any) -> str:
     from automoto import office_build
 
-    return office_build.create_pptx(_spec(spec), office.resolve_out(path, PPTX))
+    from automoto import office_check
+
+    output = office.resolve_out(path, PPTX)
+    result = office_build.create_pptx(_spec(spec), output)
+    # Do not rely on the AI remembering a follow-up tool call: check every deck
+    # immediately and return actionable warnings for a corrective edit.
+    warnings = [msg for severity, msg in office_check.check_pptx(output) if severity == "warn"]
+    if warnings:
+        return result + "\nVisual quality review: " + str(len(warnings)) + " issue(s):\n" + "\n".join(
+            "- " + msg for msg in warnings[:12]) + "\nFix these before calling the deck finished."
+    return result + "\nVisual quality review: no detected layout warnings. Render and inspect the slides to confirm."
 
 
 @_wrap
