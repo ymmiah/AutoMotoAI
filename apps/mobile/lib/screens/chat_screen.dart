@@ -79,10 +79,13 @@ class _ChatScreenState extends State<ChatScreen> {
         _view.add(_Msg('assistant', '✗ $e', error: true));
       });
     } finally {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      if (mounted) {
+        setState(() => _busy = false);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (mounted && _scroll.hasClients) {
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
+      }
     }
   }
 
