@@ -121,7 +121,8 @@ TOOLS=[
          "canvas: layout:'canvas',elements:[{type:'rect'|'text'|'icon'|'image'|'line',x,y,w,h,...}]. "
          "Optional width,height,theme:'editorial-light'|'illustrated-workflow'|'premium-tech'|'commercial', "
          "footer,notes. For PPTX use slides:[{layout,title,...}] to produce multiple slides. "
-         "For GIF animation={effect:'flow'|'pulse'|'float'|'reveal',frames:20,duration_ms:110,loop:0}. "
+         "For GIF animation={effect:'flow'|'pulse'|'float'|'reveal'|'sequence',frames:20,duration_ms:110,loop:0}; "
+         "sequence adds stages:[{group:'stage0',start:0},{group:'stage1',start:0.5}]. "
          "All photo/logo sources remain untouched, with aspect-fit and source hashes; exact wording "
          "is kept in editable text wherever supported. Never promise the image is generatively created "
          "when the tool only draws vector shapes.",
