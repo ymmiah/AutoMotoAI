@@ -784,7 +784,7 @@ function askVisualOutput() {
       '<button type="button" class="btn" data-output="gif-layered">Animated GIF + editable layers</button>'+
       '</div><div class="row"><button type="button" class="btn ghost" data-output="cancel">Cancel</button></div>',
       {label:"Choose image output",onDismiss:()=>{if(!answered)resolve(null);},
-       onMount:m=>{ $("[data-output]",m).forEach(btn=>btn.onclick=()=>choose(btn.dataset.output==="cancel"?null:btn.dataset.output)); }}
+       onMount:m=>{ $$("[data-output]",m).forEach(btn=>btn.onclick=()=>choose(btn.dataset.output==="cancel"?null:btn.dataset.output)); }}
     );
   });
 }
@@ -1299,13 +1299,13 @@ PAGES.files = async () => {
     $$(".fprev img").forEach((im) => im.addEventListener("error", () => { im.parentNode.classList.add("none"); im.parentNode.innerHTML = icon("file"); }));
     $$("[data-dir]").forEach((a) => a.onclick = (e) => { e.preventDefault(); dir = a.dataset.dir; draw(); });
     $$("[data-ask]").forEach((b) => b.onclick = () => { state.files = [b.dataset.ask]; location.hash = "#/new"; setTimeout(renderAttachments, 50); });
-    $("[data-view]").forEach((b) => b.onclick = () => viewFile(b.dataset.view));
-    $("[data-studio-image]").forEach((b) => b.onclick = () => {
+    $$("[data-view]").forEach((b) => b.onclick = () => viewFile(b.dataset.view));
+    $$("[data-studio-image]").forEach((b) => b.onclick = () => {
       sessionStorage.setItem("automoto_visual_open_image", b.dataset.studioImage);
       location.hash = "#/visual";
       if (state.route === "#/visual") PAGES.visual();
     });
-    $("[data-studio-draft]").forEach((b) => b.onclick = () => {
+    $$("[data-studio-draft]").forEach((b) => b.onclick = () => {
       sessionStorage.setItem("automoto_visual_open_draft", b.dataset.studioDraft);
       location.hash = "#/visual";
       if (state.route === "#/visual") PAGES.visual();
