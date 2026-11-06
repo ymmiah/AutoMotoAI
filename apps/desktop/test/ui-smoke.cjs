@@ -325,6 +325,7 @@ let browser;
   assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),3);
   await page.locator('#vsPageUp').click();
   assert.match(await page.locator('#vsPageCount').innerText(),/1 \/ 3/);
+  page.once('dialog',dialog=>dialog.accept());
   await page.locator('#vsPageDelete').click();
   // The duplicate was removed; original pages and their exact text remain.
   assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
