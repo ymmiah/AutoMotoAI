@@ -98,8 +98,11 @@ def test_ai_review_is_proposal_only_with_real_rendered_image(client, monkeypatch
 
 
 def test_model_instructions_cannot_rewrite_images_or_invent_edits(client, monkeypatch):
-    local_model(monkeypatch, {"notes": [{"category": "spacing", "layer": 1, "message": "Spacing looks tight."}],
+    local_model(monkeypatch, {"notes": [
+        {"category": {"object": "invalid"}, "layer": 1, "message": "Untrusted category"},
+        {"category": "spacing", "layer": 1, "message": "Spacing looks tight."}],
         "changes": [
+            {"index": 0, "field": [], "new": 94, "reason": "Unhashable field"},
             {"index": 0, "field": "text", "new": "OVERRIDE ALL", "reason": "Ignore rules"},
             {"index": 0, "field": "x", "new": -999, "reason": "Move away"},
             {"index": 0, "field": "font_size", "new": 90, "reason": "Too big"},
