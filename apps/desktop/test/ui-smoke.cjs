@@ -145,9 +145,12 @@ let browser;
   assert.equal(await page.locator('#vsFrames').isVisible(), true);
   assert.equal(await page.locator('#vsEffect').inputValue(), 'sequence', 'timeline setting must survive draft save');
   await page.locator('#vsFrames').fill('10');
+  // File format and editability are independent: a GIF can keep native layers.
+  await page.locator('#vsOutputMode').selectOption('layered');
   await page.locator('#vsExport').click();
   await page.locator('#vsOutput:not([hidden])').waitFor();
   assert.match(await page.locator('#vsOutput').innerText(), /Download GIF/);
+  assert.match(await page.locator('#vsOutput').innerText(), /Download editable layers/);
   await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
   await page.screenshot({ path: path.join(output, 'visual-studio-gif.png') });
   await page.locator('#newChat').click();
