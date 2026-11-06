@@ -200,9 +200,14 @@ CATALOG: tuple[LocalModel, ...] = (
 )
 # The one we pick: by graphics memory when there is a GPU (fast), else by RAM (CPU is slower,
 # so we stay smaller). Computers report a bit less than the label (16 GB shows as ~15.5).
-_GPU_BEST = ((22, "qwen3.5:27b"), (11, "qwen3.5:9b"), (5.5, "qwen3.5:4b"), (2.5, "qwen2.5:3b"))
+# Graphics memory is fast, so a card that can hold a larger tool model should use it.
+# 6 GB stays on the 4B vision model; 8 GB can hold an 8B tool model without swapping.
+_GPU_BEST = ((22, "qwen3.5:27b"), (11, "qwen3.5:9b"), (7.5, "qwen3:8b"), (5.5, "qwen3.5:4b"), (2.5, "qwen2.5:3b"))
 _RAM_BEST = ((30, "qwen3.5:9b"), (15, "qwen3.5:4b"), (7, "qwen2.5:3b"), (3.5, "qwen2.5:1.5b"), (0, "qwen2.5:0.5b"))
 _APPLE_BEST = ((30, "qwen3.5:27b"), (15, "qwen3.5:9b"), (7, "qwen2.5:3b"), (3.5, "qwen2.5:1.5b"), (0, "qwen2.5:0.5b"))
+_TIER_RANK = {"limited": 0, "everyday": 1, "strong": 2}
+# Tool calls on small local models wander when sampling is loose. Cap only tool turns.
+TOOL_TEMPERATURE = 0.2
 
 
 _HW: dict[str, Any] = {}
@@ -213,6 +218,52 @@ def _hardware_cached() -> dict[str, Any]:
     if not _HW:
         _HW.update(hardware())
     return dict(_HW)
+
+
+def catalog_model(name: str) -> LocalModel | None:
+    if not isinstance(name, str) or not name:
+        return None
+    base = name[:-7] if name.endswith(":latest") else name
+    for m in CATALOG:
+        if m.name == base:
+            return m
+    return None
+
+
+def quality_tier(name: str) -> str:
+    """``limited`` (short chats), ``everyday`` (files and tool steps), or ``strong`` (closest to a cloud assistant)."""
+    m = catalog_model(name)
+    if m is None:
+        low = (name or "").lower()
+        if any(s in low for s in (":0.5b", ":1b", ":1.5b", ":2b", ":0.8b")):
+            return "limited"
+        if any(s in low for s in (":7b", ":8b", ":9b", ":12b", ":14b", ":20b", ":27b", ":32b", ":70b")):
+            return "strong"
+        return "everyday"
+    if not m.tools or m.min_ram_gb <= 4:
+        return "limited"
+    if m.min_ram_gb >= 16 or m.download_gb >= 4.5:
+        return "strong"
+    return "everyday"
+
+
+def _strength(name: str) -> tuple[int, int]:
+    m = catalog_model(name)
+    return (_TIER_RANK[quality_tier(name)], CATALOG.index(m) if m is not None else 0)
+
+
+def _pick_upgrade(best: str, fits: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """A stronger tool model that also fits, when the default stays smaller so the computer stays responsive."""
+    if quality_tier(best) == "strong":
+        return None
+    stronger = [m for m in fits if m["tools"] and m["name"] != best and quality_tier(m["name"]) == "strong"]
+    if not stronger:
+        return None
+    pick = min(stronger, key=lambda m: (m["download_gb"], m["name"]))
+    slow = not pick["fast"]
+    note = f"{pick['name']} also fits and follows multi-step tasks more reliably"
+    note += ", but it will be slower on this CPU." if slow else "."
+    return {"name": pick["name"], "slow": slow, "note": note}
 
 
 def recommend(hw: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -233,14 +284,30 @@ def recommend(hw: dict[str, Any] | None = None) -> dict[str, Any]:
         if m.min_ram_gb <= budget:
             d = asdict(m)
             d["fast"] = bool(vram and vram >= m.download_gb * 1.3) or (apple and m.min_ram_gb <= ram) or \
-                (not vram and m.download_gb <= 2.0)
+                (not vram and not apple and m.download_gb <= 2.0)
             d["recommended"] = m.name == best
+            d["tier"] = quality_tier(m.name)
             fits.append(d)
-    why = (f"Your computer has about {ram:.0f} GB of memory"
-           + (f" and a {gpu['name']} graphics card ({vram:.0f} GB)" if vram else
-              " and no graphics card we can use" if not apple else " (Apple Silicon)")
-           + f", so {best} is the best fit: quick enough and good at tasks.")
-    return {"best": best, "why": why, "models": fits, "hardware": hw}
+    tier = quality_tier(best)
+    upgrade = _pick_upgrade(best, fits)
+    hardware_bit = (f"Your computer has about {ram:.0f} GB of memory"
+                    + (f" and a {gpu.get('name', 'graphics card')} graphics card ({vram:.0f} GB)" if vram else
+                       " (Apple Silicon)" if apple else " and no graphics card we can use"))
+    if tier == "limited":
+        sentence = (f"{best} is the largest model that should stay responsive here. It can chat and do short tasks. "
+                    "It is not as reliable as a cloud assistant on long, multi-step jobs. A computer with about "
+                    "8 GB of memory can run a stronger model.")
+    elif tier == "strong":
+        sentence = (f"{best} is the strongest free local model that should still stay responsive here, and the "
+                    "closest this computer can get to a cloud assistant without an API key.")
+    else:
+        sentence = (f"{best} is a practical fit for everyday assistant work: writing, files, and tool steps. "
+                    "It is slower than a cloud model and can miss a step on a long job.")
+    why = hardware_bit + ". " + sentence
+    if upgrade:
+        why += " " + upgrade["note"]
+    return {"best": best, "why": why, "tier": tier, "upgrade": upgrade, "context": _context_for(hw),
+            "models": fits, "hardware": hw, "quality_note": sentence}
 
 
 # ---------------------------------------------------------------------------
@@ -334,21 +401,36 @@ def _best_installed(names: list[str]) -> str | None:
     return next((n for n in names if "embed" not in n.lower()), None)
 
 
-def active_model() -> str:
-    """The Ollama model a chat will really use.
+def runtime_choice(names: list[str] | None = None) -> dict[str, Any]:
+    """Which Ollama model a chat will really use, and whether that is a downgrade from the one the user picked.
 
-    ``OLLAMA_MODEL`` in .env is a lock and always wins. Otherwise the model picked in Settings (or our
-    default) is used when it is downloaded; when it isn't, the best downloaded model is used instead of
-    failing with "model not found" (e.g. Offline mode turned on before a model was chosen, or a
-    picked model that was deleted in Ollama)."""
+    ``OLLAMA_MODEL`` in .env is a lock and always wins. Otherwise the Settings model (or our default) is
+    used when it is downloaded. When it isn't, the best downloaded model runs instead of failing with
+    "model not found" — and ``message`` says so, including when that substitute is weaker.
+    """
     locked = config.env("OLLAMA_MODEL")
+    chosen = locked or ollama_model()
     if locked:
-        return locked
-    chosen = ollama_model()
-    names = installed_models()
+        return {"model": locked, "chosen": locked, "substituted": False, "weaker": False, "message": ""}
+    if names is None:
+        names = installed_models()
     if not names or _is_installed(chosen, names):
-        return chosen
-    return _best_installed(names) or chosen
+        return {"model": chosen, "chosen": chosen, "substituted": False, "weaker": False, "message": ""}
+    alt = _best_installed(names) or chosen
+    if alt == chosen:
+        return {"model": chosen, "chosen": chosen, "substituted": False, "weaker": False, "message": ""}
+    weaker = _strength(alt) < _strength(chosen)
+    if weaker:
+        message = (f"{chosen} is not downloaded, so this chat is using {alt} instead. "
+                   f"{alt} is weaker, so long tasks will be less reliable. Download {chosen} to avoid that drop.")
+    else:
+        message = (f"{chosen} is not downloaded, so this chat is using {alt}, which is already on this computer.")
+    return {"model": alt, "chosen": chosen, "substituted": True, "weaker": weaker, "message": message}
+
+
+def active_model() -> str:
+    """The Ollama model a chat will really use. See :func:`runtime_choice`."""
+    return runtime_choice()["model"]
 
 
 def model_info(name: str) -> dict[str, Any]:
@@ -381,15 +463,41 @@ def supports(name: str, capability: str) -> bool | None:
     return None if caps is None else capability in caps
 
 
-def context_size(name: str) -> int:
-    """Context window to ask for: LOCAL_AI_CONTEXT (default 8192), never above what the model knows."""
-    try:
-        want = int(config.env("LOCAL_AI_CONTEXT") or DEFAULT_CONTEXT)
-    except ValueError:
-        want = DEFAULT_CONTEXT
+def _context_for(hw: dict[str, Any] | None) -> int:
+    """8192 keeps the agent's instructions intact. Stronger machines get 16384 so multi-step tool
+    transcripts are not pushed out of the window. ``LOCAL_AI_CONTEXT`` overrides this."""
+    hw = _hardware_cached() if hw is None else hw
+    ram = hw.get("ram_gb") or 8.0
+    gpu = hw.get("gpu") or {}
+    vram = gpu.get("vram_gb") or 0
+    apple = gpu.get("kind") == "apple"
+    if vram >= 8 or ram >= 24 or (apple and ram >= 16):
+        return 16384
+    return DEFAULT_CONTEXT
+
+
+def context_size(name: str, hw: dict[str, Any] | None = None) -> int:
+    """Context window to ask for. Never above what the model was trained with."""
+    raw = config.env("LOCAL_AI_CONTEXT")
+    if raw:
+        try:
+            want = int(raw)
+        except ValueError:
+            want = _context_for(hw)
+    else:
+        want = _context_for(hw)
     want = max(2048, want)
     trained = model_info(name).get("context_length")
     return min(want, trained) if isinstance(trained, int) and trained >= 2048 else want
+
+
+def tool_temperature(requested: float) -> float:
+    """Keep tool turns deterministic. Plain chat keeps the user's temperature."""
+    try:
+        requested = float(requested)
+    except (TypeError, ValueError):
+        requested = TOOL_TEMPERATURE
+    return min(requested, TOOL_TEMPERATURE)
 
 
 def request_options(name: str) -> dict[str, Any]:
@@ -558,16 +666,83 @@ def _ollama_error(exc: urllib.error.HTTPError) -> str:
 
 def status() -> dict[str, Any]:
     """Everything the Settings page needs."""
+    oll = ollama_status()
+    if oll["running"]:
+        choice = runtime_choice([m["name"] for m in oll["models"] if m.get("name")])
+    else:
+        chosen = ollama_model()
+        choice = {"model": chosen, "chosen": chosen, "substituted": False, "weaker": False, "message": ""}
+    model = choice["model"]
+    options = request_options(model) if oll["running"] else {"options": {"num_ctx": _context_for(None)}}
     return {"offline": offline(), "offline_from_env": bool(config.env("AUTOMOTO_OFFLINE")),
             "model_from_env": bool(config.env("OLLAMA_MODEL")),
-            "model": active_model(), "chosen_model": ollama_model(), "ollama_enabled": enabled("ollama"),
-            "local_server": local_server_url(), "ollama": ollama_status(), "recommend": recommend(),
+            "model": model, "chosen_model": choice["chosen"], "ollama_enabled": enabled("ollama"),
+            "local_server": local_server_url(), "ollama": oll, "recommend": recommend(),
+            "tier": quality_tier(model), "context": options["options"]["num_ctx"],
+            "think": options.get("think", False),
+            "substitution": choice if choice["substituted"] else None,
             "pulls": pull_progress()}
+
+
+def serving_locally() -> bool:
+    """True when the next answer cannot leave this computer (Offline mode, or no cloud key is configured)."""
+    if offline():
+        return True
+    if not (enabled("ollama") or enabled("local")):
+        return False
+    from automoto.providers import REGISTRY
+
+    return not any(p.key() for p in REGISTRY.values() if not p.local)
+
+
+def local_task_guide(model: str | None = None) -> str:
+    """Short rules appended for local models. Small models follow a short list better than a long essay."""
+    name = model or active_model()
+    lines = [
+        "Local model operating rules:",
+        "- Decide the steps yourself. Do not ask which tool to use, and do not show a tool list.",
+        "- Do the work with tools. Do not say a file was created, changed, or checked until a tool result says so.",
+        "- One tool call per step. After the result, call the next tool or give the final answer.",
+        "- Copy tool and argument names exactly. If a call fails, change it using the error. Do not repeat the same broken call.",
+        "- Keep going until the user's request is actually finished.",
+    ]
+    if offline():
+        lines.append("- Offline mode is on: do not use or claim a web search, a download, or a cloud model.")
+    cat = catalog_model(name)
+    if cat is not None and not cat.tools:
+        lines.append("- This model cannot call tools directly. Reply with only a fenced ```tool JSON block, then wait.")
+    elif quality_tier(name) == "limited":
+        lines.append("- This is a small model. Take one small step at a time and do not skip the tool call.")
+    return "\n".join(lines)
+
+
+_UNVERIFIED_WORK = re.compile(
+    r"\b(?:i(?:'ve| have)|i(?:'m| am)) (?:just |already )?(?:created|written|saved|updated|finished|completed|generated|edited|fixed)\b"
+    r"|\b(?:i(?:'ve| have)) (?:just |already )?(?:made|built) (?:the |a |your )?(?:file|document|report|spreadsheet|presentation|deck|slides?)\b"
+    r"|\b(?:the|your) (?:file|document|report|spreadsheet|presentation|deck|slides?) (?:is|has been) (?:ready|saved|created|done|updated|written)\b",
+    re.I)
+
+
+def claims_unverified_work(text: str) -> bool:
+    """True when a reply says the task is already done. Used to stop a local model skipping the tool call."""
+    t = (text or "").strip()
+    return bool(t) and len(t) < 1600 and bool(_UNVERIFIED_WORK.search(t))
 
 
 _THINK = re.compile(r"<think>.*?</think>\s*", re.S)
 
 
 def strip_thinking(text: str) -> str:
-    """Qwen 3 and similar models may put their private reasoning in <think>…</think>."""
-    return _THINK.sub("", text or "").strip() if text and "<think>" in text else (text or "")
+    """Drop private reasoning. Closed ``<think>`` blocks go; an unclosed tag (the reply was cut off)
+    drops the unfinished reasoning and keeps any answer written before it. A stray ``</think>``
+    keeps only the answer after it."""
+    if not text:
+        return ""
+    if "<think>" not in text and "</think>" not in text:
+        return text
+    text = _THINK.sub("", text)
+    if "</think>" in text:
+        text = text.split("</think>", 1)[-1]
+    if "<think>" in text:
+        text = text.split("<think>", 1)[0]
+    return text.strip()

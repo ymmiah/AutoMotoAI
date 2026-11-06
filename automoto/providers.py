@@ -726,12 +726,15 @@ def _ollama_post(spec: ProviderSpec, body: dict[str, Any], timeout: float, *, st
     return data
 
 
-def _ollama_body(spec: ProviderSpec, messages, model, *, tools, temperature, max_tokens) -> dict[str, Any]:
+def _ollama_body(spec: ProviderSpec, messages, model, *, tools, temperature, max_tokens,
+                 for_tools: bool = False) -> dict[str, Any]:
     from automoto import local_llm
 
     body: dict[str, Any] = {"model": model, "messages": _ollama_messages(messages), "stream": False,
                             **local_llm.request_options(model)}
-    body["options"].update({"temperature": temperature, "num_predict": max_tokens})
+    # Tool turns stay near-deterministic. Plain chat keeps the user's temperature.
+    temp = local_llm.tool_temperature(temperature) if for_tools else temperature
+    body["options"].update({"temperature": temp, "num_predict": max_tokens})
     if tools:
         body["tools"] = tools
     return body
@@ -825,6 +828,15 @@ def _anthropic_turn(spec: ProviderSpec, messages, model, key, *, tools, native, 
     return text.strip(), calls
 
 
+def _local_tool_name(name: str) -> str:
+    """Small models sometimes prefix the tool (``functions.remember``)."""
+    name = str(name or "").strip()
+    for prefix in ("functions.", "tools.", "tool."):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+    return name
+
+
 def _ollama_turn(spec: ProviderSpec, messages, model, key, *, tools, native, temperature, max_tokens, timeout):
     from automoto import toolcalls as tc
     from automoto.local_llm import strip_thinking
@@ -834,15 +846,22 @@ def _ollama_turn(spec: ProviderSpec, messages, model, key, *, tools, native, tem
     else:
         msgs, send_tools = tc.render_text(messages, tools), None
     data = _ollama_post(spec, _ollama_body(spec, msgs, model, tools=send_tools, temperature=temperature,
-                                           max_tokens=max_tokens), _timeout(spec, timeout))
+                                           max_tokens=max_tokens, for_tools=bool(tools)), _timeout(spec, timeout))
     message = data.get("message") or {}
     text = strip_thinking(str(message.get("content") or "")).strip()
     calls = []
     for c in message.get("tool_calls") or []:
         fn = (c or {}).get("function") or {}
-        if fn.get("name"):
-            calls.append({"id": c.get("id") or tc.new_id(), "name": fn["name"], "arguments": tc._args(fn.get("arguments")),
-                          "provider": spec.id})
+        name = _local_tool_name(fn.get("name") or "")
+        if name:
+            calls.append({"id": c.get("id") or tc.new_id(), "name": name,
+                          "arguments": tc._args(fn.get("arguments")), "provider": spec.id})
+    if not calls and text and tools:
+        # Qwen-class models often write the call as JSON in the reply instead of a native tool_call.
+        clean, parsed = tc.parse_loose_calls(text, tc.specs_from_schemas(tools))
+        if parsed:
+            text = clean
+            calls = [{**c, "provider": spec.id} for c in parsed]
     return text, calls
 
 

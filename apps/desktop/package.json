@@ -1,16 +1,17 @@
 {
   "name": "automoto-desktop",
   "private": true,
-  "version": "5.6.0-beta.3",
+  "version": "5.6.0-beta.5",
   "description": "AutoMoto AI desktop app (Tauri 2): sign in to your AutoMoto account, or run locally",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
     "build:win": "tauri build --bundles nsis,msi",
     "build:mac": "tauri build --target universal-apple-darwin",
-    "test:ui": "node --check dist/app.js"
+    "test:ui": "node --check dist/app.js && node test/ui-smoke.cjs"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.0"
+    "@tauri-apps/cli": "^2.10.0",
+    "playwright": "^1.65.0"
   }
 }

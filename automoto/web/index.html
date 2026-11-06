@@ -27,6 +27,7 @@
       <input id="convSearch" type="search" placeholder="Search chats" aria-label="Search conversations" autocomplete="off" />
       <kbd>⌘K</kbd>
     </label>
+    <button class="command-launch" id="commandLaunch"><span data-icon="sparkle"></span>Quick commands<kbd>⌘K</kbd></button>
     <nav class="nav" aria-label="Pages">
       <a href="#/tasks" data-page="tasks"><span data-icon="activity"></span>Tasks<span class="badge" id="taskBadge" hidden></span></a>
       <a href="#/memory" data-page="memory"><span data-icon="brain"></span>Memory</a>
@@ -48,12 +49,13 @@
       <button class="icon-btn" id="toggleSide" aria-label="Toggle sidebar (Ctrl+B)" title="Toggle sidebar (Ctrl+B)" data-icon="menu"></button>
       <h1 class="title" id="pageTitle">New chat</h1>
       <div class="top-actions">
+        <button class="icon-btn" id="quickTheme" aria-label="Toggle light or dark theme" title="Toggle theme" data-icon="sun"></button>
         <a class="top-quick" id="switchLocation" href="automoto://switch-mode" title="Switch between local mode and cloud/server account" hidden><span data-icon="monitor"></span><span class="top-label">Local / Server</span></a>
         <a class="top-quick" href="#/files" title="Browse exported and workspace files"><span data-icon="folder"></span><span class="top-label">Files</span></a>
         <a class="top-quick" href="#/memory" title="Find saved memories"><span data-icon="brain"></span><span class="top-label">Memory</span></a>
         <div class="seg" role="radiogroup" aria-label="Mode" id="modeSeg">
-          <button role="radio" data-mode="agent" aria-checked="true" title="Agent: uses tools step by step"><span data-icon="bolt"></span><span class="lbl">Agent</span></button>
-          <button role="radio" data-mode="chat" aria-checked="false" title="Chat: plain answer, no tools"><span data-icon="chat"></span><span class="lbl">Chat</span></button>
+          <button role="radio" data-mode="agent" aria-checked="true" title="Assistant: you write the request, it finishes the files and steps"><span data-icon="bolt"></span><span class="lbl">Assistant</span></button>
+          <button role="radio" data-mode="chat" aria-checked="false" title="Chat: an answer only, no files or tools"><span data-icon="chat"></span><span class="lbl">Chat</span></button>
         </div>
         <label class="picker" title="Which AI answers first">
           <span class="sr">AI provider</span>
@@ -67,7 +69,7 @@
 
   <aside class="info" id="info" aria-label="Task info" hidden>
     <div class="info-head"><b>Run info</b><button class="icon-btn" id="closeInfo" aria-label="Close info panel" data-icon="x"></button></div>
-    <div class="info-body" id="infoBody"><p class="muted">Start an agent run to see the provider, model and every step here.</p></div>
+    <div class="info-body" id="infoBody"><p class="muted">Send a request to see progress here, in plain language.</p></div>
   </aside>
 </div>
 

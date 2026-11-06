@@ -18,6 +18,13 @@ New-Item -ItemType Directory -Force $stage, "$stage\Assets", "$stage\resources",
 $release = "apps/desktop/src-tauri/target/release"
 Copy-Item "$release/AutoMoto AI.exe" $stage
 Copy-Item scripts/install.ps1 "$stage\resources\install.ps1"   # same place Tauri's bundle puts it
+# A Store update must be installable before its GitHub release is published.
+$pyver = $ver -replace '-beta\.', 'b'
+$wheel = "engine-wheel/automoto_ai-$pyver-py3-none-any.whl"
+if (-not (Test-Path $wheel)) { throw "Missing matching engine wheel: $wheel" }
+Copy-Item $wheel "$stage\resources\"
+(Get-FileHash $wheel -Algorithm SHA256).Hash.ToLowerInvariant() |
+    Set-Content -Encoding ascii "$stage\resources\automoto_ai-$pyver-py3-none-any.whl.sha256"
 Copy-Item packaging/branding/out/msix/*.png "$stage\Assets"
 Copy-Item LICENSE, NOTICE $stage
 python packaging/msstore/msix.py manifest --version $ver --out "$stage\AppxManifest.xml"
@@ -37,16 +44,19 @@ if ($LASTEXITCODE) { throw "makeappx pack failed (see the errors above: manifest
 $unpacked = Join-Path $env:RUNNER_TEMP "msix-unpacked"
 & "$bin\makeappx.exe" unpack /p $msix /d $unpacked /o | Out-Null
 if ($LASTEXITCODE) { throw "makeappx unpack failed" }
-foreach ($f in @("AutoMoto AI.exe", "AppxManifest.xml", "resources\install.ps1", "Assets\StoreLogo.png", "Assets\Square44x44Logo.png")) {
+foreach ($f in @("AutoMoto AI.exe", "AppxManifest.xml", "resources\install.ps1", "resources\automoto_ai-$pyver-py3-none-any.whl", "resources\automoto_ai-$pyver-py3-none-any.whl.sha256", "Assets\StoreLogo.png", "Assets\Square44x44Logo.png")) {
   if (-not (Test-Path (Join-Path $unpacked $f))) { throw "package is missing $f" }
 }
+$packagedWheel = Join-Path $unpacked "resources\automoto_ai-$pyver-py3-none-any.whl"
+$expected = (Get-Content "$packagedWheel.sha256" -Raw).Trim()
+if ((Get-FileHash $packagedWheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw "Bundled engine checksum mismatch" }
 # .msixupload = a zip with the .msix inside: what Partner Center asks for
 $upload = Join-Path $Out "$name.msixupload"
 Compress-Archive -Path $msix -DestinationPath "$upload.zip" -Force
 Move-Item "$upload.zip" $upload -Force
 [xml]$m = Get-Content "$stage\AppxManifest.xml"
 "package: $msix ($((Get-Item $msix).Length) bytes), version $mver (app $ver), identity $($m.Package.Identity.Name) / $($m.Package.Identity.Publisher)"
-Get-ChildItem $Out | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Set-Content -Encoding ascii (Join-Path $Out "SHA256SUMS.txt")
+Get-ChildItem $Out -File | Where-Object Name -ne "SHA256SUMS.txt" | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Set-Content -Encoding ascii (Join-Path $Out "SHA256SUMS.txt")
 
 if ($TestInstall) {
   # sign a COPY with a throw-away self-signed certificate whose subject matches the manifest Publisher

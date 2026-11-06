@@ -259,12 +259,28 @@ fn install_engine(app: AppHandle, webview: tauri::Webview) -> Result<Value, Stri
             .path()
             .resolve("resources/install.ps1", tauri::path::BaseDirectory::Resource)
             .map_err(|e| e.to_string())?;
-        // a visible PowerShell window: the user sees (and answers) every step of the official installer
-        std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File"])
+        // The Store package carries the exact engine for this app, independent of GitHub releases.
+        let engine_ver = engine_version(env!("CARGO_PKG_VERSION"));
+        let mut command = std::process::Command::new("powershell.exe");
+        command.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File"])
             .arg(script)
-            .args(["-Version", &engine_version(env!("CARGO_PKG_VERSION"))])
-            .creation_flags(0x0000_0010) // CREATE_NEW_CONSOLE
+            .args(["-Version", &engine_ver]);
+        let wheel = app.path()
+            .resolve(format!("resources/automoto_ai-{engine_ver}-py3-none-any.whl"), tauri::path::BaseDirectory::Resource)
+            .map_err(|e| e.to_string())?;
+        if store_package() || wheel.is_file() {
+            if !wheel.is_file() {
+                return Err("The bundled engine is missing. Repair or reinstall AutoMoto from the Microsoft Store.".into());
+            }
+            let checksum = std::fs::read_to_string(wheel.with_extension("whl.sha256"))
+                .map_err(|e| format!("Couldn't read the bundled engine checksum: {e}"))?;
+            let checksum = checksum.trim();
+            if checksum.len() != 64 || !checksum.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err("The bundled engine checksum is invalid. Repair the app from the Microsoft Store.".into());
+            }
+            command.arg("-Wheel").arg(wheel).arg("-Sha256").arg(checksum);
+        }
+        command.creation_flags(0x0000_0010) // CREATE_NEW_CONSOLE
             .spawn()
             .map_err(|e| format!("Couldn't open PowerShell: {e}"))?;
         Ok(json!({"started": true}))

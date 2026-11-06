@@ -86,6 +86,9 @@ def format_nudge(why: str, mode: str, tool: Any = None) -> str:
 
 CONTINUE_NUDGE = ("Continue: make that tool call now (don't describe it). "
                   "If the task is complete, reply with the final answer instead.")
+UNVERIFIED_NUDGE = ("No tool has run, so that work is not done. Call the tool now. "
+                    "Do not say a file or task is finished until a tool result confirms it. "
+                    "If you cannot do it with the tools you have, say so in one sentence.")
 
 
 def _announces_action(text: str) -> bool:
@@ -146,14 +149,18 @@ class Agent:
         self.meter = meter  # hosted mode: usage quota (accounts.Meter) - checked before every model call
 
     def system(self, plan: Any = None) -> str:
-        from automoto import planner
+        from automoto import local_llm, planner
         from automoto.agent import agent_system_prompt
 
         if plan is None:
-            return agent_system_prompt(memory=self.memory.prompt_block(), skills=skills_mod.prompt_block(self.skills),
-                                       desktop=self.desktop, tool_names=list(tools_mod.offered(self.tools)))
-        return agent_system_prompt(memory=self.memory.prompt_block(), desktop=self.desktop, tool_names=plan.tools,
-                                   task=planner.prompt_block(plan, self.skills))
+            prompt = agent_system_prompt(memory=self.memory.prompt_block(), skills=skills_mod.prompt_block(self.skills),
+                                         desktop=self.desktop, tool_names=list(tools_mod.offered(self.tools)))
+        else:
+            prompt = agent_system_prompt(memory=self.memory.prompt_block(), desktop=self.desktop, tool_names=plan.tools,
+                                         task=planner.prompt_block(plan, self.skills))
+        if local_llm.serving_locally():
+            prompt += "\n\n" + local_llm.local_task_guide()
+        return prompt
 
     def run(self, messages: list[dict[str, Any]] | str, *, max_steps: int | None = None,
             approver: Approver = deny_all, on_event: EventSink | None = None,
@@ -287,6 +294,19 @@ class Agent:
                 history.append({"role": "assistant", "content": turn.text})
                 history.append({"role": "user", "content": CONTINUE_NUDGE})
                 continue
+            if (not turn.tool_calls and nudges < 2 and step < max_steps and turn.provider in ("ollama", "local")
+                    and not any(m.get("role") == "tool" for m in history)):
+                from automoto import local_llm
+
+                if local_llm.claims_unverified_work(turn.text):
+                    # A small local model often says the file is saved before it has called a tool.
+                    nudges += 1
+                    if turn.text:
+                        emit({"type": "say", "step": step, "text": turn.text})
+                    emit({"type": "nudge", "step": step, "reason": "unverified"})
+                    history.append({"role": "assistant", "content": turn.text or "(claimed the task was done)"})
+                    history.append({"role": "user", "content": UNVERIFIED_NUDGE})
+                    continue
             if not turn.tool_calls:
                 if broken:  # out of retries: never show a raw, half-written tool call as the answer
                     shown = tc.strip_failed_call(turn.text, known)

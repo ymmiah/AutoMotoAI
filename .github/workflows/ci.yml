@@ -31,6 +31,34 @@ jobs:
           python -m automoto apps
           python -m automoto mcp
 
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install engine and browser tests
+        run: |
+          python -m pip install .
+          cd apps/desktop
+          npm ci --no-fund --no-audit
+          npx playwright install --with-deps chromium
+      - name: Browser regressions (no API keys)
+        working-directory: apps/desktop
+        env:
+          UI_SHOTS: ${{ github.workspace }}/ui-screenshots
+        run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: automoto-ui-screenshots
+          path: ui-screenshots/*.png
+          if-no-files-found: ignore
+
   office:
     # Office suite end to end with free LibreOffice + poppler: PDF export, TOC page numbers, recalc, renders;
     # plus archives / WordPress (php -l) / data files with the optional tools installed
@@ -54,9 +82,10 @@ jobs:
           python -m pytest -q -rs tests/test_office.py
       - name: Build and render a premium visual PowerPoint sample
         run: |
-          python -m pytest -q tests/test_visual_design.py::test_editable_premium_deck_and_dark_theme_contrast
+          python -m pytest -q --basetemp "$RUNNER_TEMP/visual-tests" tests/test_visual_design.py::test_editable_premium_deck_and_dark_theme_contrast
           mkdir -p visual-preview
-          cp "$HOME/.automoto/workspace/scratch/visuals-test/premium-regression.pptx" visual-preview/AutoMoto-premium-visual-demo.pptx
+          # Tests isolate the workspace under pytest's temp directory, never under the runner's home.
+          python -c "import os, shutil; from pathlib import Path; root = Path(os.environ['RUNNER_TEMP']) / 'visual-tests'; matches = list(root.rglob('premium-regression.pptx')); assert len(matches) == 1, 'expected one premium-regression.pptx under %s, found %s' % (root, matches); shutil.copyfile(matches[0], 'visual-preview/AutoMoto-premium-visual-demo.pptx')"
           libreoffice -env:UserInstallation=file:///tmp/automoto-visual-preview --headless --convert-to pdf --outdir visual-preview visual-preview/AutoMoto-premium-visual-demo.pptx
           test -s visual-preview/AutoMoto-premium-visual-demo.pdf
           pdftoppm -f 1 -l 5 -png -r 70 visual-preview/AutoMoto-premium-visual-demo.pdf visual-preview/slide

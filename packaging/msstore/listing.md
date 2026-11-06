@@ -33,7 +33,7 @@ Private by design: no telemetry, no ads. Your chats and files stay on your compu
 
 Uses live generative AI: replies and documents are written by the AI model you choose and can be wrong. Check important results. Use "Report a problem" in the app to report harmful or inappropriate output.
 
-Free and open source under the GNU AGPL v3. A commercial licence is available for closed-source or commercial use. Made by Yasin Mohammed Miah.
+Free and open source under the GNU AGPL v3. A commercial licence is available for closed-source or commercial use. Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons).
 ```
 
 ## Product features (one per line, up to 20)
@@ -67,7 +67,7 @@ productivity
 ## What's new in this version
 
 ```
-5.6.0 Beta 3: one smart assistant. Say what you need or attach a file; AutoMoto picks the right tools, shows steps in plain words and asks before anything risky.
+5.6.0 Beta 5: redesigned start screen and workspace, filterable task ideas, easier AI setup, draft recovery while navigating, better keyboard access, and more reliable local-engine updates. Offline AI can run a stronger free model on this PC and does not switch to the cloud while Offline mode is on.
 ```
 
 ## Other fields

@@ -10,19 +10,28 @@
 <body>
 <main class="wrap">
   <header class="brand">
-    <div class="logo" aria-hidden="true">🤖</div>
+    <div class="logo" aria-hidden="true">A<span><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span></div>
     <div>
       <h1>AutoMoto <b>AI</b> <span id="chan" class="chan" title="This Windows app is a beta: please report problems on GitHub" hidden>Beta</span></h1>
-      <p class="dim">Your AI cousin - an agent that actually does the work.</p>
+      <p class="dim">Your personal workspace for getting things done.</p>
     </div>
   </header>
+
+  <section class="welcome" aria-labelledby="welcomeTitle">
+    <div><span class="eyebrow">THINK BIG. START HERE.</span><h2 id="welcomeTitle">Less busywork.<br><em>More possibility.</em></h2>
+      <p>Research an idea. Make a presentation. Work through your files.<br class="wide-only"> One assistant, from the first thought to the finished work.</p></div>
+    <div class="workflow" aria-label="How AutoMoto works"><span><b>01</b> Give it a goal</span><i aria-hidden="true">↓</i><span><b>02</b> Follow the steps</span><i aria-hidden="true">↓</i><span><b>03</b> Make it yours <strong aria-hidden="true"><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></strong></span></div>
+  </section>
+
+  <div class="section-head"><h2>Choose your workspace</h2><span>Two ways to work. You're in control.</span></div>
 
   <div id="busy" class="busy" hidden role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span><span id="busyText">Opening…</span></div>
   <div id="note" class="note" hidden role="alert"></div>
 
   <section class="cards" id="cards">
     <form class="card" id="signIn" autocomplete="on">
-      <h2>Sign in to your AutoMoto account</h2>
+      <div class="card-head"><span class="mode-icon" aria-hidden="true">☁</span><span class="mode-label">CONNECTED WORKSPACE</span></div>
+      <h2>Your AutoMoto account</h2>
       <p class="dim small">One account on every device: your chats, files and usage time follow you to the Windows app, the web and your phone.</p>
       <div id="signedIn" class="signed" hidden>
         <p>Signed in as <b id="siUser"></b> on <span id="siServer"></span></p>
@@ -31,7 +40,7 @@
       <div id="signForm">
         <label>Server address<input id="server" name="server" type="text" inputmode="url" placeholder="https://automoto.example.org" required spellcheck="false" autocapitalize="off" /></label>
         <label>Username<input id="username" name="username" autocomplete="username" required spellcheck="false" autocapitalize="off" /></label>
-        <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required /></label>
+        <label for="password">Password</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required /><button type="button" class="show-password" id="showPassword" aria-label="Show password" aria-pressed="false">Show</button></div>
         <details class="more"><summary>This device's name</summary>
           <label class="sr" for="device">Device name</label><input id="device" name="device" maxlength="60" />
           <p class="dim small">Shown in Account → My devices, where you can sign this device out.</p>
@@ -42,13 +51,15 @@
     </form>
 
     <div class="card" id="localCard">
-      <h2>Local mode - just this PC</h2>
-      <p class="dim small">No account. AutoMoto runs on this computer with your own free AI key. Chats and files stay on this PC.</p>
-      <p id="engineState" class="small"></p>
-      <div class="row"><button type="button" class="btn" id="localBtn">Start local mode</button>
+      <div class="card-head"><span class="mode-icon" aria-hidden="true">⌘</span><span class="mode-label">YOUR DEVICE. YOUR WORKSPACE.</span></div>
+      <h2>Work on this computer</h2>
+      <p class="dim small">No account needed. Keep chats and files on this device. Choose an on-device model for offline AI, or connect your own cloud-provider key.</p>
+      <div class="engine-status"><p id="engineState" class="small" role="status"></p><button type="button" class="text-btn" id="refreshBtn">Refresh status</button></div>
+      <div class="row"><button type="button" class="btn primary" id="localBtn">Start local mode <span aria-hidden="true"><svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span></button>
         <button type="button" class="btn" id="installBtn" hidden>Install the local engine</button></div>
+      <ul class="local-features"><li>Documents, spreadsheets & presentations</li><li>Code, research & everyday tasks</li><li>Visible steps and approval controls</li></ul>
       <div id="installHelp" hidden class="small">
-        <p>Local mode needs the AutoMoto engine (Python). <b>Install the local engine</b> opens PowerShell and runs the official installer that ships with this app. When it finishes, come back and click <b>Start local mode</b>.</p>
+        <p>First time? <b>Install the local engine</b> opens the bundled installer in PowerShell. Python 3.10+ and internet access are needed to install dependencies. Return here when it finishes, then start local mode. Offline AI also needs Ollama and a downloaded model.</p>
         <p class="dim" id="cmdHint">Or run it yourself in PowerShell (from the AutoMotoAI folder):</p>
         <pre><code id="cmd">powershell -ExecutionPolicy Bypass -File scripts\install.ps1</code></pre>
       </div>

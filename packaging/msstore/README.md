@@ -9,7 +9,9 @@ Step-by-step instructions are in [docs/WINDOWS-DISTRIBUTION.md](../../docs/WINDO
 | [`age-rating.md`](age-rating.md) | the IARC age-rating questionnaire |
 | [`certification-notes.md`](certification-notes.md) | *Submission options → Notes for certification*, and the restricted-capability reason |
 | [`screenshots/`](screenshots) | desktop screenshots, 1920x1200 PNG (the Store wants 1366x768 or larger; up to 10) |
-| [`images/`](images) | 1:1 app tile icon 300x300 (recommended) and 16:9 hero art 1920x1080 (optional) |
+| [`images/`](images) | 1:1 app tile icon 300×300, 16:9 hero art 1920×1080, plus derived poster art 720×1080 and box art 1080×1080 |
+
+`poster-art-720x1080.png` and `box-art-1080x1080.png` are placeholders composed from the existing app icon and the hero background. Partner Center's poster and box-art slots can use them until a designed set replaces them. They are not a new illustration.
 | [`msix.py`](msix.py) | generates the package manifest and maps the version (5.6.0-beta.3 → 5.6.3.0) |
 
 Privacy policy URL: <https://ymmiah.github.io/AutoMotoAI/PRIVACY.html>

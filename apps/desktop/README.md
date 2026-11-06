@@ -1,6 +1,6 @@
 # AutoMoto AI — Windows app (Tauri 2) — Beta
 
-> **Beta** (5.6.0-beta.3). The window title, sign-in screen, About and installer names say so.
+> **Beta** (5.6.0-beta.5). The window title, sign-in screen, About and installer names say so.
 
 The **AutoMoto AI app** is a small native window (Tauri 2, the system WebView2 on Windows) that opens on a
 **sign-in screen** with two choices:
@@ -35,7 +35,7 @@ sees and revokes devices in **Account → My devices**; admins in **Admin → Si
 
 **Why Local mode doesn't bundle Python:** a frozen Python (PyInstaller) sidecar would add ~150–250 MB per install,
 is a frequent antivirus/SmartScreen false-positive, and would need its own update path. Instead the installer ships
-the official `scripts/install.ps1`; **Install the local engine** runs it in a visible PowerShell window (the same
+the official `scripts/install.ps1` (the Store MSIX also includes the matching engine wheel and SHA-256); **Install the local engine** runs it in a visible PowerShell window (the same
 checksum-pinned install as the docs), and the app then finds `%LOCALAPPDATA%\automoto-ai\venv\Scripts\python.exe`
 (or `AUTOMOTO_PYTHON`). If an engine is already running on 8765, the app asks it for a one-time link (like the VS
 Code extension) instead of starting a second one.
@@ -87,3 +87,5 @@ Signing, the Microsoft Store and winget: [docs/WINDOWS-DISTRIBUTION.md](../../do
 * Local mode needs the engine installed separately (one click, but it downloads Python packages).
 * The app shows the server's own web GUI; there is no offline copy of account chats.
 * macOS and Linux builds compile but are not released or tested in CI.
+
+Browser checks: `python -m pip install .` from the repository root, then `npm ci && npx playwright install chromium && npm run test:ui` here. Set `PYTHON` if the engine uses a virtual environment. Screenshots are written to `UI_SHOTS` when provided. Store update: [Beta 5 release notes](../../docs/RELEASE-5.6.0-beta.5-MSSTORE.md).

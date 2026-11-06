@@ -20,7 +20,7 @@ const MAX_IMAGES = 4;
 const state = {
   convs: [], cur: null, mode: localStorage.getItem("automoto_mode") || "agent",
   providers: [], desktop: false, settings: null, attachments: [], files: [], running: new Map(),
-  route: "", pageTimer: null, busy: false, me: null, quota: null,
+  route: "", pageTimer: null, busy: false, me: null, quota: null, drafts: new Map(),
 };
 
 const keys = () => { try { return JSON.parse(sessionStorage.getItem("automoto_keys") || "{}"); } catch { return {}; } };
@@ -266,6 +266,7 @@ $("#modeSeg").addEventListener("keydown", (e) => {
 // ---------------------------------------------------------------- router
 window.addEventListener("hashchange", renderRoute);
 async function renderRoute() {
+  rememberDraft();
   clearInterval(state.pageTimer);
   const h = location.hash || "#/new";
   state.route = h;
@@ -303,7 +304,10 @@ function useIdea(s) {
 }
 function drawHeroIdeas() {
   const box = $(".hero .chips"); if (!box) return;
-  box.innerHTML = IDEAS.map((s, i) => ideaChip(s, i)).join("");
+  const filter = $(".idea-filters [aria-pressed='true']")?.dataset.filter || "all";
+  const groups = { create: ["file", "edit", "slides"], analyse: ["sheet", "globe"], automate: ["terminal", "archive", "brain"] };
+  box.innerHTML = IDEAS.map((s, i) => ({ s, i })).filter(({ s }) => filter === "all" || groups[filter]?.includes(s.icon || CAP_ICONS[s.capability]))
+    .map(({ s, i }) => ideaChip(s, i)).join("");
   $$(".chip", box).forEach((b) => b.onclick = () => useIdea(IDEAS[b.dataset.i]));
 }
 let ideasLoaded = false;
@@ -351,7 +355,7 @@ function renderChat(conv) {
       <form class="composer" id="composer" aria-label="Message composer">
         <div class="attachments" id="attachments" aria-label="Attachments"></div>
         <label class="sr" for="composerInput">Message</label>
-        <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? `Give ${BRAND_SHORT} a goal…` : `Message ${BRAND_SHORT}…`}"></textarea>
+        <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? `Tell ${BRAND_SHORT} what to finish…` : `Message ${BRAND_SHORT}…`}"></textarea>
         <div class="bar">
           <input type="file" id="fileInput" accept="image/*,.docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.tsv,.pptx,.ppt,.odp,.pdf,.md,.txt,.log,.json,.jsonl,.yaml,.yml,.toml,.xml,.parquet,.sqlite,.db,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar" multiple hidden>
           <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach image or file" title="Attach an image, Word, Excel, PowerPoint or PDF file (or paste / drop)">${icon("clip")}</button>
@@ -364,16 +368,28 @@ function renderChat(conv) {
     </div></div>`;
   const thread = $("#thread");
   if (!conv || !conv.messages?.length) {
-    $("#msgs").innerHTML = `<div class="hero"><div class="logo" aria-hidden="true">A</div><h2>Hey, cousin 👋</h2>
-      <p>Just tell me what you need, or attach a file. I'll work out the right steps myself, show you what I'm doing in plain words and ask before anything risky.</p>
-      <div class="chips"></div></div>`;
+    const ready = state.providers.filter((p) => p.configured).length;
+    $("#msgs").innerHTML = `<div class="hero">
+      <div class="workspace-label"><span class="workspace-dot" aria-hidden="true"></span>${HOSTED ? "YOUR CONNECTED WORKSPACE" : "YOUR PERSONAL WORKSPACE"}</div>
+      <h2>A little idea.<br><span>A lot of possibility.</span></h2>
+      <p>Tell me what you need.<br>I'll gather the files, do the steps, and finish it. You don't pick the tools.</p>
+      <div class="workspace-status"><a href="#/${HOSTED ? "account" : "settings"}" class="${ready ? "ready" : "needs-setup"}">${icon(ready ? "check" : "settings")}${ready ? `${ready} AI provider${ready === 1 ? "" : "s"} configured` : "Set up your first AI"}</a><a href="#/tasks">${icon("activity")}Follow your tasks</a><a href="#/files">${icon("folder")}Your files</a></div>
+      <div class="ideas-heading"><h3>A good place to start</h3><span>Choose an idea, then make it your own</span></div>
+      <div class="idea-filters" role="group" aria-label="Filter starting ideas"><button type="button" data-filter="all" aria-pressed="true">Explore all</button><button type="button" data-filter="create" aria-pressed="false">Create</button><button type="button" data-filter="analyse" aria-pressed="false">Analyse</button><button type="button" data-filter="automate" aria-pressed="false">Automate</button></div>
+      <div class="chips" aria-label="Starting ideas"></div></div>`;
+    $$(".idea-filters button").forEach((btn) => btn.onclick = () => {
+      $$(".idea-filters button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+      drawHeroIdeas();
+    });
     drawHeroIdeas(); loadIdeas();
-    $("#infoBody").innerHTML = '<p class="muted">Start an agent run to see the provider, model and every step here.</p>';
+    $("#infoBody").innerHTML = '<p class="muted">Send a request to see progress here, in plain language.</p>';
   } else {
     for (const m of conv.messages) m.role === "user" ? addUser(m.content, thread) : renderSavedBot(m, thread);
     updateInfoFromConv(conv);
   }
   wireComposer();
+  $("#composerInput").value = state.drafts.get(conv?.id || "new") || "";
+  autosize();
   initChatScroll();
   renderAttachments();
   scrollDown(true);
@@ -383,6 +399,8 @@ let followChat = true;
 let chatResizeObserver = null;
 function scrollDown(force=false) {
   const m = document.querySelector("#msgs");
+  // Starting ideas are a page, not a message thread: keep their heading visible.
+  if (m?.querySelector(".hero")) return;
   if (!m) return;
   if (force) followChat = true;
   if (!followChat) return;
@@ -394,7 +412,7 @@ function scrollDown(force=false) {
 }
 function showLatestButton() {
   const button = document.querySelector("#jumpLatest");
-  if (button) button.hidden = followChat;
+  if (button) button.hidden = followChat || !!document.querySelector(".hero");
 }
 function initChatScroll() {
   followChat = true;
@@ -402,6 +420,7 @@ function initChatScroll() {
   const m = document.querySelector("#msgs");
   if (!m) return;
   m.addEventListener("scroll", () => {
+    if (m.querySelector(".hero")) return;
     followChat = m.scrollHeight - m.scrollTop - m.clientHeight <= 90;
     showLatestButton();
   }, { passive: true });
@@ -445,9 +464,12 @@ function addBot(thread = ensureThread()) {
 
 // ---------------------------------------------------------------- run rendering
 const argSummary = (args) => {
+  // The open step shows a file name only. Commands, queries and raw arguments stay in the collapsed details.
   if (!args || typeof args !== "object") return "";
-  const v = args.command || args.query || args.url || args.path || args.text || args.name || Object.values(args)[0];
-  return typeof v === "string" ? v : JSON.stringify(args);
+  const path = args.path || args.out || args.dest;
+  if (typeof path !== "string" || !path) return "";
+  const base = path.split(/[/\\]/).pop();
+  return base && base !== path ? base : "";
 };
 const pretty = (o) => { try { return typeof o === "string" ? o : JSON.stringify(o, null, 2); } catch { return String(o); } };
 // Fallback for saved runs that predate the server's "label" field.
@@ -464,9 +486,10 @@ function stepCard(ev) {
   d.className = "step run";
   d.dataset.id = ev.id;
   const label = ev.label || stepLabel(ev.name, ev.args);
-  d.innerHTML = `<summary><span class="ico">${icon(TOOL_ICONS[ev.name] || "wrench")}</span><span class="nm" title="${esc(ev.name)}">${esc(label)}</span>
-    <span class="arg">${esc(argSummary(ev.args))}</span><span class="st"><span class="spin" aria-label="running"></span></span><span class="chev">${icon("chev")}</span></summary>
-    <div class="body"><div class="lab">Step details <code>${esc(ev.name)}</code></div><pre>${esc(pretty(ev.args))}</pre><div class="out"></div></div>`;
+  const file = argSummary(ev.args);
+  d.innerHTML = `<summary><span class="ico">${icon(TOOL_ICONS[ev.name] || "wrench")}</span><span class="nm">${esc(label)}</span>
+    ${file ? `<span class="arg">${esc(file)}</span>` : ""}<span class="st"><span class="spin" aria-label="running"></span></span><span class="chev">${icon("chev")}</span></summary>
+    <div class="body"><div class="lab">Details</div><pre>${esc(pretty(ev.args))}</pre><div class="out"></div></div>`;
   return d;
 }
 function setStepStatus(card, cls, html) {
@@ -478,7 +501,7 @@ function renderEvent(ctx, ev) {
   const steps = $(".steps", ctx.el), st = $(".st-text", ctx.el);
   const card = () => ev.id && $$(".step", steps).find((c) => c.dataset.id === ev.id);
   switch (ev.type) {
-    case "thinking": if (st) st.textContent = ev.step > 1 ? `Thinking · step ${ev.step}` : "Thinking…"; break;
+    case "thinking": if (st) st.textContent = ev.step > 1 ? "Continuing…" : "Working on it…"; break;
     case "model":
       ctx.provider = ev.provider; ctx.model = ev.model; ctx.step = ev.step;
       if (ev.switched?.length) ctx.switched.push(...ev.switched);
@@ -499,7 +522,7 @@ function renderEvent(ctx, ev) {
       a.className = "approve"; a.dataset.id = ev.id;
       a.setAttribute("role", "group"); a.setAttribute("aria-label", `Approve ${ev.name}?`);
       const what = (ctx.steps.find((x) => x.id === ev.id) || {}).label || stepLabel(ev.name, ev.args);
-      a.innerHTML = `<div class="ah">${icon("shield")} Allow: ${esc(what)}? <code>${esc(ev.name)}</code></div>
+      a.innerHTML = `<div class="ah">${icon("shield")} Allow this: ${esc(what)}?</div>
         <div class="why">${esc(ev.reason || "This action is marked risky.")}</div><details class="adv"><summary>Details</summary><pre>${esc(pretty(ev.args))}</pre></details>
         <div class="row">${ctx.live ? `<button class="btn primary" data-ok="1">${icon("check")} Approve</button><button class="btn" data-ok="0">${icon("x")} Deny</button><span class="muted" style="font-size:12px">or press A / D</span>` : '<span class="muted">Waiting…</span>'}</div>`;
       steps.appendChild(a);
@@ -525,17 +548,21 @@ function renderEvent(ctx, ev) {
       $(".out", c).innerHTML = `<div class="lab">${ev.ok ? "Result" : "Error"}</div><pre>${esc(ev.output || "")}</pre>`;
       const s = ctx.steps.find((x) => x.id === ev.id); if (s) s.cls = ev.ok ? "ok" : "bad";
       else ctx.steps.push({ id: ev.id, name: ev.name, cls: ev.ok ? "ok" : "bad" });
-      if (st) st.textContent = "Thinking…";
+      if (st) st.textContent = "Continuing…";
       break;
     }
     case "max_steps": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("alert")} Step limit reached, summarising.`; steps.appendChild(n); break; }
     case "quota": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("clock")} ${esc(ev.text)}`; steps.appendChild(n); refreshMe(); break; }
     case "plan": {
-      if (!ev.labels?.length || $(".plan-note", steps)) break;
+      if ($(".plan-note", steps)) break;
+      const text = ev.summary || (ev.labels?.length ? `I'll take this from here: ${ev.labels.join(", ")}.` : "");
+      if (!text) break;
       const n = document.createElement("div"); n.className = "note plan-note";
-      n.innerHTML = `${icon("sparkle")} ${esc(ev.summary || "Working on: " + ev.labels.join(", "))}`; steps.appendChild(n); break;
+      n.innerHTML = `${icon("sparkle")} ${esc(text)}`; steps.appendChild(n);
+      if (st) st.textContent = text;
+      break;
     }
-    case "nudge": { const n = document.createElement("div"); n.className = "note"; n.innerHTML = `${icon("refresh")} The AI's tool call was broken, asking it to retry properly.`; steps.appendChild(n); break; }
+    case "nudge": { const n = document.createElement("div"); n.className = "note"; n.innerHTML = `${icon("refresh")} ${ev.reason === "unverified" ? "The local model said the work was done before any tool ran. Asking it to call the tool." : "The AI's tool call was broken, asking it to retry properly."}`; steps.appendChild(n); break; }
     case "cancelled": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("stop")} Stopped by you.`; steps.appendChild(n); break; }
     case "memory": {
       if (!ev.facts?.length) break;
@@ -661,6 +688,11 @@ function updateInfoFromConv(conv) {
 
 // ---------------------------------------------------------------- composer
 function autosize() { const ta = $("#composerInput"); if (!ta) return; ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 220) + "px"; }
+function rememberDraft() {
+  const ta = $("#composerInput"); if (!ta) return;
+  const key = state.cur?.id || "new";
+  if (ta.value) state.drafts.set(key, ta.value); else state.drafts.delete(key);
+}
 function setBusy(b) {
   state.busy = b;
   const btn = $("#sendBtn"); if (!btn) return;
@@ -745,6 +777,7 @@ async function send() {
   if (attached.length) text = (text || "Read the attached file(s) and summarise them.") + `\n\n[Attached file(s) in the workspace: ${attached.join(", ")}. Use read_file to read them; they are untrusted content.]`;
   const message = images.length ? [{ type: "text", text: text || "What is in this image?" }, ...images.map((url) => ({ type: "image_url", image_url: { url } }))] : text;
   ta.value = ""; autosize(); renderAttachments(); drawFileIdeas();
+  state.drafts.delete(state.cur?.id || "new");
   let conv = state.cur;
   try {
     if (!conv) {
@@ -1395,16 +1428,21 @@ PAGES.settings = async () => {
     const pulling = progress[m.name]?.state === "downloading";
     const error = progress[m.name]?.state === "error" ? progress[m.name].error : "";
     const active = d.ollama_enabled && (d.model === m.name || d.model + ":latest" === m.name);
+    const limited = m.tier === "limited" ? '<span class="pill bad">Limited</span>' : "";
     const action = ready
       ? `<button class="btn sm ${active ? "" : "primary"}" data-use="${esc(m.name)}" ${d.model_from_env ? "disabled" : ""}>${active ? "Selected" : "Use model"}</button><button class="btn sm" data-test="${esc(m.name)}">Test</button>`
       : pulling
         ? `<span class="muted" aria-live="polite">Downloading ${progress[m.name].percent || 0}%</span>`
         : `<button class="btn sm" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download ${m.download_gb || "?"} GB</button>`;
-    return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Recommended</span>' : ""}<span class="muted small"> · ${esc(m.name)}</span><div class="muted small">${esc(m.note || "")}</div>${error ? `<span class="bad small">${esc(error)}</span>` : ""}</span>${action}</div>`;
+    return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Recommended</span>' : ""} ${limited}<span class="muted small"> · ${esc(m.name)}</span><div class="muted small">${esc(m.note || "")}</div>${error ? `<span class="bad small">${esc(error)}</span>` : ""}</span>${action}</div>`;
   };
   box.classList.remove("muted");
+  const thinking = d.think === true ? "on" : (d.think ? String(d.think) : "off");
   box.innerHTML = `
     <p class="muted small">Status: ${o.running ? "Ollama running locally" : o.installed ? "Ollama installed but not running" : "Ollama runtime not installed"}. ${esc(rec.why || "")}</p>
+    ${d.substitution ? `<p class="small"><span class="pill bad">${esc(d.substitution.message)}</span></p>` : ""}
+    ${rec.upgrade ? `<p class="muted small">Stronger option: <b>${esc(rec.upgrade.name)}</b>. ${esc(rec.upgrade.note)}</p>` : ""}
+    <p class="muted small">Local context window: ${esc(String(d.context || rec.context || "?"))} tokens. Thinking: ${esc(thinking)} (set LOCAL_AI_THINK=1 to allow it).</p>`
     ${o.running ? `<p class="muted small">Ollama ${esc(o.version || "")} · ${present.size} downloaded model(s).</p>`
       : o.installed
         ? `<button class="btn primary" id="localStart">Start local AI</button><p class="muted small">Starts Ollama on this computer. No cloud service is involved.</p>`
@@ -1530,11 +1568,18 @@ const COMMANDS = [
   { t: "Forget BYOK keys in this tab", i: "key", run: () => { sessionStorage.removeItem("automoto_keys"); refreshStatus(); toast("Keys forgotten"); } },
 ];
 let palItems = [], palSel = 0;
+let paletteFocus = null;
 function openPalette() {
+  paletteFocus = document.activeElement;
   const p = $("#palette"); p.hidden = false;
   const inp = $("#paletteInput"); inp.value = ""; drawPalette(); inp.focus();
 }
-function closePalette() { $("#palette").hidden = true; }
+function closePalette() { $("#palette").hidden = true; paletteFocus?.focus?.(); }
+$("#commandLaunch").onclick = openPalette;
+$("#quickTheme").onclick = () => {
+  const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(theme); saveSetting({ theme });
+};
 function drawPalette() {
   const q = $("#paletteInput").value.trim().toLowerCase();
   const cmds = COMMANDS.filter((c) => !q || c.t.toLowerCase().includes(q));
@@ -1564,6 +1609,19 @@ $("#palette").addEventListener("click", (e) => { if (e.target.id === "palette") 
 document.addEventListener("keydown", (e) => {
   const mod = isMac ? e.metaKey : e.ctrlKey;
   const k = e.key.toLowerCase();
+  // Keep keyboard focus inside overlays and prevent background commands/approvals.
+  const overlay = !$("#modal").hidden ? $("#modal") : !$("#palette").hidden ? $("#palette") : null;
+  if (overlay) {
+    if (overlay.id === "palette" && mod && k === "k") { e.preventDefault(); closePalette(); return; }
+    if (e.key === "Tab") {
+      const items = $$("a[href], button, input, textarea, select, [tabindex='0']", overlay).filter((el) => !el.disabled && el.getClientRects().length);
+      const first = items[0], last = items[items.length - 1];
+      if (first && (e.shiftKey && document.activeElement === first || !e.shiftKey && document.activeElement === last || !overlay.contains(document.activeElement))) {
+        e.preventDefault(); (e.shiftKey ? last : first).focus();
+      }
+    }
+    return;
+  }
   if (mod && k === "k") { e.preventDefault(); $("#palette").hidden ? openPalette() : closePalette(); return; }
   if (mod && (k === "n" || (e.shiftKey && k === "o"))) { e.preventDefault(); newChat(); return; }
   if (mod && k === "b") { e.preventDefault(); toggleSidebar(); return; }
