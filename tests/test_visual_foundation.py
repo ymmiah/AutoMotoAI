@@ -159,6 +159,11 @@ def test_invalid_specs_fail_without_partial_output(work):
         image.write_bytes(b"existing")
         render(valid,image)
 
+def test_contrast_gate_rejects_invisible_text():
+    spec=flow(colours={"ink":"#FAFAF6"})
+    scene=compile_scene(spec)
+    assert any("low contrast" in msg for msg in quality(scene))
+
 def test_safe_source_access(work):
     with pytest.raises(Exception):
         compile_scene({"layout":"hero","title":"Unsafe",
