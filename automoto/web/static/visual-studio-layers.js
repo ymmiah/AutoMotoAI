@@ -105,7 +105,7 @@ export function normaliseSequence(spec){
     duration_ms:Math.max(50,Math.min(500,Number(spec.animation?.duration_ms)||110)),
     loop:Math.max(0,Math.min(20,Number(spec.animation?.loop)||0)),
     stages:groups.map((group,i)=>({
-      group,start:clamp(Number(previous.get(group)??(i/groups.length)),0,0.9)
+      group,start:clamp(Number(previous.get(group)??(groups.length===1?0.35:i/groups.length)),0,0.9)
     }))
   };
 }
