@@ -128,6 +128,7 @@ Animated GIF contains real changing frames with Pillow `save_all=True`, `append_
 - Source raster images are verified by a real image decoder; maximum 24MB / 36MP, one frame.
 - SVG embeds raster image bytes into a data URL (and escapes all text) instead of linking to external resources.
 - Asset fingerprints are SHA-256 hashes checked before and after export. Originals remain unchanged. Scaling in an output may resample pixels but does **not** reshape the original subject, replace a face or alter source file bytes.
+- Every `visual_create` output gets a sibling `<filename>.visual.json` provenance record with the exact output SHA-256, canvas dimensions, original-asset SHA-256 hashes and manual review status. This record does not mean a human has visually approved the result.
 - Exact text is kept in native text elements. If text cannot fit its allocated space, the tool refuses to export rather than truncating it invisibly.
 - A generated GIF has been checked for multiple frames. `visual_check` compares representative frames to detect visible motion.
 
