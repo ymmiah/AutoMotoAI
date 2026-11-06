@@ -176,10 +176,22 @@ def generate_image(ctx: ToolContext, path: str, prompt: str, checkpoint: str = "
                 project=""
                 if output_mode=="layered":
                     from automoto.visual_projects import image_project, save_project
+                    import hashlib
                     try:
                         project=save_project(image_project(dest),dest.stem)
+                        manifest=dest.with_name(dest.name+".visual.json")
+                        with manifest.open("x",encoding="utf-8") as stream:
+                            json.dump({
+                                "schema_version":1,
+                                "format":"png","output_mode":"layered",
+                                "editable_project":project,
+                                "output_sha256":hashlib.sha256(data).hexdigest(),
+                                "source":"local-diffusion-model",
+                                "checkpoint":chosen,"seed":rng,
+                                "quality":{"visual_manual_review":"required"}
+                            },stream,indent=2)
                     except (OSError, ValueError) as exc:
-                        # Do not lose expensive AI output if the editor project fails.
+                        # Keep the expensive generated image; report the project issue.
                         raise ToolFailed(f"Image generated at {sandbox.rel(dest)}, but the editable project "
                                          f"could not be created: {exc}") from None
                 return (f"Generated original image at {sandbox.rel(dest)} ({width}×{height}), model {chosen}, "
