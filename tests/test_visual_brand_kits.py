@@ -53,8 +53,9 @@ def test_all_endpoints_require_auth_and_explicit_hosted_permissions(client):
         assert path_allowed("POST", f"{ROOT}/{path}")
     assert client.post(f"{ROOT}/delete", json={"path": "test.brand.json"}).status_code == 403
     assert path_allowed("POST", f"{ROOT}/delete")
+    assert client.get(f"{ROOT}/list").status_code == 403
+    assert client.get(f"{ROOT}/load", params={"path": "test.brand.json"}).status_code == 403
     for path in ("list", "load"):
-        assert client.get(f"{ROOT}/{path}").status_code == 403
         assert path_allowed("GET", f"{ROOT}/{path}")
     assert not path_allowed("DELETE", f"{ROOT}/delete")
 
