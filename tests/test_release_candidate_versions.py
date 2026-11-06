@@ -44,9 +44,10 @@ def test_vs_code_manifest_keeps_valid_extension_version_and_beta_asset_name():
 
 
 def test_store_msix_version_mapping():
-    from packaging.msstore import msix
+    import runpy
     app = json.loads(_read("apps/desktop/src-tauri/tauri.conf.json"))["version"]
-    out = msix.msix_version(app)
+    version_fn = runpy.run_path(str(ROOT / "packaging/msstore/msix.py"))["msix_version"]
+    out = version_fn(app)
     parts = [int(x) for x in out.split(".")]
     assert len(parts) == 4 and parts[3] == 0
     assert parts[0] > 0 and all(0 <= x <= 65535 for x in parts)
