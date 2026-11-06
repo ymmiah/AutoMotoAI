@@ -351,6 +351,7 @@ let browser;
   const slidesResponse=await exportingSlides;
   assert.equal(slidesResponse.status(),200,await slidesResponse.text());
   assert.equal((await slidesResponse.json()).page_count,2);
+  await page.waitForFunction(()=>decodeURIComponent(document.querySelector('#vsOutput a[download]')?.href||'').includes('.pptx'));
   assert.equal(await page.locator('#vsOutput a[download]').count()>=2,true,
     'multi-page editable PowerPoint must provide an editable project download');
   await page.locator('#vsFormat').selectOption('pdf');
@@ -360,6 +361,7 @@ let browser;
   const pdfResponse=await exportingPdf;
   assert.equal(pdfResponse.status(),200,await pdfResponse.text());
   assert.equal((await pdfResponse.json()).page_count,2);
+  await page.waitForFunction(()=>decodeURIComponent(document.querySelector('#vsOutput a[download]')?.href||'').includes('.pdf'));
   await page.screenshot({path:path.join(output,'visual-studio-v8-multipage-export.png')});
   await page.locator('#vsFormat').selectOption('png');
   assert.match(await page.locator('#vsPageExportHint').innerText(),/Only page/);
