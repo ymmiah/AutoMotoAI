@@ -78,7 +78,8 @@ def test_draft_save_list_load_and_no_cross_directory(client):
 def test_real_gif_export_preserves_editable_draft_and_provenance(client):
     url="/api/visual/studio"
     data={"spec":spec(),"name":"Animation prototype","format":"gif",
-          "animation":{"effect":"flow","frames":12,"duration_ms":100,"loop":0}}
+          "animation":{"effect":"flow","frames":12,"duration_ms":100,"loop":0},
+          "output_mode":"layered"}
     resp=client.post(url+"/export",headers=H,json=data)
     assert resp.status_code==200,resp.text
     result=resp.json()
@@ -170,7 +171,7 @@ def test_layers_hide_in_export_but_keep_editable_source(client):
     original["elements"][2]["hidden"]=True
     original["elements"][2]["locked"]=True
     r=client.post("/api/visual/studio/export",headers=H,
-                  json={"name":"Layer visibility","spec":original,"format":"pptx"})
+                  json={"name":"Layer visibility","spec":original,"format":"pptx","output_mode":"layered"})
     assert r.status_code==200,r.text
     from pptx import Presentation
     presentation=Presentation(sandbox.default_root()/r.json()["path"])
@@ -257,6 +258,6 @@ def test_hidden_group_removes_its_connectors_from_pptx(client):
 def test_hosted_routes_are_whitelisted_but_require_user_auth():
     for path in ("presets","list","load"):
         assert path_allowed("GET","/api/visual/studio/"+path)
-    for path in ("preview","save","export"):
+    for path in ("preview","save","export","import"):
         assert path_allowed("POST","/api/visual/studio/"+path)
     assert not path_allowed("DELETE","/api/visual/studio/export")
