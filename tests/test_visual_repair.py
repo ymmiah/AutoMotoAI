@@ -83,7 +83,7 @@ def test_locked_bad_contrast_is_reported_but_not_modified(workspace):
 
 def test_independent_original_photo_remains_unmodified(workspace):
     photo=workspace/"uploads"/"reference.png"
-    photo.parent.mkdir(parents=True)
+    photo.parent.mkdir(parents=True,exist_ok=True)
     Image.new("RGB",(420,230),(55,113,188)).save(photo)
     h=hashlib.sha256(photo.read_bytes()).hexdigest()
     source=art({"type":"image","x":420,"y":100,"w":320,"h":220,
