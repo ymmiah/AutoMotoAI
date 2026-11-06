@@ -138,7 +138,19 @@ let browser;
   await page.locator('#vsAddText').click();
   await page.locator('#vsProperties textarea[data-key="text"]').fill('Exact source copy');
   await page.locator('#vsProperties textarea[data-key="text"]').press('Tab');
+  // Deliberately create unreadable white text, then inspect, propose and
+  // explicitly accept a reversible, non-destructive contrast repair.
+  await page.locator('#vsProperties [data-key="colour"]').fill('#ffffff');
+  await page.locator('#vsProperties [data-key="colour"]').press('Tab');
+  await page.locator('#vsInspect').click();
+  assert.match(await page.locator('#vsFindings').innerText(), /contrast/);
+  await page.locator('#vsSuggest').click();
+  await page.locator('#vsApply:not([disabled])').waitFor();
+  assert.match(await page.locator('#vsFindings').innerText(), /proposed field adjustment/);
+  await page.locator('#vsApply').click();
+  assert.match(await page.locator('#vsFindings').innerText(), /Suggestions applied/);
   await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  await page.screenshot({ path: path.join(output, 'visual-studio-repair.png') });
   await page.locator('#vsSave').click();
   await page.waitForFunction(() => document.querySelectorAll('#vsDraft option').length > 1);
   await page.locator('#vsFormat').selectOption('gif');
