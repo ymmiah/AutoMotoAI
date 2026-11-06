@@ -255,7 +255,7 @@ def list_designs(request: Request):
         return {"designs": []}
     found = []
     for p in sorted(folder.glob("*.design.json"), key=lambda q: q.stat().st_mtime, reverse=True)[:40]:
-        if p.is_symlink() or not p.is_file() or p.stat().st_size > MAX_SPEC_BYTES + 8192:
+        if p.is_symlink() or not p.is_file() or p.stat().st_size > 512 * 1024:
             continue
         try:
             raw = json.loads(p.read_text(encoding="utf-8"))
@@ -277,16 +277,24 @@ def load(request: Request, path: str):
         raise HTTPException(403, "design is outside your Visual Studio directory") from None
     if p.is_symlink() or not p.is_file() or not p.name.endswith(".design.json"):
         raise HTTPException(404, "design not found")
-    if p.stat().st_size > MAX_SPEC_BYTES + 8192:
+    if p.stat().st_size > 512 * 1024:
         raise HTTPException(413, "saved design is too large")
     try:
         obj = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(obj, dict):
+            raise ValueError("unsupported design file")
+        if obj.get("schema") == 2:
+            from automoto.visual_documents import _pages
+            valid_pages, _ = _pages(obj.get("pages"))
+            return {"name": str(obj.get("name", "Untitled design"))[:100],
+                    "schema": 2, "pages": valid_pages}
         if obj.get("schema") != 1 or not isinstance(obj.get("spec"), dict):
             raise ValueError("unsupported design schema")
         _compiled(obj["spec"])
     except (ValueError, OSError) as exc:
         raise HTTPException(422, f"saved design is invalid: {exc}") from None
-    return {"name": str(obj.get("name", "Untitled design"))[:100], "spec": obj["spec"]}
+    return {"name": str(obj.get("name", "Untitled design"))[:100], "schema": 1,
+            "spec": obj["spec"]}
 
 
 @router.post("/import")
