@@ -290,6 +290,11 @@ let browser;
     'Undo must restore the grouped layer without losing original object editability');
   await page.locator('#vsRedo').click();
   assert.equal(await page.locator('#vsSnap').isChecked(), true);
+  // Undo/Redo intentionally clear ephemeral multi-selection so stale item
+  // indices cannot point at changed group membership.
+  assert.match(await page.locator('#vsSelectedCount').innerText(), /0 layers selected/);
+  await page.locator('#vsSelectAll').click();
+  assert.match(await page.locator('#vsSelectedCount').innerText(), /3 layers selected/);
   await page.locator('#vsClearSelection').click();
   assert.match(await page.locator('#vsSelectedCount').innerText(), /0 layers selected/);
   await page.locator('#newChat').click();
