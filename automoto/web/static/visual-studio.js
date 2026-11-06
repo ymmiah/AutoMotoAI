@@ -1,5 +1,7 @@
-/* Visual Studio: no external scripts, no unsafe HTML and no separate rendering engine.
+/* Visual Studio: native exported scene renderer, editable layers and bounded GIF tracks.
    Backend renders the final preview. Edits keep source imagery unchanged. */
+import {layerUnits,toggleLayer,moveLayer,selectionBox,resizeSelection,
+        sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const copy=v=>JSON.parse(JSON.stringify(v));
@@ -117,18 +119,27 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<label for="vsElement" class="vs-inspector-note">Choose an element to edit</label>'+
     '<select class="input" id="vsElement" style="width:100%;margin:9px 0"></select>'+
     '<div id="vsProperties" class="vs-fields"></div>'+
+    '<h3 class="vs-layer-heading">Layers <span class="vs-small">Front → back</span></h3>'+
+    '<div id="vsLayers" class="vs-layers" aria-label="Visual design layers"></div>'+
     '<div class="vs-toolbar" style="margin-top:12px"><button class="btn" id="vsDuplicate">Duplicate</button>'+
     '<button class="btn danger" id="vsDelete">Delete</button></div>'+
     '<p class="vs-inspector-note">Grouped components move together. Exact text stays editable. Original uploaded imagery is not AI-redrawn.</p></aside></div>'+
     '<section class="vs-export"><label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
     '<option value="pptx">Editable PowerPoint</option><option value="pdf">PDF</option><option value="jpg">JPEG</option><option value="gif">Animated GIF</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Motion <select id="vsEffect"><option value="flow">Flow</option><option value="pulse">Pulse</option>'+
-    '<option value="reveal">Reveal</option><option value="float">Float</option></select></label>'+
+    '<option value="reveal">Reveal</option><option value="float">Float</option><option value="sequence">Layer timeline</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Frames <input id="vsFrames" type="number" min="8" max="48" value="20"></label>'+
     '<label class="vs-gif-settings" hidden>Milliseconds/frame <input id="vsDelay" type="number" min="50" max="500" value="110"></label>'+
     '<label class="vs-gif-settings" hidden>Loop <select id="vsLoop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label>'+
     '<span class="spacer"></span><button class="btn primary" id="vsExport">'+icon("download")+' Export</button>'+
-    '<div id="vsOutput" class="vs-output" hidden></div></section></div>';
+    '<div id="vsOutput" class="vs-output" hidden></div></section>'+
+    '<section class="vs-timeline" id="vsTimeline" hidden aria-label="Animated layer timeline">'+
+    '<div class="vs-time-head"><strong>GIF scene timeline</strong>'+
+    '<span>Set when each group appears; export keeps the exact timing.</span></div>'+
+    '<div id="vsTracks" class="vs-tracks"></div>'+
+    '<label class="vs-scrub">Preview at <output id="vsFrameLabel">0%</output>'+
+    '<input id="vsPlayhead" type="range" min="0" max="99" step="1" value="0" aria-label="Preview timeline position"></label>'+
+    '</section></div>';
   const root=page("Visual Studio",
        "Edit a premium visual composition, keep source photographs intact, and export a genuine animated GIF or an editable PowerPoint.",html);
   root.classList.add("vs-page");
