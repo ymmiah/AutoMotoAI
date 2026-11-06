@@ -331,11 +331,13 @@ let browser;
   assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
   await page.locator('#vsPageTabs [data-page-index="0"]').click();
   assert.equal(await page.locator('#vsPageName').inputValue(),'Page 1');
+  const saving=page.waitForResponse(r=>r.url().includes('/api/visual/studio/document/save')&&
+    r.request().method()==='POST');
   await page.locator('#vsSave').click();
-  await page.waitForFunction(()=>/Saved artifacts\/visual-studio\/|Save failed:/.test(document.querySelector('#vsStatus')?.textContent||''));
-  assert.match(await page.locator('#vsStatus').innerText(),/Saved artifacts\/visual-studio\//,
-    'multi-page draft save must succeed before testing its reopen and exports');
-  const savedDoc=await page.locator('#vsDraft').inputValue();
+  const savedResponse=await saving;
+  assert.equal(savedResponse.status(),200,await savedResponse.text());
+  const savedDoc=(await savedResponse.json()).path;
+  await page.waitForFunction(path=>document.querySelector('#vsDraft')?.value===path,savedDoc);
   assert.ok(savedDoc.endsWith('.design.json'));
   await page.locator('#vsLoad').click();
   assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
@@ -343,13 +345,21 @@ let browser;
   await page.locator('#vsFormat').selectOption('pptx');
   await page.locator('#vsOutputMode').selectOption('layered');
   assert.match(await page.locator('#vsPageExportHint').innerText(),/All 2 pages/);
+  const exportingSlides=page.waitForResponse(r=>r.url().includes('/api/visual/studio/document/export')&&
+    r.request().method()==='POST');
   await page.locator('#vsExport').click();
-  await page.waitForFunction(()=>/Exported artifacts\/visual-studio\/.*\.pptx/.test(document.querySelector('#vsStatus')?.textContent||''));
+  const slidesResponse=await exportingSlides;
+  assert.equal(slidesResponse.status(),200,await slidesResponse.text());
+  assert.equal((await slidesResponse.json()).page_count,2);
   assert.equal(await page.locator('#vsOutput a[download]').count()>=2,true,
     'multi-page editable PowerPoint must provide an editable project download');
   await page.locator('#vsFormat').selectOption('pdf');
+  const exportingPdf=page.waitForResponse(r=>r.url().includes('/api/visual/studio/document/export')&&
+    r.request().method()==='POST');
   await page.locator('#vsExport').click();
-  await page.waitForFunction(()=>/Exported artifacts\/visual-studio\/.*\.pdf/.test(document.querySelector('#vsStatus')?.textContent||''));
+  const pdfResponse=await exportingPdf;
+  assert.equal(pdfResponse.status(),200,await pdfResponse.text());
+  assert.equal((await pdfResponse.json()).page_count,2);
   await page.screenshot({path:path.join(output,'visual-studio-v8-multipage-export.png')});
   await page.locator('#vsFormat').selectOption('png');
   assert.match(await page.locator('#vsPageExportHint').innerText(),/Only page/);
