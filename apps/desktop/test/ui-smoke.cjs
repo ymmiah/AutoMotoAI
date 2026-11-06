@@ -183,6 +183,39 @@ let browser;
   await page.locator('#vsDismissRepair').click();
   assert.equal(await page.locator('#vsRepairReview').isVisible(), false);
   await page.screenshot({ path: path.join(output, 'visual-studio-repair-review.png') });
+  // v5: repair choices are independent; a partial selection with an
+  // unresolved contrast problem must never become applicable.
+  await page.locator('#vsTemplate').selectOption('blank');
+  for (let i = 0; i < 2; i++) {
+    await page.locator('#vsAddText').click();
+    await page.locator('#vsProperties [data-key="colour"]').fill('#ffffff');
+    await page.locator('#vsProperties [data-key="colour"]').dispatchEvent('change');
+  }
+  await page.locator('#vsInspect').click();
+  await page.locator('#vsRepairReview:not([hidden])').waitFor();
+  assert.ok(await page.locator('[data-repair-index]').count() >= 2,
+    'two unreadable labels must produce individual selectable corrections');
+  assert.equal(await page.locator('#vsRepairOriginal').isVisible(), true,
+    'before image must render the actual unmodified flawed canvas');
+  await page.locator('#vsRepairNone').click();
+  assert.equal(await page.locator('#vsApplyRepair').isDisabled(), true);
+  await page.locator('#vsRepairAll').click();
+  await page.locator('#vsRepairImage:visible').waitFor();
+  assert.equal(await page.locator('#vsApplyRepair').isEnabled(), true);
+  await page.locator('[data-repair-index]').first().uncheck();
+  await page.waitForFunction(() =>
+    /Cannot apply this selection/.test(document.querySelector('#vsRepairRemaining')?.textContent || ''));
+  assert.equal(await page.locator('#vsApplyRepair').isDisabled(), true,
+    'selecting one contrast fix must not bypass the remaining quality issue');
+  await page.locator('#vsRepairAll').click();
+  await page.locator('#vsRepairImage:visible').waitFor();
+  await page.screenshot({ path: path.join(output, 'visual-studio-v5-selective-before-after.png') });
+  await page.locator('#vsApplyRepair').click();
+  assert.equal(await page.locator('#vsRepairReview').isVisible(), false);
+  assert.equal(await page.locator('#vsUndo').isEnabled(), true);
+  await page.locator('#vsUndo').click();
+  assert.equal(await page.locator('#vsElement option').count(), 3,
+    'undo must restore original editable objects without losing layers');
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
