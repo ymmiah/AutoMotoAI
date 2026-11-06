@@ -400,6 +400,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       return;
     }
     if(act==="front"||act==="back"){
+      if(unit.locked)return;
       const item=spec.elements[selected],direction=act==="front"?1:-1;
       change(()=>{
         if(moveLayer(spec,key,direction)){
