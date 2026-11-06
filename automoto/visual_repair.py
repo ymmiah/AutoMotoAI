@@ -44,6 +44,42 @@ def _report(spec:dict) -> list[str]:
     except (VisualError,ValueError,TypeError) as exc:
         return [str(exc)]
 
+def design_notes(spec: dict) -> list[dict]:
+    """Conservative design-review hints; never used as export blockers or edits.
+
+    These are deterministic observations, not AI aesthetic judgements. Only
+    report checks supported by the actual editable specification.
+    """
+    notes: list[dict] = []
+    width, height = spec.get("width", 1280), spec.get("height", 720)
+    if not isinstance(width, (int, float)) or not isinstance(height, (int, float)):
+        return notes
+    for idx, item in enumerate(spec.get("elements", [])):
+        if not isinstance(item, dict) or item.get("hidden"):
+            continue
+        kind = item.get("type")
+        if kind == "image" and not str(item.get("alt") or "").strip():
+            notes.append({"code": "image-alt", "layer": idx + 1, "level": "advisory",
+                          "message": "Add descriptive alternative text to this image for accessibility."})
+        if kind not in {"text", "icon"} or item.get("group"):
+            continue
+        box = _xybox(item)
+        if box is not None:
+            x, y, w, h = box
+            margin = min(24, width * .025, height * .035)
+            if x < margin or y < margin or x + w > width - margin or y + h > height - margin:
+                notes.append({"code": "safe-area", "layer": idx + 1, "level": "advisory",
+                              "message": "Check the spacing around this element at the canvas edge."})
+        if kind == "text":
+            size = item.get("font_size", 25)
+            if isinstance(size, (int, float)) and not isinstance(size, bool) and math.isfinite(size) and size < 16:
+                notes.append({"code": "small-type", "layer": idx + 1, "level": "advisory",
+                              "message": "Check readability at the final display or print size."})
+        if len(notes) >= 8:
+            break
+    return notes
+
+
 def _editable(item: dict) -> bool:
     return not item.get("hidden") and not item.get("locked") and item.get("type")!="image"
 
@@ -208,6 +244,7 @@ def propose(spec:dict[str,Any]) -> dict[str,Any]:
         "proposed_spec":candidate,
         "changes":changes,
         "issues_before":issues_before,
+        "design_notes":design_notes(spec),
         "remaining_issues":remaining,
         "changed":bool(changes),
         "ready_to_apply":bool(changes) and not remaining,
