@@ -196,9 +196,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         ' aria-label="'+(u.locked?'Unlock ':'Lock ')+esc(u.label)+'" aria-pressed="'+String(u.locked)+'">'+
         icon("lock")+'</button>'+
         '<button class="vs-layer-btn" data-layer-act="front"'+common+
-        ' aria-label="Move '+esc(u.label)+' forward" '+(order===0||u.isConnector?'disabled':'')+'>'+icon("up")+'</button>'+
+        ' aria-label="Move '+esc(u.label)+' forward" '+(order===0||u.isConnector||u.locked?'disabled':'')+'>'+icon("up")+'</button>'+
         '<button class="vs-layer-btn" data-layer-act="back"'+common+
-        ' aria-label="Move '+esc(u.label)+' backwards" '+(order===layers.length-1||u.isConnector?'disabled':'')+'>'+icon("down")+'</button></div>';
+        ' aria-label="Move '+esc(u.label)+' backwards" '+(order===layers.length-1||u.isConnector||u.locked?'disabled':'')+'>'+icon("down")+'</button></div>';
     }).join("")||'<p class="vs-inspector-note">No objects yet. Add text, shapes or images.</p>';
   }
   function drawTimeline(){
