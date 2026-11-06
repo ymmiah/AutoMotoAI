@@ -153,7 +153,7 @@ def _changes(spec: dict[str, Any], entries: Any) -> list[dict[str, Any]]:
         index, field, new = entry.get("index"), entry.get("field"), entry.get("new")
         if not isinstance(index, int) or isinstance(index, bool) or index not in range(len(spec["elements"])):
             continue
-        if field not in EDIT_FIELDS or (index, field) in seen:
+        if not isinstance(field, str) or field not in EDIT_FIELDS or (index, field) in seen:
             continue
         el = spec["elements"][index]
         if (not isinstance(el, dict) or el.get("hidden") or el.get("locked") or el.get("group")
@@ -219,7 +219,8 @@ def _notes(entries: Any, count: int) -> list[dict[str, Any]]:
         if not isinstance(entry, dict):
             continue
         category, layer, message = entry.get("category"), entry.get("layer"), _reason(entry.get("message"))
-        if (category not in CATEGORIES or not isinstance(layer, int) or isinstance(layer, bool)
+        if (not isinstance(category, str) or category not in CATEGORIES
+                or not isinstance(layer, int) or isinstance(layer, bool)
                 or not 1 <= layer <= count or not message):
             continue
         results.append({"category": category, "layer": layer,
@@ -248,10 +249,11 @@ def analyse(spec: dict[str, Any]) -> dict[str, Any]:
         raise VisualError("Local model did not produce a valid design review object.")
     changes = _changes(spec, parsed.get("changes"))
     notes = _notes(parsed.get("notes"), len(spec["elements"]))
+    shown_notes = notes or design_notes(spec)
     return {"model": model, "provider": "ollama-local", "changed": bool(changes),
-            "changes": changes, "design_notes": notes or design_notes(spec),
+            "changes": changes, "design_notes": shown_notes,
             "preview": preview, "original_preview": preview,
             "requires_approval": True, "ready_to_apply": bool(changes),
             "summary": f"Local AI reviewed the rendered design: {len(changes)} candidate field changes, "
-                       f"{len(notes)} visual observations. Nothing has been applied.",
+                       f"{len(shown_notes)} review notes. Nothing has been applied.",
             "limitations": "AI observations are subjective; every selected change must pass server preview validation."}
