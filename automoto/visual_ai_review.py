@@ -44,6 +44,8 @@ object shown in the metadata. Valid change fields are x, y, font_size and colour
 Never change copy, paths, photographs, logos, groups, hidden/locked layers,
 animation, artboard dimensions or metadata. No more than 10 changes and 8 notes.
 Suggest small improvements only, and say nothing about an area you cannot judge.
+Note category MUST be one of: hierarchy, alignment, spacing, typography, colour, balance.
+Note layer is ONE-BASED; editable change index is ZERO-BASED.
 Do not output markdown, code or explanation outside the JSON."""
 
 
