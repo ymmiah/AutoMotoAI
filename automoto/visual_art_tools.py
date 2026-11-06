@@ -23,7 +23,8 @@ def visual_presets(ctx:ToolContext) -> str:
             ". Layouts: workflow (nodes + optional links), cards (2-6 cards), "
             "hero (existing image + text) and canvas (positioned elements). "
             "Export formats: PNG, JPEG, SVG, PDF, editable PPTX and animated GIF. "
-            "GIF effects: flow, pulse, float and reveal; 8-48 frames, 50-500ms each. "
+            "GIF effects: flow, pulse, float, reveal, sequence; 8-48 frames, 50-500ms each. "
+            "Sequence uses grouped canvas elements and animation.stages:[{group,start:0.0-0.9}]. "
             "The renderer uses native drawing; AI artwork still requires an installed image model.")
 
 def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) -> str:
