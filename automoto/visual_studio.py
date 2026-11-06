@@ -219,6 +219,21 @@ def propose_repair(body: DesignIn, request: Request):
     except (VisualError,ValueError,TypeError,OSError) as exc:
         raise HTTPException(422,str(exc)[:1000]) from None
 
+@router.post("/ai-review")
+def ai_review(body: DesignIn, request: Request):
+    """Explicit, local-only vision analysis. No cloud fallback or file writes.
+
+    The screenshot and editable geometry are sent only to an Ollama instance
+    bound to the loopback interface, on a user-initiated request.
+    """
+    _auth(request)
+    from automoto.visual_ai_review import analyse
+    try:
+        return analyse(_validate(body.spec))
+    except (VisualError, ValueError, TypeError, OSError) as exc:
+        raise HTTPException(422, str(exc)[:800]) from None
+
+
 
 @router.post("/save")
 def save(body: DesignIn, request: Request):
