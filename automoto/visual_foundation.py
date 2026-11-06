@@ -136,12 +136,18 @@ def _scene(spec:dict[str,Any]) -> dict:
     elements.append(_rect(0,0,w,h,t["background"],radius=0,stroke_width=0,role="background"))
     elements.append(_rect(margin,margin*.68,max(48,round(w*.085)),max(5,round(h*.011)),
                           t["accent"],radius=4,stroke_width=0,role="accent"))
-    elements.append(_text(margin,margin*1.16,w-margin*2,heading_size*1.3,
+    logo=spec.get("brand_logo")
+    reserve=min(round(w*.17),180) if logo else 0
+    elements.append(_text(margin,margin*1.16,w-margin*2-reserve,heading_size*1.3,
                           title,heading_size,t["ink"],True,"heading"))
     if subtitle:
         elements.append(_text(margin,margin*1.16+heading_size*1.4,
-                              w-margin*2,round(h*.05),subtitle,max(17,round(h*.033)),
+                              w-margin*2-reserve,round(h*.05),subtitle,max(17,round(h*.033)),
                               t["muted"],False,"subtitle"))
+    if logo:
+        elements.append(_image(w-margin-reserve+14,margin*.81,reserve-16,
+                               max(34,round(h*.105)),str(logo),
+                               str(spec.get("brand_logo_alt") or "Original supplied brand logo"),assets))
     content_top=max(round(h*.30) if subtitle else round(h*.27),135)
     content_bottom=h-max(50,round(h*.095))
     content_h=content_bottom-content_top
