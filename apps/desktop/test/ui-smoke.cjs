@@ -253,9 +253,11 @@ let browser;
   await page.unroute('**/api/visual/studio/ai-review');
   // v7: choose independent objects, distribute, align and group via the
   // actual editor, not a duplicated test-only geometry implementation.
-  page.once('dialog', dialog => dialog.accept());
+  const acceptV7CanvasReset=dialog=>dialog.accept();
+  page.on('dialog',acceptV7CanvasReset);
   await page.locator('#vsTemplate').selectOption('workflow');
   await page.locator('#vsTemplate').selectOption('blank');
+  page.off('dialog',acceptV7CanvasReset);
   for (const [x, y] of [[140,120],[340,250],[550,400]]) {
     await page.locator('#vsAddIcon').click();
     await page.locator('#vsProperties [data-key="x"]').fill(String(x));
