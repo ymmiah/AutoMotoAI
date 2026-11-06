@@ -115,13 +115,16 @@ app = FastAPI(title=f"{APP_NAME} {CODENAME}", version=__version__, docs_url="/ap
 app.include_router(hosted.router)  # hosted-mode auth/admin API (only reachable when AUTOMOTO_MODE=multiuser)
 from automoto import visual_studio
 app.include_router(visual_studio.router)  # authenticated, per-workspace visual editor
+from automoto import visual_documents
+app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/explain", "/api/doctor",
              "/api/visual/studio/preview", "/api/visual/studio/export",
-             "/api/visual/studio/repair", "/api/visual/studio/ai-review")
+             "/api/visual/studio/repair", "/api/visual/studio/ai-review",
+             "/api/visual/studio/document/export")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
 
