@@ -124,7 +124,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<div class="vs-toolbar" style="margin-top:12px"><button class="btn" id="vsDuplicate">Duplicate</button>'+
     '<button class="btn danger" id="vsDelete">Delete</button></div>'+
     '<p class="vs-inspector-note">Grouped components move together. Exact text stays editable. Original uploaded imagery is not AI-redrawn.</p></aside></div>'+
-    '<section class="vs-export"><label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
+    '<section class="vs-export"><label>Output <select id="vsOutputMode" aria-label="Image delivery type">'+
+    '<option value="flat">Single finished file</option><option value="layered">Editable layers + file</option></select></label>'+
+    '<label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
     '<option value="pptx">Editable PowerPoint</option><option value="pdf">PDF</option><option value="jpg">JPEG</option><option value="gif">Animated GIF</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Motion <select id="vsEffect"><option value="flow">Flow</option><option value="pulse">Pulse</option>'+
     '<option value="reveal">Reveal</option><option value="float">Float</option><option value="sequence">Layer timeline</option></select></label>'+
@@ -535,15 +537,16 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     const animation=fmt==="gif"?gifOptions():null;
     if(fmt==="gif"&&!animation){status("Add visible groups to use the GIF layer timeline.",true);btn.disabled=false;return;}
     if(animation)spec.animation=animation;
+    const output_mode=at("vsOutputMode").value;
     try{
-      const out=await api("/api/visual/studio/export",{spec,name,format:fmt,animation});
+      const out=await api("/api/visual/studio/export",{spec,name,format:fmt,animation,output_mode});
       const file="/api/files/download?path="+encodeURIComponent(out.path);
-      const draft="/api/files/download?path="+encodeURIComponent(out.draft);
       const preview="/api/files/preview?path="+encodeURIComponent(out.path);
       const box=at("vsOutput");box.hidden=false;
+      const project=out.draft?'/api/files/download?path='+encodeURIComponent(out.draft):null;
       box.innerHTML='<strong>Export ready</strong> <a class="btn primary" href="'+file+'" download>'+
         icon("download")+' Download '+esc(fmt.toUpperCase())+'</a> '+
-        '<a class="btn" href="'+draft+'" download>Editable design specification</a>'+
+        (project?'<a class="btn" href="'+project+'" download>Download editable layers</a>':'')+
         (fmt==="gif"?'<img src="'+preview+'" alt="Live animated GIF" style="max-height:155px;max-width:220px;object-fit:contain">':"");
       dirty=false;loadDrafts();toast("Design exported");
       status("Exported "+out.path+". Refreshing the latest design preview…");
@@ -602,4 +605,24 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   });
   draw();schedule(0);
   await Promise.all([loadAssets(),loadDrafts()]);
+  const openImage=sessionStorage.getItem("automoto_visual_open_image");
+  const openDraft=sessionStorage.getItem("automoto_visual_open_draft");
+  if(openImage||openDraft){
+    sessionStorage.removeItem("automoto_visual_open_image");
+    sessionStorage.removeItem("automoto_visual_open_draft");
+    try{
+      const result=openDraft
+        ? await api("/api/visual/studio/load?path="+encodeURIComponent(openDraft))
+        : await api("/api/visual/studio/import",{path:openImage});
+      spec=result.spec;
+      name=result.name||"Imported image";
+      at("vsName").value=name;
+      selected=spec.elements.findIndex(e=>e.type==="image");
+      undoStack=[];redoStack=[];dirty=false;
+      at("vsOutputMode").value="layered";
+      draw();schedule(0);
+      status(result.note||"Source artwork opened as editable Visual Studio layers.");
+      if(result.draft)await loadDrafts();
+    }catch(e){status("Could not open this image: "+e.message,true);}
+  }
 }

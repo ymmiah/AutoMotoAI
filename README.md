@@ -101,6 +101,21 @@ For more information, see [Offline AI](docs/OFFLINE.md).
 
 ---
 
+## Universal image output choices (new source build)
+
+> **Development:** [PR #15](https://github.com/ymmiah/AutoMotoAI/pull/15) is stacked on the Visual Studio v2 branch. Not yet a Microsoft Store release.
+
+AutoMoto asks how to deliver **every generated image**, not just GIFs: **single finished file**, **image with editable layers**, **animated GIF only**, or **GIF with editable layers**. The selected format and layer mode are independent; the application does not automatically create every variant.
+
+- **Visual Studio:** Choose `Single finished file` or `Editable layers + file` for PNG, JPEG, SVG, GIF or another supported export.
+- **Files:** Choose **Edit layers** on a PNG/JPEG/WebP/BMP/GIF. AutoMoto opens verified native designs with their actual text/shape/icon layers, or imports ordinary raster artwork as one editable image layer.
+- **AI-generated artwork:** diffusion output remains one raster image layer; added native text, icons and logos are independent. It does **not** magically recover separate AI model objects.
+- **Photo/logo composition:** original photos, logos and exact text remain individual protected design components when layered output is selected.
+
+[Delivery choices, security and realistic layer guarantees](docs/IMAGE-OUTPUT-MODES.md).
+
+---
+
 ## Visual Studio editor — layers and GIF timeline
 
 > **Source-build status:** Visual Studio v1 was merged into `main` via [PR #13](https://github.com/ymmiah/AutoMotoAI/pull/13). The next build adds layers, proportional resizing and a staged animation timeline on a separate development branch. **This is not a published Microsoft Store update.**

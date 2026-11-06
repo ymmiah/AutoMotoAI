@@ -22,6 +22,7 @@ from automoto import sandbox, tenancy
 from automoto.visual_foundation import THEMES, VisualError, compile_scene
 from automoto.visual_renderer import raster, quality, repair_text_fitting, sequence_stages
 from automoto.visual_art_tools import visual_create
+from automoto.visual_projects import image_project, save_project, mode as output_mode_check
 from automoto.tools import ToolContext, ToolFailed
 
 router = APIRouter(prefix="/api/visual/studio", tags=["visual-studio"])
@@ -38,6 +39,11 @@ class DesignIn(BaseModel):
 class ExportIn(DesignIn):
     format: str = Field("png", max_length=8)
     animation: dict[str, Any] | None = None
+    output_mode: str = Field("flat", max_length=8)
+
+
+class ImportIn(BaseModel):
+    path: str = Field(..., min_length=1, max_length=1000)
 
 
 class PreviewIn(DesignIn):
@@ -147,6 +153,7 @@ def _write_design(name: str, spec: dict[str, Any]) -> str:
 def presets(request: Request):
     _auth(request)
     return {"themes": list(THEMES), "layouts": ["workflow", "cards", "hero", "canvas"],
+            "output_modes": ["flat","layered"],
             "formats": sorted(FORMATS), "animation_effects": ["flow", "pulse", "float", "reveal", "sequence"],
             "size_limits": {"width": [640, 1920], "height": [400, 1080], "gif_pixels": 1_000_000}}
 
@@ -230,6 +237,78 @@ def load(request: Request, path: str):
     return {"name": str(obj.get("name", "Untitled design"))[:100], "spec": obj["spec"]}
 
 
+@router.post("/import")
+def import_artwork(body: ImportIn,request: Request):
+    """Open any supported workspace picture as a single unmodified art layer.
+
+    If an AutoMoto-generated image has an existing editable native project in
+    its provenance manifest, reopen that project instead of flattening it.
+    """
+    _auth(request)
+    from automoto.visual_projects import _relative_image
+    raw=body.path
+    if Path(raw).is_absolute():
+        raise HTTPException(422,"choose an image inside your own workspace")
+    try:
+        p=sandbox.resolve(raw,base=_root(),allow_outside=False)
+        relative=p.relative_to(_root()).as_posix()
+    except (sandbox.SandboxError,ValueError):
+        raise HTTPException(422,"image path must remain inside your workspace") from None
+    if not p.is_file() or p.is_symlink() or p.stat().st_size>24*1024*1024:
+        raise HTTPException(422,"image does not exist or exceeds the 24 MB source limit")
+    # Native layer projects are intentionally kept when already available.
+    manifest=p.with_name(p.name+".visual.json")
+    if manifest.is_file() and manifest.stat().st_size<64000:
+        try:
+            import hashlib
+            info=json.loads(manifest.read_text(encoding="utf-8"))
+            project=info.get("editable_project")
+            if (project and info.get("output_sha256")==hashlib.sha256(p.read_bytes()).hexdigest()
+                    and isinstance(project,str) and not Path(project).is_absolute()):
+                saved=load(request=request,path=project)
+                return {**saved,"draft":project,"layer_source":"native",
+                        "note":"Original editable vector/text layers were recovered from AutoMoto's saved design."}
+        except (OSError,ValueError,HTTPException,TypeError):
+            pass  # Invalid manifests are untrusted; fall back to the actual pixels.
+    created_frame=None
+    try:
+        if p.suffix.lower()==".gif":
+            # A GIF is multiple raster frames, not magically editable vector art.
+            # Decode only its first frame, preserving the source GIF unchanged.
+            filename=_filename(p.stem+"-first-frame","png")
+            dest=_design_dir()/filename
+            with Image.open(p) as im:
+                if im.width*im.height>36_000_000:
+                    raise VisualError("image exceeds 36 megapixels")
+                frame=im.convert("RGBA")
+                buf=io.BytesIO()
+                frame.save(buf,format="PNG")
+            preview_bytes=buf.getvalue()
+            if len(preview_bytes)>24*1024*1024:
+                raise VisualError("GIF's extracted frame exceeds 24 MB")
+            _quota_check(len(preview_bytes))
+            dest.parent.mkdir(parents=True,exist_ok=True)
+            with dest.open("xb") as stream:
+                stream.write(preview_bytes)
+            created_frame=dest
+            relative=dest.relative_to(_root()).as_posix()
+        else:
+            _relative_image(relative,_root())
+        spec=image_project(relative,_root())
+        _compiled(spec)
+        _quota_check()
+        project=_write_design(p.stem,spec)
+    except HTTPException:
+        if created_frame: created_frame.unlink(missing_ok=True)
+        raise
+    except (VisualError,OSError,ValueError) as exc:
+        if created_frame: created_frame.unlink(missing_ok=True)
+        raise HTTPException(422,str(exc)[:1000]) from None
+    return {"name":p.stem[:100],"spec":spec,"draft":project,
+            "layer_source":"raster","note":"Imported artwork is a single image layer. "
+            "You can add separate editable text, shapes and icons. No hidden AI layers were reconstructed."}
+
+
 @router.post("/export")
 def export(body: ExportIn, request: Request):
     _auth(request)
@@ -237,27 +316,31 @@ def export(body: ExportIn, request: Request):
     if fmt not in FORMATS:
         raise HTTPException(422, "unsupported export format")
     _compiled(body.spec)
+    try: output_mode_check(body.output_mode)
+    except VisualError as exc: raise HTTPException(422,str(exc)) from None
     _quota_check()
     filename = _filename(body.name, fmt)
     target = sandbox.resolve(f"{DIR}/{filename}", base=_root(), allow_outside=False)
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
-        message = visual_create(ToolContext(), str(target), body.spec, body.animation)
+        message = visual_create(ToolContext(), str(target), body.spec, body.animation,
+                                output_mode=body.output_mode)
     except (ToolFailed, VisualError, OSError, ValueError) as exc:
         raise HTTPException(422, str(exc)[:1200]) from None
     sidecar = target.with_name(target.name + ".visual.json")
-    # The draft is a separate editable file; leave the generated binary intact
-    # if storing the draft fails, and report the problem.
+    draft=None
     try:
-        _quota_check(len(json.dumps(body.spec).encode("utf-8")))
-        draft = _write_design(body.name, body.spec)
-    except (HTTPException, OSError) as exc:
+        metadata=json.loads(sidecar.read_text(encoding="utf-8"))
+        draft=metadata.get("editable_project")
+        _quota_check()
+    except (OSError,ValueError,HTTPException) as exc:
         target.unlink(missing_ok=True)
         sidecar.unlink(missing_ok=True)
-        if isinstance(exc, HTTPException):
-            raise
-        raise HTTPException(500, f"could not persist editable design: {exc}") from None
+        if draft:
+            (_root()/draft).unlink(missing_ok=True)
+        if isinstance(exc,HTTPException): raise
+        raise HTTPException(500,f"could not finish output: {exc}") from None
     return {"path": target.relative_to(_root()).as_posix(),
             "manifest": sidecar.relative_to(_root()).as_posix(),
-            "draft": draft, "format": fmt,
+            "draft": draft, "output_mode": body.output_mode, "format": fmt,
             "message": message}
