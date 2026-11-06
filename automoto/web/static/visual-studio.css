@@ -117,3 +117,18 @@
   .vs-repair-compare {grid-template-columns:minmax(0,1fr);}
   .vs-repair-compare .vs-repair-image {max-height:260px;}
 }
+
+/* v7 layer inspector: compact bulk tools, touch-friendly multi-selection. */
+.vs-multi-controls { margin-top:8px; gap:6px; }
+.vs-multi-controls label { display:inline-flex;align-items:center;gap:5px;min-width:0;font-size:12px;color:var(--dim); }
+.vs-multi-controls .input { min-width:75px;max-width:145px;font-size:12px;padding:6px 8px; }
+.vs-multi-controls .btn { min-height:34px;font-size:12px; }
+.vs-multi-controls .vs-small {flex:1 0 100%;font-size:11px;}
+.vs-layer .vs-layer-name[aria-pressed="true"] {font-weight:700;color:var(--text);}
+.vs-snap-toggle {cursor:pointer;white-space:nowrap;}
+.vs-snap-toggle input {accent-color:var(--accent);width:16px;height:16px;}
+@media (max-width: 760px) {
+  .vs-multi-controls {flex-wrap:wrap;}
+  .vs-multi-controls label {flex:1 1 120px;}
+  .vs-multi-controls .input {max-width:100%;width:100%;}
+}
