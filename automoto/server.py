@@ -120,7 +120,7 @@ app.include_router(visual_studio.router)  # authenticated, per-workspace visual 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/explain", "/api/doctor",
-             "/api/visual/studio/preview", "/api/visual/studio/export")
+             "/api/visual/studio/preview", "/api/visual/studio/export", "/api/visual/studio/inspect", "/api/visual/studio/repair")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
 
