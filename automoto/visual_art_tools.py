@@ -75,7 +75,7 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) ->
             f"theme {scenes[0]['theme']}, format {out.suffix.lower()[1:]}. "
             "Bounds, text fitting, contrast and source-file integrity passed. "
             "Manually review final appearance and font rendering. "
-            "GIF output uses actual changing animation frames.")
+            "GIF output uses genuine multi-frame animation with moving elements.")
 
 def visual_check(ctx:ToolContext,path:str) -> str:
     p=sandbox.resolve(path,allow_outside=True)
