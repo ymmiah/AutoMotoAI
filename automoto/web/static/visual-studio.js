@@ -439,6 +439,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(e.type==="text"){
         html+='<label class="full">Exact wording<textarea data-key="text" maxlength="1600">'+esc(e.text)+'</textarea></label>';
         field("font_size","Font size",e.font_size||22);
+        html+='<label class="full">Brand typography role<select data-key="style_role">'+
+          [['manual','Manual (preserve size)'],['heading','Heading'],['body','Body']].map(([value,label])=>
+          '<option value="'+value+'"'+((e.style_role||'manual')===value?' selected':'')+'>'+
+          label+'</option>').join('')+'</select></label>';
         field("colour","Text colour",e.colour||"#22252C","color");
       }else if(e.type==="rect"){
         field("fill","Fill",e.fill||"#FFFFFF","color");
@@ -466,7 +470,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         const value=numeric?Number(input.value):input.value;
         if(["x","y","w","h","x1","y1","x2","y2"].includes(key)){
           e[key]=clamp(value,key==="w"||key==="h"?1:0,key.startsWith("y")||key==="h"?spec.height:spec.width);
-        }else if(key==="font_size"){e[key]=clamp(value,12,90);}
+        }else if(key==="font_size"){e[key]=clamp(value,12,90);delete e.style_role;}
+        else if(key==="style_role"){brandTextRole(e,value);}
         else if(key==="radius"){e[key]=clamp(value,0,100);}
         else{
           e[key]=value;
@@ -542,7 +547,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     change(()=>{
       const {x,y}=place,p=PALETTES[spec.theme];
       let e;
-      if(type==="text")e={type,x,y,w:400,h:70,text:"Your headline",font_size:34,colour:p.ink,auto_colour:"ink",bold:true};
+      if(type==="text")e={type,x,y,w:400,h:70,text:"Your headline",font_size:34,style_role:"heading",colour:p.ink,auto_colour:"ink",bold:true};
       if(type==="rect")e={type,x,y,w:250,h:150,fill:p.tones[0],stroke:p.border,radius:18,auto_fill:"tone0",auto_stroke:"border"};
       if(type==="icon")e={type,x,y,w:85,h:85,name:"sparkle",colour:p.ink,auto_colour:"ink"};
       if(type==="image")e={type,x,y,w:340,h:220,path:at("vsAssets").value,alt:"Original source image"};
@@ -554,8 +559,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     try{
       const data=await api("/api/files?dir=uploads");
       const imgs=data.items.filter(e=>!e.dir&&/\.(png|jpg|jpeg|webp|bmp)$/i.test(e.name));
-      at("vsAssets").innerHTML='<option value="">Choose uploaded image</option>'+imgs.map(e=>
-        '<option value="'+esc(e.path)+'">'+esc(e.name)+'</option>').join("");
+      const options=imgs.map(e=>'<option value="'+esc(e.path)+'">'+esc(e.name)+'</option>').join("");
+      const oldLogo=at("vsBrandLogo").value;
+      at("vsAssets").innerHTML='<option value="">Choose uploaded image</option>'+options;
+      at("vsBrandLogo").innerHTML='<option value="">No logo selected</option>'+options;
+      if(oldLogo && imgs.some(item=>item.path===oldLogo))at("vsBrandLogo").value=oldLogo;
     }catch{ /* Uploads folder may not exist yet. */ }
   }
   async function loadDrafts(){
@@ -572,7 +580,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     storePage();
     draw();schedule(0);
   };
-  at("vsTheme").onchange=e=>change(()=>themeElements(spec,e.target.value));
+  at("vsTheme").onchange=e=>{
+    change(()=>themeElements(spec,e.target.value));
+    captureBrandForm();
+  };
   at("vsUndo").onclick=undo;at("vsRedo").onclick=redo;
   // Reconstruct a subset from the immutable original, never from a previous
   // proposal. The server's normal preview endpoint is the final quality gate.
