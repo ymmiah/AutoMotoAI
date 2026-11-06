@@ -146,7 +146,7 @@ Each requires separate design, testing and potentially new dependencies. Do not 
 
 ## Production validation
 
-Run `python -m pytest -q tests/test_visual_foundation.py tests/test_visual_design.py`, then `python scripts/ci/create_visual_samples.py <workspace>/showcase` to generate a comparison deck, connected workflow GIF, SVG and static images. Inspect exported previews manually and verify native PPTX objects in PowerPoint or LibreOffice.
+Run `python -m pytest -q tests/test_visual_foundation.py tests/test_visual_design.py`, then `python -m scripts.ci.create_visual_samples <workspace>/showcase` to generate a comparison deck, connected workflow GIF, SVG and static images. Inspect exported previews manually and verify native PPTX objects in PowerPoint or LibreOffice.
 
 The GitHub CI `visual-foundation` job produces a downloadable `automoto-visual-showcase` artifact if tests and rendering pass.
 
