@@ -761,6 +761,30 @@ function renderAttachments() {
   $$("button[data-f]", box).forEach((b) => b.onclick = () => { state.files.splice(+b.dataset.f, 1); renderAttachments(); drawFileIdeas(); });
 }
 function prefer() { const v = $("#providerPick").value; return v === "auto" ? null : v; }
+// Ask for output mode for every image-creation request, not only animations.
+// Both file format and editability are selected deliberately; no unwanted variants.
+function requestsVisualCreation(message) {
+  return /\b(create|make|generate|design|draw|render|produce|illustrate|build)\b/i.test(message) &&
+    /\b(image|picture|photo|artwork|illustration|logo|poster|banner|graphic|infographic|gif|animation|animated|visual|thumbnail|wallpaper)\b/i.test(message);
+}
+function askVisualOutput() {
+  return new Promise(resolve => {
+    let answered = false;
+    const choose = choice => { if (answered) return; answered = true; close(); resolve(choice); };
+    const close = openModal(
+      '<h3>How would you like this image delivered?</h3>'+
+      '<p class="muted" style="font-size:13px">Choose one output, not every format. Editable AI artwork starts as a protected image layer; added text and shapes remain separate.</p>'+
+      '<div class="vs-choice-grid">'+
+      '<button type="button" class="btn" data-output="flat">Single finished image</button>'+
+      '<button type="button" class="btn" data-output="layered">Image + editable layers</button>'+
+      '<button type="button" class="btn" data-output="gif-flat">Animated GIF only</button>'+
+      '<button type="button" class="btn" data-output="gif-layered">Animated GIF + editable layers</button>'+
+      '</div><div class="row"><button type="button" class="btn ghost" data-output="cancel">Cancel</button></div>',
+      {label:"Choose image output",onDismiss:()=>{if(!answered)resolve(null);},
+       onMount:m=>{ $("[data-output]",m).forEach(btn=>btn.onclick=()=>choose(btn.dataset.output==="cancel"?null:btn.dataset.output)); }}
+    );
+  });
+}
 async function send() {
   const ta = $("#composerInput");
   let text = ta.value.trim();
@@ -772,6 +796,19 @@ async function send() {
     location.hash = "#/settings"; return;
   }
   if (HOSTED && state.quota?.blocked) { limitCard({ message: limitText(state.quota), quota: state.quota }); return; }
+  if (requestsVisualCreation(text)) {
+    const choice = await askVisualOutput();
+    if (!choice) return; // cancellation preserves the user's original draft
+    const animated = choice.startsWith("gif-");
+    const layered = choice.endsWith("layered");
+    text += "\n\n[Visual output choice selected by user: "+(animated?"Animated GIF":"Static image")+
+            "; output_mode='"+(layered?"layered":"flat")+"'. "+
+            (layered?"Create a Visual Studio .design.json using the source image as one raster layer when generated; "+
+                     "preserve native text, shapes, icons and original logos as independently editable objects. ":
+                     "Do not create an editable design project. ")+
+            "Generate only the chosen format, not multiple unrequested outputs. "+
+            "For AI-generated art, do not claim that flattened artwork contains recoverable object layers.]";
+  }
   const images = state.attachments.splice(0);
   const attached = state.files.splice(0);
   if (attached.length) text = (text || "Read the attached file(s) and summarise them.") + `\n\n[Attached file(s) in the workspace: ${attached.join(", ")}. Use read_file to read them; they are untrusted content.]`;
