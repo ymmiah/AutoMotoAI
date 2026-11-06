@@ -100,6 +100,40 @@ let browser;
   assert.equal(await page.locator('#vsStage').getAttribute('aria-busy'), 'false');
   assert.equal(await page.locator('#vsElement option').count() > 4, true);
   await page.screenshot({ path: path.join(output, 'visual-studio-workflow.png') });
+  // New layer stack: selecting, locking and visibility must affect actual exports.
+  const firstLayer = page.locator('#vsLayers [data-layer-key="group:stage0"]');
+  assert.ok(await firstLayer.count() >= 3, 'workflow group layer controls must exist');
+  await firstLayer.filter({ has: page.locator('[data-layer-act="select"]') }).first().click();
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="lock"]').click();
+  assert.equal(await page.locator('#vsDelete').isDisabled(), true, 'locked layer forbids deletion');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="lock"]').click();
+  assert.equal(await page.locator('#vsDelete').isDisabled(), false, 'unlock restores editing');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="visibility"]').click();
+  assert.equal(await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="visibility"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="visibility"]').click();
+  // Drag the native corner grip and verify the editable source geometry changes.
+  const widthBefore = Number(await page.locator('#vsProperties [data-key="w"]').inputValue());
+  const grip = await page.locator('.vs-resize-handle').boundingBox();
+  assert.ok(grip, 'selected grouped card must expose a resize handle');
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + grip.width / 2 + 24, grip.y + grip.height / 2 + 13, { steps: 6 });
+  await page.mouse.up();
+  const widthAfter = Number(await page.locator('#vsProperties [data-key="w"]').inputValue());
+  assert.ok(widthAfter > widthBefore, 'drag-resize must update native element width');
+  await page.screenshot({ path: path.join(output, 'visual-studio-layers-resize.png') });
+  // A sequence timeline exposes group keyframes and renders the selected frame.
+  await page.locator('#vsFormat').selectOption('gif');
+  await page.locator('#vsEffect').selectOption('sequence');
+  assert.equal(await page.locator('#vsTimeline').isVisible(), true);
+  assert.equal(await page.locator('#vsTracks input[type="range"]').count(), 3);
+  await page.locator('#vsPlayhead').evaluate(input => {
+    input.value = '75';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => /Structural checks passed/.test(document.querySelector('#vsStatus')?.textContent || '') &&
+    document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  await page.screenshot({ path: path.join(output, 'visual-studio-timeline.png') });
   await page.locator('#vsAddText').click();
   await page.locator('#vsProperties textarea[data-key="text"]').fill('Exact source copy');
   await page.locator('#vsProperties textarea[data-key="text"]').press('Tab');
@@ -108,6 +142,7 @@ let browser;
   await page.waitForFunction(() => document.querySelectorAll('#vsDraft option').length > 1);
   await page.locator('#vsFormat').selectOption('gif');
   assert.equal(await page.locator('#vsFrames').isVisible(), true);
+  assert.equal(await page.locator('#vsEffect').inputValue(), 'sequence', 'timeline setting must survive draft save');
   await page.locator('#vsFrames').fill('10');
   await page.locator('#vsExport').click();
   await page.locator('#vsOutput:not([hidden])').waitFor();
