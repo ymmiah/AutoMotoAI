@@ -92,3 +92,11 @@
   .vs-track {grid-template-columns:minmax(90px,110px) minmax(60px,1fr) 40px;}
   .vs-scrub {flex-wrap:wrap;}
 }
+
+/* Review-first, non-destructive layout repair panel. */
+.vs-repair-review { margin-top:14px; border-top:1px solid var(--line); padding:15px 8px 4px; display:grid;gap:9px; }
+.vs-repair-review[hidden], .vs-repair-image[hidden] {display:none!important;}
+.vs-repair-review h3 {font-size:16px;margin:0;}
+.vs-repair-image {display:block;max-width:100%;width:100%;height:auto;max-height:340px;object-fit:contain;border:1px solid var(--line);border-radius:9px;background:var(--panel);}
+.vs-repair-list {margin:0;padding-left:20px;display:grid;gap:5px;font-size:12px;color:var(--dim);max-height:190px;overflow:auto;}
+.vs-repair-review .vs-toolbar {gap:8px;}
