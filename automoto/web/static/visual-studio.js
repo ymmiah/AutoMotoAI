@@ -4,16 +4,18 @@ import {layerUnits,unitKey,toggleLayer,moveLayer,selectionBox,resizeSelection,
         selectedLayerUnits,selectionBounds,translateLayerUnits,alignLayerUnits,
         distributeLayerUnits,groupLayerUnits,ungroupLayerUnits,snapLayerDelta,
         sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
+import {BRAND_COLOUR_KEYS,paletteFromKit,applyBrandKit,brandTextRole}
+  from "./visual-studio-brands.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const copy=v=>JSON.parse(JSON.stringify(v));
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const NS="http://www.w3.org/2000/svg";
 const PALETTES={
-  "illustrated-workflow":{ink:"#22252C",muted:"#5A606B",card:"#FFFFFF",border:"#25252D",tones:["#E8DBFA","#D6E9FF","#FFF1AA"]},
-  "editorial-light":{ink:"#172638",muted:"#526476",card:"#FFFFFF",border:"#DCE5E9",tones:["#E8F3F1","#E7ECFB","#FFF0CF"]},
-  "premium-tech":{ink:"#F8FAFC",muted:"#C3D0E1",card:"#19283E",border:"#34465E",tones:["#203D64","#234E51","#534267"]},
-  "commercial":{ink:"#2C2520",muted:"#61594F",card:"#FFFFFF",border:"#E6D8CB",tones:["#F6E3D5","#EDE1D1","#F6D9D7"]}
+  "illustrated-workflow":{background:"#FAFAF6",accent:"#6350A4",ink:"#22252C",muted:"#5A606B",card:"#FFFFFF",border:"#25252D",tones:["#E8DBFA","#D6E9FF","#FFF1AA"]},
+  "editorial-light":{background:"#F8F9F7",accent:"#246D83",ink:"#172638",muted:"#526476",card:"#FFFFFF",border:"#DCE5E9",tones:["#E8F3F1","#E7ECFB","#FFF0CF"]},
+  "premium-tech":{background:"#0D1729",accent:"#56B2FA",ink:"#F8FAFC",muted:"#C3D0E1",card:"#19283E",border:"#34465E",tones:["#203D64","#234E51","#534267"]},
+  "commercial":{background:"#FBF7F0",accent:"#A65B42",ink:"#2C2520",muted:"#61594F",card:"#FFFFFF",border:"#E6D8CB",tones:["#F6E3D5","#EDE1D1","#F6D9D7"]}
 };
 const ICONS=["check","shield","idea","chart","users","clock","target","cloud","file","image","sparkle","globe","code","lock","settings"];
 
@@ -26,8 +28,8 @@ function template(kind,theme){
     a.push({type:"rect",group:id,x,y,w,h,fill:p.card,stroke:p.border,radius:23,auto_fill:"card",auto_stroke:"border"});
     a.push({type:"rect",group:id,x:x+20,y:y+20,w:79,h:74,fill:p.tones[i%3],radius:18,auto_fill:"tone"+(i%3)});
     a.push({type:"icon",group:id,x:x+39,y:y+35,w:43,h:43,name:ico,colour:p.ink,auto_colour:"ink"});
-    a.push({type:"text",group:id,x:x+22,y:y+110,w:w-44,h:46,text:title,font_size:27,bold:true,colour:p.ink,auto_colour:"ink"});
-    a.push({type:"text",group:id,x:x+22,y:y+163,w:w-44,h:39,text:body,font_size:18,colour:p.muted,auto_colour:"muted"});
+    a.push({type:"text",group:id,x:x+22,y:y+110,w:w-44,h:46,text:title,font_size:27,style_role:"heading",bold:true,colour:p.ink,auto_colour:"ink"});
+    a.push({type:"text",group:id,x:x+22,y:y+163,w:w-44,h:39,text:body,font_size:18,style_role:"body",colour:p.muted,auto_colour:"muted"});
   };
   if(kind==="cards"){
     spec.title="Four powerful capabilities";
@@ -37,6 +39,17 @@ function template(kind,theme){
       ["Editable output","Native shapes and text","chart"],
       ["Animation","Genuine animated GIF","sparkle"]];
     for(let i=0;i<4;i++)makeCard("card"+i,70+(i%2)*575,210+Math.floor(i/2)*220,542,205,...cards[i],i);
+  }else if(kind==="brand-launch"){
+    spec.title="A confident brand introduction";
+    spec.subtitle="What we believe in, beautifully presented";
+    makeCard("story",72,254,538,248,"Our purpose","A clear message that matters.","target",0);
+    makeCard("values",669,254,538,248,"Our promise","Thoughtful details. Real value.","sparkle",1);
+  }else if(kind==="executive-brief"){
+    spec.title="Executive performance brief";
+    spec.subtitle="The decisions, evidence and next actions";
+    makeCard("outcome",65,275,367,238,"Outcomes","Highlights that matter.","chart",0);
+    makeCard("evidence",458,275,367,238,"Evidence","Measured and accountable.","shield",1);
+    makeCard("next",851,275,367,238,"Next steps","Clear ownership and action.","target",2);
   }else if(kind==="poster"){
     spec.title="Original editorial poster";
     makeCard("poster",95,250,700,275,"A more visual idea","Give your message space to stand out.","idea",0);
@@ -98,7 +111,7 @@ function relink(spec){
 export async function mountVisualStudio({api,page,toast,esc,icon}){
   const html='<div class="vs-studio">'+
     '<div class="vs-toolbar"><input class="input vs-name" id="vsName" value="My visual design" maxlength="100" aria-label="Design name">'+
-    '<label>Template <select class="input" id="vsTemplate"><option value="workflow">Workflow</option><option value="cards">Feature cards</option><option value="poster">Poster</option><option value="blank">Blank canvas</option></select></label>'+
+    '<label>Template <select class="input" id="vsTemplate"><option value="workflow">Workflow</option><option value="cards">Feature cards</option><option value="poster">Poster</option><option value="brand-launch">Brand launch</option><option value="executive-brief">Executive brief</option><option value="blank">Blank canvas</option></select></label>'+
     '<label>Theme <select class="input" id="vsTheme"><option value="illustrated-workflow">Illustrated</option><option value="editorial-light">Editorial light</option><option value="premium-tech">Premium tech</option><option value="commercial">Commercial</option></select></label>'+
     '<button class="btn" id="vsUndo">Undo</button><button class="btn" id="vsRedo">Redo</button>'+
     '<button class="btn" id="vsInspect">'+icon("check")+' Inspect & repair</button>'+
@@ -114,6 +127,29 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<button class="btn" id="vsLoad">Open</button></div>'+
     '<div class="vs-toolbar"><input id="vsTitle" class="input" aria-label="Design title" maxlength="130" placeholder="Title" style="flex:1;min-width:160px">'+
     '<input id="vsSubtitle" class="input" aria-label="Design subtitle" maxlength="250" placeholder="Subtitle" style="flex:1;min-width:160px"></div>'+
+    '<section class="vs-brands" aria-label="Reusable brand kits">'+
+    '<div class="vs-brands-head"><strong>Brand kits</strong><span class="vs-small">Private to your workspace · review before applying</span></div>'+
+    '<div class="vs-toolbar vs-brand-controls">'+
+    '<label>Kit name <input class="input" id="vsBrandName" maxlength="80" placeholder="New brand kit"></label>'+
+    '<label>Saved kit <select class="input" id="vsBrandKits" aria-label="Saved brand kits"><option value="">Select a kit</option></select></label>'+
+    '<button type="button" class="btn" id="vsBrandLoad">Load kit</button>'+
+    '<button type="button" class="btn danger" id="vsBrandDelete">Delete kit</button></div>'+
+    '<div id="vsBrandColours" class="vs-brand-colours">'+
+    BRAND_COLOUR_KEYS.map(key=>'<label>'+key.replace(/^./,c=>c.toUpperCase())+
+      '<input type="color" data-brand-colour="'+key+'" aria-label="Brand '+key+' colour"></label>').join("")+
+    '</div>'+
+    '<div class="vs-toolbar vs-brand-controls">'+
+    '<label>Heading size <input class="input" id="vsBrandHeading" type="number" min="12" max="90" value="27"></label>'+
+    '<label>Body size <input class="input" id="vsBrandBody" type="number" min="12" max="90" value="18"></label>'+
+    '<label>Original logo <select class="input" id="vsBrandLogo" aria-label="Original uploaded brand logo"><option value="">No logo selected</option></select></label></div>'+
+    '<div class="vs-toolbar vs-brand-controls">'+
+    '<button type="button" class="btn" id="vsBrandCapture">Use current palette</button>'+
+    '<button type="button" class="btn" id="vsBrandSave">Save reusable kit</button>'+
+    '<button type="button" class="btn" id="vsBrandApplyPage">Apply to page</button>'+
+    '<button type="button" class="btn" id="vsBrandApplyAll">Apply to all pages</button>'+
+    '<button type="button" class="btn" id="vsBrandPlaceLogo">Place logo on this page</button></div>'+
+    '<p class="vs-inspector-note">Only palette-linked colours and explicitly assigned heading/body styles are updated. Manual colours, locked layers, wording and image pixels are preserved.</p>'+
+    '</section>'+
     '<section class="vs-pages" aria-label="Document pages">'+
     '<div class="vs-pages-head"><strong>Document pages</strong><span id="vsPageCount" class="vs-small" role="status"></span></div>'+
     '<div id="vsPageTabs" class="vs-page-tabs" role="navigation" aria-label="Choose document page"></div>'+
