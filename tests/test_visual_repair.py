@@ -66,6 +66,63 @@ def test_repair_api_returns_actual_preview_without_saving_or_mutating(client):
     after=list(path.rglob("*.design.json")) if path.exists() else []
     assert before==after
 
+def test_review_contains_original_preview_and_advisory_notes(client):
+    spec = artboard()
+    spec["elements"][0]["x"] = 5  # close to edge, but not outside canvas
+    r = client.post("/api/visual/studio/repair", headers=AUTH, json={"spec": spec})
+    assert r.status_code == 200, r.text
+    report = r.json()
+    assert report["original_preview"].startswith("data:image/png;base64,")
+    assert any(n["code"] == "safe-area" and n["level"] == "advisory"
+               for n in report["design_notes"])
+    assert report["requires_approval"]
+    assert report["issues_before"]  # rendering a flawed 'before' is not approval
+    assert r.json()["proposed_spec"]["elements"][0]["text"] == "Source evidence"
+
+
+def test_partial_fixes_must_pass_real_preview_quality_gate(client):
+    spec = artboard()
+    spec["elements"].append({
+        "type": "text", "x": 75, "y": 310, "w": 450, "h": 80,
+        "text": "Original wording", "font_size": 32, "bold": True,
+        "colour": "#FFFFFF",
+    })
+    report = client.post("/api/visual/studio/repair", headers=AUTH,
+                         json={"spec": spec}).json()
+    assert report["ready_to_apply"], report
+    assert any(c["field"] == "colour" for c in report["changes"])
+    assert any(c["field"] in ("x", "y") for c in report["changes"])
+
+    # Simulate selecting only the colour adjustment. The overlap must still
+    # prevent the user from accepting this subset, despite a successful
+    # fix to one independent field.
+    subset = copy.deepcopy(spec)
+    for change in report["changes"]:
+        if change["field"] == "colour":
+            subset["elements"][change["index"]]["colour"] = change["new"]
+    rejected = client.post("/api/visual/studio/preview",
+                           headers=AUTH, json={"spec": subset})
+    assert rejected.status_code == 422, rejected.text
+
+    accepted = client.post("/api/visual/studio/preview", headers=AUTH,
+                           json={"spec": report["proposed_spec"]})
+    assert accepted.status_code == 200, accepted.text
+    assert report["proposed_spec"]["elements"][2]["text"] == "Original wording"
+
+
+def test_review_notes_do_not_change_source_assets_or_wording():
+    spec = artboard()
+    spec["elements"].append({
+        "type": "image", "x": 500, "y": 210, "w": 200, "h": 120,
+        "path": "uploads/user-photo.png", "alt": "",
+    })
+    snapshot = copy.deepcopy(spec)
+    report = propose(spec)
+    assert any(n["code"] == "image-alt" for n in report["design_notes"])
+    assert spec == snapshot
+    assert report["proposed_spec"]["elements"][2] == snapshot["elements"][2]
+
+
 def test_low_contrast_fix_only_changes_text_colour():
     spec={"width":800,"height":500,"layout":"canvas","artboard_only":True,
         "theme":"premium-tech","title":"","subtitle":"","elements":[

@@ -118,9 +118,15 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<p id="vsStatus" class="vs-status" role="status">Preparing preview…</p>'+
     '<div id="vsRepairReview" class="vs-repair-review" hidden role="region" aria-label="Proposed layout changes">'+
     '<h3>Review proposed changes</h3><p id="vsRepairSummary" class="vs-inspector-note"></p>'+
-    '<img id="vsRepairImage" class="vs-repair-image" alt="Proposed repaired layout preview" hidden>'+
+    '<div class="vs-repair-compare">'+
+    '<figure><figcaption>Before · original</figcaption><img id="vsRepairOriginal" class="vs-repair-image" alt="Original design before repairs" hidden></figure>'+
+    '<figure><figcaption>After · selected changes</figcaption><img id="vsRepairImage" class="vs-repair-image" alt="Proposed design with selected repairs" hidden></figure></div>'+
+    '<div class="vs-toolbar vs-repair-controls"><span id="vsRepairSelectionCount" class="vs-small" role="status"></span>'+
+    '<button type="button" class="btn" id="vsRepairAll">Select all</button>'+
+    '<button type="button" class="btn" id="vsRepairNone">Clear selection</button></div>'+
     '<ul id="vsRepairList" class="vs-repair-list"></ul>'+
-    '<p id="vsRepairRemaining" class="vs-inspector-note"></p>'+
+    '<p id="vsRepairRemaining" class="vs-inspector-note" role="status"></p>'+
+    '<h4 class="vs-repair-note-head">Design review notes (advisory)</h4><ul id="vsRepairNotes" class="vs-repair-list"></ul>'+
     '<div class="vs-toolbar"><button id="vsApplyRepair" class="btn primary">Apply selected repair</button>'+
     '<button id="vsDismissRepair" class="btn">Keep original</button></div></div></section>'+
     '<aside class="vs-inspector"><h3>Object inspector</h3>'+
@@ -155,14 +161,18 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
-  let pendingRepair=null;
+  let pendingRepair=null,repairRequest=0;
   let previewSequence=0,previewTimer=null,drag=null;
   const status=(message,bad=false)=>{at("vsStatus").textContent=message;at("vsStatus").classList.toggle("bad",bad);};
   const snap=()=>copy(spec);
-  function record(previous){
-    if(JSON.stringify(previous)===JSON.stringify(spec))return;
+  function closeRepair(){
+    ++repairRequest;
     pendingRepair=null;
     at("vsRepairReview").hidden=true;
+  }
+  function record(previous){
+    if(JSON.stringify(previous)===JSON.stringify(spec))return;
+    closeRepair();
     undoStack.push(previous);
     if(undoStack.length>40)undoStack.shift();
     redoStack=[];dirty=true;buttons();schedule();
@@ -343,6 +353,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     inspector();drawLayers();highlight();buttons();drawTimeline();
   }
   function schedule(ms=450){
+    // A pending proposal belongs to an exact snapshot. Any editor change,
+    // including text entry before blur, invalidates its approval boundary.
+    if(pendingRepair)closeRepair();
     const current=++previewSequence;
     if(previewTimer)clearTimeout(previewTimer);
     // Mark a previously rendered frame as stale immediately: users must not
@@ -404,48 +417,131 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   };
   at("vsTheme").onchange=e=>change(()=>themeElements(spec,e.target.value));
   at("vsUndo").onclick=undo;at("vsRedo").onclick=redo;
+  // Reconstruct a subset from the immutable original, never from a previous
+  // proposal. The server's normal preview endpoint is the final quality gate.
+  function selectedRepairSpec(review){
+    const candidate=copy(review.original);
+    const allowed=new Set(["x","y","font_size","colour"]);
+    for(const index of review.selected){
+      const change=review.proposal.changes[index];
+      if(!change || !allowed.has(change.field) ||
+         !Number.isInteger(change.index) || change.index<0 ||
+         change.index>=candidate.elements.length){
+        throw new Error("Invalid repair proposal. Re-inspect the design.");
+      }
+      const element=candidate.elements[change.index];
+      if(JSON.stringify(element[change.field])!==JSON.stringify(change.old)){
+        throw new Error("The design changed since inspection. Re-inspect before applying.");
+      }
+      element[change.field]=change.new;
+      if(change.field==="colour")delete element.auto_colour;
+    }
+    return candidate;
+  }
+  async function reviewSelection(review){
+    const request=++repairRequest;
+    const count=review.selected.size,maximum=review.proposal.changes.length;
+    at("vsRepairSelectionCount").textContent=count+" of "+maximum+" field changes selected";
+    at("vsApplyRepair").disabled=true;
+    review.candidate=null;
+    const picture=at("vsRepairImage");
+    picture.hidden=true;
+    picture.removeAttribute("src");
+    if(!count){
+      at("vsRepairRemaining").textContent="Choose at least one proposed change to preview it.";
+      return;
+    }
+    try{
+      const candidate=selectedRepairSpec(review);
+      at("vsRepairRemaining").textContent="Checking selected changes against the actual renderer…";
+      const preview=await api("/api/visual/studio/preview",{spec:candidate,name});
+      if(!root.isConnected||pendingRepair!==review||request!==repairRequest)return;
+      picture.src=preview.image;
+      picture.hidden=false;
+      review.candidate=candidate;
+      at("vsApplyRepair").disabled=false;
+      at("vsRepairRemaining").textContent=
+        "Selected changes pass structural checks. Compare both images before applying; visual review is still required.";
+    }catch(error){
+      if(!root.isConnected||pendingRepair!==review||request!==repairRequest)return;
+      at("vsRepairRemaining").textContent="Cannot apply this selection: "+error.message+
+        ". Select other fixes or resolve the remaining issues manually.";
+    }
+  }
   at("vsInspect").onclick=async()=>{
     const button=at("vsInspect");button.disabled=true;
+    const original=snap(),beforeSequence=previewSequence;
     status("Inspecting layout without modifying your design…");
     try{
-      const proposal=await api("/api/visual/studio/repair",{spec,name});
-      pendingRepair=proposal;
+      const proposal=await api("/api/visual/studio/repair",{spec:original,name});
+      if(!root.isConnected||beforeSequence!==previewSequence)return;
+      const review={original,proposal,selected:new Set(proposal.changes.map((_,i)=>i)),candidate:null};
+      pendingRepair=review;
       const panel=at("vsRepairReview");
       panel.hidden=false;
       at("vsRepairSummary").textContent=proposal.summary;
-      const picture=at("vsRepairImage");
-      picture.hidden=!proposal.preview;
-      if(proposal.preview) picture.src=proposal.preview;
-      else picture.removeAttribute("src");
-      at("vsRepairList").innerHTML=(proposal.changes||[]).map(f=>
-        '<li><b>'+esc(f.reason)+'</b> · Layer '+(f.index+1)+', '+esc(f.field)+
-        ': '+esc(String(f.old))+' → '+esc(String(f.new))+'</li>').join("")||
+      const before=at("vsRepairOriginal");
+      before.hidden=!proposal.original_preview;
+      if(proposal.original_preview)before.src=proposal.original_preview;
+      else before.removeAttribute("src");
+      at("vsRepairList").innerHTML=(proposal.changes||[]).map((f,i)=>
+        '<li><label class="vs-repair-choice"><input type="checkbox" data-repair-index="'+i+
+        '" checked aria-label="Include layer '+(f.index+1)+' '+esc(f.field)+' repair"><span><b>'+
+        esc(f.reason)+'</b> · Layer '+(f.index+1)+', '+esc(f.field)+
+        ': '+esc(String(f.old))+' → '+esc(String(f.new))+'</span></label></li>').join("")||
         '<li>No safe automatic change was found for this design.</li>';
-      at("vsRepairRemaining").textContent=proposal.remaining_issues?.length?
-        'Manual review still needed: '+proposal.remaining_issues.join("; "):
-        'All structural checks pass in the proposed version. Inspect the preview before applying.';
-      at("vsApplyRepair").disabled=!proposal.ready_to_apply || !proposal.preview;
-      status(proposal.changed?"Layout suggestions are ready for your review. No change has been applied.":
-        "No safe automatic repairs are available. The original remains unchanged.",
-        Boolean(proposal.remaining_issues?.length));
+      at("vsRepairNotes").innerHTML=(proposal.design_notes||[]).map(n=>
+        '<li>Layer '+Number(n.layer)+': '+esc(n.message)+'</li>').join("")||
+        '<li>No additional design-review observations.</li>';
+      status(proposal.changed?"Review each suggestion before accepting; your original remains untouched.":
+        "No safe automatic repairs are available. Your original remains unchanged.");
       panel.scrollIntoView({block:"nearest",behavior:"auto"});
-    }catch(error){pendingRepair=null;status("Inspection failed: "+error.message,true);}
-    finally{button.disabled=false;}
+      await reviewSelection(review);
+    }catch(error){
+      if(root.isConnected){closeRepair();status("Inspection failed: "+error.message,true);}
+    }finally{if(root.isConnected)button.disabled=false;}
+  };
+  at("vsRepairList").onchange=e=>{
+    const input=e.target.closest("[data-repair-index]");
+    if(!input||!pendingRepair)return;
+    const index=Number(input.dataset.repairIndex);
+    if(!Number.isInteger(index)||index<0||index>=pendingRepair.proposal.changes.length)return;
+    if(input.checked)pendingRepair.selected.add(index);
+    else pendingRepair.selected.delete(index);
+    void reviewSelection(pendingRepair);
+  };
+  at("vsRepairAll").onclick=()=>{
+    if(!pendingRepair)return;
+    pendingRepair.selected=new Set(pendingRepair.proposal.changes.map((_,i)=>i));
+    QA("[data-repair-index]",at("vsRepairList")).forEach(input=>{input.checked=true;});
+    void reviewSelection(pendingRepair);
+  };
+  at("vsRepairNone").onclick=()=>{
+    if(!pendingRepair)return;
+    pendingRepair.selected.clear();
+    QA("[data-repair-index]",at("vsRepairList")).forEach(input=>{input.checked=false;});
+    void reviewSelection(pendingRepair);
   };
   at("vsDismissRepair").onclick=()=>{
-    pendingRepair=null;at("vsRepairReview").hidden=true;
+    closeRepair();
     status("Original design retained; no layout changes applied.");
   };
   at("vsApplyRepair").onclick=()=>{
-    if(!pendingRepair?.ready_to_apply||!pendingRepair.preview)return;
-    const revised=copy(pendingRepair.proposed_spec);
+    const review=pendingRepair;
+    if(!review?.candidate||at("vsApplyRepair").disabled)return;
     const before=snap();
-    spec=revised;
+    // No editor state may change after inspection; schedule() closes the review
+    // if anything is modified in the meantime.
+    if(JSON.stringify(before)!==JSON.stringify(review.original)){
+      closeRepair();
+      status("Design changed since inspection; review again before applying.",true);
+      return;
+    }
+    spec=copy(review.candidate);
     selected=-1;
-    pendingRepair=null;
-    at("vsRepairReview").hidden=true;
+    closeRepair();
     record(before);draw();schedule(0);
-    toast("Approved layout repair applied. Undo is available.");
+    toast("Approved selected repairs applied. Undo is available.");
   };
   at("vsAddText").onclick=()=>add("text");at("vsAddShape").onclick=()=>add("rect");
   at("vsAddIcon").onclick=()=>add("icon");at("vsAddImage").onclick=()=>add("image");

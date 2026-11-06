@@ -196,6 +196,19 @@ def propose_repair(body: DesignIn, request: Request):
         spec=_validate(body.spec)
         report=propose(spec)
         report["preview"]=None
+        report["original_preview"]=None
+        # A before-preview may depict an invalid layout. It is informational
+        # only: preview/export/save still require full structural validation.
+        try:
+            original_scene=compile_scene(spec)
+            original_image=io.BytesIO()
+            raster(original_scene).save(original_image,format="PNG",optimize=True)
+            if original_image.tell()<=4*1024*1024:
+                report["original_preview"]="data:image/png;base64,"+base64.b64encode(original_image.getvalue()).decode("ascii")
+        except (VisualError,ValueError,TypeError,OSError):
+            # Text overflow and invalid geometry may be impossible to render.
+            # Always return the issue list rather than an invented preview.
+            pass
         if report["changed"] and not report["remaining_issues"]:
             scene=_compiled(report["proposed_spec"])
             result=io.BytesIO()
