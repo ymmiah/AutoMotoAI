@@ -112,6 +112,13 @@ def _target(relative: str) -> Path:
     return resolved
 
 
+@router.post("/validate")
+def validate_kit(body: BrandKitIn, request: Request):
+    """Validate the full kit without writing a brand or modifying a design."""
+    _auth(request)
+    return {"kit": _clean(body), "valid": True}
+
+
 @router.post("/save")
 def save_kit(body: BrandKitIn, request: Request):
     _auth(request)
