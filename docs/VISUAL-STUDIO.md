@@ -27,6 +27,32 @@ The server produces:
 
 The renderer preserves the original photo/logo files, keeps exact text as text objects, and refuses invalid/unreadable compositions rather than silently clipping them. Editable PowerPoint text/shapes and SVG are available. GIF is a separately generated animated image, not a native animated PowerPoint object.
 
+## Layer controls and timeline — v2 source build
+
+The next editor increment adds a proper **Layers** panel under Object inspector. A layer is an independent element or an existing grouped card/diagram component. Select any layer, move it forward or backward in drawing order (connectors remain behind cards), show/hide it, or lock it against dragging, resizing and accidental editing. All actions participate in undo/redo and the original draft retains its complete layer metadata. **Hidden layers are omitted from actual PNG/PDF/SVG/PPTX/GIF exports**, not merely hidden by CSS. Associated workflow connectors are hidden if a referenced group is hidden.
+
+A selected unlocked shape or grouped card exposes a **bottom-right resize handle**. Dragging it changes native geometry within canvas bounds; text remains editable and may still require its own font-size adjustment. Original raster source files are never rewritten and image placement remains aspect-fitted rather than retouched.
+
+For GIF exports, choose **Layer timeline** to reveal groups at configured stages. Each group gets a start-position slider (0–90%); move the playhead to render a real timeline frame on the server. This is a deterministic **staged-reveal timeline**, not an arbitrary keyframe animation system. It supports 1–12 distinct visible groups, 8–48 GIF frames, 50–500ms delay and configurable looping. Stage timing is saved with the design; the final GIF contains actual changing frames. A group can be scheduled later even when it is the only group, to avoid generating identical frames.
+
+Example sequence animation configuration:
+
+```json
+{
+  "effect": "sequence",
+  "frames": 20,
+  "duration_ms": 110,
+  "loop": 0,
+  "stages": [
+    {"group":"stage0","start":0.0},
+    {"group":"stage1","start":0.35},
+    {"group":"stage2","start":0.7}
+  ]
+}
+```
+
+For a blank design, an empty list of canvas objects is valid and can be populated through the editor. Adding and duplicating elements respects the existing 40-object limit. The overlap and contrast checks still apply; users cannot bypass them by sending arbitrary timeline strings or modifying hidden metadata.
+
 ## Trust, privacy and security
 
 - API endpoints authenticate using the existing AutoMoto local session / hosted account mechanism and its CSRF checks.
