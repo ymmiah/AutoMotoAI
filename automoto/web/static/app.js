@@ -1714,6 +1714,11 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+PAGES.visual = async () => {
+  const { mountVisualStudio } = await import("./visual-studio.js?v=" + encodeURIComponent(VERSION));
+  return mountVisualStudio({ api, page, toast, esc, icon });
+};
+
 // ---------------------------------------------------------------- background
 async function refreshBadge() {
   let tasks; try { tasks = (await api("/api/tasks")).tasks; } catch { return; }
