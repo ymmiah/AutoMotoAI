@@ -20,7 +20,7 @@ from PIL import Image
 
 from automoto import sandbox, tenancy
 from automoto.visual_foundation import THEMES, VisualError, compile_scene
-from automoto.visual_renderer import raster, quality, repair_text_fitting
+from automoto.visual_renderer import raster, quality, repair_text_fitting, sequence_stages
 from automoto.visual_art_tools import visual_create
 from automoto.tools import ToolContext, ToolFailed
 
@@ -37,6 +37,11 @@ class DesignIn(BaseModel):
 
 class ExportIn(DesignIn):
     format: str = Field("png", max_length=8)
+    animation: dict[str, Any] | None = None
+
+
+class PreviewIn(DesignIn):
+    frame: float | None = Field(None, ge=0, lt=1)
     animation: dict[str, Any] | None = None
 
 
@@ -142,16 +147,23 @@ def _write_design(name: str, spec: dict[str, Any]) -> str:
 def presets(request: Request):
     _auth(request)
     return {"themes": list(THEMES), "layouts": ["workflow", "cards", "hero", "canvas"],
-            "formats": sorted(FORMATS), "animation_effects": ["flow", "pulse", "float", "reveal"],
+            "formats": sorted(FORMATS), "animation_effects": ["flow", "pulse", "float", "reveal", "sequence"],
             "size_limits": {"width": [640, 1920], "height": [400, 1080], "gif_pixels": 1_000_000}}
 
 
 @router.post("/preview")
-def preview(body: DesignIn, request: Request):
+def preview(body: PreviewIn, request: Request):
     _auth(request)
     scene = _compiled(body.spec)
     try:
-        im = raster(scene)
+        if body.frame is not None:
+            config=body.animation or body.spec.get("animation") or {}
+            if not isinstance(config,dict) or config.get("effect")!="sequence":
+                raise VisualError("timeline frame preview requires a sequence animation")
+            sequence_stages(scene,config)
+            im = raster(scene,progress=body.frame,effect="sequence",animation=config)
+        else:
+            im = raster(scene)
         data = io.BytesIO()
         im.save(data, format="PNG", optimize=True)
     except (VisualError, OSError, ValueError) as exc:
@@ -160,7 +172,7 @@ def preview(body: DesignIn, request: Request):
         raise HTTPException(413, "rendered preview exceeds 4 MB")
     return {"image": "data:image/png;base64," + base64.b64encode(data.getvalue()).decode("ascii"),
             "width": scene["width"], "height": scene["height"],
-            "adjustments": scene.get("text_repairs", []),
+            "adjustments": scene.get("text_repairs", []), "frame": body.frame,
             "quality": "passed structural checks; manual visual review required"}
 
 
