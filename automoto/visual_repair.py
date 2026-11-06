@@ -223,9 +223,19 @@ def repair(spec: dict[str, Any]) -> dict[str,Any]:
         raise VisualError("Visual Repair currently supports individual editable canvases")
     if not isinstance(spec.get("elements"),list) or len(spec["elements"])>40:
         raise VisualError("invalid canvas element list")
-    if not isinstance(spec.get("width",1280),(float,int)) or not isinstance(spec.get("height",720),(float,int)):
-        raise VisualError("canvas width/height must be numbers")
+    if any(not isinstance(item,dict) for item in spec["elements"]):
+        raise VisualError("every editable canvas element must be an object")
+    width,height=spec.get("width",1280),spec.get("height",720)
+    if any(isinstance(value,bool) or not isinstance(value,(float,int)) or
+           not 1<=value<=1920 for value in (width,height)):
+        raise VisualError("canvas width/height must be positive bounded numbers")
+    if width*height>2_100_000:
+        raise VisualError("canvas exceeds the 2.1 megapixel limit")
+    if spec.get("colours") is not None and not isinstance(spec["colours"],dict):
+        raise VisualError("design colours must be an object")
     current=deepcopy(spec)
+    current.setdefault("width",1280)
+    current.setdefault("height",720)
     before=inspect(current)
     edits=[]
     _move_to_canvas(current,edits)
