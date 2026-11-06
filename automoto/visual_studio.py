@@ -270,19 +270,27 @@ def import_artwork(body: ImportIn,request: Request):
                         "note":"Original editable vector/text layers were recovered from AutoMoto's saved design."}
         except (OSError,ValueError,HTTPException,TypeError):
             pass  # Invalid manifests are untrusted; fall back to the actual pixels.
+    created_frame=None
     try:
         if p.suffix.lower()==".gif":
             # A GIF is multiple raster frames, not magically editable vector art.
-            # Import the first frame for editing without rewriting the GIF.
+            # Decode only its first frame, preserving the source GIF unchanged.
             filename=_filename(p.stem+"-first-frame","png")
             dest=_design_dir()/filename
-            _quota_check()
             with Image.open(p) as im:
                 if im.width*im.height>36_000_000:
                     raise VisualError("image exceeds 36 megapixels")
                 frame=im.convert("RGBA")
-                dest.parent.mkdir(parents=True,exist_ok=True)
-                frame.save(dest,format="PNG")
+                buf=io.BytesIO()
+                frame.save(buf,format="PNG")
+            preview_bytes=buf.getvalue()
+            if len(preview_bytes)>24*1024*1024:
+                raise VisualError("GIF's extracted frame exceeds 24 MB")
+            _quota_check(len(preview_bytes))
+            dest.parent.mkdir(parents=True,exist_ok=True)
+            with dest.open("xb") as stream:
+                stream.write(preview_bytes)
+            created_frame=dest
             relative=dest.relative_to(_root()).as_posix()
         else:
             _relative_image(relative,_root())
@@ -290,7 +298,11 @@ def import_artwork(body: ImportIn,request: Request):
         _compiled(spec)
         _quota_check()
         project=_write_design(p.stem,spec)
+    except HTTPException:
+        if created_frame: created_frame.unlink(missing_ok=True)
+        raise
     except (VisualError,OSError,ValueError) as exc:
+        if created_frame: created_frame.unlink(missing_ok=True)
         raise HTTPException(422,str(exc)[:1000]) from None
     return {"name":p.stem[:100],"spec":spec,"draft":project,
             "layer_source":"raster","note":"Imported artwork is a single image layer. "
