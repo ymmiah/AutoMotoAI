@@ -15,7 +15,10 @@ const token = randomBytes(32).toString('hex');
 const base = 'http://127.0.0.1:8876';
 const server = spawn(process.env.PYTHON || 'python', ['-m', 'automoto', 'serve', '--no-browser', '--port', '8876'], {
   cwd: root,
-  env: { ...process.env, AUTOMOTO_DATA_DIR: data, AUTOMOTO_LAUNCH_TOKEN: token, AUTOMOTO_SANDBOX: 'local' },
+  // This smoke test exercises many renderer previews in one minute. Use a
+  // higher limit only in its isolated ephemeral server, never in production.
+  env: { ...process.env, AUTOMOTO_DATA_DIR: data, AUTOMOTO_LAUNCH_TOKEN: token,
+    AUTOMOTO_SANDBOX: 'local', AUTOMOTO_RATE_LIMIT: '10000' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let log = '';
