@@ -59,6 +59,7 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) ->
         "themes":[s["theme"] for s in scenes],
         "dimensions":[{"width":s["width"],"height":s["height"]} for s in scenes],
         "original_assets":names,
+        "text_fitting_repairs":[s.get("text_repairs",[]) for s in scenes],
         "output_sha256":sha256(out.read_bytes()).hexdigest(),
         "animation":(animation or spec.get("animation") or {}) if out.suffix.lower()==".gif" else None,
         "quality":{"structural_check":"passed","visual_manual_review":"required"}

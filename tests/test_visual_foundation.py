@@ -159,6 +159,44 @@ def test_invalid_specs_fail_without_partial_output(work):
         image.write_bytes(b"existing")
         render(valid,image)
 
+def test_brand_logo_original_bytes_are_kept_and_embedded(work):
+    from pptx import Presentation
+    logo=work/"brand.png"
+    Image.new("RGBA",(230,80),(24,91,163,255)).save(logo)
+    before=hashlib.sha256(logo.read_bytes()).hexdigest()
+    spec=flow(width=1280,height=720,brand_logo=str(logo),
+              brand_logo_alt="Original user branding")
+    scene=compile_scene(spec)
+    assert scene["assets"][0]["sha256"]==before
+    assert any(e["type"]=="image" and e["alt"]=="Original user branding" for e in scene["elements"])
+    dest=work/"branded.pptx"
+    render(scene,dest)
+    prs=Presentation(dest)
+    logos=[sh for sh in prs.slides[0].shapes if sh.shape_type==13]
+    assert len(logos)==1
+    assert hashlib.sha256(logos[0].image.blob).hexdigest()==before
+    assert logos[0]._element.nvPicPr.cNvPr.get("descr")=="Original user branding"
+    assert hashlib.sha256(logo.read_bytes()).hexdigest()==before
+
+
+def test_surgical_autofit_preserves_exact_text(work):
+    from automoto.visual_renderer import repair_text_fitting
+    source=flow(width=800,height=500)
+    source["nodes"][0]["title"]="Document processing and checking"
+    scene=compile_scene(source)
+    texts=[e for e in scene["elements"] if e.get("role")=="card-heading"]
+    exact=texts[0]["text"]
+    old_size=texts[0]["size"]
+    changes=repair_text_fitting(scene)
+    assert texts[0]["text"]==exact
+    assert texts[0]["size"]<=old_size
+    if changes:
+        assert all(c["new_size"]>=15 for c in changes)
+    # If even the permitted font-size adjustment is insufficient, the
+    # exporter refuses to damage the layout rather than truncating copy.
+    assert all("text overflows" not in err for err in quality(scene) if "card-heading" not in err)
+
+
 def test_contrast_gate_rejects_invisible_text():
     spec=flow(colours={"ink":"#FAFAF6"})
     scene=compile_scene(spec)
