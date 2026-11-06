@@ -256,11 +256,21 @@ def _scene(spec:dict[str,Any]) -> dict:
                               body,max(20,round(h*.044)),t["ink"],True,"hero-text"))
     else:
         user=spec.get("elements")
-        if not isinstance(user,list) or not 1<=len(user)<=40:
-            raise VisualError("canvas requires 1 to 40 elements")
+        if not isinstance(user,list) or not 0<=len(user)<=40:
+            raise VisualError("canvas requires 0 to 40 elements")
+        hidden_groups={item.get("group") for item in user
+                       if isinstance(item,dict) and item.get("hidden") is True and item.get("group")}
         for element in user:
             if not isinstance(element,dict): raise VisualError("canvas elements must be objects")
+            for flag in ("hidden","locked"):
+                if flag in element and not isinstance(element[flag],bool):
+                    raise VisualError(f"{flag} must be true or false")
+            if element.get("hidden",False):
+                continue  # Keep source draft unchanged; omit this layer in every export.
             kind=element.get("type")
+            if kind=="line" and any(element.get(key) in hidden_groups
+                                    for key in ("from_group","to_group")):
+                continue
             if kind=="line":
                 e=_line(number(element.get("x1"),"x1",0,w),number(element.get("y1"),"y1",0,h),
                         number(element.get("x2"),"x2",0,w),number(element.get("y2"),"y2",0,h),
@@ -298,6 +308,13 @@ def _scene(spec:dict[str,Any]) -> dict:
                 if not isinstance(element["allow_overlap"],bool):
                     raise VisualError("allow_overlap must be true or false")
                 e["allow_overlap"]=element["allow_overlap"]
+            if kind=="line":
+                for anchor in ("from_group","to_group"):
+                    if anchor in element:
+                        value=element[anchor]
+                        if not isinstance(value,str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,50}",value):
+                            raise VisualError(f"{anchor} must name a short ASCII group")
+                        e[anchor]=value
             elements.append(e)
     if footer:
         elements.append(_text(margin,h-max(39,round(h*.057)),content_w,
