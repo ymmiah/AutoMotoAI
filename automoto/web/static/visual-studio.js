@@ -350,6 +350,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     },ms);
   }
   function add(type){
+    if(spec.elements.length>=40){toast("This canvas has 40 elements. Remove or combine objects before adding more.","bad");return;}
     if(type==="image"&&!at("vsAssets").value){toast("Upload a picture under Files and choose it first.","bad");return;}
     const dimensions={text:[400,70],rect:[250,150],icon:[85,85],image:[340,220]}[type];
     const place=freePosition(spec,...dimensions);
