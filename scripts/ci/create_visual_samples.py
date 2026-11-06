@@ -11,6 +11,7 @@ from automoto.visual_foundation import compile_scene
 from automoto.visual_renderer import render,quality
 
 def make_samples(folder:Path):
+    folder=folder.resolve()  # make reference asset paths unambiguous within the workspace
     folder.mkdir(parents=True,exist_ok=True)
     original=folder/"source-original.png"
     # This shape composition is synthetic, not an unlicensed photograph or logo.
