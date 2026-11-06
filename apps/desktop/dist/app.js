@@ -8,7 +8,7 @@ const params = new URLSearchParams(location.search);
 function busy(text) {
   $("#busy").hidden = !text;
   $("#busyText").textContent = text || "";
-  document.querySelectorAll("button").forEach((b) => { b.disabled = !!text; });
+  document.querySelectorAll("button:not([data-chrome])").forEach((b) => { b.disabled = !!text; });
 }
 function note(text, ok = false) {
   const n = $("#note");

@@ -19,6 +19,8 @@ shows **"Windows protected your PC"**. Users click **More info → Run anyway**.
   Canada** — so not to an individual in the UK, who would need an OV certificate from a certificate authority.
   — same page, and [Code signing options for Windows app developers](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options)
 
+The Windows app draws its own caption (Menu, minimize, maximize, close) instead of the system title-bar buttons. How that is wired, including MSIX notes: [WINDOWS-CHROME.md](WINDOWS-CHROME.md).
+
 ## Chosen route: the Microsoft Store (MSIX)
 
 Checked 31 October 2026. The plan is a **Microsoft Store edition** packaged as **MSIX**: Microsoft signs MSIX packages

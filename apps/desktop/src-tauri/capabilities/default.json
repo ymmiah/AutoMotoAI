@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The bundled sign-in screen may call the app's seven commands. Nothing else: no plugin APIs, no file system, no shell. Server pages (remote) get no capability at all.",
+  "description": "The bundled sign-in screen may call the account and engine commands. No plugin APIs, file system, or shell. The caption bar is a separate capability.",
   "windows": ["main"],
   "local": true,
   "permissions": [

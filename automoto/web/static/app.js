@@ -1320,35 +1320,103 @@ PAGES.settings = async () => {
   const accent = localStorage.getItem("automoto_accent") || s.accent;
   const k = keys();
   const mod = isMac ? "⌘" : "Ctrl";
-  page("Settings", "Appearance, safety and providers. Settings are saved to this computer; API keys never are.", `
-    <div class="card"><h3>${icon("sun")} Appearance</h3>
-      <div class="field"><span>Theme</span><div class="seg" role="radiogroup" aria-label="Theme" id="themeSeg">
-        ${[["dark", "moon", "Dark"], ["light", "sun", "Light"], ["system", "monitor", "System"]].map(([v, i, l]) => `<button role="radio" data-v="${v}" aria-checked="${theme === v}">${icon(i)}<span class="lbl">${l}</span></button>`).join("")}</div></div>
-      <div class="field"><span>Accent colour</span><div class="swatches" id="swatches">${ACCENTS.map((c) => `<button class="swatch" style="background:${c}" data-c="${c}" aria-label="Accent ${c}" aria-pressed="${c === accent}"></button>`).join("")}
-        <input type="color" id="accentPick" value="${esc(accent)}" aria-label="Custom accent colour"></div></div></div>
-    <div class="card"><h3>${icon("shield")} Safety</h3>
-      <label class="field"><span>Approval mode (now: ${statusPill(s.effective_approval_mode)})</span><select class="input" id="apprSel" style="max-width:420px">
-        ${[["", "Default (env AUTOMOTO_APPROVAL or ask)"], ["ask", "Ask: risky tools need my approval"], ["readonly", "Read-only: deny every risky tool"], ["auto", "Auto: run risky tools without asking"]].map(([v, l]) => `<option value="${v}" ${(s.approval_mode || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      <label class="field"><span>Default mode for new chats</span><select class="input" id="modeSel" style="max-width:420px"><option value="agent" ${s.default_mode === "agent" ? "selected" : ""}>Agent (tools)</option><option value="chat" ${s.default_mode === "chat" ? "selected" : ""}>Chat (no tools)</option></select></label>
-      <p class="muted" style="font-size:12.5px;margin:0">Blocked commands (like <code>rm -rf /</code>) never run in any mode. Network tools refuse private and local addresses.</p></div>
-    ${HOSTED ? "" : `<div class="card" id="offlineCard"><h3>${icon("cpu")} Offline AI (on this computer)</h3><p class="muted" style="font-size:13px;margin-top:0">Run a free AI model on your own computer with <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>. No key, no internet, nothing leaves your computer. <a href="https://github.com/ymmiah/AutoMotoAI/blob/main/docs/OFFLINE.md" target="_blank" rel="noopener">How it works</a></p>
-      <div id="offlineBody" class="muted" aria-live="polite">Checking this computer…</div></div>`}
-    <div class="card"><h3>${icon("folder")} Files &amp; folders</h3><p class="muted" style="font-size:13px;margin-top:0">The agent works in its sandbox folder by default. Add project folders it may also use (for example a VS Code project). Anything outside the sandbox always asks first, and secrets (<code>~/.ssh</code>, <code>.env</code> files, keychains, browser profiles, system folders) stay blocked.</p>
-      <div id="rootList"></div><form id="rootForm" class="row" style="margin-top:8px"><input class="input" name="p" placeholder="/home/me/code/project or C:\\Users\\me\\code\\project" aria-label="Folder path" style="flex:1;min-width:220px"><button class="btn sm primary">Add folder</button></form></div>
-    <div class="card"><h3>${icon("link")} Connectors (MCP)</h3><p class="muted" style="font-size:13px;margin-top:0">Official servers where they exist. Remote ones sign in with OAuth in your browser on first use; tokens go in <code>.env</code> and are never shown here. Every connector tool asks before it runs.</p>
-      <div id="connList" class="muted">Loading…</div><div class="row" style="margin-top:8px"><button class="btn sm" id="connReload">Reconnect now</button></div></div>
-    <div class="card"><h3>${icon("cpu")} Provider order</h3><p class="muted" style="font-size:13px;margin-top:0">Auto tries providers top to bottom and fails over on errors.</p>
-      <div id="orderList"></div><div class="row"><button class="btn primary sm" id="orderSave">Save order</button><button class="btn sm" id="orderReset">Reset to recommended</button></div></div>
-    ${HOSTED ? "" : `<div class="card"><h3>${icon("bolt")} Test keys</h3><p class="muted" style="font-size:13px;margin-top:0">Sends one tiny (1-token) request to every model ${BRAND_SHORT} may use with your keys and shows which answer. Models that are not available to your key (404) are skipped automatically for an hour.</p>
-      <div class="row"><button class="btn sm primary" id="doctorRun">Test keys</button></div><div id="doctorOut" style="margin-top:8px" aria-live="polite"></div></div>`}
-    <div class="card"><h3>${icon("wrench")} Advanced (for developers)</h3><p class="muted" style="font-size:13px;margin-top:0">${BRAND_SHORT} picks the right tools and skills for each task by itself, so you never need these. They are here if you want to look under the hood.</p>
-      <div class="row"><a class="btn sm" href="#/tools">${icon("wrench")} Tools</a><a class="btn sm" href="#/skills">${icon("book")} Skills</a></div></div>
-    <div class="card"><h3>${icon("key")} Bring your own keys</h3><p class="muted" style="font-size:13px;margin-top:0">Kept only in this browser tab (sessionStorage) and wiped when you close it. Sent with each request, never saved on the server. Server keys from <code>.env</code> work without this.</p>
-      <form id="keyForm">${st.providers.filter((p) => !p.local).map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
-      <div class="row"><button class="btn primary">Use keys for this tab</button><button type="button" class="btn danger" id="forgetKeys">Forget keys</button></div></form></div>
-    <div class="card"><h3>${icon("info")} About</h3><p style="margin:0 0 6px">${esc(BRAND)} v${esc(VERSION)}</p>
-      <p class="muted" style="margin:0 0 10px">Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons) · <a href="https://github.com/ymmiah" target="_blank" rel="noopener">GitHub</a> · <a href="https://linkedin.com/in/ymmiah" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://ymmiah.com" target="_blank" rel="noopener">ymmiah.com</a></p>
-      <dl class="kv" style="margin:0"><dt><kbd>${mod}+K</kbd></dt><dd>Command palette</dd><dt><kbd>${mod}+N</kbd></dt><dd>New chat (in Chrome use <kbd>${mod}+Shift+O</kbd>)</dd><dt><kbd>${mod}+B</kbd></dt><dd>Toggle sidebar</dd><dt><kbd>Enter</kbd></dt><dd>Send · <kbd>Shift+Enter</kbd> new line</dd><dt><kbd>Esc</kbd></dt><dd>Stop a run / close dialogs</dd></dl></div>`);
+  page("Settings", "Saved on this computer. Keys you paste in Providers last for this tab only.", `
+    <div class="settings">
+      <nav class="set-nav" aria-label="Settings sections">
+        <button type="button" data-set="assistant" aria-current="page">Assistant</button>
+        ${HOSTED ? "" : `<button type="button" data-set="offline">Offline AI</button>`}
+        <button type="button" data-set="look">Appearance</button>
+        <button type="button" data-set="folders">Folders</button>
+        <button type="button" data-set="providers">Providers</button>
+        <button type="button" data-set="more">More</button>
+      </nav>
+      <div class="set-main">
+        <section class="set-panel" data-set-panel="assistant" tabindex="-1">
+          <h3>Assistant</h3>
+          <p class="set-lead">You write the request. AutoMoto does the files, research and steps, and asks before anything risky.</p>
+          <div class="set-now"><span>Approval</span> ${statusPill(s.effective_approval_mode)}<span>New chats</span> <b>${s.default_mode === "chat" ? "Chat" : "Assistant"}</b></div>
+          <label class="field"><span>Approval</span><select class="input" id="apprSel">
+            ${[["", "Default (ask, unless AUTOMOTO_APPROVAL is set)"], ["ask", "Ask before risky steps"], ["readonly", "Read-only"], ["auto", "Auto-approve risky steps"]].map(([v, l]) => `<option value="${v}" ${(s.approval_mode || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+            <span class="set-hint">Blocked commands never run. Network tools refuse private and local addresses.</span></label>
+          <label class="field"><span>New chats</span><select class="input" id="modeSel">
+            <option value="agent" ${s.default_mode === "agent" ? "selected" : ""}>Assistant</option>
+            <option value="chat" ${s.default_mode === "chat" ? "selected" : ""}>Chat</option></select>
+            <span class="set-hint">Assistant finishes the work. Chat only answers, and does not change files or run tools.</span></label>
+        </section>
+        ${HOSTED ? "" : `<section class="set-panel" data-set-panel="offline" id="offlineCard" tabindex="-1" hidden>
+          <h3>Offline AI</h3>
+          <p class="set-lead">A model on this computer, through <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>. No API key. With Offline only on, cloud models and web tools stay off. <a href="https://github.com/ymmiah/AutoMotoAI/blob/main/docs/OFFLINE.md" target="_blank" rel="noopener">How it works</a></p>
+          <div id="offlineBody" aria-live="polite">Checking this computer…</div>
+        </section>`}
+        <section class="set-panel" data-set-panel="look" tabindex="-1" hidden>
+          <h3>Appearance</h3>
+          <p class="set-lead">Theme and accent for this computer.</p>
+          <div class="field"><span>Theme</span><div class="seg" role="radiogroup" aria-label="Theme" id="themeSeg">
+            ${[["dark", "moon", "Dark"], ["light", "sun", "Light"], ["system", "monitor", "System"]].map(([v, i, l]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${theme === v}">${icon(i)}<span class="lbl">${l}</span></button>`).join("")}</div></div>
+          <div class="field"><span>Accent</span><div class="swatches" id="swatches">${ACCENTS.map((c) => `<button type="button" class="swatch" style="background:${c}" data-c="${c}" aria-label="Accent ${c}" aria-pressed="${c === accent}"></button>`).join("")}
+            <input type="color" id="accentPick" value="${esc(accent)}" aria-label="Custom accent colour"></div></div>
+        </section>
+        <section class="set-panel" data-set-panel="folders" tabindex="-1" hidden>
+          <h3>Folders</h3>
+          <p class="set-lead">The assistant works in its sandbox folder. Add a project folder it may also use. Anything outside the sandbox still asks first. Secrets stay blocked: <code>~/.ssh</code>, <code>.env</code> files, keychains, browser profiles and system folders.</p>
+          <div id="rootList"></div>
+          <form id="rootForm" class="row"><input class="input" name="p" placeholder="C:\\Users\\me\\code\\project" aria-label="Folder path"><button class="btn sm primary" type="submit">Add folder</button></form>
+        </section>
+        <section class="set-panel" data-set-panel="providers" tabindex="-1" hidden>
+          <h3>Providers</h3>
+          <p class="set-lead">Auto tries this list from the top and moves on when a provider errors.</p>
+          <div class="set-block">
+            <h4>Order</h4>
+            <div id="orderList"></div>
+            <div class="row"><button type="button" class="btn primary sm" id="orderSave">Save order</button><button type="button" class="btn sm" id="orderReset">Use the recommended order</button></div>
+          </div>
+          <div class="set-block">
+            <h4>Keys for this tab</h4>
+            <p class="set-lead">Kept in this tab only, sent with each request, and wiped when the tab closes. A key in <code>.env</code> works without this.</p>
+            <form id="keyForm">${st.providers.filter((p) => !p.local).map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
+            <div class="row"><button class="btn primary" type="submit">Use keys for this tab</button><button type="button" class="btn danger" id="forgetKeys">Forget keys</button></div></form>
+          </div>
+          ${HOSTED ? "" : `<div class="set-block"><h4>Test keys</h4><p class="set-lead">One tiny request to every model ${BRAND_SHORT} may use. Models the key cannot see are skipped for an hour.</p>
+            <div class="row"><button type="button" class="btn sm primary" id="doctorRun">Test keys</button></div><div id="doctorOut" aria-live="polite"></div></div>`}
+        </section>
+        <section class="set-panel" data-set-panel="more" tabindex="-1" hidden>
+          <h3>More</h3>
+          <div class="set-block">
+            <h4>Connectors</h4>
+            <p class="set-lead">Official servers where they exist. Remote ones sign in with OAuth in your browser on first use. Tokens stay in <code>.env</code> and are never shown here. Each connector tool asks before it runs.</p>
+            <div id="connList" class="muted">Loading…</div>
+            <div class="row"><button type="button" class="btn sm" id="connReload">Reconnect now</button></div>
+          </div>
+          <div class="set-block">
+            <h4>For developers</h4>
+            <p class="set-lead">${BRAND_SHORT} picks the tools and skills for each request. Open these only to look under the hood.</p>
+            <div class="row"><a class="btn sm" href="#/tools">Tools</a><a class="btn sm" href="#/skills">Skills</a></div>
+          </div>
+          <div class="set-block">
+            <h4>About</h4>
+            <p>${esc(BRAND)} v${esc(VERSION)}</p>
+            <p class="muted">Made by Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons) · <a href="https://github.com/ymmiah" target="_blank" rel="noopener">GitHub</a> · <a href="https://linkedin.com/in/ymmiah" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://ymmiah.com" target="_blank" rel="noopener">ymmiah.com</a></p>
+            <dl class="kv"><dt><kbd>${mod}+K</kbd></dt><dd>Command palette</dd><dt><kbd>${mod}+N</kbd></dt><dd>New chat (in Chrome use <kbd>${mod}+Shift+O</kbd>)</dd><dt><kbd>${mod}+B</kbd></dt><dd>Toggle sidebar</dd><dt><kbd>Enter</kbd></dt><dd>Send · <kbd>Shift+Enter</kbd> new line</dd><dt><kbd>Esc</kbd></dt><dd>Stop a run / close dialogs</dd></dl>
+          </div>
+        </section>
+      </div>
+    </div>`);
+  const showSettingsPanel = (id) => {
+    const panels = $$("[data-set-panel]");
+    if (!panels.some((p) => p.dataset.setPanel === id)) id = "assistant";
+    try { sessionStorage.setItem("automoto_settings_panel", id); } catch { /* this tab cannot store the section */ }
+    $$(".set-nav [data-set]").forEach((b) => b.setAttribute("aria-current", b.dataset.set === id ? "page" : "false"));
+    panels.forEach((p) => { p.hidden = p.dataset.setPanel !== id; });
+  };
+  let savedPanel = "assistant";
+  try { savedPanel = sessionStorage.getItem("automoto_settings_panel") || "assistant"; } catch { /* keep the Assistant section */ }
+  showSettingsPanel(savedPanel);
+  $(".set-nav").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-set]");
+    if (!b) return;
+    showSettingsPanel(b.dataset.set);
+    document.querySelector(`[data-set-panel="${CSS.escape(b.dataset.set)}"]`)?.focus();
+  });
 
   $("#themeSeg").onclick = async (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -1429,29 +1497,37 @@ PAGES.settings = async () => {
     const error = progress[m.name]?.state === "error" ? progress[m.name].error : "";
     const active = d.ollama_enabled && (d.model === m.name || d.model + ":latest" === m.name);
     const limited = m.tier === "limited" ? '<span class="pill bad">Limited</span>' : "";
+    const recommended = m.recommended ? '<span class="pill">Recommended</span>' : "";
     const action = ready
-      ? `<button class="btn sm ${active ? "" : "primary"}" data-use="${esc(m.name)}" ${d.model_from_env ? "disabled" : ""}>${active ? "Selected" : "Use model"}</button><button class="btn sm" data-test="${esc(m.name)}">Test</button>`
+      ? `<button type="button" class="btn sm ${active ? "" : "primary"}" data-use="${esc(m.name)}" ${active || d.model_from_env ? "disabled" : ""} aria-pressed="${active ? "true" : "false"}">${active ? "In use" : "Use"}</button><button type="button" class="btn sm" data-test="${esc(m.name)}">Test</button>`
       : pulling
         ? `<span class="muted" aria-live="polite">Downloading ${progress[m.name].percent || 0}%</span>`
-        : `<button class="btn sm" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download ${m.download_gb || "?"} GB</button>`;
-    return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Recommended</span>' : ""} ${limited}<span class="muted small"> · ${esc(m.name)}</span><div class="muted small">${esc(m.note || "")}</div>${error ? `<span class="bad small">${esc(error)}</span>` : ""}</span>${action}</div>`;
+        : `<button type="button" class="btn sm" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download ${m.download_gb || "?"} GB</button>`;
+    return `<div class="model-row"><div><b>${esc(m.label)}</b> ${recommended} ${limited}<div class="muted small">${esc(m.name)}${m.note ? ` · ${esc(m.note)}` : ""}</div>${error ? `<div class="bad small">${esc(error)}</div>` : ""}</div><div class="model-actions">${action}</div></div>`;
   };
   box.classList.remove("muted");
   const thinking = d.think === true ? "on" : (d.think ? String(d.think) : "off");
+  const stateName = o.running ? "running" : o.installed ? "installed" : "missing";
+  const stateLabel = o.running ? "Running on this computer" : o.installed ? "Installed, not running" : "Not installed";
+  const primary = o.running ? "" : o.installed
+    ? `<button type="button" class="btn primary sm" id="localStart">Start local AI</button>`
+    : `<a class="btn primary sm" href="https://ollama.com/download" target="_blank" rel="noopener">Get Ollama</a>`;
   box.innerHTML = `
-    <p class="muted small">Status: ${o.running ? "Ollama running locally" : o.installed ? "Ollama installed but not running" : "Ollama runtime not installed"}. ${esc(rec.why || "")}</p>
+    <div class="ai-status" data-state="${stateName}">
+      <span class="ai-dot" aria-hidden="true"></span>
+      <div><b>${stateLabel}</b><div class="muted small">${esc(rec.why || "")}</div></div>
+      <div class="ai-status-act"><button type="button" class="btn sm" id="offlineCheck">Refresh</button>${primary}</div>
+    </div>
     ${d.substitution ? `<p class="small"><span class="pill bad">${esc(d.substitution.message)}</span></p>` : ""}
     ${rec.upgrade ? `<p class="muted small">Stronger option: <b>${esc(rec.upgrade.name)}</b>. ${esc(rec.upgrade.note)}</p>` : ""}
-    <p class="muted small">Local context window: ${esc(String(d.context || rec.context || "?"))} tokens. Thinking: ${esc(thinking)} (set LOCAL_AI_THINK=1 to allow it).</p>
-    ${o.running ? `<p class="muted small">Ollama ${esc(o.version || "")} · ${present.size} downloaded model(s).</p>`
-      : o.installed
-        ? `<button class="btn primary" id="localStart">Start local AI</button><p class="muted small">Starts Ollama on this computer. No cloud service is involved.</p>`
-        : `<p>Install the free official inference runtime once, then download a model from this screen. No additional Python packages or API keys are needed.</p><a class="btn primary" href="https://ollama.com/download" target="_blank" rel="noopener">Download official Ollama installer</a>`}
-    <div class="toolbar"><b>Models available on this computer</b><span class="spacer"></span><button class="btn sm" id="offlineCheck">Refresh models</button></div>
-    ${models.length ? models.map(modelRow).join("") : '<p class="muted">No recommended models found for this device.</p>'}
-    ${o.running ? `<form id="localCustom" class="row" style="margin-top:12px"><input class="input" name="name" style="flex:1;min-width:200px" aria-label="Ollama library model name" placeholder="Other model (e.g. gemma3:4b)" required><button class="btn sm">Download by name</button></form>` : ""}
-    <label class="field" style="margin-top:14px"><span><input type="checkbox" id="offlineSw" ${d.offline ? "checked" : ""} ${d.offline_from_env ? "disabled" : ""}> Offline only: disable cloud models and web tools</span></label>
-    <div class="row"><button class="btn sm primary" id="localCloud" ${d.offline_from_env ? "disabled" : ""}>Use cloud AI / server providers</button>${d.ollama_enabled ? '<button class="btn sm" id="offlineOff">Disable local model</button>' : ""}</div>
+    <p class="muted small">Context ${esc(String(d.context || rec.context || "?"))} tokens · Thinking ${esc(thinking)}.${o.running && o.version ? ` Ollama ${esc(o.version)}.` : ""}</p>
+    <div class="model-head"><b>Models</b><span class="muted small">${present.size ? `${present.size} downloaded` : "None downloaded yet"}</span></div>
+    ${models.length ? models.map(modelRow).join("") : '<p class="muted small">No recommended model for this computer yet.</p>'}
+    ${o.running ? `<form id="localCustom" class="row"><input class="input" name="name" aria-label="Ollama library model name" placeholder="Other model, for example gemma3:4b" required><button class="btn sm" type="submit">Download by name</button></form>` : ""}
+    ${o.installed && !o.running ? '<p class="muted small">Starts Ollama on this computer. No cloud service is involved.</p>' : ""}
+    <label class="switch-row"><span><b>Offline only</b><span class="set-hint">Cloud models and web tools stay off. The assistant keeps working with the model on this PC.</span></span>
+      <input type="checkbox" id="offlineSw" ${d.offline ? "checked" : ""} ${d.offline_from_env ? "disabled" : ""}></label>
+    <div class="row"><button type="button" class="btn sm" id="localCloud" ${d.offline_from_env ? "disabled" : ""}>Use cloud providers</button>${d.ollama_enabled ? '<button type="button" class="btn sm" id="offlineOff">Turn off the local model</button>' : ""}</div>
     ${d.offline_from_env ? '<p class="muted small">AUTOMOTO_OFFLINE in .env controls offline mode. Change that setting to enable cloud mode.</p>' : ""}
     ${d.model_from_env ? '<p class="muted small">OLLAMA_MODEL in .env locks the selected model. Remove it to change models here.</p>' : ""}`;
   $("#offlineCheck").onclick = drawOffline;

@@ -1,0 +1,27 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "window-chrome",
+  "description": "Caption bar only: drag, minimize, maximize, close, and the Menu actions. No files, shell, account commands, or network.",
+  "windows": ["main"],
+  "local": true,
+  "platforms": ["windows"],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:8765/*",
+      "http://localhost:8765/*",
+      "https://*/*"
+    ]
+  },
+  "permissions": [
+    "core:window:allow-minimize",
+    "core:window:allow-unminimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-is-maximized",
+    "allow-chrome-action"
+  ]
+}

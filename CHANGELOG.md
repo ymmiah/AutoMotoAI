@@ -2,6 +2,8 @@
 
 ## 5.6.0-beta.5 — Desktop workspace and Microsoft Store update
 
+- Windows uses AutoMoto's own caption bar (Menu, minimize, maximize, close) instead of the system title-bar buttons. Snap with Win+Z or by dragging the caption. See [docs/WINDOWS-CHROME.md](docs/WINDOWS-CHROME.md).
+- Settings is split into Assistant, Offline AI, Appearance, Folders, Providers and More. Offline AI shows one status and a model list instead of a stack of equal cards.
 - Redesigned native launcher and chat workspace, filterable ideas, setup status, quick commands and themes.
 - Preserve unsent message drafts during navigation and contain keyboard focus in dialogs.
 - Refresh engine installation status without overwriting sign-in drafts.
