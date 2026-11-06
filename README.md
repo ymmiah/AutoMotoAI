@@ -101,15 +101,18 @@ For more information, see [Offline AI](docs/OFFLINE.md).
 
 ---
 
-## Visual design improvements in development
+## Visual Design Foundation and GIF animation (source builds)
 
-> The [visual design upgrade](docs/VISUAL-DESIGN.md) is on a separate feature branch and **is not yet included** in the published Windows/Microsoft Store release.
+> **Development status:** The core visual design engine has merged into `main` in [PR #11](https://github.com/ymmiah/AutoMotoAI/pull/11). Final compatibility, provenance and regression fixes are tracked in [PR #12](https://github.com/ymmiah/AutoMotoAI/pull/12). **The published Microsoft Store app has not yet been updated with this feature.**
 
-- **Better PowerPoint design:** editable vector icons, premium feature cards, metrics and process diagrams; explicit canvas positioning for shapes, text and reference images.
-- **More readable themes:** automatic light text on dark slides when text colours are not supplied; consistent page margins, original images and logos kept at their natural aspect ratios.
-- **Real local artwork:** an optional ComfyUI checkpoint can generate new image files, entirely on the computer after setup. ComfyUI and its model must be installed separately.
-- **Surgical source preservation:** `image_compose` places a supplied photograph/logo with exact text and no AI face or brand redraws. Original source files remain unchanged. Generated images cannot be guaranteed to preserve a reference person's identity.
-- **Quality checks:** `office_check` plus rendered slide review before release.
+- **One shared visual engine:** `visual_create` produces premium connected workflow diagrams, feature cards, original-image compositions or positioned canvas artwork from one validated design specification.
+- **Genuine GIF animation:** .gif outputs have multiple changing frames, looping playback, adjustable duration and `flow`, `pulse`, `float` or `reveal` effects. GIF is a separate file, not a claim that PowerPoint plays editable animation.
+- **Editable files:** multi-slide PowerPoint exports contain real text, native vector shapes, icons and connectors; SVG, PNG, JPEG and simple PDF exports are also supported.
+- **Original imagery:** source photographs and brand logos are embedded or aspect-fitted rather than generatively redrawn. Source-file SHA-256 hashes are verified, and creation tools record provenance in a sidecar `.visual.json` file.
+- **Quality gates:** bounds, text fitting and contrast checks, plus file and GIF-motion inspection. Visually inspect the final result before presenting or publishing.
+- **Optional AI artwork:** `image_generate` still requires separately installed ComfyUI and a compatible local checkpoint; original vector diagrams and GIFs work without it.
+
+[Full API, example specifications and release limits](docs/VISUAL-FOUNDATION-GIF.md) · [Previous PPTX upgrades](docs/VISUAL-DESIGN.md)
 
 ---
 
