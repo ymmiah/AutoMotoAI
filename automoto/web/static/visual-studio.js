@@ -166,11 +166,15 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   function buttons(){at("vsUndo").disabled=!undoStack.length;at("vsRedo").disabled=!redoStack.length;}
   function undo(){
     if(!undoStack.length)return;
-    redoStack.push(snap());spec=undoStack.pop();selected=-1;draw();schedule();
+    redoStack.push(snap());spec=undoStack.pop();selected=-1;
+    at("vsEffect").value=spec.animation?.effect||"flow";
+    draw();schedule();
   }
   function redo(){
     if(!redoStack.length)return;
-    undoStack.push(snap());spec=redoStack.pop();selected=-1;draw();schedule();
+    undoStack.push(snap());spec=redoStack.pop();selected=-1;
+    at("vsEffect").value=spec.animation?.effect||"flow";
+    draw();schedule();
   }
   function currentUnit(index=selected){
     return layerUnits(spec).find(u=>u.indices.includes(index));
@@ -206,7 +210,6 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       at("vsTracks").innerHTML='<p class="vs-inspector-note">Add a grouped workflow or feature cards to use this animation timeline.</p>';
       return;
     }
-    spec.animation=config;
     at("vsTracks").innerHTML=config.stages.map(({group,start},index)=>
        '<label class="vs-track"><span class="vs-track-name">'+esc(group)+'</span>'+
        '<input type="range" data-track="'+index+'" min="0" max="90" step="5" value="'+Math.round(start*100)+'" aria-label="Reveal '+esc(group)+' at percent">'+
@@ -539,8 +542,12 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   overlay.addEventListener("pointerdown",e=>{
     const target=e.target.closest("[data-i]");if(!target)return;
     const i=Number(target.getAttribute("data-i"));if(!spec.elements[i])return;
-    selected=i;draw();e.preventDefault();
-    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before:snap()};
+    const resizing=target.dataset.resize==="se";
+    selected=i;
+    const before=snap(),initial=selectionBox(spec,selected);
+    draw();e.preventDefault();
+    if(isLocked())return;
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before,initial,resizing};
     overlay.setPointerCapture(e.pointerId);
   });
   overlay.addEventListener("pointermove",e=>{
@@ -548,6 +555,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     const rect=overlay.getBoundingClientRect();if(!rect.width||!rect.height)return;
     const dx=Math.round((e.clientX-drag.x)*spec.width/rect.width);
     const dy=Math.round((e.clientY-drag.y)*spec.height/rect.height);
+    if(drag.resizing){
+      spec=copy(drag.before);
+      resizeSelection(spec,selected,drag.initial.w+dx,drag.initial.h+dy);
+      relink(spec);highlight();e.preventDefault();return;
+    }
     const orig=drag.before.elements[selected],g=orig.group;
     const ids=drag.before.elements.reduce((a,item,i)=>{
       if(g&&item.group===g||!g&&i===selected)a.push(i);return a;
