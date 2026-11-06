@@ -553,3 +553,8 @@ html[data-chrome="custom"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
   .ai-status-act { grid-column: 1 / -1; justify-content: flex-start; }
   .model-row { grid-template-columns: 1fr; }
 }
+
+/* Universal image delivery prompt: single output versus editable Visual Studio layers. */
+.vs-choice-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:17px 0; }
+.vs-choice-grid .btn {min-height:54px;padding:12px;line-height:1.4;text-align:center;white-space:normal;justify-content:center;}
+@media(max-width:570px){.vs-choice-grid{grid-template-columns:1fr}.vs-choice-grid .btn{min-height:44px}}
