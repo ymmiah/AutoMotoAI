@@ -229,13 +229,47 @@ def _draw_element(im,draw,e,scale=1):
         py=round(e["y"]*scale+(box_h-image.height)/2)
         im.paste(image,(px,py),image)
 
-def raster(scene,scale=1.0,progress=None,effect="flow"):
+def sequence_stages(scene:dict,config:dict) -> dict[str,float]:
+    """Validate a compact, group-based reveal timeline. No code or expressions."""
+    if not isinstance(config,dict):
+        raise VisualError("animation must be a JSON object")
+    stages=config.get("stages")
+    if not isinstance(stages,list) or not 1<=len(stages)<=12:
+        raise VisualError("sequence animation requires 1 to 12 stages")
+    groups={e["group"] for e in scene["elements"] if e.get("group")}
+    seen={}
+    for step in stages:
+        if not isinstance(step,dict) or set(step)!={"group","start"}:
+            raise VisualError("each animation stage must contain only group and start")
+        key=step["group"]
+        if not isinstance(key,str) or key not in groups or key in seen:
+            raise VisualError("animation stage names must be unique visible design groups")
+        value=step["start"]
+        if isinstance(value,bool) or not isinstance(value,(float,int)) or not math.isfinite(value) or not 0<=value<1:
+            raise VisualError("animation stage start must be a number from 0 to below 1")
+        seen[key]=float(value)
+    return seen
+
+
+def raster(scene,scale=1.0,progress=None,effect="flow",animation=None):
     from PIL import Image,ImageDraw
     w,h=scene["width"],scene["height"]
     im=Image.new("RGB",(round(w*scale),round(h*scale)),scene["tokens"]["background"])
     draw=ImageDraw.Draw(im)
     elements=scene["elements"]
-    if progress is not None and effect=="reveal":
+    if progress is not None and effect=="sequence":
+        starts=sequence_stages(scene,animation or {})
+        visible={group for group,start in starts.items() if progress>=start}
+        for e in elements:
+            group=e.get("group")
+            if group in starts and group not in visible:
+                continue
+            # A connection becomes visible only when both endpoint stages have appeared.
+            if e["type"]=="line" and any(e.get(k) in starts and e.get(k) not in visible
+                                         for k in ("from_group","to_group")):
+                continue
+            _draw_element(im,draw,e,scale)
+    elif progress is not None and effect=="reveal":
         revealable=[i for i,e in enumerate(elements) if e.get("role")=="card"]
         # Card/icon/text groups remain logically tied by paint order and spatial
         # containment; reveal per column rather than producing static duplicates.
@@ -459,11 +493,13 @@ def render(scene:dict,path:Path,*,animation:dict|None=None,scenes:list[dict]|Non
             effect=str(config.get("effect","flow"))
             if not 8<=frames<=48 or not 50<=duration<=500 or not 0<=loops<=20:
                 raise VisualError("GIF needs 8-48 frames, 50-500ms and loop 0-20")
-            if effect not in {"flow","pulse","float","reveal"}:
-                raise VisualError("GIF effect must be flow, pulse, float or reveal")
+            if effect not in {"flow","pulse","float","reveal","sequence"}:
+                raise VisualError("GIF effect must be flow, pulse, float, reveal or sequence")
+            if effect=="sequence":
+                sequence_stages(scene,config)
             images=[]
             for index in range(frames):
-                images.append(raster(scene,progress=index/frames,effect=effect))
+                images.append(raster(scene,progress=index/frames,effect=effect,animation=config))
             # Single palette avoids visible colour flicker between GIF frames.
             palette=images[-1].quantize(colors=192)
             paletted=[im.quantize(palette=palette,dither=Image.Dither.NONE) for im in images]

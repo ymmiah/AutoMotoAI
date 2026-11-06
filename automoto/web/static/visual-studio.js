@@ -1,5 +1,7 @@
-/* Visual Studio: no external scripts, no unsafe HTML and no separate rendering engine.
+/* Visual Studio: native exported scene renderer, editable layers and bounded GIF tracks.
    Backend renders the final preview. Edits keep source imagery unchanged. */
+import {layerUnits,toggleLayer,moveLayer,selectionBox,resizeSelection,
+        sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const copy=v=>JSON.parse(JSON.stringify(v));
@@ -117,18 +119,29 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<label for="vsElement" class="vs-inspector-note">Choose an element to edit</label>'+
     '<select class="input" id="vsElement" style="width:100%;margin:9px 0"></select>'+
     '<div id="vsProperties" class="vs-fields"></div>'+
+    '<h3 class="vs-layer-heading">Layers <span class="vs-small">Front → back</span></h3>'+
+    '<div id="vsLayers" class="vs-layers" aria-label="Visual design layers"></div>'+
     '<div class="vs-toolbar" style="margin-top:12px"><button class="btn" id="vsDuplicate">Duplicate</button>'+
     '<button class="btn danger" id="vsDelete">Delete</button></div>'+
     '<p class="vs-inspector-note">Grouped components move together. Exact text stays editable. Original uploaded imagery is not AI-redrawn.</p></aside></div>'+
-    '<section class="vs-export"><label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
+    '<section class="vs-export"><label>Output <select id="vsOutputMode" aria-label="Image delivery type">'+
+    '<option value="flat">Single finished file</option><option value="layered">Editable layers + file</option></select></label>'+
+    '<label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
     '<option value="pptx">Editable PowerPoint</option><option value="pdf">PDF</option><option value="jpg">JPEG</option><option value="gif">Animated GIF</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Motion <select id="vsEffect"><option value="flow">Flow</option><option value="pulse">Pulse</option>'+
-    '<option value="reveal">Reveal</option><option value="float">Float</option></select></label>'+
+    '<option value="reveal">Reveal</option><option value="float">Float</option><option value="sequence">Layer timeline</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Frames <input id="vsFrames" type="number" min="8" max="48" value="20"></label>'+
     '<label class="vs-gif-settings" hidden>Milliseconds/frame <input id="vsDelay" type="number" min="50" max="500" value="110"></label>'+
     '<label class="vs-gif-settings" hidden>Loop <select id="vsLoop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label>'+
     '<span class="spacer"></span><button class="btn primary" id="vsExport">'+icon("download")+' Export</button>'+
-    '<div id="vsOutput" class="vs-output" hidden></div></section></div>';
+    '<div id="vsOutput" class="vs-output" hidden></div></section>'+
+    '<section class="vs-timeline" id="vsTimeline" hidden aria-label="Animated layer timeline">'+
+    '<div class="vs-time-head"><strong>GIF scene timeline</strong>'+
+    '<span>Set when each group appears; export keeps the exact timing.</span></div>'+
+    '<div id="vsTracks" class="vs-tracks"></div>'+
+    '<label class="vs-scrub">Preview at <output id="vsFrameLabel">0%</output>'+
+    '<input id="vsPlayhead" type="range" min="0" max="99" step="1" value="0" aria-label="Preview timeline position"></label>'+
+    '</section></div>';
   const root=page("Visual Studio",
        "Edit a premium visual composition, keep source photographs intact, and export a genuine animated GIF or an editable PowerPoint.",html);
   root.classList.add("vs-page");
@@ -143,19 +156,72 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     if(undoStack.length>40)undoStack.shift();
     redoStack=[];dirty=true;buttons();schedule();
   }
-  function change(fn){const before=snap();fn();record(before);draw();}
+  function change(fn){
+    const before=snap();fn();
+    if(spec.animation?.effect==="sequence"){
+      const next=normaliseSequence(spec);
+      if(next)spec.animation=next;
+      else delete spec.animation;
+    }
+    record(before);draw();
+  }
   function buttons(){at("vsUndo").disabled=!undoStack.length;at("vsRedo").disabled=!redoStack.length;}
   function undo(){
     if(!undoStack.length)return;
-    redoStack.push(snap());spec=undoStack.pop();selected=-1;draw();schedule();
+    redoStack.push(snap());spec=undoStack.pop();selected=-1;
+    at("vsEffect").value=spec.animation?.effect||"flow";
+    draw();schedule();
   }
   function redo(){
     if(!redoStack.length)return;
-    undoStack.push(snap());spec=redoStack.pop();selected=-1;draw();schedule();
+    undoStack.push(snap());spec=redoStack.pop();selected=-1;
+    at("vsEffect").value=spec.animation?.effect||"flow";
+    draw();schedule();
+  }
+  function currentUnit(index=selected){
+    return layerUnits(spec).find(u=>u.indices.includes(index));
+  }
+  function isLocked(index=selected){return !!currentUnit(index)?.locked;}
+  function drawLayers(){
+    const layers=layerUnits(spec).slice().reverse();
+    at("vsLayers").innerHTML=layers.map((u,order)=>{
+      const active=u.indices.includes(selected),iconName=u.isConnector?"link":u.key.startsWith("group:")?"folder":"file";
+      const label=u.label+" ("+u.indices.length+")";
+      const common=' data-layer-key="'+esc(u.key)+'"';
+      return '<div class="vs-layer'+(active?' active':'')+(u.hidden?' hidden-layer':'')+'">'+
+        '<button class="vs-layer-name" data-layer-act="select"'+common+' title="'+esc(label)+'">'+
+        icon(iconName)+' '+esc(label)+'</button>'+
+        '<button class="vs-layer-btn" data-layer-act="visibility"'+common+
+        ' aria-label="'+(u.hidden?'Show ':'Hide ')+esc(u.label)+'" aria-pressed="'+String(u.hidden)+'">'+
+        icon(u.hidden?'eye':'eye')+'</button>'+
+        '<button class="vs-layer-btn" data-layer-act="lock"'+common+
+        ' aria-label="'+(u.locked?'Unlock ':'Lock ')+esc(u.label)+'" aria-pressed="'+String(u.locked)+'">'+
+        icon("lock")+'</button>'+
+        '<button class="vs-layer-btn" data-layer-act="front"'+common+
+        ' aria-label="Move '+esc(u.label)+' forward" '+(order===0||u.isConnector||u.locked?'disabled':'')+'>'+icon("up")+'</button>'+
+        '<button class="vs-layer-btn" data-layer-act="back"'+common+
+        ' aria-label="Move '+esc(u.label)+' backwards" '+(order===layers.length-1||u.isConnector||u.locked?'disabled':'')+'>'+icon("down")+'</button></div>';
+    }).join("")||'<p class="vs-inspector-note">No objects yet. Add text, shapes or images.</p>';
+  }
+  function drawTimeline(){
+    const enabled=at("vsFormat").value==="gif" && at("vsEffect").value==="sequence";
+    at("vsTimeline").hidden=!enabled;
+    if(!enabled)return;
+    const config=normaliseSequence(spec);
+    if(!config){
+      at("vsTracks").innerHTML='<p class="vs-inspector-note">Add a grouped workflow or feature cards to use this animation timeline.</p>';
+      return;
+    }
+    at("vsTracks").innerHTML=config.stages.map(({group,start},index)=>
+       '<label class="vs-track"><span class="vs-track-name">'+esc(group)+'</span>'+
+       '<input type="range" data-track="'+index+'" min="0" max="90" step="5" value="'+Math.round(start*100)+'" aria-label="Reveal '+esc(group)+' at percent">'+
+       '<output>'+Math.round(start*100)+'%</output></label>'
+    ).join("");
   }
   function highlight(){
     overlay.replaceChildren();
     spec.elements.forEach((e,i)=>{
+      if(e.hidden)return;
       const hit=document.createElementNS(NS,e.type==="line"?"line":"rect");
       hit.setAttribute("data-i",String(i));hit.setAttribute("class","vs-target");
       if(e.type==="line"){
@@ -167,7 +233,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       }
       overlay.appendChild(hit);
     });
-    if(selected<0||!spec.elements[selected])return;
+    if(selected<0||!spec.elements[selected]||spec.elements[selected].hidden)return;
     const e=spec.elements[selected];
     const chosen=e.group?spec.elements.filter(a=>a.group===e.group):[e];
     const xs=chosen.map(a=>bounds(a)),x=Math.min(...xs.map(a=>a.x)),y=Math.min(...xs.map(a=>a.y));
@@ -177,6 +243,18 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     mark.setAttribute("y",String(Math.max(0,y-5)));mark.setAttribute("width",String(Math.min(spec.width-x+5,right-x+10)));
     mark.setAttribute("height",String(Math.min(spec.height-y+5,bottom-y+10)));
     overlay.appendChild(mark);
+    if(!isLocked() && e.type!=="line"){
+      const grip=document.createElementNS(NS,"rect");
+      grip.setAttribute("data-i",String(selected));
+      grip.setAttribute("data-resize","se");
+      grip.setAttribute("class","vs-resize-handle");
+      grip.setAttribute("x",String(clamp(right-8,0,spec.width-20)));
+      grip.setAttribute("y",String(clamp(bottom-8,0,spec.height-20)));
+      grip.setAttribute("width","20");
+      grip.setAttribute("height","20");
+      grip.setAttribute("aria-label","Drag to resize selected design element");
+      overlay.appendChild(grip);
+    }
   }
   function inspector(){
     const pick=at("vsElement");
@@ -216,7 +294,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       }
     }
     area.innerHTML=html;
+    const readonly=isLocked();
     QA("[data-key]",area).forEach(input=>{
+      input.disabled=readonly;
       let start;
       input.onfocus=()=>{start=snap();};
       input.oninput=()=>{
@@ -246,17 +326,28 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     at("vsSubtitle").value=spec.subtitle||"";
     at("vsTheme").value=spec.theme;
     at("vsCount").textContent=spec.elements.length+" editable elements";
-    at("vsDelete").disabled=selected<0;at("vsDuplicate").disabled=selected<0;
-    inspector();highlight();buttons();
+    at("vsDelete").disabled=selected<0||isLocked();
+    at("vsDuplicate").disabled=selected<0||isLocked();
+    at("vsElement").disabled=false;
+    inspector();drawLayers();highlight();buttons();drawTimeline();
   }
   function schedule(ms=450){
     const current=++previewSequence;
     if(previewTimer)clearTimeout(previewTimer);
+    // Mark a previously rendered frame as stale immediately: users must not
+    // mistake it for the artwork they are saving or exporting now.
+    stage.setAttribute("aria-busy","true");
+    status("Updating design preview…");
     previewTimer=setTimeout(async()=>{
       if(!root.isConnected||current!==previewSequence)return;
       stage.setAttribute("aria-busy","true");
       try{
-        const d=await api("/api/visual/studio/preview",{spec,name});
+        const body={spec,name};
+        if(at("vsFormat").value==="gif" && at("vsEffect").value==="sequence" && spec.animation?.effect==="sequence"){
+          body.animation=spec.animation;
+          body.frame=Number(at("vsPlayhead").value)/100;
+        }
+        const d=await api("/api/visual/studio/preview",body);
         if(!root.isConnected||current!==previewSequence)return;
         at("vsPreview").src=d.image;
         status("Structural checks passed"+(d.adjustments.length?" · "+d.adjustments.length+" text adjustments":"")+". Review the actual appearance.");
@@ -265,6 +356,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     },ms);
   }
   function add(type){
+    if(spec.elements.length>=40){toast("This canvas has 40 elements. Remove or combine objects before adding more.","bad");return;}
     if(type==="image"&&!at("vsAssets").value){toast("Upload a picture under Files and choose it first.","bad");return;}
     const dimensions={text:[400,70],rect:[250,150],icon:[85,85],image:[340,220]}[type];
     const place=freePosition(spec,...dimensions);
@@ -304,8 +396,72 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   at("vsAddText").onclick=()=>add("text");at("vsAddShape").onclick=()=>add("rect");
   at("vsAddIcon").onclick=()=>add("icon");at("vsAddImage").onclick=()=>add("image");
   at("vsElement").onchange=e=>{selected=e.target.value===""?-1:Number(e.target.value);draw();};
+  at("vsLayers").onclick=e=>{
+    const button=e.target.closest("[data-layer-act]");if(!button)return;
+    const key=button.dataset.layerKey,act=button.dataset.layerAct;
+    const unit=layerUnits(spec).find(u=>u.key===key);if(!unit)return;
+    if(act==="select"){selected=unit.indices[0];draw();return;}
+    if(act==="visibility"||act==="lock"){
+      const flag=act==="visibility"?"hidden":"locked";
+      change(()=>toggleLayer(spec,key,flag,flag==="hidden"?!unit.hidden:!unit.locked));
+      return;
+    }
+    if(act==="front"||act==="back"){
+      if(unit.locked)return;
+      const item=spec.elements[selected],direction=act==="front"?1:-1;
+      change(()=>{
+        if(moveLayer(spec,key,direction)){
+          if(item)selected=spec.elements.indexOf(item);
+          else selected=layerUnits(spec).find(u=>u.key===key)?.indices[0]??-1;
+        }
+      });
+    }
+  };
+  let trackPrevious=null;
+  at("vsTracks").addEventListener("pointerdown",()=>{trackPrevious=snap();});
+  at("vsTracks").addEventListener("focusin",()=>{trackPrevious=snap();});
+  at("vsTracks").oninput=e=>{
+    const input=e.target.closest("[data-track]");
+    if(!input||spec.animation?.effect!=="sequence")return;
+    const i=Number(input.dataset.track);if(!spec.animation.stages[i])return;
+    spec.animation.stages[i].start=Number(input.value)/100;
+    Q("output",input.parentElement).textContent=input.value+"%";
+    schedule(300);
+  };
+  at("vsTracks").onchange=e=>{
+    if(!e.target.matches("[data-track]"))return;
+    record(trackPrevious||snap());trackPrevious=null;
+  };
+  at("vsPlayhead").oninput=e=>{
+    at("vsFrameLabel").textContent=e.target.value+"%";
+    schedule(300);
+  };
+  const gifOptions=()=>{
+    const effect=at("vsEffect").value;
+    const options={
+      effect,frames:Number(at("vsFrames").value),
+      duration_ms:Number(at("vsDelay").value),
+      loop:Number(at("vsLoop").value)
+    };
+    if(effect==="sequence"){
+      const tracks=normaliseSequence(spec);
+      if(!tracks)return null;
+      options.stages=tracks.stages;
+    }
+    return options;
+  };
+  function updateGifSpec(){
+    if(at("vsFormat").value!=="gif")return;
+    const next=gifOptions();
+    if(!next){status("A layer timeline needs at least one visible grouped component.",true);return;}
+    const before=snap();
+    spec.animation=next;
+    record(before);draw();
+  }
+  at("vsEffect").onchange=updateGifSpec;
+  for(const id of ["vsFrames","vsDelay","vsLoop"])at(id).onchange=updateGifSpec;
   at("vsDelete").onclick=()=>{
-    if(selected<0)return;
+    if(selected<0||isLocked())return;
     change(()=>{
       const chosen=spec.elements[selected],g=chosen.group;
       spec.elements=spec.elements.filter((e,i)=>g ? e.group!==g&&e.from_group!==g&&e.to_group!==g : i!==selected);
@@ -313,7 +469,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     });
   };
   at("vsDuplicate").onclick=()=>{
-    if(selected<0)return;
+    if(selected<0||isLocked())return;
+    const unit=currentUnit();
+    if(spec.elements.length+(unit?.indices.length||1)>40){
+      toast("Duplicating this group would exceed the 40-object canvas limit.","bad");return;
+    }
     change(()=>{
       const selectedElement=spec.elements[selected],g=selectedElement.group;
       const set=g?spec.elements.filter(e=>e.group===g):[selectedElement];
@@ -336,7 +496,15 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   }
   at("vsName").oninput=e=>{name=e.target.value;};
   at("vsFormat").onchange=()=>{
-    QA(".vs-gif-settings",root).forEach(el=>{el.hidden=at("vsFormat").value!=="gif";});
+    const gif=at("vsFormat").value==="gif";
+    QA(".vs-gif-settings",root).forEach(el=>{el.hidden=!gif;});
+    if(gif && spec.animation){
+      at("vsEffect").value=spec.animation.effect||"flow";
+      at("vsFrames").value=spec.animation.frames||20;
+      at("vsDelay").value=spec.animation.duration_ms||110;
+      at("vsLoop").value=spec.animation.loop??0;
+    }
+    drawTimeline();schedule();
   };
   at("vsSave").onclick=async()=>{
     const btn=at("vsSave");btn.disabled=true;
@@ -352,33 +520,49 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     try{
       const data=await api("/api/visual/studio/load?path="+encodeURIComponent(path));
       spec=data.spec;name=data.name;at("vsName").value=name;selected=-1;dirty=false;undoStack=[];redoStack=[];
+      if(spec.animation){
+        at("vsFormat").value="gif";
+        at("vsEffect").value=spec.animation.effect||"flow";
+        at("vsFrames").value=spec.animation.frames||20;
+        at("vsDelay").value=spec.animation.duration_ms||110;
+        at("vsLoop").value=spec.animation.loop??0;
+        QA(".vs-gif-settings",root).forEach(el=>{el.hidden=false;});
+      }
       draw();schedule(0);toast("Design opened");
     }catch(e){status("Could not open saved design: "+e.message,true);}
   };
   at("vsExport").onclick=async()=>{
     const btn=at("vsExport");btn.disabled=true;
     const fmt=at("vsFormat").value;
-    const animation=fmt==="gif"?{effect:at("vsEffect").value,frames:Number(at("vsFrames").value),
-      duration_ms:Number(at("vsDelay").value),loop:Number(at("vsLoop").value)}:null;
+    const animation=fmt==="gif"?gifOptions():null;
+    if(fmt==="gif"&&!animation){status("Add visible groups to use the GIF layer timeline.",true);btn.disabled=false;return;}
+    if(animation)spec.animation=animation;
+    const output_mode=at("vsOutputMode").value;
     try{
-      const out=await api("/api/visual/studio/export",{spec,name,format:fmt,animation});
+      const out=await api("/api/visual/studio/export",{spec,name,format:fmt,animation,output_mode});
       const file="/api/files/download?path="+encodeURIComponent(out.path);
-      const draft="/api/files/download?path="+encodeURIComponent(out.draft);
       const preview="/api/files/preview?path="+encodeURIComponent(out.path);
       const box=at("vsOutput");box.hidden=false;
+      const project=out.draft?'/api/files/download?path='+encodeURIComponent(out.draft):null;
       box.innerHTML='<strong>Export ready</strong> <a class="btn primary" href="'+file+'" download>'+
         icon("download")+' Download '+esc(fmt.toUpperCase())+'</a> '+
-        '<a class="btn" href="'+draft+'" download>Editable design specification</a>'+
+        (project?'<a class="btn" href="'+project+'" download>Download editable layers</a>':'')+
         (fmt==="gif"?'<img src="'+preview+'" alt="Live animated GIF" style="max-height:155px;max-width:220px;object-fit:contain">':"");
-      dirty=false;loadDrafts();toast("Design exported");status("Saved "+out.path+" and its provenance record.");
+      dirty=false;loadDrafts();toast("Design exported");
+      status("Exported "+out.path+". Refreshing the latest design preview…");
+      schedule(0);
     }catch(e){status("Export failed: "+e.message,true);}
     finally{btn.disabled=false;}
   };
   overlay.addEventListener("pointerdown",e=>{
     const target=e.target.closest("[data-i]");if(!target)return;
     const i=Number(target.getAttribute("data-i"));if(!spec.elements[i])return;
-    selected=i;draw();e.preventDefault();
-    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before:snap()};
+    const resizing=target.dataset.resize==="se";
+    selected=i;
+    const before=snap(),initial=selectionBox(spec,selected);
+    draw();e.preventDefault();
+    if(isLocked())return;
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before,initial,resizing};
     overlay.setPointerCapture(e.pointerId);
   });
   overlay.addEventListener("pointermove",e=>{
@@ -386,6 +570,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     const rect=overlay.getBoundingClientRect();if(!rect.width||!rect.height)return;
     const dx=Math.round((e.clientX-drag.x)*spec.width/rect.width);
     const dy=Math.round((e.clientY-drag.y)*spec.height/rect.height);
+    if(drag.resizing){
+      spec=copy(drag.before);
+      resizeSelection(spec,selected,drag.initial.w+dx,drag.initial.h+dy);
+      relink(spec);highlight();e.preventDefault();return;
+    }
     const orig=drag.before.elements[selected],g=orig.group;
     const ids=drag.before.elements.reduce((a,item,i)=>{
       if(g&&item.group===g||!g&&i===selected)a.push(i);return a;
@@ -416,4 +605,24 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   });
   draw();schedule(0);
   await Promise.all([loadAssets(),loadDrafts()]);
+  const openImage=sessionStorage.getItem("automoto_visual_open_image");
+  const openDraft=sessionStorage.getItem("automoto_visual_open_draft");
+  if(openImage||openDraft){
+    sessionStorage.removeItem("automoto_visual_open_image");
+    sessionStorage.removeItem("automoto_visual_open_draft");
+    try{
+      const result=openDraft
+        ? await api("/api/visual/studio/load?path="+encodeURIComponent(openDraft))
+        : await api("/api/visual/studio/import",{path:openImage});
+      spec=result.spec;
+      name=result.name||"Imported image";
+      at("vsName").value=name;
+      selected=spec.elements.findIndex(e=>e.type==="image");
+      undoStack=[];redoStack=[];dirty=false;
+      at("vsOutputMode").value="layered";
+      draw();schedule(0);
+      status(result.note||"Source artwork opened as editable Visual Studio layers.");
+      if(result.draft)await loadDrafts();
+    }catch(e){status("Could not open this image: "+e.message,true);}
+  }
 }

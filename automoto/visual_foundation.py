@@ -132,22 +132,27 @@ def _scene(spec:dict[str,Any]) -> dict:
     heading_size=max(30,round(h*.068))
     elements:list[dict]=[]
     assets:list[dict]=[]
-    # Small modern editorial decorations shared by all layouts.
-    elements.append(_rect(0,0,w,h,t["background"],radius=0,stroke_width=0,role="background"))
-    elements.append(_rect(margin,margin*.68,max(48,round(w*.085)),max(5,round(h*.011)),
-                          t["accent"],radius=4,stroke_width=0,role="accent"))
-    logo=spec.get("brand_logo")
-    reserve=min(round(w*.17),180) if logo else 0
-    elements.append(_text(margin,margin*1.16,w-margin*2-reserve,heading_size*1.3,
-                          title,heading_size,t["ink"],True,"heading"))
-    if subtitle:
-        elements.append(_text(margin,margin*1.16+heading_size*1.4,
-                              w-margin*2-reserve,round(h*.05),subtitle,max(17,round(h*.033)),
-                              t["muted"],False,"subtitle"))
-    if logo:
-        elements.append(_image(w-margin-reserve+14,margin*.81,reserve-16,
-                               max(34,round(h*.105)),str(logo),
-                               str(spec.get("brand_logo_alt") or "Original supplied brand logo"),assets))
+    # Native layered artboards must not acquire an unexpected title strip
+    # when reopened: every visible object should be an actual editable layer.
+    plain = spec.get("artboard_only",False)
+    if not isinstance(plain,bool) or (plain and layout!="canvas"):
+        raise VisualError("artboard_only is supported only for canvas layouts")
+    if not plain:
+        elements.append(_rect(0,0,w,h,t["background"],radius=0,stroke_width=0,role="background"))
+        elements.append(_rect(margin,margin*.68,max(48,round(w*.085)),max(5,round(h*.011)),
+                              t["accent"],radius=4,stroke_width=0,role="accent"))
+        logo=spec.get("brand_logo")
+        reserve=min(round(w*.17),180) if logo else 0
+        elements.append(_text(margin,margin*1.16,w-margin*2-reserve,heading_size*1.3,
+                              title,heading_size,t["ink"],True,"heading"))
+        if subtitle:
+            elements.append(_text(margin,margin*1.16+heading_size*1.4,
+                                  w-margin*2-reserve,round(h*.05),subtitle,max(17,round(h*.033)),
+                                  t["muted"],False,"subtitle"))
+        if logo:
+            elements.append(_image(w-margin-reserve+14,margin*.81,reserve-16,
+                                   max(34,round(h*.105)),str(logo),
+                                   str(spec.get("brand_logo_alt") or "Original supplied brand logo"),assets))
     content_top=max(round(h*.30) if subtitle else round(h*.27),135)
     content_bottom=h-max(50,round(h*.095))
     content_h=content_bottom-content_top
@@ -256,11 +261,21 @@ def _scene(spec:dict[str,Any]) -> dict:
                               body,max(20,round(h*.044)),t["ink"],True,"hero-text"))
     else:
         user=spec.get("elements")
-        if not isinstance(user,list) or not 1<=len(user)<=40:
-            raise VisualError("canvas requires 1 to 40 elements")
+        if not isinstance(user,list) or not 0<=len(user)<=40:
+            raise VisualError("canvas requires 0 to 40 elements")
+        hidden_groups={item.get("group") for item in user
+                       if isinstance(item,dict) and item.get("hidden") is True and item.get("group")}
         for element in user:
             if not isinstance(element,dict): raise VisualError("canvas elements must be objects")
+            for flag in ("hidden","locked"):
+                if flag in element and not isinstance(element[flag],bool):
+                    raise VisualError(f"{flag} must be true or false")
+            if element.get("hidden",False):
+                continue  # Keep source draft unchanged; omit this layer in every export.
             kind=element.get("type")
+            if kind=="line" and any(element.get(key) in hidden_groups
+                                    for key in ("from_group","to_group")):
+                continue
             if kind=="line":
                 e=_line(number(element.get("x1"),"x1",0,w),number(element.get("y1"),"y1",0,h),
                         number(element.get("x2"),"x2",0,w),number(element.get("y2"),"y2",0,h),
@@ -298,6 +313,13 @@ def _scene(spec:dict[str,Any]) -> dict:
                 if not isinstance(element["allow_overlap"],bool):
                     raise VisualError("allow_overlap must be true or false")
                 e["allow_overlap"]=element["allow_overlap"]
+            if kind=="line":
+                for anchor in ("from_group","to_group"):
+                    if anchor in element:
+                        value=element[anchor]
+                        if not isinstance(value,str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,50}",value):
+                            raise VisualError(f"{anchor} must name a short ASCII group")
+                        e[anchor]=value
             elements.append(e)
     if footer:
         elements.append(_text(margin,h-max(39,round(h*.057)),content_w,

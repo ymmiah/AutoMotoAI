@@ -101,14 +101,32 @@ For more information, see [Offline AI](docs/OFFLINE.md).
 
 ---
 
-## Visual Studio editor — next source build
+## Universal image output choices (new source build)
 
-> **In development:** [Visual Studio v1](docs/VISUAL-STUDIO.md) is implemented in [draft pull request #13](https://github.com/ymmiah/AutoMotoAI/pull/13), **not yet in the Microsoft Store release**.
+> **Development:** [PR #15](https://github.com/ymmiah/AutoMotoAI/pull/15) is stacked on the Visual Studio v2 branch. Not yet a Microsoft Store release.
 
-- The new **Visual Studio** sidebar page provides workflow, cards, poster and blank design templates, live backend-rendered previews, movable/grouped components, precise element properties, original uploaded images, undo/redo and editable draft files.
-- Export PNG/JPEG, SVG, PDF, editable PowerPoint and **genuine multi-frame GIF** files with loop, speed and motion settings.
-- File references are restricted to the signed-in account's workspace; outputs get provenance hashes, text fitting and contrast checks.
-- Full CI and browser-based smoke tests must pass before promotion. Full keyframe animation and generative pixel-level editing are separate follow-on milestones.
+AutoMoto asks how to deliver **every generated image**, not just GIFs: **single finished file**, **image with editable layers**, **animated GIF only**, or **GIF with editable layers**. The selected format and layer mode are independent; the application does not automatically create every variant.
+
+- **Visual Studio:** Choose `Single finished file` or `Editable layers + file` for PNG, JPEG, SVG, GIF or another supported export.
+- **Files:** Choose **Edit layers** on a PNG/JPEG/WebP/BMP/GIF. AutoMoto opens verified native designs with their actual text/shape/icon layers, or imports ordinary raster artwork as one editable image layer.
+- **AI-generated artwork:** diffusion output remains one raster image layer; added native text, icons and logos are independent. It does **not** magically recover separate AI model objects.
+- **Photo/logo composition:** original photos, logos and exact text remain individual protected design components when layered output is selected.
+
+[Delivery choices, security and realistic layer guarantees](docs/IMAGE-OUTPUT-MODES.md).
+
+---
+
+## Visual Studio editor — layers and GIF timeline
+
+> **Source-build status:** Visual Studio v1 was merged into `main` via [PR #13](https://github.com/ymmiah/AutoMotoAI/pull/13). The next build adds layers, proportional resizing and a staged animation timeline on a separate development branch. **This is not a published Microsoft Store update.**
+
+- **Visual Studio** supplies workflow, feature-card, poster and blank-canvas templates, native design controls and server-rendered previews.
+- **Layers:** drag/select grouped diagram components, reorder visual stacking, hide/show artwork and lock editing. Visibility persists in editable drafts and affects the actual exported image or PowerPoint.
+- **Resize handles:** proportionally reposition and resize objects/groups while maintaining source-image integrity. Export rejects text overflow, low contrast and unintended collisions.
+- **GIF timeline:** set when each design group appears, scrub to view a frame, and export a genuine multi-frame GIF with configurable timing and looping.
+- **Multi-format export:** PNG/JPEG, SVG, PDF and editable PowerPoint use the same validation and original source assets; no separate image-generation service is needed for native diagrams.
+
+[Editor workflow, privacy controls and limits](docs/VISUAL-STUDIO.md). Automatic visual redesign, complex keyframe interpolation and pixel-level generative photo editing are still future milestones.
 
 ---
 

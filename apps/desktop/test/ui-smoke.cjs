@@ -100,6 +100,41 @@ let browser;
   assert.equal(await page.locator('#vsStage').getAttribute('aria-busy'), 'false');
   assert.equal(await page.locator('#vsElement option').count() > 4, true);
   await page.screenshot({ path: path.join(output, 'visual-studio-workflow.png') });
+  // New layer stack: selecting, locking and visibility must affect actual exports.
+  assert.ok(await page.locator('#vsLayers [data-layer-key="group:stage0"]').count() >= 3,
+    'workflow group layer controls must exist');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="select"]').click();
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="lock"]').click();
+  assert.equal(await page.locator('#vsDelete').isDisabled(), true, 'locked layer forbids deletion');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="lock"]').click();
+  assert.equal(await page.locator('#vsDelete').isDisabled(), false, 'unlock restores editing');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="visibility"]').click();
+  assert.equal(await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="visibility"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="visibility"]').click();
+  // Drag the native corner grip and verify the editable source geometry changes.
+  const widthBefore = Number(await page.locator('#vsProperties [data-key="w"]').inputValue());
+  const grip = await page.locator('.vs-resize-handle').boundingBox();
+  assert.ok(grip, 'selected grouped card must expose a resize handle');
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + grip.width / 2 + 24, grip.y + grip.height / 2 + 13, { steps: 6 });
+  await page.mouse.up();
+  const widthAfter = Number(await page.locator('#vsProperties [data-key="w"]').inputValue());
+  assert.ok(widthAfter > widthBefore, 'drag-resize must update native element width');
+  await page.screenshot({ path: path.join(output, 'visual-studio-layers-resize.png') });
+  // A sequence timeline exposes group keyframes and renders the selected frame.
+  await page.locator('#vsFormat').selectOption('gif');
+  await page.locator('#vsEffect').selectOption('sequence');
+  assert.equal(await page.locator('#vsTimeline').isVisible(), true);
+  assert.equal(await page.locator('#vsTracks input[type="range"]').count(), 3);
+  await page.locator('#vsPlayhead').evaluate(input => {
+    input.value = '75';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => /Structural checks passed/.test(document.querySelector('#vsStatus')?.textContent || '') &&
+    document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  await page.locator('#vsTimeline').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(output, 'visual-studio-timeline.png') });
   await page.locator('#vsAddText').click();
   await page.locator('#vsProperties textarea[data-key="text"]').fill('Exact source copy');
   await page.locator('#vsProperties textarea[data-key="text"]').press('Tab');
@@ -108,11 +143,29 @@ let browser;
   await page.waitForFunction(() => document.querySelectorAll('#vsDraft option').length > 1);
   await page.locator('#vsFormat').selectOption('gif');
   assert.equal(await page.locator('#vsFrames').isVisible(), true);
+  assert.equal(await page.locator('#vsEffect').inputValue(), 'sequence', 'timeline setting must survive draft save');
   await page.locator('#vsFrames').fill('10');
+  // File format and editability are independent: a GIF can keep native layers.
+  await page.locator('#vsOutputMode').selectOption('layered');
   await page.locator('#vsExport').click();
   await page.locator('#vsOutput:not([hidden])').waitFor();
   assert.match(await page.locator('#vsOutput').innerText(), /Download GIF/);
+  assert.match(await page.locator('#vsOutput').innerText(), /Download editable layers/);
+  await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
   await page.screenshot({ path: path.join(output, 'visual-studio-gif.png') });
+  // Every supported picture has an Edit layers action in Files.
+  await page.locator('.nav [data-page="files"]').click();
+  await page.locator('[data-dir="artifacts"]').first().click();
+  await page.locator('[data-dir="artifacts/visual-studio"]').first().click();
+  await page.locator('[data-studio-image$=".gif"]').first().click();
+  await page.locator('#vsOutputMode').waitFor();
+  await page.waitForFunction(() => document.querySelector('#vsPreview')?.naturalWidth > 0 &&
+    document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  assert.equal(await page.locator('#vsOutputMode').inputValue(), 'layered',
+    'opening an exported image must restore an editable Visual Studio project');
+  assert.ok(await page.locator('#vsElement option').count() > 3,
+    'native generated GIF must reopen its independently editable source layers');
+  await page.screenshot({ path: path.join(output, 'visual-studio-reopen-layers.png') });
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();

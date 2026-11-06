@@ -23,10 +23,14 @@ def visual_presets(ctx:ToolContext) -> str:
             ". Layouts: workflow (nodes + optional links), cards (2-6 cards), "
             "hero (existing image + text) and canvas (positioned elements). "
             "Export formats: PNG, JPEG, SVG, PDF, editable PPTX and animated GIF. "
-            "GIF effects: flow, pulse, float and reveal; 8-48 frames, 50-500ms each. "
+            "GIF effects: flow, pulse, float, reveal, sequence; 8-48 frames, 50-500ms each. "
+            "Sequence uses grouped canvas elements and animation.stages:[{group,start:0.0-0.9}]. "
             "The renderer uses native drawing; AI artwork still requires an installed image model.")
 
-def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) -> str:
+def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None,
+                  output_mode:str="flat") -> str:
+    from automoto.visual_projects import mode
+    mode(output_mode)
     out=sandbox.resolve(path,allow_outside=True)
     if out.suffix.lower() not in {".png",".jpg",".jpeg",".svg",".gif",".pptx",".pdf"}:
         raise ToolFailed("output path must end with .png, .jpg, .svg, .gif, .pptx or .pdf")
@@ -46,10 +50,34 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) ->
             scenes.append(compile_scene({**themes,**raw}))
     else:
         scenes=[compile_scene(spec)]
+    project_spec=None
+    if output_mode=="layered":
+        if len(scenes)!=1:
+            raise ToolFailed("Visual Studio layered projects currently support one canvas; "
+                             "use editable PowerPoint for multi-slide designs")
+        from automoto.visual_projects import scene_project
+        try:
+            # Already-authored editor canvases are the source of truth: preserve
+            # even hidden/locked objects, grouped layers and animation timing.
+            project_spec = spec if spec.get("layout")=="canvas" else scene_project(scenes[0])
+            if out.suffix.lower()==".gif":
+                # Preserve the selected motion sequence when the agent passes
+                # timing as a tool argument, not only as a spec field.
+                project_spec = {**project_spec,
+                                "animation":animation or spec.get("animation") or
+                                {"effect":"flow","frames":20,"duration_ms":110,"loop":0}}
+        except (VisualError,OSError,ValueError) as exc: raise ToolFailed(str(exc)) from None
     try:
         render(scenes[0],out,scenes=scenes,animation=animation or spec.get("animation"))
     except (VisualError,OSError,ValueError,ImportError) as exc:
         raise ToolFailed(str(exc)) from None
+    project=None
+    if project_spec:
+        from automoto.visual_projects import save_project
+        try: project=save_project(project_spec,out.stem)
+        except (VisualError,OSError,ValueError) as exc:
+            out.unlink(missing_ok=True)
+            raise ToolFailed("Could not prepare editable layered project: "+str(exc)) from None
     names=sorted({f["path"]:f for s in scenes for f in s["assets"]}.values(),key=lambda v:v["path"])
     from hashlib import sha256
     metadata={
@@ -59,6 +87,8 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) ->
         "themes":[s["theme"] for s in scenes],
         "dimensions":[{"width":s["width"],"height":s["height"]} for s in scenes],
         "original_assets":names,
+        "output_mode":output_mode,
+        "editable_project":project,
         "text_fitting_repairs":[s.get("text_repairs",[]) for s in scenes],
         "output_sha256":sha256(out.read_bytes()).hexdigest(),
         "animation":(animation or spec.get("animation") or {}) if out.suffix.lower()==".gif" else None,
@@ -70,13 +100,17 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) ->
             json.dump(metadata,stream,indent=2,ensure_ascii=False)
     except OSError as exc:
         out.unlink(missing_ok=True)
+        if project:
+            (sandbox.default_root()/project).unlink(missing_ok=True)
         raise ToolFailed(f"failed to save visual provenance manifest: {exc}") from None
     return (f"Created {sandbox.rel(out)} and {sandbox.rel(manifest)}: "
-            f"{len(scenes)} design scene(s), {len(names)} protected original asset(s), "
+            + (f"Editable Visual Studio layered project: {project}. " if project else "Single exported file (no editable project requested). ")
+            + f"{len(scenes)} design scene(s), {len(names)} protected original asset(s), "
             f"theme {scenes[0]['theme']}, format {out.suffix.lower()[1:]}. "
             "Bounds, text fitting, contrast and source-file integrity passed. "
             "Manually review final appearance and font rendering. "
-            "GIF output uses genuine multi-frame animation with moving elements.")
+            + ("GIF output uses genuine multi-frame animation with moving elements."
+             if out.suffix.lower()==".gif" else "This is a static exported artwork."))
 
 def visual_check(ctx:ToolContext,path:str) -> str:
     p=sandbox.resolve(path,allow_outside=True)
@@ -114,17 +148,22 @@ TOOLS=[
          _obj({}),"safe",visual_presets,"visual"),
     Tool("visual_create","Create an original premium infographic, linked workflow, cards, slide, poster "
          "or ACTUAL animated GIF using one validated spec. Supports editable PPTX, SVG, PNG, JPG, PDF, GIF. "
+         "Ask whether the user wants output_mode='layered' (a separate Visual Studio editable design "
+         "with original text/icons/shapes as layers) or output_mode='flat' (only the exported artwork). "
+         "GIF is a format choice and also supports optional layers; never create every variant by default. "
          "For workflow use layout:'workflow',title,nodes:[{id,title,text,icon}],optional links:[{from,to}]; "
          "cards: layout:'cards',cards:[{title,text,icon}]; "
          "hero: layout:'hero',image:'uploads/source.png',text; "
          "canvas: layout:'canvas',elements:[{type:'rect'|'text'|'icon'|'image'|'line',x,y,w,h,...}]. "
          "Optional width,height,theme:'editorial-light'|'illustrated-workflow'|'premium-tech'|'commercial', "
          "footer,notes. For PPTX use slides:[{layout,title,...}] to produce multiple slides. "
-         "For GIF animation={effect:'flow'|'pulse'|'float'|'reveal',frames:20,duration_ms:110,loop:0}. "
+         "For GIF animation={effect:'flow'|'pulse'|'float'|'reveal'|'sequence',frames:20,duration_ms:110,loop:0}; "
+         "sequence adds stages:[{group:'stage0',start:0},{group:'stage1',start:0.5}]. "
          "All photo/logo sources remain untouched, with aspect-fit and source hashes; exact wording "
          "is kept in editable text wherever supported. Never promise the image is generatively created "
          "when the tool only draws vector shapes.",
-         _obj({"path":S,"spec":{"type":"object"},"animation":{"type":"object"}},["path","spec"]),
+         _obj({"path":S,"spec":{"type":"object"},"animation":{"type":"object"},
+               "output_mode":S},["path","spec"]),
          "risky",visual_create,"visual"),
     Tool("visual_check","Inspect GIF frame count and visible motion or check shape count and overflow "
          "in an editable PPTX. Check after every visual_create output.",

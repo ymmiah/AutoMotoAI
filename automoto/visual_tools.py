@@ -95,8 +95,10 @@ def _basic_workflow(prompt: str, negative: str, checkpoint: str, width: int, hei
 
 def generate_image(ctx: ToolContext, path: str, prompt: str, checkpoint: str = "",
                    negative: str = "", width: int = 1024, height: int = 768,
-                   steps: int = 22, seed: int | None = None) -> str:
-    """Generate an *original* image from text through a local ComfyUI install."""
+                   steps: int = 22, seed: int | None = None, output_mode: str = "flat") -> str:
+    """Generate original pixels, optionally wrapped in a genuine Visual Studio image layer."""
+    from automoto.visual_projects import mode, image_project
+    mode(output_mode)
     if not isinstance(prompt, str) or not 4 <= len(prompt.strip()) <= 2500:
         raise ToolFailed("Image prompt must be 4-2500 characters")
     if not isinstance(negative, str) or len(negative) > 1000:
@@ -111,6 +113,12 @@ def generate_image(ctx: ToolContext, path: str, prompt: str, checkpoint: str = "
         raise ToolFailed("Generated images must be saved as .png")
     if dest.exists():
         raise ToolFailed("Output already exists. Choose a new path; existing files are never overwritten")
+    if output_mode=="layered":
+        # Reject non-workspace destinations before any expensive model inference.
+        try:
+            dest.resolve().relative_to(sandbox.default_root().resolve())
+        except ValueError:
+            raise ToolFailed("Editable artwork must be saved inside your own workspace") from None
     base = _comfy_base()
     models = _json(base, "/models/checkpoints")
     if not isinstance(models, list) or not models:
@@ -165,8 +173,33 @@ def generate_image(ctx: ToolContext, path: str, prompt: str, checkpoint: str = "
                     raise ToolFailed(f"Local image output is not a valid PNG: {exc}") from None
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(data)
+                project=""
+                if output_mode=="layered":
+                    from automoto.visual_projects import image_project, save_project
+                    import hashlib
+                    try:
+                        project=save_project(image_project(dest),dest.stem)
+                        manifest=dest.with_name(dest.name+".visual.json")
+                        with manifest.open("x",encoding="utf-8") as stream:
+                            json.dump({
+                                "schema_version":1,
+                                "format":"png","output_mode":"layered",
+                                "editable_project":project,
+                                "output_sha256":hashlib.sha256(data).hexdigest(),
+                                "source":"local-diffusion-model",
+                                "checkpoint":chosen,"seed":rng,
+                                "quality":{"visual_manual_review":"required"}
+                            },stream,indent=2)
+                    except (OSError, ValueError) as exc:
+                        # Keep the expensive generated image; report the project issue.
+                        raise ToolFailed(f"Image generated at {sandbox.rel(dest)}, but the editable project "
+                                         f"could not be created: {exc}") from None
                 return (f"Generated original image at {sandbox.rel(dest)} ({width}×{height}), model {chosen}, "
-                        f"seed {rng}. It has not altered any reference photo. Review before using.")
+                        f"seed {rng}. "
+                        + (f"Open editable layer project {project} in Visual Studio. "
+                           "The generated artwork is one raster layer; new text/icons are separate. "
+                           if project else "Flat image only; no editable project requested. ")
+                        + "No reference face/logo was recreated. Review before using.")
         time.sleep(.75)
     raise ToolFailed("Local image generation timed out after three minutes; check the ComfyUI queue")
 
@@ -201,8 +234,10 @@ def _font(px: int, bold=False):
 def compose_image(ctx: ToolContext, path: str, source: str, title: str = "", subtitle: str = "",
                   logo: str = "", width: int = 1600, height: int = 900,
                   accent: str = "#3C82F6", background: str = "#111B2C",
-                  image_side: str = "right") -> str:
-    """Compose exactly supplied photography and text into a designed canvas, without AI redrawing."""
+                  image_side: str = "right", output_mode: str = "flat") -> str:
+    """Compose without redrawing photos; layered mode keeps typography as text layers."""
+    from automoto.visual_projects import mode
+    mode(output_mode)
     from PIL import Image, ImageDraw, ImageOps
     width, height = int(width), int(height)
     if not 640 <= width <= 4096 or not 480 <= height <= 4096 or width * height > 12_000_000:
@@ -219,6 +254,42 @@ def compose_image(ctx: ToolContext, path: str, source: str, title: str = "", sub
         raise ToolFailed("Output must be a .png image")
     if dest.exists():
         raise ToolFailed("Output exists. Never overwrite user files")
+    if output_mode=="layered":
+        if width>1920 or height>1080 or width*height>2_100_000:
+            raise ToolFailed("Editable artwork supports up to 1920×1080 (2.1 megapixels). "
+                             "Choose smaller dimensions or use flat output.")
+        from automoto.visual_projects import _relative_image
+        from automoto.visual_art_tools import visual_create
+        original=_relative_image(source)
+        emblem=_relative_image(logo) if logo else ""
+        photo_x=int(width*.52) if image_side=="right" else int(width*.06)
+        text_x=int(width*.06) if image_side=="right" else int(width*.57)
+        photo_w=int(width*.42)
+        text_w=int(width*.36)
+        brightness=sum(int(background[i:i+2],16)*k for i,k in ((1,.2126),(3,.7152),(5,.0722)))
+        ink="#FFFFFF" if brightness<135 else "#162335"
+        elements=[
+            {"type":"rect","x":0,"y":0,"w":width,"h":height,"fill":background,"radius":0,"group":"background"},
+            {"type":"rect","x":photo_x-6,"y":int(height*.15)-6,"w":photo_w+12,
+             "h":int(height*.70)+12,"fill":"#FFFFFF","stroke":accent,"radius":18,"group":"photo-border"},
+            {"type":"image","x":photo_x,"y":int(height*.15),"w":photo_w,"h":int(height*.70),
+             "path":original,"alt":"Original supplied photograph","group":"source-photo"},
+        ]
+        if logo:
+            elements.append({"type":"image","x":text_x,"y":int(height*.10),"w":int(width*.18),
+                            "h":int(height*.10),"path":emblem,"alt":"Original brand logo","group":"brand-logo"})
+        if title:
+            elements.append({"type":"text","x":text_x,"y":int(height*.30),"w":text_w,
+                            "h":int(height*.18),"text":title,"font_size":min(64,max(28,int(height*.063))),
+                            "bold":True,"colour":ink,"group":"heading"})
+        if subtitle:
+            elements.append({"type":"text","x":text_x,"y":int(height*.54),"w":text_w,
+                            "h":int(height*.22),"text":subtitle,"font_size":min(31,max(18,int(height*.029))),
+                            "colour":ink,"group":"subheading"})
+        spec={"width":width,"height":height,"layout":"canvas","theme":"premium-tech",
+              "artboard_only":True,"title":"","subtitle":"","elements":elements,
+              "colours":{"background":background}}
+        return visual_create(ctx,str(dest),spec,output_mode="layered")
     source_img = _image(source)
     emblem = _image(logo) if logo else None
     canvas = Image.new("RGB", (width, height), background)
@@ -285,15 +356,19 @@ TOOLS = [
     Tool("image_generate", "Generate original images with a real free LOCAL diffusion checkpoint via ComfyUI. "
          "Requires ComfyUI already installed/running on this computer with a compatible SD/SDXL checkpoint; "
          "downloads no code or models. Does NOT preserve a reference person's identity. "
-         "For photos/logos needing strict preservation, use image_compose instead.",
+         "For photos/logos needing strict preservation, use image_compose instead. "
+         "Ask if the user wants output_mode='layered' (image as one editable Visual Studio raster layer) "
+         "or 'flat' (image only). GIF is a separate optional format; never create variants unrequested.",
          _obj({"path": S, "prompt": S, "checkpoint": S, "negative": S, "width": I,
-               "height": I, "steps": I, "seed": I}, ["path", "prompt"]),
+               "height": I, "steps": I, "seed": I,"output_mode":S}, ["path", "prompt"]),
          "risky", generate_image, "visual"),
     Tool("image_compose", "Create a premium presentation/banner PNG with exact user-supplied photo, logo and text. "
          "Preserves the identity, proportions, logo structure and source files; it never generatively changes "
          "people, recreates brand marks, changes wording or crops source photos. "
-         "Use this for reference-image fidelity (NOT image_generate).",
+         "Use this for reference-image fidelity (NOT image_generate). "
+         "output_mode='layered' produces a Visual Studio project with original photo, exact native text "
+         "and logo as separate editable layers; 'flat' produces only the finished image.",
          _obj({"path": S, "source": S, "title": S, "subtitle": S, "logo": S, "width": I,
-               "height": I, "accent": S, "background": S, "image_side": S}, ["path", "source"]),
+               "height": I, "accent": S, "background": S, "image_side": S,"output_mode":S}, ["path", "source"]),
          "risky", compose_image, "visual"),
 ]
