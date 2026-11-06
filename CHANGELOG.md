@@ -1,5 +1,17 @@
 # AutoMoto AI - Version History & Changelog
 
+## 5.6.0-beta.6 — Visual Studio v1–v5 and editable image workflow
+
+- Add Visual Studio with editable design objects, safe local rendering, templates, drag-and-drop editing and export options.
+- Add editable layer stack, group controls and a staged animated GIF timeline.
+- Add review-first layout inspection, conservative repairs and a fix for reopening editable generated images.
+- Add per-field repair selection, original-versus-proposed previews, server-side validation of the selected changes, and Undo.
+- Preserve original source photographs, uploaded logos, exact text and existing animation settings. The editor does not automatically reconstruct individual objects from flattened images.
+- Add visual design accessibility and spacing advisories. These are deterministic checks, not generative aesthetic critique.
+- Include browser, renderer, security and Windows installer regressions; Microsoft Store submission remains a separate manual approval step.
+- Prepare beta package version 5.6.6.0 for an existing Store listing, subject to publisher identity and version availability verification.
+
+
 ## 5.6.0-beta.5 — Desktop workspace and Microsoft Store update
 
 - Windows uses AutoMoto's own caption bar (Menu, minimize, maximize, close) instead of the system title-bar buttons. Snap with Win+Z or by dragging the caption. See [docs/WINDOWS-CHROME.md](docs/WINDOWS-CHROME.md).
