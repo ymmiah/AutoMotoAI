@@ -566,6 +566,133 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(oldLogo && imgs.some(item=>item.path===oldLogo))at("vsBrandLogo").value=oldLogo;
     }catch{ /* Uploads folder may not exist yet. */ }
   }
+  function captureBrandForm(){
+    const theme=PALETTES[spec.theme],overrides=spec.colours||{};
+    const values={...theme,...overrides};
+    for(const key of BRAND_COLOUR_KEYS){
+      const source=key.startsWith("tone")?theme.tones[Number(key.slice(4))]:values[key];
+      const input=Q('[data-brand-colour="'+key+'"]',root);
+      if(input)input.value=source||"#777777";
+    }
+    at("vsBrandHeading").value=spec.brand_style?.heading_size||27;
+    at("vsBrandBody").value=spec.brand_style?.body_size||18;
+  }
+  function readBrandForm(){
+    const colours=Object.fromEntries(BRAND_COLOUR_KEYS.map(key=>
+      [key,Q('[data-brand-colour="'+key+'"]',root).value.toUpperCase()]));
+    const kit={name:at("vsBrandName").value.trim(),colours,
+      heading_size:Number(at("vsBrandHeading").value),
+      body_size:Number(at("vsBrandBody").value),
+      logo:at("vsBrandLogo").value||null};
+    paletteFromKit(kit);
+    if(!kit.name||kit.name.length>80)throw Error("Give your brand kit a name (1–80 characters).");
+    return kit;
+  }
+  function showBrandKit(kit){
+    at("vsBrandName").value=kit.name;
+    const colours=paletteFromKit(kit);
+    for(const key of BRAND_COLOUR_KEYS){
+      Q('[data-brand-colour="'+key+'"]',root).value=colours[key];
+    }
+    at("vsBrandHeading").value=kit.heading_size;
+    at("vsBrandBody").value=kit.body_size;
+    if(kit.logo && !QA("option",at("vsBrandLogo")).some(o=>o.value===kit.logo)){
+      at("vsBrandLogo").add(new Option(kit.logo,kit.logo));
+    }
+    at("vsBrandLogo").value=kit.logo||"";
+  }
+  async function loadBrandKits(){
+    try{
+      const result=await api("/api/visual/studio/brand-kits/list");
+      const current=at("vsBrandKits").value;
+      at("vsBrandKits").innerHTML='<option value="">Select a kit</option>'+
+        result.kits.map(k=>'<option value="'+esc(k.path)+'">'+esc(k.name)+'</option>').join("");
+      if(result.kits.some(k=>k.path===current))at("vsBrandKits").value=current;
+    }catch(e){status("Could not load brand kits: "+e.message,true);}
+  }
+  at("vsBrandCapture").onclick=()=>{captureBrandForm();toast("Current page palette captured. Save to reuse it.");};
+  at("vsBrandSave").onclick=async()=>{
+    const button=at("vsBrandSave");button.disabled=true;
+    try{
+      const result=await api("/api/visual/studio/brand-kits/save",readBrandForm());
+      await loadBrandKits();at("vsBrandKits").value=result.path;
+      toast("Brand kit saved privately");status("Reusable brand kit saved.");
+    }catch(e){status("Brand kit save failed: "+e.message,true);}
+    finally{button.disabled=false;}
+  };
+  at("vsBrandLoad").onclick=async()=>{
+    const path=at("vsBrandKits").value;
+    if(!path){status("Choose a saved brand kit first.",true);return;}
+    try{
+      const result=await api("/api/visual/studio/brand-kits/load?path="+encodeURIComponent(path));
+      showBrandKit(result.kit);toast("Brand kit loaded. Review colours before applying.");
+    }catch(e){status("Could not open brand kit: "+e.message,true);}
+  };
+  at("vsBrandDelete").onclick=async()=>{
+    const path=at("vsBrandKits").value;
+    if(!path||!window.confirm("Delete this saved brand kit? Existing designs will not be changed."))return;
+    try{
+      await api("/api/visual/studio/brand-kits/delete",{path});
+      await loadBrandKits();
+      toast("Saved brand kit deleted. Existing designs remain unchanged.");
+    }catch(e){status("Could not delete brand kit: "+e.message,true);}
+  };
+  async function applySelectedBrand(allPages){
+    const btn=at(allPages?"vsBrandApplyAll":"vsBrandApplyPage");
+    btn.disabled=true;
+    try{
+      const {kit}=await api("/api/visual/studio/brand-kits/validate",readBrandForm());
+      const previous=documentPages(),snapshot=JSON.stringify(previous);
+      const candidates=previous.map((p,i)=>{
+        const next=copy(p);
+        if(allPages||i===activePage)applyBrandKit(next.spec,kit);
+        return next;
+      });
+      if(JSON.stringify(candidates)===snapshot){toast("These pages already use this kit.");return;}
+      if(allPages && pages.length>1 &&
+         !window.confirm("Apply this brand kit to all "+pages.length+" pages? Each page keeps its own Undo history."))return;
+      // All pages, including an untouched current page, must pass the real
+      // renderer before any mutated layer enters the editing session.
+      await api("/api/visual/studio/document/validate",{name,pages:candidates});
+      if(JSON.stringify(documentPages())!==snapshot){
+        status("Document changed while checking the brand kit. Apply it again.",true);return;
+      }
+      for(let i=0;i<pages.length;i++){
+        if(JSON.stringify(previous[i])===JSON.stringify(candidates[i]))continue;
+        const history=i===activePage?undoStack:(pages[i]._undo||[]);
+        history.push(previous[i].spec);
+        if(history.length>40)history.shift();
+        pages[i]._undo=history;pages[i]._redo=[];
+        pages[i].spec=candidates[i].spec;
+      }
+      spec=pages[activePage].spec;
+      undoStack=pages[activePage]._undo||[];redoStack=[];
+      selected=-1;selectionKeys.clear();dirty=true;closeRepair();
+      draw();schedule(0);
+      toast(allPages?"Brand kit applied to the document.":"Brand kit applied to this page.");
+    }catch(e){status("Brand kit not applied: "+e.message,true);}
+    finally{btn.disabled=false;}
+  }
+  at("vsBrandApplyPage").onclick=()=>applySelectedBrand(false);
+  at("vsBrandApplyAll").onclick=()=>applySelectedBrand(true);
+  at("vsBrandPlaceLogo").onclick=async()=>{
+    const button=at("vsBrandPlaceLogo");button.disabled=true;
+    try{
+      const {kit}=await api("/api/visual/studio/brand-kits/validate",readBrandForm());
+      if(!kit.logo)throw Error("Choose an original uploaded logo first.");
+      if(spec.elements.length>=40)throw Error("This page already has 40 editable elements.");
+      const pos=freePosition(spec,170,90);
+      if(!pos)throw Error("No clear space for the logo. Move existing elements first.");
+      const candidate=copy(spec);
+      candidate.elements.push({type:"image",x:pos.x,y:pos.y,w:170,h:90,
+        path:kit.logo,alt:"Original supplied brand logo"});
+      await api("/api/visual/studio/preview",{spec:candidate,name});
+      change(()=>{spec.elements=candidate.elements;selected=spec.elements.length-1;
+        selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);});
+      toast("Original logo placed as an editable image layer; source pixels untouched.");
+    }catch(e){status("Logo not placed: "+e.message,true);}
+    finally{button.disabled=false;}
+  };
   async function loadDrafts(){
     try{
       const data=await api("/api/visual/studio/list");
@@ -1084,8 +1211,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       change(()=>{if(translateLayerUnits(spec,[...selectionKeys],delta[0]*amount,delta[1]*amount))relink(spec);});
     }
   });
-  draw();schedule(0);
-  await Promise.all([loadAssets(),loadDrafts()]);
+  captureBrandForm();draw();schedule(0);
+  await Promise.all([loadAssets(),loadDrafts(),loadBrandKits()]);
   const openImage=sessionStorage.getItem("automoto_visual_open_image");
   const openDraft=sessionStorage.getItem("automoto_visual_open_draft");
   if(openImage||openDraft){
