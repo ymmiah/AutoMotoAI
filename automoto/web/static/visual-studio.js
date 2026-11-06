@@ -837,6 +837,63 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     input.onchange=()=>{record(previous||snap());};
   }
   at("vsName").oninput=e=>{name=e.target.value;};
+  // Document operations never merge two page histories or mutate source
+  // assets. Each page remains the same native editable canvas specification.
+  at("vsPageTabs").onclick=e=>{
+    const target=e.target.closest("[data-page-index]");
+    if(target)openPage(Number(target.dataset.pageIndex));
+  };
+  at("vsPageName").onchange=e=>{
+    const value=e.target.value.trim().slice(0,80)||"Page "+(activePage+1);
+    if(pages[activePage].name!==value){
+      pages[activePage].name=value;dirty=true;
+    }
+    pageBars();
+  };
+  at("vsPageAdd").onclick=()=>{
+    if(pages.length>=20){toast("Document limit: 20 pages.","bad");return;}
+    storePage();
+    const blank=template("blank",spec.theme);
+    blank.width=spec.width;blank.height=spec.height;
+    if(spec.artboard_only)blank.artboard_only=true;
+    if(spec.colours)blank.colours=copy(spec.colours);
+    pages.splice(activePage+1,0,{name:"Page "+(pages.length+1),spec:blank});
+    activePage++;
+    spec=blank;undoStack=[];redoStack=[];
+    selected=-1;selectionKeys.clear();dirty=true;
+    closeRepair();draw();schedule(0);
+  };
+  at("vsPageDuplicate").onclick=()=>{
+    if(pages.length>=20){toast("Document limit: 20 pages.","bad");return;}
+    storePage();
+    const source=pages[activePage],duplicate=copy(source.spec);
+    const title=("Copy of "+source.name).slice(0,80);
+    pages.splice(activePage+1,0,{name:title,spec:duplicate});
+    activePage++;spec=duplicate;undoStack=[];redoStack=[];
+    selected=-1;selectionKeys.clear();dirty=true;
+    closeRepair();draw();schedule(0);
+  };
+  for(const [id,dir] of [["vsPageUp",-1],["vsPageDown",1]]){
+    at(id).onclick=()=>{
+      const other=activePage+dir;
+      if(other<0||other>=pages.length)return;
+      storePage();
+      [pages[activePage],pages[other]]=[pages[other],pages[activePage]];
+      activePage=other;dirty=true;pageBars();
+    };
+  }
+  at("vsPageDelete").onclick=()=>{
+    if(pages.length<=1)return;
+    if(!window.confirm("Remove this page from the document? Its contents will be lost unless you have saved a previous draft."))return;
+    storePage();
+    pages.splice(activePage,1);
+    activePage=Math.min(activePage,pages.length-1);
+    const next=pages[activePage];
+    spec=next.spec;undoStack=next._undo||[];redoStack=next._redo||[];
+    selected=-1;selectionKeys.clear();dirty=true;
+    closeRepair();draw();schedule(0);
+  };
+
   at("vsFormat").onchange=()=>{
     const gif=at("vsFormat").value==="gif";
     QA(".vs-gif-settings",root).forEach(el=>{el.hidden=!gif;});
@@ -846,13 +903,14 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       at("vsDelay").value=spec.animation.duration_ms||110;
       at("vsLoop").value=spec.animation.loop??0;
     }
-    drawTimeline();schedule();
+    drawTimeline();pageBars();schedule();
   };
   at("vsSave").onclick=async()=>{
     const btn=at("vsSave");btn.disabled=true;
     try{
-      const out=await api("/api/visual/studio/save",{name,spec});
-      dirty=false;await loadDrafts();at("vsDraft").value=out.path;toast("Editable design saved");status("Saved "+out.path);
+      const out=await api("/api/visual/studio/document/save",{name,pages:documentPages()});
+      dirty=false;await loadDrafts();at("vsDraft").value=out.path;
+      toast("Editable "+pages.length+"-page document saved");status("Saved "+out.path);
     }catch(e){status("Save failed: "+e.message,true);}
     finally{btn.disabled=false;}
   };
@@ -861,8 +919,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     if(dirty&&!window.confirm("Discard unsaved changes and open the saved draft?"))return;
     try{
       const data=await api("/api/visual/studio/load?path="+encodeURIComponent(path));
-      spec=data.spec;name=data.name;at("vsName").value=name;selected=-1;selectionKeys.clear();dirty=false;undoStack=[];redoStack=[];
-      if(spec.animation){
+      setDocument(data);name=data.name;at("vsName").value=name;
+      if(pages.length>1)at("vsFormat").value="pptx";
+      if(spec.animation && pages.length===1){
         at("vsFormat").value="gif";
         at("vsEffect").value=spec.animation.effect||"flow";
         at("vsFrames").value=spec.animation.frames||20;
@@ -880,8 +939,14 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     if(fmt==="gif"&&!animation){status("Add visible groups to use the GIF layer timeline.",true);btn.disabled=false;return;}
     if(animation)spec.animation=animation;
     const output_mode=at("vsOutputMode").value;
+    const wholeDocument=pages.length>1 && (fmt==="pdf"||fmt==="pptx");
+    const exportName=wholeDocument?name:name+(pages.length>1?" - "+pages[activePage].name:"");
     try{
-      const out=await api("/api/visual/studio/export",{spec,name,format:fmt,animation,output_mode});
+      const out=wholeDocument
+        ? await api("/api/visual/studio/document/export",{
+            name:exportName,pages:documentPages(),format:fmt,output_mode})
+        : await api("/api/visual/studio/export",{
+            spec,name:exportName,format:fmt,animation,output_mode});
       const file="/api/files/download?path="+encodeURIComponent(out.path);
       const preview="/api/files/preview?path="+encodeURIComponent(out.path);
       const box=at("vsOutput");box.hidden=false;
@@ -890,8 +955,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         icon("download")+' Download '+esc(fmt.toUpperCase())+'</a> '+
         (project?'<a class="btn" href="'+project+'" download>Download editable layers</a>':'')+
         (fmt==="gif"?'<img src="'+preview+'" alt="Live animated GIF" style="max-height:155px;max-width:220px;object-fit:contain">':"");
-      dirty=false;loadDrafts();toast("Design exported");
-      status("Exported "+out.path+". Refreshing the latest design preview…");
+      await loadDrafts();toast(wholeDocument?"Document exported":"Page exported");
+      status("Exported "+out.path+(wholeDocument?" · "+pages.length+" pages.":pages.length>1
+        ?" · Only the active page was exported.":".")+" Refreshing the latest preview…");
       schedule(0);
     }catch(e){status("Export failed: "+e.message,true);}
     finally{btn.disabled=false;}
@@ -982,9 +1048,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       const result=openDraft
         ? await api("/api/visual/studio/load?path="+encodeURIComponent(openDraft))
         : await api("/api/visual/studio/import",{path:openImage});
-      spec=result.spec;
+      setDocument(result);
       name=result.name||"Imported image";
       at("vsName").value=name;
+      if(pages.length>1)at("vsFormat").value="pptx";
       selected=spec.elements.findIndex(e=>e.type==="image");
       selectionKeys=selected>=0?new Set([unitKey(spec.elements[selected],selected)]):new Set();
       undoStack=[];redoStack=[];dirty=false;
