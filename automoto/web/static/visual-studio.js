@@ -1,6 +1,8 @@
 /* Visual Studio: native exported scene renderer, editable layers and bounded GIF tracks.
    Backend renders the final preview. Edits keep source imagery unchanged. */
-import {layerUnits,toggleLayer,moveLayer,selectionBox,resizeSelection,
+import {layerUnits,unitKey,toggleLayer,moveLayer,selectionBox,resizeSelection,
+        selectedLayerUnits,selectionBounds,translateLayerUnits,alignLayerUnits,
+        distributeLayerUnits,groupLayerUnits,ungroupLayerUnits,snapLayerDelta,
         sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
@@ -136,6 +138,20 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<div id="vsProperties" class="vs-fields"></div>'+
     '<h3 class="vs-layer-heading">Layers <span class="vs-small">Front → back</span></h3>'+
     '<div id="vsLayers" class="vs-layers" aria-label="Visual design layers"></div>'+
+    '<div class="vs-toolbar vs-multi-controls"><button class="btn" id="vsSelectAll">Select unlocked</button>'+
+    '<button class="btn" id="vsClearSelection">Clear selection</button>'+
+    '<span id="vsSelectedCount" class="vs-small" role="status"></span></div>'+
+    '<div class="vs-toolbar vs-multi-controls">'+
+    '<label>Align <select class="input" id="vsAlignMode" aria-label="Align selected layers">'+
+    '<option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option>'+
+    '<option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select></label>'+
+    '<button class="btn" id="vsAlign">Align</button>'+
+    '<label>Distribute <select class="input" id="vsDistributeMode" aria-label="Distribute selected layers">'+
+    '<option value="horizontal">Horizontally</option><option value="vertical">Vertically</option></select></label>'+
+    '<button class="btn" id="vsDistribute">Distribute</button></div>'+
+    '<div class="vs-toolbar vs-multi-controls"><button class="btn" id="vsGroup">Group</button>'+
+    '<button class="btn" id="vsUngroup">Ungroup</button>'+
+    '<label class="vs-snap-toggle"><input type="checkbox" id="vsSnap" checked> Snap on drag</label></div>'+
     '<div class="vs-toolbar" style="margin-top:12px"><button class="btn" id="vsDuplicate">Duplicate</button>'+
     '<button class="btn danger" id="vsDelete">Delete</button></div>'+
     '<p class="vs-inspector-note">Grouped components move together. Exact text stays editable. Original uploaded imagery is not AI-redrawn.</p></aside></div>'+
@@ -162,6 +178,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
+  let selectionKeys=new Set();
   let pendingRepair=null,repairRequest=0,inspectionRequest=0;
   let previewSequence=0,previewTimer=null,drag=null;
   const status=(message,bad=false)=>{at("vsStatus").textContent=message;at("vsStatus").classList.toggle("bad",bad);};
@@ -180,26 +197,38 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     redoStack=[];dirty=true;buttons();schedule();
   }
   function change(fn){
-    const before=snap();fn();
+    const before=snap(),result=fn();
     if(spec.animation?.effect==="sequence"){
       const next=normaliseSequence(spec);
       if(next)spec.animation=next;
       else delete spec.animation;
     }
-    record(before);draw();
+    record(before);draw();return result;
   }
   function buttons(){at("vsUndo").disabled=!undoStack.length;at("vsRedo").disabled=!redoStack.length;}
   function undo(){
     if(!undoStack.length)return;
-    redoStack.push(snap());spec=undoStack.pop();selected=-1;
+    redoStack.push(snap());spec=undoStack.pop();selected=-1;selectionKeys.clear();
     at("vsEffect").value=spec.animation?.effect||"flow";
     draw();schedule();
   }
   function redo(){
     if(!redoStack.length)return;
-    undoStack.push(snap());spec=redoStack.pop();selected=-1;
+    undoStack.push(snap());spec=redoStack.pop();selected=-1;selectionKeys.clear();
     at("vsEffect").value=spec.animation?.effect||"flow";
     draw();schedule();
+  }
+  function selectedUnits(){return selectedLayerUnits(spec,selectionKeys);}
+  function choose(index,extend=false){
+    const unit=layerUnits(spec).find(u=>u.indices.includes(index));
+    if(!extend)selectionKeys.clear();
+    if(unit){
+      if(extend && selectionKeys.has(unit.key))selectionKeys.delete(unit.key);
+      else selectionKeys.add(unit.key);
+    }
+    const units=selectedUnits();
+    selected=units.length?(unit&&selectionKeys.has(unit.key)?index:units[0].indices[0]):-1;
+    draw();
   }
   function currentUnit(index=selected){
     return layerUnits(spec).find(u=>u.indices.includes(index));
@@ -208,11 +237,12 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   function drawLayers(){
     const layers=layerUnits(spec).slice().reverse();
     at("vsLayers").innerHTML=layers.map((u,order)=>{
-      const active=u.indices.includes(selected),iconName=u.isConnector?"link":u.key.startsWith("group:")?"folder":"file";
+      const active=selectionKeys.has(u.key),iconName=u.isConnector?"link":u.key.startsWith("group:")?"folder":"file";
       const label=u.label+" ("+u.indices.length+")";
       const common=' data-layer-key="'+esc(u.key)+'"';
       return '<div class="vs-layer'+(active?' active':'')+(u.hidden?' hidden-layer':'')+'">'+
-        '<button class="vs-layer-name" data-layer-act="select"'+common+' title="'+esc(label)+'">'+
+        '<button class="vs-layer-name" data-layer-act="select"'+common+
+        ' aria-pressed="'+String(active)+'" title="'+esc(label)+' · Shift/Ctrl-click to select multiple">'+
         icon(iconName)+' '+esc(label)+'</button>'+
         '<button class="vs-layer-btn" data-layer-act="visibility"'+common+
         ' aria-label="'+(u.hidden?'Show ':'Hide ')+esc(u.label)+'" aria-pressed="'+String(u.hidden)+'">'+
@@ -256,28 +286,32 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       }
       overlay.appendChild(hit);
     });
-    if(selected<0||!spec.elements[selected]||spec.elements[selected].hidden)return;
-    const e=spec.elements[selected];
-    const chosen=e.group?spec.elements.filter(a=>a.group===e.group):[e];
-    const xs=chosen.map(a=>bounds(a)),x=Math.min(...xs.map(a=>a.x)),y=Math.min(...xs.map(a=>a.y));
-    const right=Math.max(...xs.map(a=>a.x+a.w)),bottom=Math.max(...xs.map(a=>a.y+a.h));
-    const mark=document.createElementNS(NS,"rect");
-    mark.setAttribute("class","vs-selected");mark.setAttribute("x",String(Math.max(0,x-5)));
-    mark.setAttribute("y",String(Math.max(0,y-5)));mark.setAttribute("width",String(Math.min(spec.width-x+5,right-x+10)));
-    mark.setAttribute("height",String(Math.min(spec.height-y+5,bottom-y+10)));
-    overlay.appendChild(mark);
-    if(!isLocked() && e.type!=="line"){
-      const grip=document.createElementNS(NS,"rect");
-      grip.setAttribute("data-i",String(selected));
-      grip.setAttribute("data-resize","se");
-      grip.setAttribute("class","vs-resize-handle");
-      grip.setAttribute("x",String(clamp(right-8,0,spec.width-20)));
-      grip.setAttribute("y",String(clamp(bottom-8,0,spec.height-20)));
-      grip.setAttribute("width","20");
-      grip.setAttribute("height","20");
-      grip.setAttribute("aria-label","Drag to resize selected design element");
-      overlay.appendChild(grip);
+    const units=selectedUnits();
+    if(!units.length)return;
+    for(const unit of units){
+      const area=selectionBox(spec,unit.indices[0]);
+      if(!area)continue;
+      const mark=document.createElementNS(NS,"rect");
+      mark.setAttribute("class","vs-selected");
+      mark.setAttribute("x",String(Math.max(0,area.x-5)));
+      mark.setAttribute("y",String(Math.max(0,area.y-5)));
+      mark.setAttribute("width",String(Math.min(spec.width-area.x+5,area.w+10)));
+      mark.setAttribute("height",String(Math.min(spec.height-area.y+5,area.h+10)));
+      overlay.appendChild(mark);
     }
+    if(units.length!==1||selected<0||!spec.elements[selected]||isLocked()||
+       spec.elements[selected].type==="line")return;
+    const area=selectionBox(spec,selected);
+    if(!area)return;
+    const grip=document.createElementNS(NS,"rect");
+    grip.setAttribute("data-i",String(selected));
+    grip.setAttribute("data-resize","se");
+    grip.setAttribute("class","vs-resize-handle");
+    grip.setAttribute("x",String(clamp(area.x+area.w-8,0,spec.width-20)));
+    grip.setAttribute("y",String(clamp(area.y+area.h-8,0,spec.height-20)));
+    grip.setAttribute("width","20");grip.setAttribute("height","20");
+    grip.setAttribute("aria-label","Drag to resize selected design element");
+    overlay.appendChild(grip);
   }
   function inspector(){
     const pick=at("vsElement");
@@ -285,6 +319,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       spec.elements.map((e,i)=>'<option value="'+i+'"'+(i===selected?' selected':'')+'>'+
         (i+1)+' · '+esc(e.type)+' '+(e.type==="text"?esc(e.text.slice(0,20)):esc(e.group||""))+'</option>').join("");
     const area=at("vsProperties");
+    if(selectedUnits().length>1){
+      area.innerHTML='<p class="vs-inspector-note full">Multiple layers selected. Use Align, Distribute, Group or drag to move them. Choose one layer to edit individual properties.</p>';
+      return;
+    }
     if(selected<0||!spec.elements[selected]){
       area.innerHTML='<p class="vs-inspector-note full">Choose an element from the canvas or this list.</p>';return;
     }
@@ -343,14 +381,29 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     });
   }
   function draw(){
+    const available=new Set(layerUnits(spec).map(u=>u.key));
+    selectionKeys=new Set([...selectionKeys].filter(k=>available.has(k)));
+    if(!selectionKeys.size && selected>=0 && spec.elements[selected]){
+      selectionKeys.add(unitKey(spec.elements[selected],selected));
+    }
+    if(selectionKeys.size && !selectedUnits().some(u=>u.indices.includes(selected))){
+      selected=selectedUnits()[0].indices[0];
+    }
     stage.style.aspectRatio=spec.width+"/"+spec.height;
     overlay.setAttribute("viewBox","0 0 "+spec.width+" "+spec.height);
     at("vsTitle").value=spec.title||"";
     at("vsSubtitle").value=spec.subtitle||"";
     at("vsTheme").value=spec.theme;
     at("vsCount").textContent=spec.elements.length+" editable elements";
-    at("vsDelete").disabled=selected<0||isLocked();
-    at("vsDuplicate").disabled=selected<0||isLocked();
+    const units=selectedUnits(),allowed=units.every(u=>!u.locked&&!u.hidden&&!u.isConnector);
+    at("vsSelectedCount").textContent=units.length+" layer"+(units.length===1?"":"s")+" selected";
+    at("vsAlign").disabled=units.length<2||!allowed;
+    at("vsDistribute").disabled=units.length<3||!allowed;
+    at("vsGroup").disabled=units.length<2||!allowed||units.some(u=>u.key.startsWith("group:"));
+    at("vsUngroup").disabled=units.length!==1||!allowed||!units[0].key.startsWith("group:");
+    at("vsClearSelection").disabled=!units.length;
+    at("vsDelete").disabled=units.length!==1||selected<0||isLocked();
+    at("vsDuplicate").disabled=units.length!==1||selected<0||isLocked();
     at("vsElement").disabled=false;
     inspector();drawLayers();highlight();buttons();drawTimeline();
   }
@@ -395,6 +448,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(type==="icon")e={type,x,y,w:85,h:85,name:"sparkle",colour:p.ink,auto_colour:"ink"};
       if(type==="image")e={type,x,y,w:340,h:220,path:at("vsAssets").value,alt:"Original source image"};
       spec.elements.push(e);selected=spec.elements.length-1;
+      selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);
     });
   }
   async function loadAssets(){
@@ -414,7 +468,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   }
   at("vsTemplate").onchange=e=>{
     if(dirty&&!window.confirm("Replace this design? Save your draft first if you want to keep it."))return;
-    spec=template(e.target.value,spec.theme);selected=-1;dirty=false;undoStack=[];redoStack=[];
+    spec=template(e.target.value,spec.theme);selected=-1;selectionKeys.clear();dirty=false;undoStack=[];redoStack=[];
     draw();schedule(0);
   };
   at("vsTheme").onchange=e=>change(()=>themeElements(spec,e.target.value));
@@ -566,19 +620,19 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       return;
     }
     spec=copy(review.candidate);
-    selected=-1;
+    selected=-1;selectionKeys.clear();
     closeRepair();
     record(before);draw();schedule(0);
     toast("Approved selected repairs applied. Undo is available.");
   };
   at("vsAddText").onclick=()=>add("text");at("vsAddShape").onclick=()=>add("rect");
   at("vsAddIcon").onclick=()=>add("icon");at("vsAddImage").onclick=()=>add("image");
-  at("vsElement").onchange=e=>{selected=e.target.value===""?-1:Number(e.target.value);draw();};
+  at("vsElement").onchange=e=>choose(e.target.value===""?-1:Number(e.target.value));
   at("vsLayers").onclick=e=>{
     const button=e.target.closest("[data-layer-act]");if(!button)return;
     const key=button.dataset.layerKey,act=button.dataset.layerAct;
     const unit=layerUnits(spec).find(u=>u.key===key);if(!unit)return;
-    if(act==="select"){selected=unit.indices[0];draw();return;}
+    if(act==="select"){choose(unit.indices[0],e.shiftKey||e.ctrlKey||e.metaKey);return;}
     if(act==="visibility"||act==="lock"){
       const flag=act==="visibility"?"hidden":"locked";
       change(()=>toggleLayer(spec,key,flag,flag==="hidden"?!unit.hidden:!unit.locked));
@@ -586,14 +640,58 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     }
     if(act==="front"||act==="back"){
       if(unit.locked)return;
-      const item=spec.elements[selected],direction=act==="front"?1:-1;
+      const item=spec.elements[unit.indices[0]],direction=act==="front"?1:-1;
       change(()=>{
         if(moveLayer(spec,key,direction)){
-          if(item)selected=spec.elements.indexOf(item);
-          else selected=layerUnits(spec).find(u=>u.key===key)?.indices[0]??-1;
+          selected=spec.elements.indexOf(item);
+          selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);
         }
       });
     }
+  };
+  // Batch controls use whole layer units, never half a card or a locked asset.
+  at("vsSelectAll").onclick=()=>{
+    const units=layerUnits(spec).filter(u=>!u.hidden&&!u.locked&&!u.isConnector);
+    selectionKeys=new Set(units.map(u=>u.key));
+    selected=units.length?units[0].indices[0]:-1;draw();
+  };
+  at("vsClearSelection").onclick=()=>choose(-1);
+  at("vsAlign").onclick=()=>{
+    const result=change(()=>{
+      const ok=alignLayerUnits(spec,[...selectionKeys],at("vsAlignMode").value);
+      if(ok)relink(spec);return ok;
+    });
+    if(!result)toast("Alignment could not be applied without moving a layer outside the canvas.","bad");
+  };
+  at("vsDistribute").onclick=()=>{
+    const result=change(()=>{
+      const ok=distributeLayerUnits(spec,[...selectionKeys],at("vsDistributeMode").value);
+      if(ok)relink(spec);return ok;
+    });
+    if(!result)toast("Cannot distribute these layers without overlap or invalid geometry.","bad");
+  };
+  at("vsGroup").onclick=()=>{
+    const group=change(()=>{
+      const value=groupLayerUnits(spec,[...selectionKeys]);
+      if(value){
+        selectionKeys=new Set(["group:"+value]);
+        selected=spec.elements.findIndex(e=>e.group===value);
+      }
+      return value;
+    });
+    if(!group)toast("Select two or more separate unlocked layers to group. Existing groups cannot be nested.","bad");
+  };
+  at("vsUngroup").onclick=()=>{
+    const units=selectedUnits(),indices=units.length===1?[...units[0].indices]:[];
+    const ok=change(()=>{
+      const applied=ungroupLayerUnits(spec,[...selectionKeys]);
+      if(applied){
+        selectionKeys=new Set(indices.map(i=>unitKey(spec.elements[i],i)));
+        selected=indices[0]??-1;
+      }
+      return applied;
+    });
+    if(!ok)toast("This group cannot be split while it is locked or referenced by a connector.","bad");
   };
   let trackPrevious=null;
   at("vsTracks").addEventListener("pointerdown",()=>{trackPrevious=snap();});
@@ -639,15 +737,15 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   at("vsEffect").onchange=updateGifSpec;
   for(const id of ["vsFrames","vsDelay","vsLoop"])at(id).onchange=updateGifSpec;
   at("vsDelete").onclick=()=>{
-    if(selected<0||isLocked())return;
+    if(selected<0||isLocked()||selectedUnits().length!==1)return;
     change(()=>{
       const chosen=spec.elements[selected],g=chosen.group;
       spec.elements=spec.elements.filter((e,i)=>g ? e.group!==g&&e.from_group!==g&&e.to_group!==g : i!==selected);
-      selected=-1;relink(spec);
+      selected=-1;selectionKeys.clear();relink(spec);
     });
   };
   at("vsDuplicate").onclick=()=>{
-    if(selected<0||isLocked())return;
+    if(selected<0||isLocked()||selectedUnits().length!==1)return;
     const unit=currentUnit();
     if(spec.elements.length+(unit?.indices.length||1)>40){
       toast("Duplicating this group would exceed the 40-object canvas limit.","bad");return;
@@ -664,6 +762,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         spec.elements.push(e);
       });
       selected=spec.elements.length-1;
+      selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);
     });
   };
   for(const key of ["title","subtitle"]){
@@ -697,7 +796,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     if(dirty&&!window.confirm("Discard unsaved changes and open the saved draft?"))return;
     try{
       const data=await api("/api/visual/studio/load?path="+encodeURIComponent(path));
-      spec=data.spec;name=data.name;at("vsName").value=name;selected=-1;dirty=false;undoStack=[];redoStack=[];
+      spec=data.spec;name=data.name;at("vsName").value=name;selected=-1;selectionKeys.clear();dirty=false;undoStack=[];redoStack=[];
       if(spec.animation){
         at("vsFormat").value="gif";
         at("vsEffect").value=spec.animation.effect||"flow";
@@ -735,12 +834,20 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   overlay.addEventListener("pointerdown",e=>{
     const target=e.target.closest("[data-i]");if(!target)return;
     const i=Number(target.getAttribute("data-i"));if(!spec.elements[i])return;
-    const resizing=target.dataset.resize==="se";
+    if(e.shiftKey||e.ctrlKey||e.metaKey){
+      choose(i,true);e.preventDefault();return;
+    }
+    const hit=layerUnits(spec).find(u=>u.indices.includes(i));
+    if(!hit)return;
+    if(!selectionKeys.has(hit.key))selectionKeys=new Set([hit.key]);
     selected=i;
-    const before=snap(),initial=selectionBox(spec,selected);
+    const resizing=target.dataset.resize==="se",before=snap(),initial=selectionBox(spec,selected);
     draw();e.preventDefault();
-    if(isLocked())return;
-    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before,initial,resizing};
+    const units=selectedUnits();
+    if(units.some(u=>u.locked||u.hidden)||(!resizing&&units.some(u=>u.isConnector)&&units.length>1))return;
+    if(resizing&&units.length!==1)return;
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before,initial,resizing,
+          index:i,keys:[...selectionKeys]};
     overlay.setPointerCapture(e.pointerId);
   });
   overlay.addEventListener("pointermove",e=>{
@@ -748,24 +855,28 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     const rect=overlay.getBoundingClientRect();if(!rect.width||!rect.height)return;
     const dx=Math.round((e.clientX-drag.x)*spec.width/rect.width);
     const dy=Math.round((e.clientY-drag.y)*spec.height/rect.height);
+    spec=copy(drag.before);
     if(drag.resizing){
-      spec=copy(drag.before);
-      resizeSelection(spec,selected,drag.initial.w+dx,drag.initial.h+dy);
+      resizeSelection(spec,drag.index,drag.initial.w+dx,drag.initial.h+dy);
       relink(spec);highlight();e.preventDefault();return;
     }
-    const orig=drag.before.elements[selected],g=orig.group;
-    const ids=drag.before.elements.reduce((a,item,i)=>{
-      if(g&&item.group===g||!g&&i===selected)a.push(i);return a;
-    },[]);
-    const boxes=ids.map(i=>bounds(drag.before.elements[i]));
-    const left=Math.min(...boxes.map(b=>b.x)),top=Math.min(...boxes.map(b=>b.y));
-    const right=Math.max(...boxes.map(b=>b.x+b.w)),bottom=Math.max(...boxes.map(b=>b.y+b.h));
-    const tx=clamp(dx,Math.ceil(-left),Math.floor(spec.width-right));
-    const ty=clamp(dy,Math.ceil(-top),Math.floor(spec.height-bottom));
-    for(const i of ids){
-      const item=spec.elements[i],base=drag.before.elements[i];
-      if(item.type==="line"){item.x1=base.x1+tx;item.x2=base.x2+tx;item.y1=base.y1+ty;item.y2=base.y2+ty;}
-      else {item.x=base.x+tx;item.y=base.y+ty;}
+    if(drag.before.elements[drag.index]?.type!=="line"){
+      const shift=at("vsSnap").checked
+        ? snapLayerDelta(drag.before,drag.keys,dx,dy):{dx,dy};
+      translateLayerUnits(spec,drag.keys,shift.dx,shift.dy);
+    }else{
+      // Preserve existing independent line dragging. Linked workflow lines
+      // are still repositioned deterministically by relink().
+      const original=drag.before.elements[drag.index];
+      const limX=Math.min(original.x1,original.x2);
+      const limY=Math.min(original.y1,original.y2);
+      const maxX=Math.max(original.x1,original.x2);
+      const maxY=Math.max(original.y1,original.y2);
+      const shiftX=clamp(dx,-limX,spec.width-maxX);
+      const shiftY=clamp(dy,-limY,spec.height-maxY);
+      const item=spec.elements[drag.index];
+      item.x1=original.x1+shiftX;item.x2=original.x2+shiftX;
+      item.y1=original.y1+shiftY;item.y2=original.y2+shiftY;
     }
     relink(spec);highlight();e.preventDefault();
   });
@@ -777,9 +888,23 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   overlay.addEventListener("pointerup",done);
   overlay.addEventListener("pointercancel",done);
   root.addEventListener("keydown",e=>{
-    if(!(e.ctrlKey||e.metaKey)||e.key.toLowerCase()!=="z")return;
-    if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))return;
-    e.preventDefault();if(e.shiftKey)redo();else undo();
+    if(/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName))return;
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){
+      e.preventDefault();if(e.shiftKey)redo();else undo();return;
+    }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="a"){
+      e.preventDefault();at("vsSelectAll").click();return;
+    }
+    if(e.key==="Escape"&&selectedUnits().length){
+      e.preventDefault();choose(-1);return;
+    }
+    const arrows={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+    if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&arrows[e.key]&&selectedUnits().length){
+      const amount=e.shiftKey?10:1,delta=arrows[e.key];
+      if(selectedUnits().some(u=>u.locked||u.hidden||u.isConnector))return;
+      e.preventDefault();
+      change(()=>{if(translateLayerUnits(spec,[...selectionKeys],delta[0]*amount,delta[1]*amount))relink(spec);});
+    }
   });
   draw();schedule(0);
   await Promise.all([loadAssets(),loadDrafts()]);
@@ -796,6 +921,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       name=result.name||"Imported image";
       at("vsName").value=name;
       selected=spec.elements.findIndex(e=>e.type==="image");
+      selectionKeys=selected>=0?new Set([unitKey(spec.elements[selected],selected)]):new Set();
       undoStack=[];redoStack=[];dirty=false;
       at("vsOutputMode").value="layered";
       draw();schedule(0);

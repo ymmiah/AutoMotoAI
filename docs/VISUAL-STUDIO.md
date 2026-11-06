@@ -1,6 +1,6 @@
-# AutoMoto Visual Studio — Editor v1
+# AutoMoto Visual Studio — Editable design editor
 
-**Status:** the editor v1 source was merged into `main` via [PR #13](https://github.com/ymmiah/AutoMotoAI/pull/13). The next layers and animation timeline build is on `feature/visual-studio-layers-timeline-v2`. These source changes are **not** proof that Microsoft Store has been updated.
+**Development status:** Visual Studio v1–v6 have been merged into the source repository. **v7 advanced layer controls** (multi-selection, snapping, alignment, distribution, simple grouping) are proposed in [PR #21](https://github.com/ymmiah/AutoMotoAI/pull/21). Read [the v7 layer guide](VISUAL-STUDIO-ADVANCED-LAYERS-V7.md), [v6 local AI review](VISUAL-AI-REVIEW-V6.md) and [v5 selective repair](VISUAL-SELECTIVE-REVIEW-V5.md). **Microsoft Store publication is deferred until all planned AutoMoto AI development phases are complete.**
 
 ## Open it
 
