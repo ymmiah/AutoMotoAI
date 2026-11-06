@@ -332,6 +332,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   function schedule(ms=450){
     const current=++previewSequence;
     if(previewTimer)clearTimeout(previewTimer);
+    // Mark a previously rendered frame as stale immediately: users must not
+    // mistake it for the artwork they are saving or exporting now.
+    stage.setAttribute("aria-busy","true");
+    status("Updating design preview…");
     previewTimer=setTimeout(async()=>{
       if(!root.isConnected||current!==previewSequence)return;
       stage.setAttribute("aria-busy","true");
