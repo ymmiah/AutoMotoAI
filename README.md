@@ -101,6 +101,17 @@ For more information, see [Offline AI](docs/OFFLINE.md).
 
 ---
 
+## Visual Studio editor — next source build
+
+> **In development:** [Visual Studio v1](docs/VISUAL-STUDIO.md) is implemented in [draft pull request #13](https://github.com/ymmiah/AutoMotoAI/pull/13), **not yet in the Microsoft Store release**.
+
+- The new **Visual Studio** sidebar page provides workflow, cards, poster and blank design templates, live backend-rendered previews, movable/grouped components, precise element properties, original uploaded images, undo/redo and editable draft files.
+- Export PNG/JPEG, SVG, PDF, editable PowerPoint and **genuine multi-frame GIF** files with loop, speed and motion settings.
+- File references are restricted to the signed-in account's workspace; outputs get provenance hashes, text fitting and contrast checks.
+- Full CI and browser-based smoke tests must pass before promotion. Full keyframe animation and generative pixel-level editing are separate follow-on milestones.
+
+---
+
 ## Visual Design Foundation and GIF animation (source builds)
 
 > **Development status:** The core visual design engine has merged into `main` in [PR #11](https://github.com/ymmiah/AutoMotoAI/pull/11). Final compatibility, provenance and regression fixes are tracked in [PR #12](https://github.com/ymmiah/AutoMotoAI/pull/12). **The published Microsoft Store app has not yet been updated with this feature.**
