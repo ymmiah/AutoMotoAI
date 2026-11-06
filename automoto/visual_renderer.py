@@ -92,7 +92,7 @@ def _icon_png(draw,e,scale=1):
         else:
             for yy in (.38,.54,.68):line([(.29,yy),(.70,yy)],.055)
     elif name in {"users","person"}:
-        circle(.36,.13,.28,circle_fill if False else c)
+        circle(.36,.13,.28,fill=c)
         rect(.21,.48,.58,.38,fill=c)
     elif name=="clock":
         circle(.10,.1,.8)
@@ -203,6 +203,14 @@ def raster(scene,scale=1.0,progress=None,effect="flow"):
                 rad=(n["w"]*.54 + 7*math.sin(progress*math.pi*2))*scale
                 draw.ellipse((round(cx-rad),round(cy-rad),round(cx+rad),round(cy+rad)),
                              outline=accent,width=max(2,round(4*scale)))
+            else:
+                # Hero and freeform scenes also need real moving frames, not a
+                # sequence of identical stills.
+                bar=max(18,int(scene["width"]*.14*scale))
+                bx=int(scene["width"]*.052*scale)+round(progress*bar)
+                by=int(scene["height"]*.965*scale)
+                draw.rounded_rectangle((bx,by,bx+round(30*scale),by+round(7*scale)),
+                                       radius=max(2,round(3*scale)),fill=accent)
     return im
 
 def _svg_icon(e):
