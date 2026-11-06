@@ -58,3 +58,37 @@
 @media (prefers-reduced-motion:reduce) {
   .vs-stage, .vs-over * { transition:none !important; }
 }
+
+/* Visual Studio v2: compact layer stack, drag-resize controls and GIF scene timeline. */
+.vs-layer-heading { margin:22px 0 8px !important; display:flex;align-items:baseline;justify-content:space-between;gap:7px; }
+.vs-small {font-size:11px;color:var(--dim);font-weight:400;}
+.vs-layers { display:grid;gap:5px;max-height:320px;overflow:auto;scrollbar-width:thin; }
+.vs-layer { border:1px solid var(--line);background:var(--bg2);border-radius:10px;padding:5px;display:flex;gap:4px;align-items:center;min-width:0; }
+.vs-layer.active {border-color:var(--accent);background:var(--panel2);}
+.vs-layer.hidden-layer {opacity:.65;}
+.vs-layer .vs-layer-name { flex:1;min-width:0;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;border:0;background:transparent;text-align:left;padding:4px;font-size:12px;cursor:pointer; }
+.vs-layer .vs-layer-name:focus-visible {outline:2px solid var(--accent);}
+.vs-layer .vs-layer-btn {flex:none;border:1px solid transparent;color:var(--dim);background:none;border-radius:7px;width:26px;height:29px;padding:4px;display:grid;place-items:center;cursor:pointer;}
+.vs-layer .vs-layer-btn:hover:not(:disabled) {color:var(--text);border-color:var(--line2);background:var(--hover);}
+.vs-layer .vs-layer-btn:disabled {opacity:.27;cursor:not-allowed;}
+.vs-layer .vs-layer-btn[aria-pressed="true"] {color:var(--accent);background:var(--panel2);}
+.vs-layer .vs-layer-btn .svg {height:14px;width:14px;}
+.vs-resize-handle {fill:#fff;stroke:#347bed;stroke-width:3;cursor:nwse-resize;pointer-events:all;}
+.vs-over .vs-target {touch-action:none;}
+.vs-inspector.locked .vs-fields {opacity:.60;}
+.vs-timeline {background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:16px;display:grid;gap:12px;}
+.vs-time-head {display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+.vs-time-head strong {font-size:15px;}
+.vs-time-head span {font-size:12px;color:var(--dim);}
+.vs-tracks {display:grid;gap:9px;}
+.vs-track {display:grid;grid-template-columns:minmax(110px,160px) minmax(100px,1fr) 48px;gap:9px;align-items:center;font-size:12px;}
+.vs-track-name {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.vs-track input, .vs-scrub input {width:100%;accent-color:var(--accent);cursor:pointer;}
+.vs-track output {font-variant-numeric:tabular-nums;color:var(--dim);text-align:right;}
+.vs-scrub {border-top:1px solid var(--line);padding-top:8px;display:flex;gap:9px;align-items:center;font-size:12px;color:var(--dim);}
+.vs-scrub input {flex:1;}
+@media (max-width:650px) {
+  .vs-layers {max-height:230px;}
+  .vs-track {grid-template-columns:minmax(90px,110px) minmax(60px,1fr) 40px;}
+  .vs-scrub {flex-wrap:wrap;}
+}
