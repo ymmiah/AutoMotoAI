@@ -46,7 +46,7 @@ const path = require('node:path');
     assert.equal(s.elements[0].x,302);
   }
   {
-    const s=spec([item(50,50),item(200,200,{w:80}),item(390,350)]);
+    const s=spec([item(50,50),item(200,200),item(390,350)]);
     assert.equal(layer.groupLayerUnits(s,['item:0','item:1']),'studio_group_1');
     assert.equal(s.elements[0].group,'studio_group_1');
     assert.equal(s.elements[1].group,'studio_group_1');
@@ -57,7 +57,7 @@ const path = require('node:path');
     assert.ok(s.elements.slice(0,2).every(x=>!x.group));
   }
   {
-    const s=spec([item(40,40,{w:70}),item(300,300),item(160,180,80,60,{locked:true})]);
+    const s=spec([item(40,40,70,60),item(300,300),item(160,180,80,60,{locked:true})]);
     const before=snapshot(s);
     assert.equal(layer.translateLayerUnits(s,['item:0','item:2'],30,0),false);
     assert.equal(layer.alignLayerUnits(s,['item:0','item:2'],'left'),false);
