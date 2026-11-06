@@ -133,6 +133,7 @@ let browser;
   });
   await page.waitForFunction(() => /Structural checks passed/.test(document.querySelector('#vsStatus')?.textContent || '') &&
     document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  await page.locator('#vsTimeline').scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(output, 'visual-studio-timeline.png') });
   await page.locator('#vsAddText').click();
   await page.locator('#vsProperties textarea[data-key="text"]').fill('Exact source copy');
