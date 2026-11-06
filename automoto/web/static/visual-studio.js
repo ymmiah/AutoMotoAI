@@ -513,6 +513,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     }finally{if(root.isConnected)button.disabled=false;}
   };
   at("vsAIReview").onclick=async()=>{
+    closeRepair();
     const button=at("vsAIReview");button.disabled=true;
     const original=snap(),beforeSequence=previewSequence,inspection=++inspectionRequest;
     // User-initiated opt in. The server only speaks to Ollama on loopback;
