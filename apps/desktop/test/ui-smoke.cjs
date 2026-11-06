@@ -158,7 +158,17 @@ let browser;
   await page.locator('[data-dir="artifacts"]').first().click();
   await page.locator('[data-dir="artifacts/visual-studio"]').first().click();
   await page.locator('[data-studio-image$=".gif"]').first().click();
-  await page.locator('#vsOutputMode').waitFor();
+  try {
+    await page.locator('#vsOutputMode').waitFor({ timeout: 10000 });
+  } catch (err) {
+    const state = await page.evaluate(() => ({
+      hash: location.hash,
+      pageTitle: document.querySelector('h1')?.textContent || "",
+      outputModeCount: document.querySelectorAll('#vsOutputMode').length,
+      notice: document.querySelector('.toast')?.textContent || ""
+    }));
+    throw new Error('Image layer reopen failed: ' + JSON.stringify({ state, pageErrors: errors, reason: err.message }));
+  }
   await page.waitForFunction(() => document.querySelector('#vsPreview')?.naturalWidth > 0 &&
     document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
   assert.equal(await page.locator('#vsOutputMode').inputValue(), 'layered',
