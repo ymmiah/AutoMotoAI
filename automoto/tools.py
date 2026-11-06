@@ -461,6 +461,10 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
     from automoto import visual_tools
 
     tools += [t for t in visual_tools.TOOLS if local_apps or t.name == "image_compose"]
+    # Shared deterministic visual pipeline: no remote app or network dependency.
+    from automoto import visual_art_tools
+
+    tools += visual_art_tools.TOOLS
     if services:
         from automoto import services as services_mod
 

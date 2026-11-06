@@ -55,14 +55,13 @@ CAPS: tuple[Capability, ...] = (
     Capability("slides", "Presentations", r"\b(slides?|deck|presentation|powerpoint|pptx?|odp|viva|pitch|keynote)\b",
                (".pptx", ".ppt", ".odp"),
                ("office_create_pptx", "office_edit", "office_convert", "office_check", "office_review",
-                "image_compose", "image_generate"),
+                "image_compose", "visual_create"),
                skills=("powerpoint-decks",),
-               how="Read with read_file (slides + notes). Build visually polished slides using cards, metrics, "
-                   "steps, editable vector icons, image_text and original assets; do not produce only black "
-                   "slides and text tables. For user's faces, bodies, original logos or exact text, use "
-                   "image_compose or unmodified original images; image_generate is for NEW art only and "
-                   "needs a running local ComfyUI with checkpoint. Always office_check + office_review; "
-                   "fix visible overflow before calling a presentation finished."),
+               how="Read with read_file (slides + notes). Use visual_create with slides:[...] for "
+                   "fresh editable multi-slide PPTX with premium themes, diagrams, icons and bounded layouts. "
+                   "Use office_create_pptx for specialised charts/tables and revisions. Preserve source "
+                   "photos, faces and logos; image_generate creates NEW art only with installed ComfyUI. "
+                   "Always visual_check or office_check, then render and inspect."),
     Capability("pdf", "PDFs", r"\b(pdf|publication|print[- ]ready)\b", (".pdf",),
                ("office_convert", "office_check", "office_review"), skills=("publication-ready-pdf",),
                how="Read with read_file (first/last for a page range). Make PDFs by creating the Word/slide file and "
@@ -118,14 +117,14 @@ CAPS: tuple[Capability, ...] = (
                    "save; library_search to answer from saved docs with their links; discover source=github|"
                    "stackoverflow|hackernews|bluesky for public developer posts; read_feed for RSS/Atom."),
     Capability("image", "Images", r"\b(image|photo|picture|pic|screenshot|logo|icon|resize|crop|thumbnail|png|jpe?g|"
-               r"webp|exif|svg|poster|banner)\b", (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff",
+               r"webp|exif|svg|gif|animated?|animation|motion|infographic|poster|banner)\b", (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff",
                                                   ".svg", ".heic", ".psd"),
-               ("image_compose", "image_generate", "image_models", "list_apps", "run_app"),
+               ("visual_create", "image_compose", "image_generate", "image_models", "list_apps", "run_app"),
                skills=("graphic-design",),
-               how="For original AI artwork, check image_models then image_generate (requires a LOCAL ComfyUI "
-                   "checkpoint). For user-supplied face/body/logo/text, preserve the exact source with "
-                   "image_compose; never synthesize or reinterpret identifiable details without express "
-                   "permission. Use source files, readable fonts and deliberate layouts."),
+               how="For workflow diagrams, posters, infographics, editable SVG/PPTX or genuine animated GIF "
+                   "use visual_create and then visual_check. GIF supports multi-frame flow, pulse and reveal. "
+                   "For original AI artwork image_generate needs a local ComfyUI checkpoint. For supplied "
+                   "faces and logos keep original source files, never reconstruct protected details."),
     Capability("media", "Audio and video", r"\b(video|audio|mp3|mp4|wav|mov|mkv|podcast|trim|subtitles?|transcode|"
                r"ffmpeg|gif from)\b", (".mp3", ".wav", ".m4a", ".flac", ".ogg", ".mp4", ".mov", ".mkv", ".webm", ".avi"),
                ("list_apps", "run_app"), skills=("video-editing", "audio-editing"),
