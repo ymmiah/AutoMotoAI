@@ -31,6 +31,9 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) ->
     if out.suffix.lower() not in {".png",".jpg",".jpeg",".svg",".gif",".pptx",".pdf"}:
         raise ToolFailed("output path must end with .png, .jpg, .svg, .gif, .pptx or .pdf")
     if out.exists():raise ToolFailed("output already exists; choose a new path")
+    manifest=out.with_name(out.name+".visual.json")
+    if manifest.exists():
+        raise ToolFailed("design manifest already exists; choose a new filename")
     spec=_spec(spec)
     slides=spec.get("slides")
     if slides is not None:
@@ -48,12 +51,31 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None) ->
     except (VisualError,OSError,ValueError,ImportError) as exc:
         raise ToolFailed(str(exc)) from None
     names=sorted({f["path"]:f for s in scenes for f in s["assets"]}.values(),key=lambda v:v["path"])
-    return (f"Created {sandbox.rel(out)}: {len(scenes)} design scene(s), "
-            f"{len(names)} protected original asset(s), theme {scenes[0]['theme']}, "
-            f"format {out.suffix.lower()[1:]}. "
-            "Output passed bounds, text-fitting, asset-integrity and file checks. "
-            "Open the result to confirm aesthetics and font rendering. "
-            "GIF output is a genuine multi-frame animation, not a static image.")
+    from hashlib import sha256
+    metadata={
+        "schema_version":1,
+        "format":out.suffix.lower()[1:],
+        "scene_count":len(scenes),
+        "themes":[s["theme"] for s in scenes],
+        "dimensions":[{"width":s["width"],"height":s["height"]} for s in scenes],
+        "original_assets":names,
+        "output_sha256":sha256(out.read_bytes()).hexdigest(),
+        "animation":(animation or spec.get("animation") or {}) if out.suffix.lower()==".gif" else None,
+        "quality":{"structural_check":"passed","visual_manual_review":"required"}
+    }
+    try:
+        # New sidecar only. Do not modify or overwrite any input asset.
+        with manifest.open("x",encoding="utf-8") as stream:
+            json.dump(metadata,stream,indent=2,ensure_ascii=False)
+    except OSError as exc:
+        out.unlink(missing_ok=True)
+        raise ToolFailed(f"failed to save visual provenance manifest: {exc}") from None
+    return (f"Created {sandbox.rel(out)} and {sandbox.rel(manifest)}: "
+            f"{len(scenes)} design scene(s), {len(names)} protected original asset(s), "
+            f"theme {scenes[0]['theme']}, format {out.suffix.lower()[1:]}. "
+            "Bounds, text fitting, contrast and source-file integrity passed. "
+            "Manually review final appearance and font rendering. "
+            "GIF output uses actual changing animation frames.")
 
 def visual_check(ctx:ToolContext,path:str) -> str:
     p=sandbox.resolve(path,allow_outside=True)
