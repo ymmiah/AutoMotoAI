@@ -140,6 +140,24 @@ def test_preview_rejects_bad_colour_and_large_specs(client):
     assert r.status_code==422
 
 
+def test_unrelated_text_collision_is_blocked_and_grouped_overlap_is_allowed(client):
+    from automoto.visual_foundation import compile_scene
+    from automoto.visual_renderer import quality
+    scene=spec()
+    scene["elements"].append({
+        "type":"text","x":120,"y":315,"w":200,"h":65,
+        "font_size":26,"text":"Accidental overlay","colour":"#22252C"
+    })
+    compiled=compile_scene(scene)
+    assert any("unintended overlap" in issue for issue in quality(compiled))
+    refused=client.post("/api/visual/studio/preview",headers=H,json={"spec":scene})
+    assert refused.status_code==422
+    scene["elements"][-1]["allow_overlap"]=True
+    # Intentional overlaps can be explicitly authorised by the designer.
+    approved=client.post("/api/visual/studio/preview",headers=H,json={"spec":scene})
+    assert approved.status_code==200,approved.text
+
+
 def test_hosted_routes_are_whitelisted_but_require_user_auth():
     for path in ("presets","list","load"):
         assert path_allowed("GET","/api/visual/studio/"+path)
