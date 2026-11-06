@@ -1,0 +1,60 @@
+/* Visual Studio — responsive, build-free design canvas and property inspector */
+.vs-page { max-width: none !important; width: 100%; }
+.vs-studio { display: grid; gap: 14px; padding-bottom: 30px; }
+.vs-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vs-toolbar .btn { display: inline-flex; align-items: center; gap: 7px; }
+.vs-toolbar .spacer { flex: 1; }
+.vs-toolbar select, .vs-toolbar input { min-height: 37px; }
+.vs-name { min-width: 160px; max-width: 240px; flex: 1 1 160px; }
+.vs-hint { font-size: 13px; color: var(--dim); margin: 0; }
+.vs-shell { display: grid; grid-template-columns: minmax(0,1fr) 270px; gap: 14px; align-items: start; }
+.vs-workspace { min-width:0; padding:12px; background:var(--panel2); border:1px solid var(--line); border-radius:17px; }
+.vs-stage { margin:0 auto; position:relative; width:100%; max-width:1160px; aspect-ratio:16/9; overflow:hidden; background:white; border:1px solid var(--line); border-radius:9px; box-shadow:0 16px 45px rgba(0,0,0,.15); }
+.vs-preview { display:block; width:100%; height:100%; object-fit:contain; }
+.vs-over { position:absolute; inset:0; height:100%; width:100%; touch-action:none; }
+.vs-over .vs-target { fill:transparent; cursor:grab; pointer-events:all; }
+.vs-over .vs-target:active { cursor:grabbing; }
+.vs-over .vs-line-target { cursor:move; }
+.vs-over .vs-selected { fill:rgba(64,126,235,.10); stroke:#347BED; stroke-width:3; stroke-dasharray:9 5; pointer-events:none; }
+.vs-stage[aria-busy="true"]::after { content:"Updating preview…"; position:absolute; bottom:8px; right:8px; font-size:11px; background:rgba(10,19,30,.8); color:white; border-radius:6px; padding:4px 7px; pointer-events:none; }
+.vs-summary { display:flex; flex-wrap:wrap; gap:8px; justify-content:space-between; font-size:12px; color:var(--dim); margin:9px 3px 0; }
+.vs-inspector { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; min-height:310px; }
+.vs-inspector h3 { margin:0 0 9px; font-size:16px; }
+.vs-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.vs-fields .full { grid-column:1 / -1; }
+.vs-fields label { display:grid; gap:4px; font-size:12px; color:var(--dim); }
+.vs-fields input, .vs-fields textarea, .vs-fields select { width:100%; padding:7px 8px; background:var(--bg2); border:1px solid var(--line2); border-radius:8px; color:var(--text); min-width:0; }
+.vs-fields textarea { min-height:90px; resize:vertical; }
+.vs-fields input[type=color] { height:37px; padding:3px; }
+.vs-inspector-note { font-size:12px; color:var(--dim); line-height:1.5; }
+.vs-export { background:var(--panel); border:1px solid var(--line); border-radius:15px; padding:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+.vs-export label { display:grid; gap:4px; font-size:12px; color:var(--dim); }
+.vs-export select, .vs-export input { min-height:37px; padding:7px; background:var(--bg2); border:1px solid var(--line2); border-radius:8px; }
+.vs-export input[type=number] { max-width:100px; }
+.vs-output { background:var(--panel2); border-radius:9px; padding:11px; width:100%; display:flex; flex-wrap:wrap; gap:9px; align-items:center; }
+.vs-output a { white-space:normal; overflow-wrap:anywhere; }
+.vs-status { font-size:12px; color:var(--dim); min-height:18px; }
+.vs-status.bad { color:var(--bad); }
+.vs-preset { max-width:190px; }
+.vs-toolbar .vs-separator { width:1px; height:26px; background:var(--line2); margin:0 2px; }
+.vs-asset { max-width:220px; min-width:135px; }
+@media (max-width:1000px) {
+  .vs-shell { grid-template-columns:1fr; }
+  .vs-inspector { min-height:0; }
+  .vs-fields { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .vs-fields .full { grid-column:span 2; }
+}
+@media (max-width:650px) {
+  .vs-studio { gap:10px; }
+  .vs-toolbar { gap:6px; }
+  .vs-toolbar .btn { font-size:12px; padding:7px 9px; }
+  .vs-workspace { padding:5px; }
+  .vs-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .vs-fields .full { grid-column:1 / -1; }
+  .vs-export { align-items:stretch; }
+  .vs-export label { flex:1 1 110px; }
+  .vs-name { min-width:120px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .vs-stage, .vs-over * { transition:none !important; }
+}
