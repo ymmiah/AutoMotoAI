@@ -254,6 +254,7 @@ let browser;
   // v7: choose independent objects, distribute, align and group via the
   // actual editor, not a duplicated test-only geometry implementation.
   page.once('dialog', dialog => dialog.accept());
+  await page.locator('#vsTemplate').selectOption('workflow');
   await page.locator('#vsTemplate').selectOption('blank');
   for (const [x, y] of [[140,120],[340,250],[550,400]]) {
     await page.locator('#vsAddIcon').click();
