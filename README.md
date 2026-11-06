@@ -101,14 +101,17 @@ For more information, see [Offline AI](docs/OFFLINE.md).
 
 ---
 
-## Visual Studio editor — next source build
+## Visual Studio editor — layers and GIF timeline
 
-> **In development:** [Visual Studio v1](docs/VISUAL-STUDIO.md) is implemented in [draft pull request #13](https://github.com/ymmiah/AutoMotoAI/pull/13), **not yet in the Microsoft Store release**.
+> **Source-build status:** Visual Studio v1 was merged into `main` via [PR #13](https://github.com/ymmiah/AutoMotoAI/pull/13). The next build adds layers, proportional resizing and a staged animation timeline on a separate development branch. **This is not a published Microsoft Store update.**
 
-- The new **Visual Studio** sidebar page provides workflow, cards, poster and blank design templates, live backend-rendered previews, movable/grouped components, precise element properties, original uploaded images, undo/redo and editable draft files.
-- Export PNG/JPEG, SVG, PDF, editable PowerPoint and **genuine multi-frame GIF** files with loop, speed and motion settings.
-- File references are restricted to the signed-in account's workspace; outputs get provenance hashes, text fitting and contrast checks.
-- Full CI and browser-based smoke tests must pass before promotion. Full keyframe animation and generative pixel-level editing are separate follow-on milestones.
+- **Visual Studio** supplies workflow, feature-card, poster and blank-canvas templates, native design controls and server-rendered previews.
+- **Layers:** drag/select grouped diagram components, reorder visual stacking, hide/show artwork and lock editing. Visibility persists in editable drafts and affects the actual exported image or PowerPoint.
+- **Resize handles:** proportionally reposition and resize objects/groups while maintaining source-image integrity. Export rejects text overflow, low contrast and unintended collisions.
+- **GIF timeline:** set when each design group appears, scrub to view a frame, and export a genuine multi-frame GIF with configurable timing and looping.
+- **Multi-format export:** PNG/JPEG, SVG, PDF and editable PowerPoint use the same validation and original source assets; no separate image-generation service is needed for native diagrams.
+
+[Editor workflow, privacy controls and limits](docs/VISUAL-STUDIO.md). Automatic visual redesign, complex keyframe interpolation and pixel-level generative photo editing are still future milestones.
 
 ---
 
