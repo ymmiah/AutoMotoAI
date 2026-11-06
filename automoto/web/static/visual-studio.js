@@ -64,6 +64,21 @@ function bounds(e){
     w:Math.abs(e.x2-e.x1)+14||14,h:Math.abs(e.y2-e.y1)+14||14};
   return {x:e.x,y:e.y,w:e.w,h:e.h};
 }
+function freePosition(spec,w,h){
+  // Never insert a new text label directly on top of a card, image or icon.
+  // Start below the content, then search upwards in a coarse collision grid.
+  if(!spec.elements.length)return {x:100,y:275};
+  const occupied=spec.elements.filter(e=>e.type!=="line").map(bounds);
+  const limitX=spec.width-w-45,lowest=spec.height-h-40;
+  if(limitX<45||lowest<180)return null;
+  for(let y=lowest;y>=190;y-=25){
+    for(let x=65;x<=limitX;x+=40){
+      if(occupied.every(b=>x+w<=b.x-7||x>=b.x+b.w+7||
+                           y+h<=b.y-7||y>=b.y+b.h+7))return {x,y};
+    }
+  }
+  return null;
+}
 function relink(spec){
   const rects=new Map(spec.elements.filter(e=>e.type==="rect"&&e.group).map(e=>[e.group,e]));
   for(const e of spec.elements){
@@ -250,8 +265,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   }
   function add(type){
     if(type==="image"&&!at("vsAssets").value){toast("Upload a picture under Files and choose it first.","bad");return;}
+    const dimensions={text:[400,70],rect:[250,150],icon:[85,85],image:[340,220]}[type];
+    const place=freePosition(spec,...dimensions);
+    if(!place){toast("No empty space for this object. Move or remove an existing object, or start a Blank canvas.","bad");return;}
     change(()=>{
-      const i=spec.elements.length%5,x=140+i*30,y=290+i*18,p=PALETTES[spec.theme];
+      const {x,y}=place,p=PALETTES[spec.theme];
       let e;
       if(type==="text")e={type,x,y,w:400,h:70,text:"Your headline",font_size:34,colour:p.ink,auto_colour:"ink",bold:true};
       if(type==="rect")e={type,x,y,w:250,h:150,fill:p.tones[0],stroke:p.border,radius:18,auto_fill:"tone0",auto_stroke:"border"};
