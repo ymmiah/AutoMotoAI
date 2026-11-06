@@ -166,6 +166,13 @@ let browser;
   assert.ok(await page.locator('#vsElement option').count() > 3,
     'native generated GIF must reopen its independently editable source layers');
   await page.screenshot({ path: path.join(output, 'visual-studio-reopen-layers.png') });
+  // Inspection is always review-first: a valid scene is not silently mutated.
+  await page.locator('#vsInspect').click();
+  await page.locator('#vsRepairReview:not([hidden])').waitFor();
+  assert.match(await page.locator('#vsRepairSummary').innerText(), /proposed field changes/);
+  await page.locator('#vsDismissRepair').click();
+  assert.equal(await page.locator('#vsRepairReview').isVisible(), false);
+  await page.screenshot({ path: path.join(output, 'visual-studio-repair-review.png') });
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
