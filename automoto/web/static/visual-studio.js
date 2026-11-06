@@ -99,6 +99,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<label>Template <select class="input" id="vsTemplate"><option value="workflow">Workflow</option><option value="cards">Feature cards</option><option value="poster">Poster</option><option value="blank">Blank canvas</option></select></label>'+
     '<label>Theme <select class="input" id="vsTheme"><option value="illustrated-workflow">Illustrated</option><option value="editorial-light">Editorial light</option><option value="premium-tech">Premium tech</option><option value="commercial">Commercial</option></select></label>'+
     '<button class="btn" id="vsUndo">Undo</button><button class="btn" id="vsRedo">Redo</button>'+
+    '<button class="btn" id="vsInspect">'+icon("check")+' Inspect & repair</button>'+
     '<button class="btn primary" id="vsSave">Save draft</button></div>'+
     '<div class="vs-toolbar"><button class="btn" id="vsAddText">'+icon("edit")+' Text</button>'+
     '<button class="btn" id="vsAddShape">'+icon("plus")+' Shape</button>'+
@@ -114,7 +115,14 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<img id="vsPreview" class="vs-preview" alt="Actual rendered design preview" draggable="false">'+
     '<svg class="vs-over" id="vsOverlay" aria-label="Drag an object to reposition it"></svg></div>'+
     '<div class="vs-summary"><span>Select an object or drag it. Preview updates after edits.</span><span id="vsCount"></span></div>'+
-    '<p id="vsStatus" class="vs-status" role="status">Preparing preview…</p></section>'+
+    '<p id="vsStatus" class="vs-status" role="status">Preparing preview…</p>'+
+    '<div id="vsRepairReview" class="vs-repair-review" hidden role="region" aria-label="Proposed layout changes">'+
+    '<h3>Review proposed changes</h3><p id="vsRepairSummary" class="vs-inspector-note"></p>'+
+    '<img id="vsRepairImage" class="vs-repair-image" alt="Proposed repaired layout preview" hidden>'+
+    '<ul id="vsRepairList" class="vs-repair-list"></ul>'+
+    '<p id="vsRepairRemaining" class="vs-inspector-note"></p>'+
+    '<div class="vs-toolbar"><button id="vsApplyRepair" class="btn primary">Apply selected repair</button>'+
+    '<button id="vsDismissRepair" class="btn">Keep original</button></div></div></section>'+
     '<aside class="vs-inspector"><h3>Object inspector</h3>'+
     '<label for="vsElement" class="vs-inspector-note">Choose an element to edit</label>'+
     '<select class="input" id="vsElement" style="width:100%;margin:9px 0"></select>'+
@@ -147,11 +155,14 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
+  let pendingRepair=null;
   let previewSequence=0,previewTimer=null,drag=null;
   const status=(message,bad=false)=>{at("vsStatus").textContent=message;at("vsStatus").classList.toggle("bad",bad);};
   const snap=()=>copy(spec);
   function record(previous){
     if(JSON.stringify(previous)===JSON.stringify(spec))return;
+    pendingRepair=null;
+    at("vsRepairReview").hidden=true;
     undoStack.push(previous);
     if(undoStack.length>40)undoStack.shift();
     redoStack=[];dirty=true;buttons();schedule();
@@ -393,6 +404,49 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   };
   at("vsTheme").onchange=e=>change(()=>themeElements(spec,e.target.value));
   at("vsUndo").onclick=undo;at("vsRedo").onclick=redo;
+  at("vsInspect").onclick=async()=>{
+    const button=at("vsInspect");button.disabled=true;
+    status("Inspecting layout without modifying your design…");
+    try{
+      const proposal=await api("/api/visual/studio/repair",{spec,name});
+      pendingRepair=proposal;
+      const panel=at("vsRepairReview");
+      panel.hidden=false;
+      at("vsRepairSummary").textContent=proposal.summary;
+      const picture=at("vsRepairImage");
+      picture.hidden=!proposal.preview;
+      if(proposal.preview) picture.src=proposal.preview;
+      else picture.removeAttribute("src");
+      at("vsRepairList").innerHTML=(proposal.changes||[]).map(f=>
+        '<li><b>'+esc(f.reason)+'</b> · Layer '+(f.index+1)+', '+esc(f.field)+
+        ': '+esc(String(f.old))+' → '+esc(String(f.new))+'</li>').join("")||
+        '<li>No safe automatic change was found for this design.</li>';
+      at("vsRepairRemaining").textContent=proposal.remaining_issues?.length?
+        'Manual review still needed: '+proposal.remaining_issues.join("; "):
+        'All structural checks pass in the proposed version. Inspect the preview before applying.';
+      at("vsApplyRepair").disabled=!proposal.ready_to_apply || !proposal.preview;
+      status(proposal.changed?"Layout suggestions are ready for your review. No change has been applied.":
+        "No safe automatic repairs are available. The original remains unchanged.",
+        Boolean(proposal.remaining_issues?.length));
+      panel.scrollIntoView({block:"nearest",behavior:"auto"});
+    }catch(error){pendingRepair=null;status("Inspection failed: "+error.message,true);}
+    finally{button.disabled=false;}
+  };
+  at("vsDismissRepair").onclick=()=>{
+    pendingRepair=null;at("vsRepairReview").hidden=true;
+    status("Original design retained; no layout changes applied.");
+  };
+  at("vsApplyRepair").onclick=()=>{
+    if(!pendingRepair?.ready_to_apply||!pendingRepair.preview)return;
+    const revised=copy(pendingRepair.proposed_spec);
+    const before=snap();
+    spec=revised;
+    selected=-1;
+    pendingRepair=null;
+    at("vsRepairReview").hidden=true;
+    record(before);draw();schedule(0);
+    toast("Approved layout repair applied. Undo is available.");
+  };
   at("vsAddText").onclick=()=>add("text");at("vsAddShape").onclick=()=>add("rect");
   at("vsAddIcon").onclick=()=>add("icon");at("vsAddImage").onclick=()=>add("image");
   at("vsElement").onchange=e=>{selected=e.target.value===""?-1:Number(e.target.value);draw();};
