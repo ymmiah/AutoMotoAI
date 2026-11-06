@@ -230,8 +230,10 @@ def repair(spec: dict[str, Any]) -> dict[str,Any]:
     edits=[]
     _move_to_canvas(current,edits)
     _fix_fit(current,edits)
-    _fix_contrast(current,edits)
     _fix_collision(current,edits)
+    # Contrast is assessed after placement so a moved label uses the new
+    # underlying colour rather than the one at its original position.
+    _fix_contrast(current,edits)
     after=inspect(current)
     return {
         "spec":current,"changes":edits,"changed":bool(edits),
