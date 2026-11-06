@@ -117,6 +117,27 @@ def quality(scene):
             if ratio<target:
                 findings.append(f"low contrast ({ratio:.1f}:1) in {e.get('role') or 'text'}; "
                                 f"requires at least {target:.1f}:1")
+    if scene.get("layout")=="canvas":
+        # Text, icons and unmodified photos should not accidentally cover
+        # unrelated objects. Cards intentionally layer their own grouped
+        # content on card backgrounds; those are deliberately excluded.
+        items=[e for e in scene["elements"] if e["type"] in ("text","icon","image")
+               and e.get("role") not in {"heading","subtitle","footer"}
+               and (e["type"]!="text" or e.get("text","").strip())]
+        for i,a in enumerate(items):
+            for b in items[i+1:]:
+                if a.get("allow_overlap") or b.get("allow_overlap"):
+                    continue
+                if a.get("group") and a.get("group")==b.get("group"):
+                    continue
+                ix=max(0,min(a["x"]+a["w"],b["x"]+b["w"])-max(a["x"],b["x"]))
+                iy=max(0,min(a["y"]+a["h"],b["y"]+b["h"])-max(a["y"],b["y"]))
+                if ix*iy>100 and ix*iy/min(a["w"]*a["h"],b["w"]*b["h"])>=.12:
+                    findings.append("unintended overlap between independent "
+                                    f"{a['type']} and {b['type']} elements; "
+                                    "reposition them, group them, or explicitly allow_overlap")
+                    if len(findings)>=10:
+                        return findings
     return findings
 
 def _icon_png(draw,e,scale=1):
