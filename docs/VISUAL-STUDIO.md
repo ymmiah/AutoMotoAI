@@ -1,6 +1,6 @@
 # AutoMoto Visual Studio — Editor v1
 
-**Status:** source build on `feature/visual-studio-editor-v1` ([pull request #13](https://github.com/ymmiah/AutoMotoAI/pull/13)). This is **not** yet published in Microsoft Store.
+**Status:** the editor v1 source was merged into `main` via [PR #13](https://github.com/ymmiah/AutoMotoAI/pull/13). The next layers and animation timeline build is on `feature/visual-studio-layers-timeline-v2`. These source changes are **not** proof that Microsoft Store has been updated.
 
 ## Open it
 
