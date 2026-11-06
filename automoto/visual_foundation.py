@@ -180,7 +180,12 @@ def _scene(spec:dict[str,Any]) -> dict:
             if icon not in ICONS: raise VisualError(f"unsupported icon: {icon}")
             tone=item.get("tone",t["tones"][index%len(t["tones"])])
             tone=colour(tone)
-            col,row=index%columns,index//columns
+            row=index//columns
+            col=index%columns
+            # Snake workflow reading order: across a row, down, then back.
+            # This avoids a diagonal connector crossing unrelated cards.
+            if layout=="workflow" and row%2:
+                col=columns-1-col
             x=margin+col*(cell_w+gap);y=content_top+row*(cell_h+gap)
             elements.append(_rect(x,y,cell_w,cell_h,t["card"],t["border"],radius=22,stroke_width=2,role="card"))
             icon_size=min(52,max(30,round(cell_h*.27)))
@@ -188,7 +193,7 @@ def _scene(spec:dict[str,Any]) -> dict:
                                   radius=16,stroke_width=0,role="icon-background"))
             elements.append(_icon(x+22,y+20,icon_size,icon,t["ink"]))
             # Use width-bounded headings and descriptions; measure during rendering.
-            heading_offset=min(92,max(62,round(cell_h*.35)))
+            heading_offset=max(icon_size+36,min(96,round(cell_h*.36)))
             heading_y=y+heading_offset
             text_size=max(17,min(23,round(cell_w*.057)))
             heading_h=max(36,min(58,round(cell_h*.25)))
@@ -228,6 +233,12 @@ def _scene(spec:dict[str,Any]) -> dict:
                 # connections in a single row may go in gaps; the visual marker
                 # is used by GIF animation to show live flow.
                 elements.append(_line(x1,y1,x2,y2,t["accent"],3))
+            # Connectors belong under cards, never above content or labels.
+            connectors=[element for element in elements if element["type"]=="line"]
+            elements=[element for element in elements if element["type"]!="line"]
+            first_card=next((i for i,element in enumerate(elements)
+                             if element.get("role")=="card"),len(elements))
+            elements[first_card:first_card]=connectors
     elif layout=="hero":
         path=spec.get("image")
         if not path: raise VisualError("hero requires a source image path")
