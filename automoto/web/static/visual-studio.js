@@ -498,6 +498,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     await reviewSelection(review);
   }
   at("vsInspect").onclick=async()=>{
+    closeRepair();
     const button=at("vsInspect");button.disabled=true;
     const original=snap(),beforeSequence=previewSequence,inspection=++inspectionRequest;
     status("Inspecting layout without modifying your design…");
