@@ -54,9 +54,15 @@ def image_project(path: str | Path, workspace: Path | None = None) -> dict[str, 
     with Image.open(root / rel) as opened:
         oriented = ImageOps.exif_transpose(opened)
         ow, oh = oriented.size
-    scale = min(1.0, 1920 / ow, 1080 / oh, math.sqrt(2_100_000 / (ow * oh)))
-    w, h = max(640, round(ow * scale)), max(400, round(oh * scale))
-    w, h = min(w,1920), min(h,1080)
+    cap = min(1.0, 1920 / ow, 1080 / oh, math.sqrt(2_100_000 / (ow * oh)))
+    minimum = max(640 / ow, 400 / oh)
+    # For typical photographs, keep the original aspect ratio (including
+    # square and portrait images). If a very long/narrow image cannot meet
+    # both canvas minima without exceeding its maxima, letterbox via the
+    # existing aspect-fit image renderer; never stretch its pixels.
+    scale = max(cap, minimum) if minimum <= cap else cap
+    w = max(640, min(1920, round(ow * scale)))
+    h = max(400, min(1080, round(oh * scale)))
     return {
         "schema":1,"width":w,"height":h,"layout":"canvas","theme":"editorial-light",
         "artboard_only":True,"title":"","subtitle":"",
