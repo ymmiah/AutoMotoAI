@@ -101,9 +101,9 @@ let browser;
   assert.equal(await page.locator('#vsElement option').count() > 4, true);
   await page.screenshot({ path: path.join(output, 'visual-studio-workflow.png') });
   // New layer stack: selecting, locking and visibility must affect actual exports.
-  const firstLayer = page.locator('#vsLayers [data-layer-key="group:stage0"]');
-  assert.ok(await firstLayer.count() >= 3, 'workflow group layer controls must exist');
-  await firstLayer.filter({ has: page.locator('[data-layer-act="select"]') }).first().click();
+  assert.ok(await page.locator('#vsLayers [data-layer-key="group:stage0"]').count() >= 3,
+    'workflow group layer controls must exist');
+  await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="select"]').click();
   await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="lock"]').click();
   assert.equal(await page.locator('#vsDelete').isDisabled(), true, 'locked layer forbids deletion');
   await page.locator('#vsLayers [data-layer-key="group:stage0"][data-layer-act="lock"]').click();
