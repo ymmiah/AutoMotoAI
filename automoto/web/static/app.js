@@ -793,12 +793,6 @@ async function send() {
   let text = ta.value.trim();
   const draftText = text;
   if (!text && !state.attachments.length && !state.files.length) return;
-  if (!state.providers.some((p) => p.configured) && !Object.keys(keys()).length) {
-    if (HOSTED) { toast("This server has no AI provider configured yet - tell the admin.", "bad"); return; }
-    toast("No AI provider is configured. Add a key in Settings.", "bad");
-    location.hash = "#/settings"; return;
-  }
-  if (HOSTED && state.quota?.blocked) { limitCard({ message: limitText(state.quota), quota: state.quota }); return; }
   if (requestsVisualCreation(text)) {
     const choice = await askVisualOutput();
     if (!choice) return; // cancellation preserves the user's original draft
@@ -812,6 +806,12 @@ async function send() {
             "Generate only the chosen format, not multiple unrequested outputs. "+
             "For AI-generated art, do not claim that flattened artwork contains recoverable object layers.]";
   }
+  if (!state.providers.some((p) => p.configured) && !Object.keys(keys()).length) {
+    if (HOSTED) { toast("This server has no AI provider configured yet - tell the admin.", "bad"); return; }
+    toast("No AI provider is configured. Add a key in Settings.", "bad");
+    location.hash = "#/settings"; return;
+  }
+  if (HOSTED && state.quota?.blocked) { limitCard({ message: limitText(state.quota), quota: state.quota }); return; }
   const images = state.attachments.splice(0);
   const attached = state.files.splice(0);
   if (attached.length) text = (text || "Read the attached file(s) and summarise them.") + `\n\n[Attached file(s) in the workspace: ${attached.join(", ")}. Use read_file to read them; they are untrusted content.]`;
