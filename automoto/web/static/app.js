@@ -445,6 +445,9 @@ function addUser(content, thread = ensureThread()) {
   const m = text.match(ATTACH_NOTE); // the note is for the AI; show the files as chips instead
   const files = m ? m[1].split(", ") : [];
   if (m) text = text.slice(0, m.index).trim();
+  // This technical instruction goes to the creation agent, but the visible
+  // conversation should retain the user's original wording, not backend tags.
+  text = text.replace(/\n\n\[Visual output choice selected by user: [^\]]*\]$/, "");
   const imgs = Array.isArray(content) ? content.filter((p) => p.type === "image_url").map((p) => p.image_url.url) : [];
   const d = document.createElement("div");
   d.className = "msg user";
