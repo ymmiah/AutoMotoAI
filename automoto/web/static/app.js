@@ -1251,13 +1251,25 @@ PAGES.files = async () => {
           <div class="fmeta"><b title="${esc(it.path)}">${esc(it.name)}</b><span class="muted">${fmt(it.size)}</span></div>
           <div class="factions"><a class="btn" href="${dlUrl(it.path)}" download>${icon("download")} Download</a>
           <button class="btn" data-ask="${esc(it.path)}">${icon("chat")} Ask agent</button>
+          ${/\.(png|jpe?g|webp|bmp|gif)$/i.test(it.name) ? `<button class="btn" data-studio-image="${esc(it.path)}">${icon("edit")} Edit layers</button>` : ""}
+          ${/\.design\.json$/i.test(it.name) ? `<button class="btn" data-studio-draft="${esc(it.path)}">${icon("edit")} Open layers</button>` : ""}
           ${it.view ? `<button class="btn" data-view="${esc(it.path)}">${icon("eye")} View</button>` : ""}
           ${it.view === "archive" ? `<button class="btn" data-extract="${esc(it.path)}">${icon("folder")} Extract</button><button class="btn" data-repack="${esc(it.path)}" title="Re-pack as a clean zip (drops __MACOSX, .DS_Store, .git, .env…)">${icon("archive")} Clean zip</button>` : ""}</div></div>`).join("")
       : '<div class="card muted">Empty folder. Upload a file or ask the agent to create a document.</div>';
     $$(".fprev img").forEach((im) => im.addEventListener("error", () => { im.parentNode.classList.add("none"); im.parentNode.innerHTML = icon("file"); }));
     $$("[data-dir]").forEach((a) => a.onclick = (e) => { e.preventDefault(); dir = a.dataset.dir; draw(); });
     $$("[data-ask]").forEach((b) => b.onclick = () => { state.files = [b.dataset.ask]; location.hash = "#/new"; setTimeout(renderAttachments, 50); });
-    $$("[data-view]").forEach((b) => b.onclick = () => viewFile(b.dataset.view));
+    $("[data-view]").forEach((b) => b.onclick = () => viewFile(b.dataset.view));
+    $("[data-studio-image]").forEach((b) => b.onclick = () => {
+      sessionStorage.setItem("automoto_visual_open_image", b.dataset.studioImage);
+      location.hash = "#/visual";
+      if (state.route === "#/visual") PAGES.visual();
+    });
+    $("[data-studio-draft]").forEach((b) => b.onclick = () => {
+      sessionStorage.setItem("automoto_visual_open_draft", b.dataset.studioDraft);
+      location.hash = "#/visual";
+      if (state.route === "#/visual") PAGES.visual();
+    });
     const act = async (action, path, verb) => {
       try { const r = await api("/api/files/archive", { action, path }); toast(`${verb} ${r.path}${r.files != null ? ` (${r.files} files)` : ""}`); draw(); }
       catch (e) { toast(e.message, "bad"); }
