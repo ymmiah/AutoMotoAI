@@ -183,6 +183,30 @@ def preview(body: PreviewIn, request: Request):
             "quality": "passed structural checks; manual visual review required"}
 
 
+@router.post("/repair")
+def propose_repair(body: DesignIn, request: Request):
+    """Return non-destructive suggested fixes and an optional real preview.
+
+    The client must call its own Undo-tracked Apply action explicitly. No saved
+    draft, original asset, or export is rewritten by this endpoint.
+    """
+    _auth(request)
+    from automoto.visual_repair import propose
+    try:
+        spec=_validate(body.spec)
+        report=propose(spec)
+        report["preview"]=None
+        if report["changed"] and not report["remaining_issues"]:
+            scene=_compiled(report["proposed_spec"])
+            result=io.BytesIO()
+            raster(scene).save(result,format="PNG",optimize=True)
+            if result.tell()<=4*1024*1024:
+                report["preview"]="data:image/png;base64,"+base64.b64encode(result.getvalue()).decode("ascii")
+        return report
+    except (VisualError,ValueError,TypeError,OSError) as exc:
+        raise HTTPException(422,str(exc)[:1000]) from None
+
+
 @router.post("/save")
 def save(body: DesignIn, request: Request):
     _auth(request)
