@@ -368,6 +368,48 @@ let browser;
   await page.screenshot({path:path.join(output,'visual-studio-v8-multipage-export.png')});
   await page.locator('#vsFormat').selectOption('png');
   assert.match(await page.locator('#vsPageExportHint').innerText(),/Only page/);
+  // v9: Save a brand kit, reload it and prove that one explicit approval
+  // can validate and restyle both native pages without flattening them.
+  await page.locator('#vsBrandCapture').click();
+  await page.locator('#vsBrandName').fill('QA visual identity');
+  const kitSaving=page.waitForResponse(r=>r.url().includes('/api/visual/studio/brand-kits/save')&&
+    r.request().method()==='POST');
+  await page.locator('#vsBrandSave').click();
+  const kitSaveResponse=await kitSaving;
+  assert.equal(kitSaveResponse.status(),200,await kitSaveResponse.text());
+  const kitPath=(await kitSaveResponse.json()).path;
+  await page.waitForFunction(path=>document.querySelector('#vsBrandKits')?.value===path,kitPath);
+  await page.locator('#vsBrandName').fill('Temporary edit');
+  const kitLoading=page.waitForResponse(r=>r.url().includes('/api/visual/studio/brand-kits/load')&&
+    r.request().method()==='GET');
+  await page.locator('#vsBrandLoad').click();
+  assert.equal((await kitLoading).status(),200);
+  assert.equal(await page.locator('#vsBrandName').inputValue(),'QA visual identity');
+  await page.locator('#vsBrandHeading').fill('30');
+  page.once('dialog',dialog=>dialog.accept());
+  const kitChecking=page.waitForResponse(r=>r.url().includes('/api/visual/studio/document/validate')&&
+    r.request().method()==='POST');
+  await page.locator('#vsBrandApplyAll').click();
+  const kitCheckResponse=await kitChecking;
+  assert.equal(kitCheckResponse.status(),200,await kitCheckResponse.text());
+  await page.locator('#vsPageTabs [data-page-index="1"]').click();
+  await page.locator('#vsElement').selectOption('0');
+  assert.equal(await page.locator('#vsProperties [data-key="font_size"]').inputValue(),'30');
+  await page.locator('#vsPageTabs [data-page-index="0"]').click();
+  await page.locator('#vsElement').selectOption('0');
+  assert.equal(await page.locator('#vsProperties [data-key="font_size"]').inputValue(),'30');
+  await page.locator('#vsUndo').click();
+  await page.locator('#vsElement').selectOption('0');
+  assert.equal(await page.locator('#vsProperties [data-key="font_size"]').inputValue(),'34',
+    'brand application must be undoable without changing the original copy');
+  await page.screenshot({path:path.join(output,'visual-studio-v9-brand-kits.png')});
+  // Confirm the saved kit is only a reusable style reference; deleting it
+  // must never remove any existing draft or its underlying artwork.
+  page.once('dialog',dialog=>dialog.accept());
+  const deletingKit=page.waitForResponse(r=>r.url().includes('/api/visual/studio/brand-kits/delete')&&
+    r.request().method()==='POST');
+  await page.locator('#vsBrandDelete').click();
+  assert.equal((await deletingKit).status(),200);
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
