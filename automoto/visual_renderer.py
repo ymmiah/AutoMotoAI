@@ -375,10 +375,26 @@ def _pptx_scenes(scenes:list[dict],path:Path):
                         run.font.bold=e.get("bold",False)
                         run.font.color.rgb=RGBColor(*_hexrgb(e["colour"]))
             elif t=="image":
+                from PIL import ImageOps
                 p=Path(e["path"])
-                with Image.open(p) as image:iw,ih=image.size
+                with Image.open(p) as opened:
+                    iw,ih=opened.size
+                    # Existing JPEG/PNG bytes stay original unless PowerPoint
+                    # cannot accept the source or EXIF orientation requires a
+                    # corrected display copy. Never write back to the source.
+                    orient=opened.getexif().get(274,1)
+                    convert=p.suffix.lower() in {".webp",".bmp"} or orient not in {1,None}
+                    if convert:
+                        copy=ImageOps.exif_transpose(opened).convert("RGBA")
+                        iw,ih=copy.size
+                        temporary=io.BytesIO()
+                        copy.save(temporary,format="PNG")
+                        temporary.seek(0)
+                        source=temporary
+                    else:
+                        source=str(p)
                 fit=min(X(e["w"])/iw,Y(e["h"])/ih)
-                pic=slide.shapes.add_picture(str(p),
+                pic=slide.shapes.add_picture(source,
                      X(e["x"])+round((X(e["w"])-iw*fit)/2),
                      Y(e["y"])+round((Y(e["h"])-ih*fit)/2),
                      round(iw*fit),round(ih*fit))
