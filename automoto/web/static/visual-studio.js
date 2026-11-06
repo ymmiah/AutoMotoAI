@@ -545,7 +545,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         icon("download")+' Download '+esc(fmt.toUpperCase())+'</a> '+
         '<a class="btn" href="'+draft+'" download>Editable design specification</a>'+
         (fmt==="gif"?'<img src="'+preview+'" alt="Live animated GIF" style="max-height:155px;max-width:220px;object-fit:contain">':"");
-      dirty=false;loadDrafts();toast("Design exported");status("Saved "+out.path+" and its provenance record.");
+      dirty=false;loadDrafts();toast("Design exported");
+      status("Exported "+out.path+". Refreshing the latest design preview…");
+      schedule(0);
     }catch(e){status("Export failed: "+e.message,true);}
     finally{btn.disabled=false;}
   };
