@@ -84,7 +84,7 @@ def test_visual_studio_export_mode_and_format_are_independent(home,format,layere
 
 
 def test_import_flattened_ai_art_is_one_image_layer_not_fake_object_layers(home):
-    uploaded=home/"uploads"/"fresh-ai-image.webp";uploaded.parent.mkdir(parents=True)
+    uploaded=home/"uploads"/"fresh-ai-image.webp";uploaded.parent.mkdir(parents=True,exist_ok=True)
     Image.new("RGB",(720,480),(45,119,210)).save(uploaded)
     before=hashlib.sha256(uploaded.read_bytes()).hexdigest()
     with TestClient(server.app) as web:
@@ -118,7 +118,7 @@ def test_native_image_import_recovers_earlier_separate_editor_layers(home):
 
 
 def test_gif_flat_import_uses_one_static_preview_frame_without_modifying_source(home):
-    src=home/"uploads"/"demo.gif";src.parent.mkdir(parents=True)
+    src=home/"uploads"/"demo.gif";src.parent.mkdir(parents=True,exist_ok=True)
     frames=[Image.new("RGB",(800,480),(255,20,40)),
             Image.new("RGB",(800,480),(20,40,255))]
     frames[0].save(src,save_all=True,append_images=frames[1:],duration=100,loop=0)
