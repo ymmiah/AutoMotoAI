@@ -93,6 +93,16 @@ let browser;
   assert.equal(await page.locator('#composerInput').inputValue(), 'Keep this draft while I check settings');
   await page.locator('#composerInput').fill('');
   await page.screenshot({ path: path.join(output, 'workspace-dark.png') });
+  // All generated image requests (not only GIFs) must ask whether to keep
+  // an editable layered project; cancellation cannot discard the draft.
+  const imageBrief='Generate a landscape illustration for a poster';
+  await page.locator('#composerInput').fill(imageBrief);
+  await page.locator('#sendBtn').click();
+  await page.locator('#modal [data-output="layered"]').waitFor();
+  assert.equal(await page.locator('#modal [data-output]').count(), 5);
+  await page.locator('#modal [data-output="cancel"]').click();
+  assert.equal(await page.locator('#composerInput').inputValue(), imageBrief);
+  await page.locator('#composerInput').fill('');
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
   await page.locator('.nav [data-page="visual"]').click();
   await page.locator('#vsPreview').waitFor();
