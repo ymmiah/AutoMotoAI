@@ -448,6 +448,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(type==="icon")e={type,x,y,w:85,h:85,name:"sparkle",colour:p.ink,auto_colour:"ink"};
       if(type==="image")e={type,x,y,w:340,h:220,path:at("vsAssets").value,alt:"Original source image"};
       spec.elements.push(e);selected=spec.elements.length-1;
+      selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);
     });
   }
   async function loadAssets(){
@@ -467,7 +468,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   }
   at("vsTemplate").onchange=e=>{
     if(dirty&&!window.confirm("Replace this design? Save your draft first if you want to keep it."))return;
-    spec=template(e.target.value,spec.theme);selected=-1;dirty=false;undoStack=[];redoStack=[];
+    spec=template(e.target.value,spec.theme);selected=-1;selectionKeys.clear();dirty=false;undoStack=[];redoStack=[];
     draw();schedule(0);
   };
   at("vsTheme").onchange=e=>change(()=>themeElements(spec,e.target.value));
@@ -619,19 +620,19 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       return;
     }
     spec=copy(review.candidate);
-    selected=-1;
+    selected=-1;selectionKeys.clear();
     closeRepair();
     record(before);draw();schedule(0);
     toast("Approved selected repairs applied. Undo is available.");
   };
   at("vsAddText").onclick=()=>add("text");at("vsAddShape").onclick=()=>add("rect");
   at("vsAddIcon").onclick=()=>add("icon");at("vsAddImage").onclick=()=>add("image");
-  at("vsElement").onchange=e=>{selected=e.target.value===""?-1:Number(e.target.value);draw();};
+  at("vsElement").onchange=e=>choose(e.target.value===""?-1:Number(e.target.value));
   at("vsLayers").onclick=e=>{
     const button=e.target.closest("[data-layer-act]");if(!button)return;
     const key=button.dataset.layerKey,act=button.dataset.layerAct;
     const unit=layerUnits(spec).find(u=>u.key===key);if(!unit)return;
-    if(act==="select"){selected=unit.indices[0];draw();return;}
+    if(act==="select"){choose(unit.indices[0],e.shiftKey||e.ctrlKey||e.metaKey);return;}
     if(act==="visibility"||act==="lock"){
       const flag=act==="visibility"?"hidden":"locked";
       change(()=>toggleLayer(spec,key,flag,flag==="hidden"?!unit.hidden:!unit.locked));
@@ -639,11 +640,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     }
     if(act==="front"||act==="back"){
       if(unit.locked)return;
-      const item=spec.elements[selected],direction=act==="front"?1:-1;
+      const item=spec.elements[unit.indices[0]],direction=act==="front"?1:-1;
       change(()=>{
         if(moveLayer(spec,key,direction)){
-          if(item)selected=spec.elements.indexOf(item);
-          else selected=layerUnits(spec).find(u=>u.key===key)?.indices[0]??-1;
+          selected=spec.elements.indexOf(item);
+          selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);
         }
       });
     }
@@ -692,15 +693,15 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   at("vsEffect").onchange=updateGifSpec;
   for(const id of ["vsFrames","vsDelay","vsLoop"])at(id).onchange=updateGifSpec;
   at("vsDelete").onclick=()=>{
-    if(selected<0||isLocked())return;
+    if(selected<0||isLocked()||selectedUnits().length!==1)return;
     change(()=>{
       const chosen=spec.elements[selected],g=chosen.group;
       spec.elements=spec.elements.filter((e,i)=>g ? e.group!==g&&e.from_group!==g&&e.to_group!==g : i!==selected);
-      selected=-1;relink(spec);
+      selected=-1;selectionKeys.clear();relink(spec);
     });
   };
   at("vsDuplicate").onclick=()=>{
-    if(selected<0||isLocked())return;
+    if(selected<0||isLocked()||selectedUnits().length!==1)return;
     const unit=currentUnit();
     if(spec.elements.length+(unit?.indices.length||1)>40){
       toast("Duplicating this group would exceed the 40-object canvas limit.","bad");return;
@@ -717,6 +718,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         spec.elements.push(e);
       });
       selected=spec.elements.length-1;
+      selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);
     });
   };
   for(const key of ["title","subtitle"]){
@@ -750,7 +752,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     if(dirty&&!window.confirm("Discard unsaved changes and open the saved draft?"))return;
     try{
       const data=await api("/api/visual/studio/load?path="+encodeURIComponent(path));
-      spec=data.spec;name=data.name;at("vsName").value=name;selected=-1;dirty=false;undoStack=[];redoStack=[];
+      spec=data.spec;name=data.name;at("vsName").value=name;selected=-1;selectionKeys.clear();dirty=false;undoStack=[];redoStack=[];
       if(spec.animation){
         at("vsFormat").value="gif";
         at("vsEffect").value=spec.animation.effect||"flow";
@@ -849,6 +851,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       name=result.name||"Imported image";
       at("vsName").value=name;
       selected=spec.elements.findIndex(e=>e.type==="image");
+      selectionKeys=selected>=0?new Set([unitKey(spec.elements[selected],selected)]):new Set();
       undoStack=[];redoStack=[];dirty=false;
       at("vsOutputMode").value="layered";
       draw();schedule(0);
