@@ -546,7 +546,12 @@ def cmd_local(args) -> int:
     print("Models that fit:")
     for m in rec["models"]:
         print(f"  {'*' if m['recommended'] else ' '} {m['name']:<14} {m['download_gb']:>4} GB  {m['note']}")
-    print(f"In use: {st['model'] if st['ollama_enabled'] else 'none'} · Offline mode: {'on' if st['offline'] else 'off'}")
+    print(f"In use: {st['model'] if st['ollama_enabled'] else 'none'} · Offline mode: {'on' if st['offline'] else 'off'}"
+          f" · context {st.get('context') or rec.get('context')} · thinking {st.get('think') or 'off'}")
+    if st.get("substitution"):
+        print(st["substitution"]["message"])
+    if rec.get("upgrade"):
+        print("Stronger option: " + rec["upgrade"]["note"])
     if st["local_server"]:
         print(f"Local OpenAI-compatible server: {st['local_server']}")
     have = {m["name"] for m in o["models"]}

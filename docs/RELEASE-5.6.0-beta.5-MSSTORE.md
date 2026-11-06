@@ -13,6 +13,7 @@ Existing Store product: [9N9J7FLSSFG8](https://apps.microsoft.com/detail/9n9j7fl
 - Engine installation status refreshes when returning from the installer, with a manual refresh option that preserves an unfinished sign-in form.
 - Store packages include the matching engine wheel with SHA-256 verification, so installing the engine does not depend on an unpublished GitHub release.
 - Includes current main's visual PowerPoint generation, original-image preservation, and layout quality checks.
+- Offline AI recommends a stronger model when the graphics card can hold it, keeps a longer context on strong PCs, and warns when it has to use a weaker downloaded model. Offline mode does not fall back to a cloud provider.
 
 ## Update file
 
@@ -21,7 +22,7 @@ The **Windows app** workflow produces `AutoMoto-AI-5.6.0-beta.5-Windows-x64.msix
 1. Wait for the PR's Windows build, Rust checks, browser regressions, and MSIX install/launch checks to pass.
 2. Download `automoto-ai-msstore` from that successful run and verify `SHA256SUMS.txt`.
 3. Confirm the package identity/publisher exactly matches the existing product's Partner Center identity. Missing repository identity variables produce a **test-only placeholder**, which must not be submitted. Set `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME`, and `MSSTORE_DISPLAY_NAME` to the existing product's values and rebuild if necessary.
-4. Create an update for the existing product in Partner Center, upload the `.msixupload`, review metadata/screenshots, and submit for certification.
+4. Create an update for the existing product in Partner Center, upload the `.msixupload`, review metadata/screenshots, and submit for certification. Optional poster art (720×1080) and box art (1080×1080) derived from the existing icon are in `packaging/msstore/images/`. Replace them in Partner Center if you have final marketing art. Do not submit a package whose identity is still the test placeholder.
 
 This change does not publish a GitHub release or submit the app to Microsoft. The older Beta 4 PR is not required for this update.
 

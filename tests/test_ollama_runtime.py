@@ -62,11 +62,18 @@ class FakeOllama:
                     return self._send(200, {"capabilities": caps, "model_info": {"llama.context_length": 32768}})
                 if self.path == "/api/chat":
                     fake.chats.append(data)
+                    content = data["messages"][-1].get("content") or ""
                     if data.get("tools") and not m.get("tools"):
                         return self._send(400, {"error": f"registry.ollama.ai/library/{model} does not support tools"})
-                    if data.get("tools") and data["messages"][-1]["content"] == "save it":
+                    if data.get("tools") and content == "save it":
                         return self._send(200, {"message": {"role": "assistant", "content": "", "tool_calls": [
                             {"function": {"name": "remember", "arguments": {"text": "hi"}}}]}})
+                    if "prefix save" in content:
+                        return self._send(200, {"message": {"role": "assistant", "content": "", "tool_calls": [
+                            {"function": {"name": "functions.remember", "arguments": {"text": "hi"}}}]}})
+                    if "loose save" in content:
+                        return self._send(200, {"message": {"role": "assistant", "content":
+                            'Saving now.\n{"name": "remember", "arguments": {"text": "hi"}}'}})
                     return self._send(200, {"message": {"role": "assistant", "content": f"<think>x</think>Hello from {model}"}})
                 self._send(404, {"error": "not found"})
 
@@ -84,6 +91,8 @@ def ollama(monkeypatch):
         for k in p.env_keys:
             monkeypatch.delenv(k, raising=False)
     monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.setattr(local_llm, "_hardware_cached", lambda: {"ram_gb": 16.0, "gpu": None, "cpus": 4,
+                                                                "os": "Linux", "arch": "x86_64"})
     fakes = []
 
     def make(models):
@@ -146,6 +155,7 @@ def test_every_request_sets_a_big_enough_context_and_turns_thinking_down(ollama,
     assert t.text == "Hello from qwen3.5:4b"  # <think> stripped
     body = fake.chats[-1]
     assert body["options"]["num_ctx"] == 8192 and body["think"] is False and body["tools"]
+    assert body["options"]["temperature"] == 0.2  # tool turns stay deterministic
     monkeypatch.setenv("LOCAL_AI_CONTEXT", "65536")
     assert local_llm.context_size("qwen3.5:4b") == 32768  # never above what the model was trained for
 
@@ -155,6 +165,26 @@ def test_native_tool_calls_come_back(ollama):
     settings.update({"local_model": "qwen2.5:3b"})
     t = turn("save it")
     assert t.mode == "native" and t.tool_calls[0]["name"] == "remember" and t.tool_calls[0]["arguments"] == {"text": "hi"}
+
+
+def test_prefixed_and_loose_tool_calls_still_run(ollama):
+    ollama({"qwen2.5:3b": {"tools": True}})
+    settings.update({"local_model": "qwen2.5:3b"})
+    prefixed = turn("prefix save")
+    assert prefixed.tool_calls[0]["name"] == "remember" and prefixed.tool_calls[0]["arguments"] == {"text": "hi"}
+    loose = turn("loose save")
+    assert loose.tool_calls[0]["name"] == "remember" and loose.tool_calls[0]["arguments"] == {"text": "hi"}
+    assert "remember" not in loose.text
+
+
+def test_missing_choice_is_replaced_out_loud(ollama):
+    ollama({"qwen2.5:0.5b": {"tools": True}})
+    settings.update({"offline": True, "local_model": "qwen3.5:4b"})
+    panel = local_llm.status()
+    assert panel["model"] == "qwen2.5:0.5b"
+    assert panel["substitution"]["weaker"] is True
+    assert "weaker" in panel["substitution"]["message"]
+    assert panel["tier"] == "limited"
 
 
 def test_models_without_tools_skip_the_failing_native_call(ollama):

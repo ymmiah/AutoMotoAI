@@ -355,7 +355,7 @@ function renderChat(conv) {
       <form class="composer" id="composer" aria-label="Message composer">
         <div class="attachments" id="attachments" aria-label="Attachments"></div>
         <label class="sr" for="composerInput">Message</label>
-        <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? `Give ${BRAND_SHORT} a goal…` : `Message ${BRAND_SHORT}…`}"></textarea>
+        <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? `Tell ${BRAND_SHORT} what to finish…` : `Message ${BRAND_SHORT}…`}"></textarea>
         <div class="bar">
           <input type="file" id="fileInput" accept="image/*,.docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.tsv,.pptx,.ppt,.odp,.pdf,.md,.txt,.log,.json,.jsonl,.yaml,.yml,.toml,.xml,.parquet,.sqlite,.db,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar" multiple hidden>
           <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach image or file" title="Attach an image, Word, Excel, PowerPoint or PDF file (or paste / drop)">${icon("clip")}</button>
@@ -372,7 +372,7 @@ function renderChat(conv) {
     $("#msgs").innerHTML = `<div class="hero">
       <div class="workspace-label"><span class="workspace-dot" aria-hidden="true"></span>${HOSTED ? "YOUR CONNECTED WORKSPACE" : "YOUR PERSONAL WORKSPACE"}</div>
       <h2>A little idea.<br><span>A lot of possibility.</span></h2>
-      <p>Hey, cousin. What are we making happen today?<br>Give me a goal. I'll work through the steps with you.</p>
+      <p>Tell me what you need.<br>I'll gather the files, do the steps, and finish it. You don't pick the tools.</p>
       <div class="workspace-status"><a href="#/${HOSTED ? "account" : "settings"}" class="${ready ? "ready" : "needs-setup"}">${icon(ready ? "check" : "settings")}${ready ? `${ready} AI provider${ready === 1 ? "" : "s"} configured` : "Set up your first AI"}</a><a href="#/tasks">${icon("activity")}Follow your tasks</a><a href="#/files">${icon("folder")}Your files</a></div>
       <div class="ideas-heading"><h3>A good place to start</h3><span>Choose an idea, then make it your own</span></div>
       <div class="idea-filters" role="group" aria-label="Filter starting ideas"><button type="button" data-filter="all" aria-pressed="true">Explore all</button><button type="button" data-filter="create" aria-pressed="false">Create</button><button type="button" data-filter="analyse" aria-pressed="false">Analyse</button><button type="button" data-filter="automate" aria-pressed="false">Automate</button></div>
@@ -382,7 +382,7 @@ function renderChat(conv) {
       drawHeroIdeas();
     });
     drawHeroIdeas(); loadIdeas();
-    $("#infoBody").innerHTML = '<p class="muted">Start an agent run to see the provider, model and every step here.</p>';
+    $("#infoBody").innerHTML = '<p class="muted">Send a request to see progress here, in plain language.</p>';
   } else {
     for (const m of conv.messages) m.role === "user" ? addUser(m.content, thread) : renderSavedBot(m, thread);
     updateInfoFromConv(conv);
@@ -464,9 +464,12 @@ function addBot(thread = ensureThread()) {
 
 // ---------------------------------------------------------------- run rendering
 const argSummary = (args) => {
+  // The open step shows a file name only. Commands, queries and raw arguments stay in the collapsed details.
   if (!args || typeof args !== "object") return "";
-  const v = args.command || args.query || args.url || args.path || args.text || args.name || Object.values(args)[0];
-  return typeof v === "string" ? v : JSON.stringify(args);
+  const path = args.path || args.out || args.dest;
+  if (typeof path !== "string" || !path) return "";
+  const base = path.split(/[/\\]/).pop();
+  return base && base !== path ? base : "";
 };
 const pretty = (o) => { try { return typeof o === "string" ? o : JSON.stringify(o, null, 2); } catch { return String(o); } };
 // Fallback for saved runs that predate the server's "label" field.
@@ -483,9 +486,10 @@ function stepCard(ev) {
   d.className = "step run";
   d.dataset.id = ev.id;
   const label = ev.label || stepLabel(ev.name, ev.args);
-  d.innerHTML = `<summary><span class="ico">${icon(TOOL_ICONS[ev.name] || "wrench")}</span><span class="nm" title="${esc(ev.name)}">${esc(label)}</span>
-    <span class="arg">${esc(argSummary(ev.args))}</span><span class="st"><span class="spin" aria-label="running"></span></span><span class="chev">${icon("chev")}</span></summary>
-    <div class="body"><div class="lab">Step details <code>${esc(ev.name)}</code></div><pre>${esc(pretty(ev.args))}</pre><div class="out"></div></div>`;
+  const file = argSummary(ev.args);
+  d.innerHTML = `<summary><span class="ico">${icon(TOOL_ICONS[ev.name] || "wrench")}</span><span class="nm">${esc(label)}</span>
+    ${file ? `<span class="arg">${esc(file)}</span>` : ""}<span class="st"><span class="spin" aria-label="running"></span></span><span class="chev">${icon("chev")}</span></summary>
+    <div class="body"><div class="lab">Details</div><pre>${esc(pretty(ev.args))}</pre><div class="out"></div></div>`;
   return d;
 }
 function setStepStatus(card, cls, html) {
@@ -497,7 +501,7 @@ function renderEvent(ctx, ev) {
   const steps = $(".steps", ctx.el), st = $(".st-text", ctx.el);
   const card = () => ev.id && $$(".step", steps).find((c) => c.dataset.id === ev.id);
   switch (ev.type) {
-    case "thinking": if (st) st.textContent = ev.step > 1 ? `Thinking · step ${ev.step}` : "Thinking…"; break;
+    case "thinking": if (st) st.textContent = ev.step > 1 ? "Continuing…" : "Working on it…"; break;
     case "model":
       ctx.provider = ev.provider; ctx.model = ev.model; ctx.step = ev.step;
       if (ev.switched?.length) ctx.switched.push(...ev.switched);
@@ -518,7 +522,7 @@ function renderEvent(ctx, ev) {
       a.className = "approve"; a.dataset.id = ev.id;
       a.setAttribute("role", "group"); a.setAttribute("aria-label", `Approve ${ev.name}?`);
       const what = (ctx.steps.find((x) => x.id === ev.id) || {}).label || stepLabel(ev.name, ev.args);
-      a.innerHTML = `<div class="ah">${icon("shield")} Allow: ${esc(what)}? <code>${esc(ev.name)}</code></div>
+      a.innerHTML = `<div class="ah">${icon("shield")} Allow this: ${esc(what)}?</div>
         <div class="why">${esc(ev.reason || "This action is marked risky.")}</div><details class="adv"><summary>Details</summary><pre>${esc(pretty(ev.args))}</pre></details>
         <div class="row">${ctx.live ? `<button class="btn primary" data-ok="1">${icon("check")} Approve</button><button class="btn" data-ok="0">${icon("x")} Deny</button><span class="muted" style="font-size:12px">or press A / D</span>` : '<span class="muted">Waiting…</span>'}</div>`;
       steps.appendChild(a);
@@ -544,17 +548,21 @@ function renderEvent(ctx, ev) {
       $(".out", c).innerHTML = `<div class="lab">${ev.ok ? "Result" : "Error"}</div><pre>${esc(ev.output || "")}</pre>`;
       const s = ctx.steps.find((x) => x.id === ev.id); if (s) s.cls = ev.ok ? "ok" : "bad";
       else ctx.steps.push({ id: ev.id, name: ev.name, cls: ev.ok ? "ok" : "bad" });
-      if (st) st.textContent = "Thinking…";
+      if (st) st.textContent = "Continuing…";
       break;
     }
     case "max_steps": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("alert")} Step limit reached, summarising.`; steps.appendChild(n); break; }
     case "quota": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("clock")} ${esc(ev.text)}`; steps.appendChild(n); refreshMe(); break; }
     case "plan": {
-      if (!ev.labels?.length || $(".plan-note", steps)) break;
+      if ($(".plan-note", steps)) break;
+      const text = ev.summary || (ev.labels?.length ? `I'll take this from here: ${ev.labels.join(", ")}.` : "");
+      if (!text) break;
       const n = document.createElement("div"); n.className = "note plan-note";
-      n.innerHTML = `${icon("sparkle")} ${esc(ev.summary || "Working on: " + ev.labels.join(", "))}`; steps.appendChild(n); break;
+      n.innerHTML = `${icon("sparkle")} ${esc(text)}`; steps.appendChild(n);
+      if (st) st.textContent = text;
+      break;
     }
-    case "nudge": { const n = document.createElement("div"); n.className = "note"; n.innerHTML = `${icon("refresh")} The AI's tool call was broken, asking it to retry properly.`; steps.appendChild(n); break; }
+    case "nudge": { const n = document.createElement("div"); n.className = "note"; n.innerHTML = `${icon("refresh")} ${ev.reason === "unverified" ? "The local model said the work was done before any tool ran. Asking it to call the tool." : "The AI's tool call was broken, asking it to retry properly."}`; steps.appendChild(n); break; }
     case "cancelled": { const n = document.createElement("div"); n.className = "note warn"; n.innerHTML = `${icon("stop")} Stopped by you.`; steps.appendChild(n); break; }
     case "memory": {
       if (!ev.facts?.length) break;
@@ -1420,16 +1428,21 @@ PAGES.settings = async () => {
     const pulling = progress[m.name]?.state === "downloading";
     const error = progress[m.name]?.state === "error" ? progress[m.name].error : "";
     const active = d.ollama_enabled && (d.model === m.name || d.model + ":latest" === m.name);
+    const limited = m.tier === "limited" ? '<span class="pill bad">Limited</span>' : "";
     const action = ready
       ? `<button class="btn sm ${active ? "" : "primary"}" data-use="${esc(m.name)}" ${d.model_from_env ? "disabled" : ""}>${active ? "Selected" : "Use model"}</button><button class="btn sm" data-test="${esc(m.name)}">Test</button>`
       : pulling
         ? `<span class="muted" aria-live="polite">Downloading ${progress[m.name].percent || 0}%</span>`
         : `<button class="btn sm" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download ${m.download_gb || "?"} GB</button>`;
-    return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Recommended</span>' : ""}<span class="muted small"> · ${esc(m.name)}</span><div class="muted small">${esc(m.note || "")}</div>${error ? `<span class="bad small">${esc(error)}</span>` : ""}</span>${action}</div>`;
+    return `<div class="order-item"><span class="nm"><b>${esc(m.label)}</b> ${m.recommended ? '<span class="pill">Recommended</span>' : ""} ${limited}<span class="muted small"> · ${esc(m.name)}</span><div class="muted small">${esc(m.note || "")}</div>${error ? `<span class="bad small">${esc(error)}</span>` : ""}</span>${action}</div>`;
   };
   box.classList.remove("muted");
+  const thinking = d.think === true ? "on" : (d.think ? String(d.think) : "off");
   box.innerHTML = `
     <p class="muted small">Status: ${o.running ? "Ollama running locally" : o.installed ? "Ollama installed but not running" : "Ollama runtime not installed"}. ${esc(rec.why || "")}</p>
+    ${d.substitution ? `<p class="small"><span class="pill bad">${esc(d.substitution.message)}</span></p>` : ""}
+    ${rec.upgrade ? `<p class="muted small">Stronger option: <b>${esc(rec.upgrade.name)}</b>. ${esc(rec.upgrade.note)}</p>` : ""}
+    <p class="muted small">Local context window: ${esc(String(d.context || rec.context || "?"))} tokens. Thinking: ${esc(thinking)} (set LOCAL_AI_THINK=1 to allow it).</p>`
     ${o.running ? `<p class="muted small">Ollama ${esc(o.version || "")} · ${present.size} downloaded model(s).</p>`
       : o.installed
         ? `<button class="btn primary" id="localStart">Start local AI</button><p class="muted small">Starts Ollama on this computer. No cloud service is involved.</p>`

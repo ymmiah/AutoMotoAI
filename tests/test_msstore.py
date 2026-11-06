@@ -19,10 +19,11 @@ NS = {"m": "http://schemas.microsoft.com/appx/manifest/foundation/windows10",
 
 def test_version_mapping():
     assert msix.msix_version("5.6.0-beta.3") == "5.6.3.0"
+    assert msix.msix_version("5.6.0-beta.5") == "5.6.5.0"
     assert msix.msix_version("5.6.0") == "5.6.99.0"
     assert msix.msix_version("5.6.1-beta.1") == "5.6.101.0"
     assert msix.msix_version("5.6.1") == "5.6.199.0"
-    order = ["5.6.0-beta.1", "5.6.0-beta.3", "5.6.0", "5.6.1-beta.1", "5.6.1", "5.7.0-beta.1", "6.0.0"]
+    order = ["5.6.0-beta.1", "5.6.0-beta.3", "5.6.0-beta.5", "5.6.0", "5.6.1-beta.1", "5.6.1", "5.7.0-beta.1", "6.0.0"]
     nums = [tuple(map(int, msix.msix_version(v).split("."))) for v in order]
     assert nums == sorted(nums) and len(set(nums)) == len(nums)
     for bad in ("5.6", "5.6.0-rc.1", "0.1.0", "5.6.0-beta.99"):
@@ -72,6 +73,16 @@ def test_every_referenced_image_exists_with_the_right_size():
         assert Image.open(out / f"{ref}.png").size == sizes[ref]
         assert Image.open(out / f"{ref}.scale-200.png").size == tuple(2 * v for v in sizes[ref])
     assert Image.open(out / "Square44x44Logo.targetsize-256_altform-unplated.png").size == (256, 256)
+
+
+def test_store_poster_and_box_art_match_partner_center_slots():
+    from PIL import Image
+
+    images = ROOT / "packaging/msstore/images"
+    assert Image.open(images / "poster-art-720x1080.png").size == (720, 1080)
+    assert Image.open(images / "box-art-1080x1080.png").size == (1080, 1080)
+    assert Image.open(images / "app-tile-icon-300x300.png").size == (300, 300)
+    assert Image.open(images / "super-hero-art-1920x1080.png").size == (1920, 1080)
 
 
 def test_store_screenshots_are_big_enough():

@@ -1,6 +1,6 @@
 # Offline AI: use AutoMoto with no internet and no key
 
-> **⚠️ Beta.** These newer controls are being tested on `fix/chat-scroll-offline-navigation-files` and may not yet be part of the installed Microsoft Store version. If your Settings page lacks **Offline AI**, update to a build containing the feature.
+> **Beta.** Offline AI is in the desktop build from 5.6.0-beta.5 onward. If Settings has no **Offline AI** card, update the app.
 
 AutoMoto can use a free AI model that runs **on your own computer**. You don't need an AI key.
 Once the model is downloaded you don't need the internet either, and your chats and files never
@@ -50,15 +50,16 @@ That's it. Start a new chat and ask something.
 
 ## Which model should I pick?
 
-AutoMoto picks for you (Settings marks it **Recommended**), and if the model you picked isn't downloaded it
-quietly uses the best one you *do* have instead of failing. All of these are free, open-weights models from the
-[Ollama library](https://ollama.com/library):
+AutoMoto picks for you (Settings marks it **Recommended**). If the model you picked isn't downloaded, it uses the best one you *do* have instead of failing, and it **says so**. When that substitute is weaker, Settings shows a warning: long tasks will be less reliable until you download the recommended model. It never quietly pretends a tiny model is as capable as the one you chose, and Offline mode never falls through to a cloud model.
+
+A computer with about 4 GB of memory is marked **Limited**. It can chat and do short tasks. It is not as reliable as a cloud assistant on long, multi-step jobs. With 8 GB or more you get an everyday model; a strong computer gets the closest free local model that should still stay responsive.
 
 | Your computer | Good model | Download |
 |---|---|---|
-| 4 GB memory | `qwen2.5:1.5b` or `qwen3.5:0.8b` | 1–1.3 GB |
+| 4 GB memory | `qwen2.5:1.5b` or `qwen3.5:0.8b` (Limited) | 1–1.3 GB |
 | 8 GB memory (most laptops) | `qwen2.5:3b` (fastest) or `llama3.2:3b` | About 2 GB |
-| 16 GB memory, or a graphics card with 6 GB+ | `qwen3.5:4b` (reads images too) | About 4 GB |
+| 16 GB memory, or a graphics card with 6 GB | `qwen3.5:4b` (reads images too). A 7B model also fits but is slower on CPU | About 4 GB |
+| A graphics card with 8 GB | `qwen3:8b` (stronger tool use) | About 5 GB |
 | 32 GB memory, a graphics card with 12 GB+, or a 16 GB Mac | `qwen3.5:9b`, `gemma4:12b` or `deepseek-r1:8b` | 5–8 GB |
 | A graphics card with 16–24 GB | `gpt-oss:20b` or `qwen3.5:27b` | 14–20 GB |
 
@@ -71,9 +72,16 @@ is very slow on a laptop CPU. AutoMoto turns thinking off (gpt-oss: down to *low
 let them think.
 
 **Context window:** Ollama's own default (2–4 thousand tokens on most PCs) is smaller than AutoMoto's
-instructions and tool list, which made small models "forget" how to work. AutoMoto now asks for **8,192 tokens**
-on every request (`LOCAL_AI_CONTEXT=16384` for long documents if you have the memory; never more than the model
-supports).
+instructions and tool list, which made small models "forget" how to work. AutoMoto asks for **8,192 tokens**
+on a normal computer, and **16,384** when you have about 24 GB of memory, 8 GB of graphics memory, or a 16 GB
+Apple chip, so a multi-step task can keep its instructions and tool results. Set `LOCAL_AI_CONTEXT` to override
+(never more than the model supports). Tool calls use a low temperature so small models follow the schema.
+Thinking stays off unless you set `LOCAL_AI_THINK=1`.
+
+**How it stays on task:** with a local model, AutoMoto adds a short set of operating rules (one tool at a time,
+don't claim a file is done before a tool result says so, don't invent a web search while Offline mode is on).
+If the model says the work is finished before any tool has run, AutoMoto asks it to call the tool. Models that
+write the call as JSON in the reply, or prefix the name with `functions.`, are still run.
 
 ## The same thing from the command line
 

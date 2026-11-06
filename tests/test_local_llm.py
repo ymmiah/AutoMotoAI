@@ -23,7 +23,7 @@ def hw(ram, vram=None, kind=None):
 
 @pytest.mark.parametrize("h,best", [
     (hw(2), "qwen2.5:0.5b"), (hw(4), "qwen2.5:1.5b"), (hw(7.6), "qwen2.5:3b"), (hw(15.5), "qwen3.5:4b"),
-    (hw(32), "qwen3.5:9b"), (hw(16, 4), "qwen2.5:3b"), (hw(16, 8), "qwen3.5:4b"), (hw(32, 12), "qwen3.5:9b"),
+    (hw(32), "qwen3.5:9b"), (hw(16, 4), "qwen2.5:3b"), (hw(16, 8), "qwen3:8b"), (hw(32, 12), "qwen3.5:9b"),
     (hw(64, 24), "qwen3.5:27b"), (hw(16, None, "apple"), "qwen3.5:9b"), (hw(8, None, "apple"), "qwen2.5:3b"),
 ])
 def test_recommend_fits_the_computer(h, best):
@@ -31,6 +31,48 @@ def test_recommend_fits_the_computer(h, best):
     assert r["best"] == best
     assert any(m["name"] == best and m["recommended"] and m["tools"] for m in r["models"])  # picks can use tools
     assert "GB" in r["why"]
+    assert r["tier"] == local_llm.quality_tier(best)
+    assert r["tier"] in r["why"] or best in r["why"]
+
+
+def test_weak_computer_is_told_the_limit_and_a_strong_one_is_not():
+    weak = local_llm.recommend(hw(4))
+    assert weak["tier"] == "limited"
+    assert "not as reliable as a cloud assistant" in weak["why"]
+    assert weak["upgrade"] is None
+    strong = local_llm.recommend(hw(32, 24))
+    assert strong["tier"] == "strong" and strong["best"] == "qwen3.5:27b"
+    assert "closest this computer can get to a cloud assistant" in strong["why"]
+    everyday = local_llm.recommend(hw(15.5))
+    assert everyday["tier"] == "everyday" and everyday["upgrade"]["name"]
+    assert everyday["upgrade"]["slow"] is True and "slower on this CPU" in everyday["why"]
+
+
+def test_context_grows_on_strong_hardware_and_stays_inside_the_model(monkeypatch):
+    monkeypatch.setattr(local_llm, "model_info", lambda name: {"context_length": 32768})
+    assert local_llm.context_size("qwen2.5:3b", {"ram_gb": 8, "gpu": None}) == 8192
+    assert local_llm.context_size("qwen3:8b", {"ram_gb": 16, "gpu": {"vram_gb": 8, "kind": "nvidia"}}) == 16384
+    assert local_llm.context_size("qwen3.5:9b", {"ram_gb": 32, "gpu": None}) == 16384
+    assert local_llm.context_size("qwen3.5:9b", {"ram_gb": 16, "gpu": {"vram_gb": None, "kind": "apple"}}) == 16384
+    monkeypatch.setenv("LOCAL_AI_CONTEXT", "4096")
+    assert local_llm.context_size("qwen3:8b", {"ram_gb": 64, "gpu": {"vram_gb": 24}}) == 4096
+    monkeypatch.setenv("LOCAL_AI_CONTEXT", "100000")
+    assert local_llm.context_size("qwen3:8b", {"ram_gb": 64}) == 32768
+
+
+def test_tool_turns_use_a_low_temperature():
+    assert local_llm.tool_temperature(0.4) == 0.2
+    assert local_llm.tool_temperature(0.1) == 0.1
+
+
+def test_a_weaker_substitute_is_reported(monkeypatch):
+    monkeypatch.setattr(local_llm, "installed_models", lambda max_age=5.0: ["qwen2.5:0.5b"])
+    settings.update({"local_model": "qwen3.5:4b"})
+    choice = local_llm.runtime_choice()
+    assert choice["model"] == "qwen2.5:0.5b" and choice["substituted"] and choice["weaker"]
+    assert "weaker" in choice["message"] and "qwen3.5:4b" in choice["message"]
+    same = local_llm.runtime_choice(["qwen3.5:4b"])
+    assert same["substituted"] is False and same["model"] == "qwen3.5:4b"
 
 
 def test_catalogue_has_the_current_free_families():
@@ -126,6 +168,12 @@ def test_settings_validation():
 def test_strip_thinking():
     assert local_llm.strip_thinking("<think>hmm\nok</think>\n\nHello!") == "Hello!"
     assert local_llm.strip_thinking("plain") == "plain"
+    assert local_llm.strip_thinking("Answer first. <think>still going") == "Answer first."
+    assert local_llm.strip_thinking("reasoning</think>\n\nHello") == "Hello"
+    assert local_llm.claims_unverified_work("I've created the report.")
+    assert local_llm.claims_unverified_work("Your file has been saved.")
+    assert not local_llm.claims_unverified_work("I can create that report if you want.")
+    assert not local_llm.claims_unverified_work("Hello")
 
 
 def test_pull_reports_when_ollama_is_not_running():

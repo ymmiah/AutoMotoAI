@@ -224,7 +224,7 @@ class Plan:
 
     def as_dict(self) -> dict[str, Any]:
         labels = [BY_ID[c].label for c in self.capabilities if c in BY_ID]
-        summary = ("Working with: " + ", ".join(labels).lower()) if labels else ""
+        summary = ("I'll take this from here: " + ", ".join(labels) + ".") if labels else "I'll take this from here."
         return {"capabilities": self.capabilities, "labels": labels, "summary": summary,
                 "tools": self.tools, "skills": self.skills, "files": self.files}
 

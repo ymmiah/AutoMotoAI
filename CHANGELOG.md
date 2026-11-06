@@ -7,6 +7,9 @@
 - Refresh engine installation status without overwriting sign-in drafts.
 - Bundle the matching Python engine wheel and SHA-256 in the Store MSIX; align runtime and package versions.
 - Add browser regression checks and screenshots. See [Store release notes](docs/RELEASE-5.6.0-beta.5-MSSTORE.md).
+- Offline AI stays on this computer: hardware-honest model recommendations (8 GB graphics memory defaults to Qwen 3 8B), a longer context window on strong PCs, low temperature for tool calls, a short local-model task guide, and a visible warning when a weaker downloaded model is used instead of the one you picked. Thinking stays off unless `LOCAL_AI_THINK=1`.
+- The chat is one assistant. You write the request; it chooses the files, tools and steps, finishes the task, and shows plain-language progress instead of a tool menu.
+- The Windows rate-limit test no longer depends on `/api/status` (that probe can outlast the limit window). The clock is frozen in the test. The premium PowerPoint CI sample is copied from the isolated pytest workspace, with a clear error if that file is missing.
 
 ## Unreleased (on `main`, after 5.6.0-beta.3) — one central assistant, memory, artifacts, your own server
 **Coming in the next beta.** Not in a tagged build yet.
