@@ -40,6 +40,8 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("GET", r"/api/skills"), ("GET", r"/api/skills/[\w.-]+"),
     ("GET", r"/api/memory"), ("POST", r"/api/memory"), ("DELETE", r"/api/memory/\d+"), ("PUT", r"/api/memory/\d+"),
     ("GET", r"/api/files"), ("POST", r"/api/files/upload"), ("GET", r"/api/files/(download|preview|inspect)"),
+    ("GET", r"/api/visual/studio/(presets|list|load)"),
+    ("POST", r"/api/visual/studio/(preview|save|export)"),
     ("POST", r"/api/files/archive"), ("POST", r"/api/files/delete"),
     ("GET", r"/api/admin/(users|settings|invites|usage|audit)"), ("PUT", r"/api/admin/settings"),
     ("PATCH", r"/api/admin/users/\w+"), ("DELETE", r"/api/admin/users/\w+"),
