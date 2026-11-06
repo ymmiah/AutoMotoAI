@@ -153,6 +153,19 @@ let browser;
   assert.match(await page.locator('#vsOutput').innerText(), /Download editable layers/);
   await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
   await page.screenshot({ path: path.join(output, 'visual-studio-gif.png') });
+  // Every supported picture has an Edit layers action in Files.
+  await page.locator('.nav [data-page="files"]').click();
+  await page.locator('[data-dir="artifacts"]').first().click();
+  await page.locator('[data-dir="artifacts/visual-studio"]').first().click();
+  await page.locator('[data-studio-image$=".gif"]').first().click();
+  await page.locator('#vsOutputMode').waitFor();
+  await page.waitForFunction(() => document.querySelector('#vsPreview')?.naturalWidth > 0 &&
+    document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  assert.equal(await page.locator('#vsOutputMode').inputValue(), 'layered',
+    'opening an exported image must restore an editable Visual Studio project');
+  assert.ok(await page.locator('#vsElement option').count() > 3,
+    'native generated GIF must reopen its independently editable source layers');
+  await page.screenshot({ path: path.join(output, 'visual-studio-reopen-layers.png') });
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
