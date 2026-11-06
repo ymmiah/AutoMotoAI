@@ -265,6 +265,7 @@ $("#modeSeg").addEventListener("keydown", (e) => {
 
 // ---------------------------------------------------------------- router
 window.addEventListener("hashchange", renderRoute);
+window.addEventListener("popstate", renderRoute);
 async function renderRoute() {
   rememberDraft();
   clearInterval(state.pageTimer);
@@ -1299,17 +1300,18 @@ PAGES.files = async () => {
     $$(".fprev img").forEach((im) => im.addEventListener("error", () => { im.parentNode.classList.add("none"); im.parentNode.innerHTML = icon("file"); }));
     $$("[data-dir]").forEach((a) => a.onclick = (e) => { e.preventDefault(); dir = a.dataset.dir; draw(); });
     $$("[data-ask]").forEach((b) => b.onclick = () => { state.files = [b.dataset.ask]; location.hash = "#/new"; setTimeout(renderAttachments, 50); });
-    $("[data-view]").forEach((b) => b.onclick = () => viewFile(b.dataset.view));
-    $("[data-studio-image]").forEach((b) => b.onclick = () => {
-      sessionStorage.setItem("automoto_visual_open_image", b.dataset.studioImage);
-      location.hash = "#/visual";
-      if (state.route === "#/visual") PAGES.visual();
-    });
-    $("[data-studio-draft]").forEach((b) => b.onclick = () => {
-      sessionStorage.setItem("automoto_visual_open_draft", b.dataset.studioDraft);
-      location.hash = "#/visual";
-      if (state.route === "#/visual") PAGES.visual();
-    });
+    document.querySelectorAll("[data-view]").forEach((b) => b.onclick = () => viewFile(b.dataset.view));
+    // Mount the editor immediately and preserve browser history. This route
+    // is explicit rather than relying on a delayed hashchange event.
+    const openInVisual = (intent, value) => {
+      sessionStorage.setItem(intent, value);
+      history.pushState(null, "", "#/visual");
+      Promise.resolve(renderRoute()).catch(err => toast("Could not open Visual Studio: " + err.message, "bad"));
+    };
+    document.querySelectorAll("[data-studio-image]").forEach((b) => b.onclick = () =>
+      openInVisual("automoto_visual_open_image", b.dataset.studioImage));
+    document.querySelectorAll("[data-studio-draft]").forEach((b) => b.onclick = () =>
+      openInVisual("automoto_visual_open_draft", b.dataset.studioDraft));
     const act = async (action, path, verb) => {
       try { const r = await api("/api/files/archive", { action, path }); toast(`${verb} ${r.path}${r.files != null ? ` (${r.files} files)` : ""}`); draw(); }
       catch (e) { toast(e.message, "bad"); }
