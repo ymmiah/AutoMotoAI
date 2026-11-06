@@ -179,9 +179,14 @@ def propose(spec:dict[str,Any]) -> dict[str,Any]:
             if other.get("type") not in ("text","icon","image"):
                 continue
             other_box=_xybox(other)
-            if other_box and _intersects(box,other_box) and (
-                min(box[0]+box[2],other_box[0]+other_box[2])-max(box[0],other_box[0]))*
-                (min(box[1]+box[3],other_box[1]+other_box[3])-max(box[1],other_box[1]))>=max(101,.12*min(box[2]*box[3],other_box[2]*other_box[3])):
+            if not other_box or not _intersects(box,other_box):
+                continue
+            width_overlap=max(0,min(box[0]+box[2],other_box[0]+other_box[2])
+                              -max(box[0],other_box[0]))
+            height_overlap=max(0,min(box[1]+box[3],other_box[1]+other_box[3])
+                               -max(box[1],other_box[1]))
+            overlap=width_overlap*height_overlap
+            if overlap>100 and overlap/min(box[2]*box[3],other_box[2]*other_box[3])>=.12:
                 bad=True
                 break
         if not bad:continue
