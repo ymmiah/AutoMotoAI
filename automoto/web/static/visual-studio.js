@@ -114,6 +114,16 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<button class="btn" id="vsLoad">Open</button></div>'+
     '<div class="vs-toolbar"><input id="vsTitle" class="input" aria-label="Design title" maxlength="130" placeholder="Title" style="flex:1;min-width:160px">'+
     '<input id="vsSubtitle" class="input" aria-label="Design subtitle" maxlength="250" placeholder="Subtitle" style="flex:1;min-width:160px"></div>'+
+    '<section class="vs-pages" aria-label="Document pages">'+
+    '<div class="vs-pages-head"><strong>Document pages</strong><span id="vsPageCount" class="vs-small" role="status"></span></div>'+
+    '<div id="vsPageTabs" class="vs-page-tabs" role="navigation" aria-label="Choose document page"></div>'+
+    '<div class="vs-toolbar vs-page-controls">'+
+    '<label>Page name <input class="input" id="vsPageName" maxlength="80" aria-label="Current page name"></label>'+
+    '<button type="button" class="btn" id="vsPageAdd">New page</button>'+
+    '<button type="button" class="btn" id="vsPageDuplicate">Duplicate page</button>'+
+    '<button type="button" class="btn" id="vsPageUp">Move earlier</button>'+
+    '<button type="button" class="btn" id="vsPageDown">Move later</button>'+
+    '<button type="button" class="btn danger" id="vsPageDelete">Remove page</button></div></section>'+
     '<div class="vs-shell"><section class="vs-workspace"><div class="vs-stage" id="vsStage" aria-busy="true">'+
     '<img id="vsPreview" class="vs-preview" alt="Actual rendered design preview" draggable="false">'+
     '<svg class="vs-over" id="vsOverlay" aria-label="Drag an object to reposition it"></svg></div>'+
@@ -164,6 +174,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<label class="vs-gif-settings" hidden>Frames <input id="vsFrames" type="number" min="8" max="48" value="20"></label>'+
     '<label class="vs-gif-settings" hidden>Milliseconds/frame <input id="vsDelay" type="number" min="50" max="500" value="110"></label>'+
     '<label class="vs-gif-settings" hidden>Loop <select id="vsLoop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label>'+
+    '<p id="vsPageExportHint" class="vs-page-export-hint" role="status">Exporting current page.</p>'+
     '<span class="spacer"></span><button class="btn primary" id="vsExport">'+icon("download")+' Export</button>'+
     '<div id="vsOutput" class="vs-output" hidden></div></section>'+
     '<section class="vs-timeline" id="vsTimeline" hidden aria-label="Animated layer timeline">'+
@@ -179,10 +190,62 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
   let selectionKeys=new Set();
+  let pages=[{name:"Page 1",spec}],activePage=0;
   let pendingRepair=null,repairRequest=0,inspectionRequest=0;
   let previewSequence=0,previewTimer=null,drag=null;
   const status=(message,bad=false)=>{at("vsStatus").textContent=message;at("vsStatus").classList.toggle("bad",bad);};
   const snap=()=>copy(spec);
+  function storePage(){
+    if(!pages[activePage])return;
+    pages[activePage].spec=spec;
+    pages[activePage]._undo=undoStack;
+    pages[activePage]._redo=redoStack;
+  }
+  function documentPages(){
+    storePage();
+    return pages.map(p=>({name:p.name,spec:copy(p.spec)}));
+  }
+  function pageBars(){
+    storePage();
+    at("vsPageCount").textContent=(activePage+1)+" / "+pages.length+" · max 20";
+    at("vsPageTabs").innerHTML=pages.map((p,i)=>
+      '<button type="button" class="vs-page-tab" data-page-index="'+i+'"'+
+      ' aria-current="'+(i===activePage?"page":"false")+'" title="'+esc(p.name)+'">'+
+      '<span>'+(i+1)+'</span> '+esc(p.name)+'</button>').join("");
+    at("vsPageName").value=pages[activePage].name;
+    at("vsPageAdd").disabled=pages.length>=20;
+    at("vsPageDuplicate").disabled=pages.length>=20;
+    at("vsPageDelete").disabled=pages.length===1;
+    at("vsPageUp").disabled=activePage===0;
+    at("vsPageDown").disabled=activePage===pages.length-1;
+    at("vsPageExportHint").textContent=pages.length>1
+      ? (["pdf","pptx"].includes(at("vsFormat").value)
+        ? "All "+pages.length+" pages in order; PowerPoint keeps editable text and shapes."
+        : "Only page "+(activePage+1)+" exported as "+at("vsFormat").value.toUpperCase()+
+          "; choose PDF or PowerPoint to export every page.")
+      : "Exporting this single page.";
+  }
+  function openPage(index){
+    if(!Number.isInteger(index)||index<0||index>=pages.length)return;
+    storePage();
+    if(index!==activePage){
+      activePage=index;
+      spec=pages[index].spec;
+      undoStack=pages[index]._undo||[];
+      redoStack=pages[index]._redo||[];
+      selected=-1;selectionKeys.clear();
+      closeRepair();
+    }
+    at("vsEffect").value=spec.animation?.effect||"flow";
+    draw();schedule(0);
+  }
+  function setDocument(data){
+    const incoming=data.pages||[{name:"Page 1",spec:data.spec}];
+    pages=incoming.map(p=>({name:p.name,spec:p.spec}));
+    activePage=0;spec=pages[0].spec;selected=-1;selectionKeys.clear();
+    undoStack=[];redoStack=[];dirty=false;
+    at("vsEffect").value=spec.animation?.effect||"flow";
+  }
   function closeRepair(){
     ++repairRequest;
     ++inspectionRequest;
@@ -405,7 +468,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     at("vsDelete").disabled=units.length!==1||selected<0||isLocked();
     at("vsDuplicate").disabled=units.length!==1||selected<0||isLocked();
     at("vsElement").disabled=false;
-    inspector();drawLayers();highlight();buttons();drawTimeline();
+    inspector();drawLayers();highlight();buttons();drawTimeline();pageBars();
   }
   function schedule(ms=450){
     // A pending proposal belongs to an exact snapshot. Any editor change,
@@ -468,7 +531,9 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   }
   at("vsTemplate").onchange=e=>{
     if(dirty&&!window.confirm("Replace this design? Save your draft first if you want to keep it."))return;
-    spec=template(e.target.value,spec.theme);selected=-1;selectionKeys.clear();dirty=false;undoStack=[];redoStack=[];
+    spec=template(e.target.value,spec.theme);selected=-1;selectionKeys.clear();
+    dirty=true;undoStack=[];redoStack=[];
+    storePage();
     draw();schedule(0);
   };
   at("vsTheme").onchange=e=>change(()=>themeElements(spec,e.target.value));
