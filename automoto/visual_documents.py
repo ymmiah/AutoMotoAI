@@ -76,15 +76,19 @@ def _pages(pages: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
 
 def _write(name: str, pages: list[dict[str, Any]]) -> str:
     payload = json.dumps({"schema": 2, "name": name, "pages": pages},
-                         indent=2, ensure_ascii=False, allow_nan=False).encode("utf-8")
+                         separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
     if len(payload) > MAX_DOCUMENT_BYTES:
         raise HTTPException(413, "document exceeds the 512 KB size limit")
     _quota_check(len(payload))
     folder = _design_dir()
     folder.mkdir(parents=True, exist_ok=True)
     target = sandbox.resolve(f"{DIR}/{_filename(name, 'design.json')}", base=_root(), allow_outside=False)
-    with target.open("xb") as stream:
-        stream.write(payload)
+    try:
+        with target.open("xb") as stream:
+            stream.write(payload)
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
     return target.relative_to(_root()).as_posix()
 
 
