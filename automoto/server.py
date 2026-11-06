@@ -113,6 +113,8 @@ _DOCS = config.env("AUTOMOTO_API_DOCS", "") in ("1", "true", "yes")
 app = FastAPI(title=f"{APP_NAME} {CODENAME}", version=__version__, docs_url="/api/docs" if _DOCS else None,
               redoc_url=None, openapi_url="/api/openapi.json" if _DOCS else None)
 app.include_router(hosted.router)  # hosted-mode auth/admin API (only reachable when AUTOMOTO_MODE=multiuser)
+from automoto import visual_studio
+app.include_router(visual_studio.router)  # authenticated, per-workspace visual editor
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
