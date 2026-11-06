@@ -132,6 +132,12 @@ def test_visual_create_exposed_in_planner_and_registry(work):
     answer=visual_create(tools.ToolContext(),str(out),flow(),
                          {"frames":12,"duration_ms":100})
     assert out.exists() and "genuine multi-frame" in answer
+    manifest=out.with_name(out.name+".visual.json")
+    assert manifest.exists()
+    import json
+    metadata=json.loads(manifest.read_text(encoding="utf-8"))
+    assert metadata["output_sha256"]==hashlib.sha256(out.read_bytes()).hexdigest()
+    assert metadata["format"]=="gif" and metadata["quality"]["structural_check"]=="passed"
 
 def test_invalid_specs_fail_without_partial_output(work):
     with pytest.raises(VisualError,match="unique"):
