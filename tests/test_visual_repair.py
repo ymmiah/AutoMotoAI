@@ -48,7 +48,7 @@ def test_inspect_is_read_only_and_repairs_contrast(workspace):
     assert original==snapshot
     assert result["changed"]
     assert any(c["field"]=="colour" for c in result["changes"])
-    assert result["spec"]["elements"][1]["colour"]!=" #FFFFFF"
+    assert result["spec"]["elements"][1]["colour"]!="#FFFFFF"
     assert result["after"]["passed"], result["after"]
     assert result["spec"]["elements"][1]["text"]==original["elements"][1]["text"]
 
