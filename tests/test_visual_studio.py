@@ -93,7 +93,10 @@ def test_real_gif_export_preserves_editable_draft_and_provenance(client):
     manifest=json.loads((sandbox.default_root()/result["manifest"]).read_text())
     assert manifest["output_sha256"]==hashlib.sha256(output.read_bytes()).hexdigest()
     reopened=client.get(url+"/load",headers=H,params={"path":result["draft"]})
-    assert reopened.status_code==200 and reopened.json()["spec"]==data["spec"]
+    assert reopened.status_code==200,reopened.text
+    saved=reopened.json()["spec"]
+    assert {k:v for k,v in saved.items() if k!="animation"}==data["spec"]
+    assert saved["animation"]==data["animation"]
 
 
 def test_editable_powerpoint_export(client):
