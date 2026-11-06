@@ -1,7 +1,9 @@
 # Visual design, PowerPoint and image fidelity
 
-This improvement is in development on `feature/visual-design-pptx-image-preservation`.
-It is not part of the already-published Microsoft Store application.
+The original visual-design upgrade was merged to `main` through PR #6.
+The subsequent shared visual engine, including GIF animation, was merged through PR #11.
+Source features are not necessarily available in the currently published Microsoft Store package.
+For the newer shared architecture and GIF tools, see [Visual Foundation and GIF](VISUAL-FOUNDATION-GIF.md).
 
 ## What's changed
 
