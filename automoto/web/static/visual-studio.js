@@ -649,6 +649,50 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       });
     }
   };
+  // Batch controls use whole layer units, never half a card or a locked asset.
+  at("vsSelectAll").onclick=()=>{
+    const units=layerUnits(spec).filter(u=>!u.hidden&&!u.locked&&!u.isConnector);
+    selectionKeys=new Set(units.map(u=>u.key));
+    selected=units.length?units[0].indices[0]:-1;draw();
+  };
+  at("vsClearSelection").onclick=()=>choose(-1);
+  at("vsAlign").onclick=()=>{
+    const result=change(()=>{
+      const ok=alignLayerUnits(spec,[...selectionKeys],at("vsAlignMode").value);
+      if(ok)relink(spec);return ok;
+    });
+    if(!result)toast("Alignment could not be applied without moving a layer outside the canvas.","bad");
+  };
+  at("vsDistribute").onclick=()=>{
+    const result=change(()=>{
+      const ok=distributeLayerUnits(spec,[...selectionKeys],at("vsDistributeMode").value);
+      if(ok)relink(spec);return ok;
+    });
+    if(!result)toast("Cannot distribute these layers without overlap or invalid geometry.","bad");
+  };
+  at("vsGroup").onclick=()=>{
+    const group=change(()=>{
+      const value=groupLayerUnits(spec,[...selectionKeys]);
+      if(value){
+        selectionKeys=new Set(["group:"+value]);
+        selected=spec.elements.findIndex(e=>e.group===value);
+      }
+      return value;
+    });
+    if(!group)toast("Select two or more separate unlocked layers to group. Existing groups cannot be nested.","bad");
+  };
+  at("vsUngroup").onclick=()=>{
+    const units=selectedUnits(),indices=units.length===1?[...units[0].indices]:[];
+    const ok=change(()=>{
+      const applied=ungroupLayerUnits(spec,[...selectionKeys]);
+      if(applied){
+        selectionKeys=new Set(indices.map(i=>unitKey(spec.elements[i],i)));
+        selected=indices[0]??-1;
+      }
+      return applied;
+    });
+    if(!ok)toast("This group cannot be split while it is locked or referenced by a connector.","bad");
+  };
   let trackPrevious=null;
   at("vsTracks").addEventListener("pointerdown",()=>{trackPrevious=snap();});
   at("vsTracks").addEventListener("focusin",()=>{trackPrevious=snap();});
@@ -790,12 +834,20 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   overlay.addEventListener("pointerdown",e=>{
     const target=e.target.closest("[data-i]");if(!target)return;
     const i=Number(target.getAttribute("data-i"));if(!spec.elements[i])return;
-    const resizing=target.dataset.resize==="se";
+    if(e.shiftKey||e.ctrlKey||e.metaKey){
+      choose(i,true);e.preventDefault();return;
+    }
+    const hit=layerUnits(spec).find(u=>u.indices.includes(i));
+    if(!hit)return;
+    if(!selectionKeys.has(hit.key))selectionKeys=new Set([hit.key]);
     selected=i;
-    const before=snap(),initial=selectionBox(spec,selected);
+    const resizing=target.dataset.resize==="se",before=snap(),initial=selectionBox(spec,selected);
     draw();e.preventDefault();
-    if(isLocked())return;
-    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before,initial,resizing};
+    const units=selectedUnits();
+    if(units.some(u=>u.locked||u.hidden)||(!resizing&&units.some(u=>u.isConnector)&&units.length>1))return;
+    if(resizing&&units.length!==1)return;
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,before,initial,resizing,
+          index:i,keys:[...selectionKeys]};
     overlay.setPointerCapture(e.pointerId);
   });
   overlay.addEventListener("pointermove",e=>{
@@ -803,24 +855,28 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     const rect=overlay.getBoundingClientRect();if(!rect.width||!rect.height)return;
     const dx=Math.round((e.clientX-drag.x)*spec.width/rect.width);
     const dy=Math.round((e.clientY-drag.y)*spec.height/rect.height);
+    spec=copy(drag.before);
     if(drag.resizing){
-      spec=copy(drag.before);
-      resizeSelection(spec,selected,drag.initial.w+dx,drag.initial.h+dy);
+      resizeSelection(spec,drag.index,drag.initial.w+dx,drag.initial.h+dy);
       relink(spec);highlight();e.preventDefault();return;
     }
-    const orig=drag.before.elements[selected],g=orig.group;
-    const ids=drag.before.elements.reduce((a,item,i)=>{
-      if(g&&item.group===g||!g&&i===selected)a.push(i);return a;
-    },[]);
-    const boxes=ids.map(i=>bounds(drag.before.elements[i]));
-    const left=Math.min(...boxes.map(b=>b.x)),top=Math.min(...boxes.map(b=>b.y));
-    const right=Math.max(...boxes.map(b=>b.x+b.w)),bottom=Math.max(...boxes.map(b=>b.y+b.h));
-    const tx=clamp(dx,Math.ceil(-left),Math.floor(spec.width-right));
-    const ty=clamp(dy,Math.ceil(-top),Math.floor(spec.height-bottom));
-    for(const i of ids){
-      const item=spec.elements[i],base=drag.before.elements[i];
-      if(item.type==="line"){item.x1=base.x1+tx;item.x2=base.x2+tx;item.y1=base.y1+ty;item.y2=base.y2+ty;}
-      else {item.x=base.x+tx;item.y=base.y+ty;}
+    if(drag.before.elements[drag.index]?.type!=="line"){
+      const shift=at("vsSnap").checked
+        ? snapLayerDelta(drag.before,drag.keys,dx,dy):{dx,dy};
+      translateLayerUnits(spec,drag.keys,shift.dx,shift.dy);
+    }else{
+      // Preserve existing independent line dragging. Linked workflow lines
+      // are still repositioned deterministically by relink().
+      const original=drag.before.elements[drag.index];
+      const limX=Math.min(original.x1,original.x2);
+      const limY=Math.min(original.y1,original.y2);
+      const maxX=Math.max(original.x1,original.x2);
+      const maxY=Math.max(original.y1,original.y2);
+      const shiftX=clamp(dx,-limX,spec.width-maxX);
+      const shiftY=clamp(dy,-limY,spec.height-maxY);
+      const item=spec.elements[drag.index];
+      item.x1=original.x1+shiftX;item.x2=original.x2+shiftX;
+      item.y1=original.y1+shiftY;item.y2=original.y2+shiftY;
     }
     relink(spec);highlight();e.preventDefault();
   });
@@ -832,9 +888,23 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   overlay.addEventListener("pointerup",done);
   overlay.addEventListener("pointercancel",done);
   root.addEventListener("keydown",e=>{
-    if(!(e.ctrlKey||e.metaKey)||e.key.toLowerCase()!=="z")return;
-    if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))return;
-    e.preventDefault();if(e.shiftKey)redo();else undo();
+    if(/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName))return;
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){
+      e.preventDefault();if(e.shiftKey)redo();else undo();return;
+    }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="a"){
+      e.preventDefault();at("vsSelectAll").click();return;
+    }
+    if(e.key==="Escape"&&selectedUnits().length){
+      e.preventDefault();choose(-1);return;
+    }
+    const arrows={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+    if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&arrows[e.key]&&selectedUnits().length){
+      const amount=e.shiftKey?10:1,delta=arrows[e.key];
+      if(selectedUnits().some(u=>u.locked||u.hidden||u.isConnector))return;
+      e.preventDefault();
+      change(()=>{if(translateLayerUnits(spec,[...selectionKeys],delta[0]*amount,delta[1]*amount))relink(spec);});
+    }
   });
   draw();schedule(0);
   await Promise.all([loadAssets(),loadDrafts()]);
