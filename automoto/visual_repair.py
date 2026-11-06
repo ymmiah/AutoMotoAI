@@ -205,7 +205,7 @@ def propose(spec:dict[str,Any]) -> dict[str,Any]:
         "issues_before":issues_before,
         "remaining_issues":remaining,
         "changed":bool(changes),
-        "ready_to_apply":bool(changes),
+        "ready_to_apply":bool(changes) and not remaining,
         "requires_approval":True,
         "summary":f"{len(changes)} proposed field changes; {len(remaining)} issues remain. "
                   "Changes are not applied until the user approves.",
