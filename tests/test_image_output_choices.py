@@ -83,6 +83,20 @@ def test_visual_studio_export_mode_and_format_are_independent(home,format,layere
                 assert gif.n_frames>1
 
 
+def test_square_and_portrait_images_keep_artboard_aspect(home):
+    from automoto.visual_projects import image_project
+    directory=home/"uploads"
+    directory.mkdir(parents=True,exist_ok=True)
+    for size in ((512,512),(700,980),(1600,900)):
+        image=directory/("aspect-%d-%d.png"%size)
+        Image.new("RGB",size,(80,40,130)).save(image)
+        design=image_project(image)
+        ratio=design["width"]/design["height"]
+        original=size[0]/size[1]
+        assert abs(ratio-original)<0.012, (size,design["width"],design["height"])
+        assert design["elements"][0]["path"].startswith("uploads/")
+
+
 def test_import_flattened_ai_art_is_one_image_layer_not_fake_object_layers(home):
     uploaded=home/"uploads"/"fresh-ai-image.webp";uploaded.parent.mkdir(parents=True,exist_ok=True)
     Image.new("RGB",(720,480),(45,119,210)).save(uploaded)
