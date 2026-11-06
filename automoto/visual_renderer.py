@@ -67,6 +67,30 @@ def _contrast(a,b):
     hi,lo=max(la,lb),min(la,lb)
     return (hi+0.05)/(lo+0.05)
 
+def repair_text_fitting(scene):
+    """Targeted text-size repair; never truncate, replace or paraphrase wording."""
+    lower_bounds={"heading":24,"subtitle":15,"card-heading":15,"card-detail":13,
+                  "hero-text":17,"footer":12}
+    fixes=[]
+    for e in scene["elements"]:
+        if e["type"]!="text" or not e.get("text","").strip():
+            continue
+        role=e.get("role","")
+        if role not in lower_bounds:
+            continue  # manually positioned text should not change size unexpectedly
+        original=float(e["size"])
+        floor=max(lower_bounds[role],round(original*.68))
+        while e["size"]>floor:
+            try:
+                _text_lines(e)
+                break
+            except VisualError:
+                e["size"]=round(float(e["size"])-1,2)
+        if e["size"]!=original:
+            fixes.append({"role":role,"old_size":original,"new_size":e["size"]})
+    scene["text_repairs"]=fixes
+    return fixes
+
 def quality(scene):
     from PIL import features
     findings=[]
@@ -375,7 +399,9 @@ def render(scene:dict,path:Path,*,animation:dict|None=None,scenes:list[dict]|Non
         raise VisualError("multiple scenes are supported only by PowerPoint")
     findings=[]
     selected=scenes or [scene]
-    for item in selected:findings+=quality(item)
+    for item in selected:
+        repair_text_fitting(item)
+        findings+=quality(item)
     if findings:raise VisualError("visual quality check failed: "+"; ".join(findings[:5]))
     source_hashes={e["path"]:__import__("hashlib").sha256(Path(e["path"]).read_bytes()).hexdigest()
                    for s in selected for e in s["elements"] if e["type"]=="image"}
