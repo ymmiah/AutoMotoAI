@@ -148,6 +148,7 @@ let browser;
   await page.locator('#vsExport').click();
   await page.locator('#vsOutput:not([hidden])').waitFor();
   assert.match(await page.locator('#vsOutput').innerText(), /Download GIF/);
+  await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
   await page.screenshot({ path: path.join(output, 'visual-studio-gif.png') });
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
