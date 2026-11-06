@@ -297,6 +297,57 @@ let browser;
   assert.match(await page.locator('#vsSelectedCount').innerText(), /3 layers selected/);
   await page.locator('#vsClearSelection').click();
   assert.match(await page.locator('#vsSelectedCount').innerText(), /0 layers selected/);
+  // v8: save and reopen a genuinely multi-page editable project. In all-page
+  // PDF/PPTX mode, every canvas must be rendered, not just the current one.
+  const acceptDocumentChanges=dialog=>dialog.accept();
+  page.on('dialog',acceptDocumentChanges);
+  await page.locator('#vsTemplate').selectOption('workflow');
+  await page.locator('#vsTemplate').selectOption('blank');
+  page.off('dialog',acceptDocumentChanges);
+  await page.locator('#vsAddText').click();
+  await page.locator('#vsProperties [data-key="text"]').fill('Page one native editable text');
+  await page.locator('#vsProperties [data-key="text"]').press('Tab');
+  await page.locator('#vsPageAdd').click();
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
+  assert.match(await page.locator('#vsPageCount').innerText(),/2 \/ 2/);
+  await page.locator('#vsPageName').fill('Second page');
+  await page.locator('#vsPageName').press('Tab');
+  await page.locator('#vsAddText').click();
+  await page.locator('#vsProperties [data-key="text"]').fill('Page two source text');
+  await page.locator('#vsProperties [data-key="text"]').press('Tab');
+  await page.locator('#vsPageTabs [data-page-index="0"]').click();
+  assert.match(await page.locator('#vsPageCount').innerText(),/1 \/ 2/);
+  assert.equal(await page.locator('#vsElement option').count(),2,
+    'returning to page one restores its editable object');
+  await page.locator('#vsPageDuplicate').click();
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),3);
+  await page.locator('#vsPageUp').click();
+  assert.match(await page.locator('#vsPageCount').innerText(),/1 \/ 3/);
+  await page.locator('#vsPageDelete').click();
+  // The duplicate was removed; original pages and their exact text remain.
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
+  await page.locator('#vsPageTabs [data-page-index="0"]').click();
+  assert.equal(await page.locator('#vsPageName').inputValue(),'Page 1');
+  await page.locator('#vsSave').click();
+  await page.waitForFunction(()=>/Saved artifacts\/visual-studio\//.test(document.querySelector('#vsStatus')?.textContent||''));
+  const savedDoc=await page.locator('#vsDraft').inputValue();
+  assert.ok(savedDoc.endsWith('.design.json'));
+  await page.locator('#vsLoad').click();
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
+  assert.equal(await page.locator('#vsPageTabs [data-page-index="1"]').innerText().then(x=>x.includes('Second page')),true);
+  await page.locator('#vsFormat').selectOption('pptx');
+  await page.locator('#vsOutputMode').selectOption('layered');
+  assert.match(await page.locator('#vsPageExportHint').innerText(),/All 2 pages/);
+  await page.locator('#vsExport').click();
+  await page.waitForFunction(()=>/Exported artifacts\/visual-studio\/.*\.pptx/.test(document.querySelector('#vsStatus')?.textContent||''));
+  assert.equal(await page.locator('#vsOutput a[download]').count()>=2,true,
+    'multi-page editable PowerPoint must provide an editable project download');
+  await page.locator('#vsFormat').selectOption('pdf');
+  await page.locator('#vsExport').click();
+  await page.waitForFunction(()=>/Exported artifacts\/visual-studio\/.*\.pdf/.test(document.querySelector('#vsStatus')?.textContent||''));
+  await page.screenshot({path:path.join(output,'visual-studio-v8-multipage-export.png')});
+  await page.locator('#vsFormat').selectOption('png');
+  assert.match(await page.locator('#vsPageExportHint').innerText(),/Only page/);
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
