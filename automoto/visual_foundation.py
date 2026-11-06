@@ -286,6 +286,18 @@ def _scene(spec:dict[str,Any]) -> dict:
                              str(element.get("alt","Original source image")),assets)
                 else:
                     raise VisualError("canvas type must be text, rect, icon, image or line")
+            # Preserve semantic grouping in the compiled scene so visual
+            # inspection can distinguish deliberate card contents from
+            # accidentally overlapping independent objects.
+            if "group" in element:
+                group=element["group"]
+                if not isinstance(group,str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,50}",group):
+                    raise VisualError("canvas group must be a short ASCII identifier")
+                e["group"]=group
+            if "allow_overlap" in element:
+                if not isinstance(element["allow_overlap"],bool):
+                    raise VisualError("allow_overlap must be true or false")
+                e["allow_overlap"]=element["allow_overlap"]
             elements.append(e)
     if footer:
         elements.append(_text(margin,h-max(39,round(h*.057)),content_w,
