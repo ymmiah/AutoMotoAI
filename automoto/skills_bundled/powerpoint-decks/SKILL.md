@@ -2,7 +2,7 @@
 name: powerpoint-decks
 description: Create PowerPoint (.pptx) presentations with a clear storyline, one idea per slide, a consistent theme, charts/tables/images and speaker notes - then export and review as PDF.
 category: office
-tools: office_create_pptx, office_edit, read_file, office_convert, office_check, office_review
+tools: visual_create, visual_check, office_create_pptx, office_edit, read_file, office_convert, office_check, office_review
 optional_apps: libreoffice
 status: live
 ---
@@ -15,6 +15,13 @@ status: live
    → implication) → recommendation / next steps → questions/thank you.
 3. Write slide titles as *headlines* that state the takeaway ("Sales grew 18% after the redesign"),
    not topics ("Sales").
+
+**Build with `visual_create` (new designs first)**
+- A single design spec can create **editable PowerPoint slides**, SVG, PNG or real animated GIFs; use a `.pptx` path with `slides:[{layout,title,...}]` for multi-slide decks. Use `workflow` for connected process diagrams, `cards` for feature grids, `hero` for exact source imagery and `canvas` for precise positioned elements.
+- Theme presets: `illustrated-workflow`, `editorial-light`, `premium-tech`, `commercial`.
+- PPTX remains genuine editable text and native shapes; photographs are kept as original embedded files with aspect-fit.
+- Animations are exported as separate GIF files, with frame duration, loop count, flow/reveal/pulse effects. A GIF is **not** embedded as a guaranteed animated PowerPoint slide; avoid claiming editable PPTX motion unless actual PowerPoint animations are built.
+- Validate exports with `visual_check`, then render a full presentation preview. For complex tables, data charts and existing decks use `office_create_pptx` and `office_edit`.
 
 **Build with `office_create_pptx`**
 - One idea per slide; 3-6 bullets, ≤ 12 words each; sub-points only when needed.
