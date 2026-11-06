@@ -182,15 +182,18 @@ def _scene(spec:dict[str,Any]) -> dict:
                                   radius=16,stroke_width=0,role="icon-background"))
             elements.append(_icon(x+22,y+20,icon_size,icon,t["ink"]))
             # Use width-bounded headings and descriptions; measure during rendering.
-            heading_y=y+min(92,max(67,round(cell_h*.38)))
-            text_size=max(17,min(26,round(cell_w*.072)))
-            elements.append(_text(x+19,heading_y,cell_w-38,min(45,cell_h*.18),
+            heading_offset=min(92,max(62,round(cell_h*.35)))
+            heading_y=y+heading_offset
+            text_size=max(17,min(23,round(cell_w*.057)))
+            heading_h=max(36,min(58,round(cell_h*.25)))
+            elements.append(_text(x+19,heading_y,cell_w-38,heading_h,
                                   label,text_size,t["ink"],True,"card-heading"))
             if details:
-                elements.append(_text(x+19,heading_y+text_size*1.55,
-                                      cell_w-38,max(27,cell_h-(heading_y-y)-text_size*1.65-15),
-                                      details,max(13,min(19,round(cell_w*.047))),
-                                      t["muted"],False,"card-detail"))
+                detail_y=heading_y+heading_h+4
+                detail_h=cell_h-heading_offset-heading_h-13
+                detail_size=max(15,min(19,round(cell_w*.043)))
+                elements.append(_text(x+19,detail_y,cell_w-38,detail_h,
+                                      details,detail_size,t["muted"],False,"card-detail"))
             centres[name]=(x+cell_w/2,y+cell_h/2)
         if layout=="workflow":
             links=spec.get("links",[])
