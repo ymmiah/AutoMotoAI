@@ -60,6 +60,12 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None,
             # Already-authored editor canvases are the source of truth: preserve
             # even hidden/locked objects, grouped layers and animation timing.
             project_spec = spec if spec.get("layout")=="canvas" else scene_project(scenes[0])
+            if out.suffix.lower()==".gif":
+                # Preserve the selected motion sequence when the agent passes
+                # timing as a tool argument, not only as a spec field.
+                project_spec = {**project_spec,
+                                "animation":animation or spec.get("animation") or
+                                {"effect":"flow","frames":20,"duration_ms":110,"loop":0}}
         except (VisualError,OSError,ValueError) as exc: raise ToolFailed(str(exc)) from None
     try:
         render(scenes[0],out,scenes=scenes,animation=animation or spec.get("animation"))
