@@ -301,7 +301,6 @@ fn engine_version(app_version: &str) -> String {
     }
 }
 
-#[tauri::command]
 /// Menu actions from the custom caption. The same ids as the native menu.
 /// Allowed on the sign-in page and on the page the window is showing (see capabilities/chrome.json).
 #[tauri::command]
@@ -315,6 +314,7 @@ fn chrome_action(app: AppHandle, action: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
 fn open_link(app: AppHandle, webview: tauri::Webview, which: String) -> Result<(), String> {
     check_caller(&webview)?;
     let url = LINKS.iter().find(|(k, _)| *k == which).map(|(_, u)| *u).ok_or("unknown link")?;
