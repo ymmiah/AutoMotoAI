@@ -96,7 +96,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<div class="vs-toolbar"><input class="input vs-name" id="vsName" value="My visual design" maxlength="100" aria-label="Design name">'+
     '<label>Template <select class="input" id="vsTemplate"><option value="workflow">Workflow</option><option value="cards">Feature cards</option><option value="poster">Poster</option><option value="blank">Blank canvas</option></select></label>'+
     '<label>Theme <select class="input" id="vsTheme"><option value="illustrated-workflow">Illustrated</option><option value="editorial-light">Editorial light</option><option value="premium-tech">Premium tech</option><option value="commercial">Commercial</option></select></label>'+
-    '<button class="btn" id="vsUndo">Undo</button><button class="btn" id="vsRedo">Redo</button></div>'+
+    '<button class="btn" id="vsUndo">Undo</button><button class="btn" id="vsRedo">Redo</button>'+
+    '<button class="btn primary" id="vsSave">Save draft</button></div>'+
     '<div class="vs-toolbar"><button class="btn" id="vsAddText">'+icon("edit")+' Text</button>'+
     '<button class="btn" id="vsAddShape">'+icon("plus")+' Shape</button>'+
     '<button class="btn" id="vsAddIcon">'+icon("sparkle")+' Icon</button>'+
@@ -104,7 +105,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<button class="btn" id="vsAddImage">'+icon("image")+' Place image</button>'+
     '<a class="btn" href="#/files">'+icon("folder")+' Files</a>'+
     '<span class="spacer"></span><select class="input vs-asset" id="vsDraft" aria-label="Saved designs"><option value="">Saved designs…</option></select>'+
-    '<button class="btn" id="vsLoad">Open</button><button class="btn primary" id="vsSave">Save draft</button></div>'+
+    '<button class="btn" id="vsLoad">Open</button></div>'+
     '<div class="vs-toolbar"><input id="vsTitle" class="input" aria-label="Design title" maxlength="130" placeholder="Title" style="flex:1;min-width:160px">'+
     '<input id="vsSubtitle" class="input" aria-label="Design subtitle" maxlength="250" placeholder="Subtitle" style="flex:1;min-width:160px"></div>'+
     '<div class="vs-shell"><section class="vs-workspace"><div class="vs-stage" id="vsStage" aria-busy="true">'+
