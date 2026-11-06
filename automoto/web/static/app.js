@@ -255,7 +255,7 @@ function setMode(m, persist = true) {
   $$("#modeSeg button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === m)));
   if (persist) localStorage.setItem("automoto_mode", m);
   const ta = $("#composerInput");
-  if (ta) ta.placeholder = m === "agent" ? `Give ${BRAND_SHORT} a goal…` : `Message ${BRAND_SHORT}…`;
+  if (ta) ta.placeholder = m === "agent" ? `Tell ${BRAND_SHORT} what to finish…` : `Message ${BRAND_SHORT}…`;
   if (persist && state.cur?.id) api(`/api/conversations/${state.cur.id}`, { mode: m }, "PATCH").catch(() => {});
 }
 $("#modeSeg").addEventListener("click", (e) => { const b = e.target.closest("button[data-mode]"); if (b) setMode(b.dataset.mode); });
@@ -1442,7 +1442,7 @@ PAGES.settings = async () => {
     <p class="muted small">Status: ${o.running ? "Ollama running locally" : o.installed ? "Ollama installed but not running" : "Ollama runtime not installed"}. ${esc(rec.why || "")}</p>
     ${d.substitution ? `<p class="small"><span class="pill bad">${esc(d.substitution.message)}</span></p>` : ""}
     ${rec.upgrade ? `<p class="muted small">Stronger option: <b>${esc(rec.upgrade.name)}</b>. ${esc(rec.upgrade.note)}</p>` : ""}
-    <p class="muted small">Local context window: ${esc(String(d.context || rec.context || "?"))} tokens. Thinking: ${esc(thinking)} (set LOCAL_AI_THINK=1 to allow it).</p>`
+    <p class="muted small">Local context window: ${esc(String(d.context || rec.context || "?"))} tokens. Thinking: ${esc(thinking)} (set LOCAL_AI_THINK=1 to allow it).</p>
     ${o.running ? `<p class="muted small">Ollama ${esc(o.version || "")} · ${present.size} downloaded model(s).</p>`
       : o.installed
         ? `<button class="btn primary" id="localStart">Start local AI</button><p class="muted small">Starts Ollama on this computer. No cloud service is involved.</p>`
