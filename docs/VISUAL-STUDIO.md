@@ -71,8 +71,8 @@ The source includes:
 
 Before release, run `python -m pytest -q tests/test_visual_studio.py tests/test_visual_foundation.py tests/test_visual_design.py`; then run the desktop UI smoke suite (`npm run test:ui` from `apps/desktop`) with Chromium/Playwright installed.
 
-## Limits of v1
+## Current limits
 
-This increment is a functional editor for common graphics and workflows, **not a full Figma/Canva replacement**. It does not yet include full design-object hierarchy and z-order controls, production keyframe timeline editing, arbitrary path animation, multi-slide editor UX, direct pixel-level AI retouching, or fully automatic aesthetic critique and self-repair. The existing agent can still generate multi-slide PowerPoints through `visual_create`; the editor itself currently opens one canvas at a time.
+The editor has group-aware layer visibility, locking, z-order controls, bounded resizing and a staged GIF reveal timeline, but is **not a full Figma/Canva replacement**. It does not yet include deeply nested layer hierarchies, rotation and advanced object constraints, continuous keyframe interpolation, arbitrary path animation, a full multi-slide editor, generative pixel-level identity-preserving retouching, or automatically verified aesthetic critique and self-repair. The existing agent can still generate multi-slide PowerPoints through `visual_create`; the editor itself currently opens one canvas at a time.
 
 Production readiness depends on passing the full CI matrix, reviewing browser screenshots, and publishing a new signed Windows package. Merging the source branch alone is **not** Microsoft Store publication.
