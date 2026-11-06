@@ -62,11 +62,17 @@ def test_expired_launch_token_refused(client):
 def test_rate_limit(monkeypatch, client):
     monkeypatch.setenv("AUTOMOTO_RATE_LIMIT", "5")
     server._HITS.clear()
-    # Status probes local AI runtimes and can exceed the 60-second window on Windows.
-    # Settings exercises the same middleware bucket without unrelated network discovery.
+    # /api/status probes local AI and can outlast the 60s window on Windows, so this uses
+    # /api/settings. The clock is frozen too: a slow handler must not open a new window by itself.
+    now = {"t": 10_000.0}
+    monkeypatch.setattr(server.time, "monotonic", lambda: now["t"])
     codes = [client.get("/api/settings", headers=H).status_code for _ in range(8)]
+    assert codes[:5] == [200] * 5 and codes[5:] == [429, 429, 429]
+    now["t"] += 59
+    assert client.get("/api/settings", headers=H).status_code == 429
+    now["t"] += 2  # the oldest hit is now outside the 60s window, so one slot opens
+    assert client.get("/api/settings", headers=H).status_code == 200
     server._HITS.clear()
-    assert codes[:5] == [200] * 5 and codes[-1] == 429
 
 
 def test_security_headers_and_no_wildcard_cors(client):

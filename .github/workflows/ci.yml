@@ -85,7 +85,7 @@ jobs:
           python -m pytest -q --basetemp "$RUNNER_TEMP/visual-tests" tests/test_visual_design.py::test_editable_premium_deck_and_dark_theme_contrast
           mkdir -p visual-preview
           # Tests isolate the workspace under pytest's temp directory, never under the runner's home.
-          python -c "import os, shutil; from pathlib import Path; src = next((Path(os.environ['RUNNER_TEMP']) / 'visual-tests').rglob('premium-regression.pptx')); shutil.copyfile(src, 'visual-preview/AutoMoto-premium-visual-demo.pptx')"
+          python -c "import os, shutil; from pathlib import Path; root = Path(os.environ['RUNNER_TEMP']) / 'visual-tests'; matches = list(root.rglob('premium-regression.pptx')); assert len(matches) == 1, 'expected one premium-regression.pptx under %s, found %s' % (root, matches); shutil.copyfile(matches[0], 'visual-preview/AutoMoto-premium-visual-demo.pptx')"
           libreoffice -env:UserInstallation=file:///tmp/automoto-visual-preview --headless --convert-to pdf --outdir visual-preview visual-preview/AutoMoto-premium-visual-demo.pptx
           test -s visual-preview/AutoMoto-premium-visual-demo.pdf
           pdftoppm -f 1 -l 5 -png -r 70 visual-preview/AutoMoto-premium-visual-demo.pdf visual-preview/slide
