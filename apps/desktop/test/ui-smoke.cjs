@@ -216,6 +216,41 @@ let browser;
   await page.locator('#vsUndo').click();
   assert.equal(await page.locator('#vsElement option').count(), 3,
     'undo must restore original editable objects without losing layers');
+  // v6: exercise the real review UI contract with a stubbed model response;
+  // no downloaded Ollama model or cloud provider is required in CI.
+  await page.route('**/api/visual/studio/ai-review', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        model: 'test-local-vision', provider: 'ollama-local',
+        changed: true, requires_approval: true,
+        summary: 'Local AI reviewed this design. No edits applied.',
+        original_preview: null,
+        changes: [
+          { index: 0, field: 'colour', old: '#ffffff', new: '#172638', reason: 'Improve headline readability.' },
+          { index: 1, field: 'colour', old: '#ffffff', new: '#172638', reason: 'Improve label readability.' },
+        ],
+        design_notes: [
+          { category: 'typography', layer: 1, message: 'Check headline hierarchy at final size.' },
+        ],
+      }) });
+  });
+  await page.locator('#vsAIReview').click();
+  await page.locator('#vsRepairReview:not([hidden])').waitFor();
+  assert.match(await page.locator('#vsReviewHeading').innerText(), /Local AI design review/);
+  assert.match(await page.locator('#vsRepairSummary').innerText(), /test-local-vision/);
+  assert.match(await page.locator('#vsRepairNotes').innerText(), /headline hierarchy/);
+  assert.equal(await page.locator('[data-repair-index]').count(), 2,
+    'AI edits must use independently selectable review checkboxes');
+  await page.locator('#vsRepairNone').click();
+  assert.equal(await page.locator('#vsApplyRepair').isDisabled(), true);
+  await page.locator('#vsRepairAll').click();
+  await page.locator('#vsRepairImage:visible').waitFor();
+  assert.equal(await page.locator('#vsApplyRepair').isEnabled(), true);
+  await page.screenshot({ path: path.join(output, 'visual-studio-v6-local-ai-review.png') });
+  await page.locator('#vsApplyRepair').click();
+  assert.equal(await page.locator('#vsRepairReview').isVisible(), false);
+  await page.locator('#vsUndo').click();
+  await page.unroute('**/api/visual/studio/ai-review');
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();

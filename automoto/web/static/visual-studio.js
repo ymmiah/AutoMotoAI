@@ -100,6 +100,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<label>Theme <select class="input" id="vsTheme"><option value="illustrated-workflow">Illustrated</option><option value="editorial-light">Editorial light</option><option value="premium-tech">Premium tech</option><option value="commercial">Commercial</option></select></label>'+
     '<button class="btn" id="vsUndo">Undo</button><button class="btn" id="vsRedo">Redo</button>'+
     '<button class="btn" id="vsInspect">'+icon("check")+' Inspect & repair</button>'+
+    '<button class="btn" id="vsAIReview" title="Explicitly review with a downloaded local Ollama vision model; no cloud fallback">'+icon("sparkle")+' Local AI design review</button>'+
     '<button class="btn primary" id="vsSave">Save draft</button></div>'+
     '<div class="vs-toolbar"><button class="btn" id="vsAddText">'+icon("edit")+' Text</button>'+
     '<button class="btn" id="vsAddShape">'+icon("plus")+' Shape</button>'+
@@ -117,7 +118,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<div class="vs-summary"><span>Select an object or drag it. Preview updates after edits.</span><span id="vsCount"></span></div>'+
     '<p id="vsStatus" class="vs-status" role="status">Preparing preview…</p>'+
     '<div id="vsRepairReview" class="vs-repair-review" hidden role="region" aria-label="Proposed layout changes">'+
-    '<h3>Review proposed changes</h3><p id="vsRepairSummary" class="vs-inspector-note"></p>'+
+    '<h3 id="vsReviewHeading">Review proposed changes</h3><p id="vsRepairSummary" class="vs-inspector-note"></p>'+
     '<div class="vs-repair-compare">'+
     '<figure><figcaption>Before · original</figcaption><img id="vsRepairOriginal" class="vs-repair-image" alt="Original design before repairs" hidden></figure>'+
     '<figure><figcaption>After · selected changes</figcaption><img id="vsRepairImage" class="vs-repair-image" alt="Proposed design with selected repairs" hidden></figure></div>'+
@@ -161,12 +162,13 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
-  let pendingRepair=null,repairRequest=0;
+  let pendingRepair=null,repairRequest=0,inspectionRequest=0;
   let previewSequence=0,previewTimer=null,drag=null;
   const status=(message,bad=false)=>{at("vsStatus").textContent=message;at("vsStatus").classList.toggle("bad",bad);};
   const snap=()=>copy(spec);
   function closeRepair(){
     ++repairRequest;
+    ++inspectionRequest;
     pendingRepair=null;
     at("vsRepairReview").hidden=true;
   }
@@ -468,37 +470,63 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         ". Select other fixes or resolve the remaining issues manually.";
     }
   }
+  async function presentReview(proposal,original,kind){
+    const review={original,proposal,selected:new Set((proposal.changes||[]).map((_,i)=>i)),candidate:null};
+    pendingRepair=review;
+    const panel=at("vsRepairReview");
+    panel.hidden=false;
+    at("vsReviewHeading").textContent=kind==="ai"?"Local AI design review":"Review proposed changes";
+    at("vsRepairSummary").textContent=proposal.summary+
+      (kind==="ai"?" Model: "+proposal.model+". Suggestions are not automatically accepted.":"");
+    const before=at("vsRepairOriginal");
+    before.hidden=!proposal.original_preview;
+    if(proposal.original_preview)before.src=proposal.original_preview;
+    else before.removeAttribute("src");
+    at("vsRepairList").innerHTML=(proposal.changes||[]).map((f,i)=>
+      '<li><label class="vs-repair-choice"><input type="checkbox" data-repair-index="'+i+
+      '" checked aria-label="Include layer '+(f.index+1)+' '+esc(f.field)+' repair"><span><b>'+
+      esc(f.reason)+'</b> · Layer '+(f.index+1)+', '+esc(f.field)+
+      ': '+esc(String(f.old))+' → '+esc(String(f.new))+'</span></label></li>').join("")||
+      '<li>No editable change suggested. Review the design notes below.</li>';
+    at("vsRepairNotes").innerHTML=(proposal.design_notes||[]).map(n=>
+      '<li>'+(n.category?'<strong>'+esc(n.category)+'</strong> · ':'')+
+      'Layer '+Number(n.layer)+': '+esc(n.message)+'</li>').join("")||
+      '<li>No additional design-review observations.</li>';
+    status(proposal.changed?"Inspect suggested changes before approval; original untouched.":
+      "Review finished; no editable changes suggested. Original untouched.");
+    panel.scrollIntoView({block:"nearest",behavior:"auto"});
+    await reviewSelection(review);
+  }
   at("vsInspect").onclick=async()=>{
+    closeRepair();
     const button=at("vsInspect");button.disabled=true;
-    const original=snap(),beforeSequence=previewSequence;
+    const original=snap(),beforeSequence=previewSequence,inspection=++inspectionRequest;
     status("Inspecting layout without modifying your design…");
     try{
       const proposal=await api("/api/visual/studio/repair",{spec:original,name});
-      if(!root.isConnected||beforeSequence!==previewSequence)return;
-      const review={original,proposal,selected:new Set(proposal.changes.map((_,i)=>i)),candidate:null};
-      pendingRepair=review;
-      const panel=at("vsRepairReview");
-      panel.hidden=false;
-      at("vsRepairSummary").textContent=proposal.summary;
-      const before=at("vsRepairOriginal");
-      before.hidden=!proposal.original_preview;
-      if(proposal.original_preview)before.src=proposal.original_preview;
-      else before.removeAttribute("src");
-      at("vsRepairList").innerHTML=(proposal.changes||[]).map((f,i)=>
-        '<li><label class="vs-repair-choice"><input type="checkbox" data-repair-index="'+i+
-        '" checked aria-label="Include layer '+(f.index+1)+' '+esc(f.field)+' repair"><span><b>'+
-        esc(f.reason)+'</b> · Layer '+(f.index+1)+', '+esc(f.field)+
-        ': '+esc(String(f.old))+' → '+esc(String(f.new))+'</span></label></li>').join("")||
-        '<li>No safe automatic change was found for this design.</li>';
-      at("vsRepairNotes").innerHTML=(proposal.design_notes||[]).map(n=>
-        '<li>Layer '+Number(n.layer)+': '+esc(n.message)+'</li>').join("")||
-        '<li>No additional design-review observations.</li>';
-      status(proposal.changed?"Review each suggestion before accepting; your original remains untouched.":
-        "No safe automatic repairs are available. Your original remains unchanged.");
-      panel.scrollIntoView({block:"nearest",behavior:"auto"});
-      await reviewSelection(review);
+      if(!root.isConnected||beforeSequence!==previewSequence||inspection!==inspectionRequest)return;
+      await presentReview(proposal,original,"repair");
     }catch(error){
-      if(root.isConnected){closeRepair();status("Inspection failed: "+error.message,true);}
+      if(root.isConnected && inspection===inspectionRequest){
+        closeRepair();status("Inspection failed: "+error.message,true);
+      }
+    }finally{if(root.isConnected)button.disabled=false;}
+  };
+  at("vsAIReview").onclick=async()=>{
+    closeRepair();
+    const button=at("vsAIReview");button.disabled=true;
+    const original=snap(),beforeSequence=previewSequence,inspection=++inspectionRequest;
+    // User-initiated opt in. The server only speaks to Ollama on loopback;
+    // it does not send artwork to cloud providers or start a model download.
+    status("Reviewing the actual canvas with your downloaded local vision model…");
+    try{
+      const proposal=await api("/api/visual/studio/ai-review",{spec:original,name});
+      if(!root.isConnected||beforeSequence!==previewSequence||inspection!==inspectionRequest)return;
+      await presentReview(proposal,original,"ai");
+    }catch(error){
+      if(root.isConnected && inspection===inspectionRequest){
+        closeRepair();status("Local AI review unavailable: "+error.message,true);
+      }
     }finally{if(root.isConnected)button.disabled=false;}
   };
   at("vsRepairList").onchange=e=>{
