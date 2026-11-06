@@ -14,10 +14,11 @@ Existing Store product: [9N9J7FLSSFG8](https://apps.microsoft.com/detail/9n9j7fl
 - Store packages include the matching engine wheel with SHA-256 verification, so installing the engine does not depend on an unpublished GitHub release.
 - Includes current main's visual PowerPoint generation, original-image preservation, and layout quality checks.
 - Offline AI recommends a stronger model when the graphics card can hold it, keeps a longer context on strong PCs, and warns when it has to use a weaker downloaded model. Offline mode does not fall back to a cloud provider.
+- The Windows window uses AutoMoto's caption bar (Menu, minimize, maximize, close) instead of the system title-bar buttons. Settings is grouped into Assistant, Offline AI, Appearance, Folders, Providers and More.
 
 ## Update file
 
-The **Windows app** workflow produces `AutoMoto-AI-5.6.0-beta.5-Windows-x64.msixupload` inside the `automoto-ai-msstore` artifact, alongside the `.msix` and `SHA256SUMS.txt`. The unsigned upload package is for Partner Center; a separately signed throw-away copy is used for the CI install/launch smoke test.
+The **Windows app** workflow produces the artifact **`automoto-ai-msstore`**. Upload **`AutoMoto-AI-5.6.0-beta.5-Windows-x64.msixupload`** to Partner Center (MSIX identity **5.6.5.0**). The same artifact also contains `AutoMoto-AI-5.6.0-beta.5-Windows-x64.msix` and `SHA256SUMS.txt`. The unsigned `.msixupload` is what Partner Center asks for; a separately signed throw-away copy is used for the CI install/launch smoke test. Do not submit a second package at 5.6.5.0 if that version is already published.
 
 1. Wait for the PR's Windows build, Rust checks, browser regressions, and MSIX install/launch checks to pass.
 2. Download `automoto-ai-msstore` from that successful run and verify `SHA256SUMS.txt`.

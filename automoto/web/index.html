@@ -15,6 +15,30 @@
 </head>
 <body>
 <a class="skip" href="#composerInput">Skip to message box</a>
+<header class="am-chrome" id="amChrome">
+  <button type="button" class="am-menu" data-chrome="menu" aria-haspopup="menu" aria-expanded="false" aria-controls="amAppMenu">Menu</button>
+  <div class="am-drag" data-tauri-drag-region>
+    <span class="am-mark" aria-hidden="true">A</span>
+    <span class="am-caption" id="amChromeTitle" data-tauri-drag-region>AutoMoto AI</span>
+  </div>
+  <div class="am-controls" role="toolbar" aria-label="Window">
+    <button type="button" data-chrome="min" aria-label="Minimize"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5h10"/></svg></button>
+    <button type="button" data-chrome="max" aria-label="Maximize"><svg class="ico-max" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/></svg><svg class="ico-restore" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.8" y="3.2" width="7.2" height="7.2" rx="1.2"/><path d="M6.2 6.1H4.2A1.2 1.2 0 0 0 3 7.3v4.5A1.2 1.2 0 0 0 4.2 13h4.5a1.2 1.2 0 0 0 1.2-1.2V10"/></svg></button>
+    <button type="button" data-chrome="close" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5"/></svg></button>
+  </div>
+  <div class="am-appmenu" id="amAppMenu" role="menu" hidden>
+    <button type="button" role="menuitem" data-chrome="act" data-action="home">Switch Local / Cloud / Server <span class="k">Ctrl+Shift+H</span></button>
+    <button type="button" role="menuitem" data-chrome="act" data-action="reload">Reload <span class="k">Ctrl+R</span></button>
+    <button type="button" role="menuitem" data-chrome="act" data-action="updates">Check for updates</button>
+    <button type="button" role="menuitem" data-chrome="act" data-action="signout">Sign out of this device</button>
+    <div role="separator"></div>
+    <button type="button" role="menuitem" data-chrome="act" data-action="guide">Step-by-step guide <span class="k">F1</span></button>
+    <button type="button" role="menuitem" data-chrome="act" data-action="log">Open the local engine log</button>
+    <button type="button" role="menuitem" data-chrome="act" data-action="about">About AutoMoto AI</button>
+    <div role="separator"></div>
+    <button type="button" role="menuitem" data-chrome="act" data-action="quit">Quit <span class="k">Ctrl+Q</span></button>
+  </div>
+</header>
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar" aria-label="Sidebar">
     <div class="side-head">
@@ -85,6 +109,7 @@
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/purify.min.js"></script>
 <script src="/static/vendor/highlight.min.js"></script>
+<script src="/static/chrome.js?v=__AUTOMOTO_VERSION__"></script>
 <script type="module" src="/static/app.js?v=__AUTOMOTO_VERSION__"></script>
 </body>
 </html>

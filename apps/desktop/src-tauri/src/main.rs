@@ -10,6 +10,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod account;
+mod chrome;
 mod local;
 mod settings;
 
@@ -300,6 +301,19 @@ fn engine_version(app_version: &str) -> String {
     }
 }
 
+/// Menu actions from the custom caption. The same ids as the native menu.
+/// Allowed on the sign-in page and on the page the window is showing (see capabilities/chrome.json).
+#[tauri::command]
+fn chrome_action(app: AppHandle, action: String) -> Result<(), String> {
+    match action.as_str() {
+        "home" | "reload" | "updates" | "signout" | "quit" | "guide" | "log" | "about" => {
+            on_menu(&app, &action);
+            Ok(())
+        }
+        _ => Err("unknown window action".into()),
+    }
+}
+
 #[tauri::command]
 fn open_link(app: AppHandle, webview: tauri::Webview, which: String) -> Result<(), String> {
     check_caller(&webview)?;
@@ -438,7 +452,7 @@ fn on_menu(app: &AppHandle, id: &str) {
         "about" => {
             app.dialog()
                 .message(format!("AutoMoto AI app {} - {CHANNEL}\n\nYour AI cousin - an agent that actually does the work.\n\n\
-                                  Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)\nMIT licence · github.com/ymmiah/AutoMotoAI",
+                                  Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)\nAGPL-3.0-only, with a commercial licence available\ngithub.com/ymmiah/AutoMotoAI",
                                  env!("CARGO_PKG_VERSION")))
                 .title("About AutoMoto AI (Beta)")
                 .show(|_| {});
@@ -468,7 +482,7 @@ fn main() {
             local_child: Mutex::new(None),
             launch_token: random_token(),
         })
-        .invoke_handler(tauri::generate_handler![app_info, sign_in, open_account, sign_out, start_local, install_engine, open_link])
+        .invoke_handler(tauri::generate_handler![app_info, sign_in, open_account, sign_out, start_local, install_engine, open_link, chrome_action])
         .setup(move |app| {
             #[cfg(desktop)]
             app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
@@ -477,10 +491,12 @@ fn main() {
             let newwin = handle.clone();
             let start = if local_flag { "index.html?auto=local" } else { "index.html" };
             let menu = build_menu(&handle)?;
-            let w = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(start.into()))
+            // Windows drops the system caption (decorations: false) and draws AutoMoto's own bar
+            // in the page. macOS and Linux keep the native frame; the page hides #amChrome there.
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(start.into()))
                 .title(TITLE)
                 .inner_size(1200.0, 820.0)
-                .min_inner_size(720.0, 520.0)
+                .min_inner_size(720.0, 600.0)
                 .menu(menu)
                 .on_navigation(move |u| navigation_allowed(&nav, u))
                 .on_new_window(move |u, _features| {
@@ -489,8 +505,19 @@ fn main() {
                         let _ = newwin.opener().open_url(u.as_str(), None::<&str>);
                     }
                     tauri::webview::NewWindowResponse::Deny
-                })
-                .build()?;
+                });
+            #[cfg(windows)]
+            let window = window
+                .decorations(false)
+                .shadow(true)
+                .background_color(tauri::window::Color(12, 16, 23, 255))
+                .initialization_script(concat!(
+                    "window.__AUTOMOTO_FORCE_CHROME__=true;\n",
+                    include_str!("chrome.js")
+                ));
+            let w = window.build()?;
+            #[cfg(windows)]
+            chrome::attach(&w);
             if let Ok(mut u) = w.url() {
                 u.set_query(None);
                 u.set_fragment(None);

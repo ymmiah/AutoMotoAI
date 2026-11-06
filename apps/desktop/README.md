@@ -42,9 +42,10 @@ Code extension) instead of starting a second one.
 
 ## Security
 
-* **Capabilities:** only this app's 7 commands, only for the bundled local page (`"local": true`); no `core:default`,
-  no shell, fs or http plugins exposed to JavaScript. Remote pages (the account server, the local engine) get **no**
-  IPC access.
+* **Capabilities:** the account and engine commands stay on the bundled sign-in page. A separate capability allows only
+  the caption bar (drag, minimize, maximize, close, and the Menu actions) on that page, the local engine, and the
+  signed-in server. No shell, file system, or HTTP plugin is exposed.
+* **Window frame (Windows):** `decorations: false` plus the caption in the page. See [docs/WINDOWS-CHROME.md](../../docs/WINDOWS-CHROME.md).
 * **CSP** on the bundled page: `default-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost; …`;
   `freezePrototype` on.
 * **Navigation:** the window may show only the app page, the signed-in server's origin and the local engine; every

@@ -27,7 +27,7 @@ top-right corner, then paste it into your terminal.
 
 ## 0. The Windows app
 
-The **AutoMoto AI app for Windows** (new in 5.6.0, **Beta**) is a normal window you install like any other program. It opens
+The **AutoMoto AI app for Windows** (new in 5.6.0, **Beta**) installs like any other program and opens in **its own window frame**: Menu, the AutoMoto name, and minimize, maximize and close. It is not the standard Windows title bar. Drag that bar to move the window; **Win+Z** snaps it. It opens
 on a sign-in screen with two choices: **your AutoMoto account** (the same chats, files and usage time on every
 device) or **Local mode** (just this PC, no account).
 
@@ -82,7 +82,7 @@ engine on this PC; if it isn't installed, click **Install the local engine** (it
 official installer that ships inside the app), add a free AI key when it asks, then click **Start local mode** again.
 The app starts the engine for you and stops it when you close the window.
 
-**Useful menu items** (menu **AutoMoto**): *Sign-in screen / switch mode* (`Ctrl+Shift+H`), *Reload* (`Ctrl+R`),
+**Useful menu items** (**Menu** on the window bar, and the AutoMoto menu): *Switch Local / Cloud / Server* (`Ctrl+Shift+H`), *Reload* (`Ctrl+R`),
 *Check for updates…*, *Sign out of this device*. **Help** has this guide (`F1`) and the local engine's log.
 
 **Updates** — the beta app follows the **beta channel**: it checks for new beta builds when it starts and asks before installing a new version. Every update
@@ -483,16 +483,14 @@ Click **Settings**.
 
 ![Settings: appearance and safety](gui-guide/17-settings.png)
 
-| Card | What you can do |
+| Section | What you can do |
 |---|---|
+| **Assistant** | How new chats start, and **Approval**: *Ask* (recommended), *Read-only*, or *Auto* (no questions — only in a throwaway sandbox). You write the request; AutoMoto does the steps. |
+| **Offline AI** | Status of Ollama on this PC, the model in use, download, and **Offline only**. |
 | **Appearance** | Dark / Light / System theme and an accent colour. |
-| **Safety** | **Approval mode**: *Ask* (recommended), *Read-only* (deny every risky tool) or *Auto* (no questions — only in a throwaway sandbox). Default mode for new chats. |
-| **Files & folders** | Add project folders the agent may also use (it still asks before touching them). |
-| **Connectors (MCP)** | Official connectors (GitHub, Notion, Figma, Canva, Google Drive…). Click **Enable**, then **Reconnect now**. Remote ones sign in with OAuth in your browser on first use. |
-| **Provider order** | Which AI *Auto* tries first; it fails over down the list. |
-| **Bring your own keys** | Paste a key for **this browser tab only** (wiped when you close it). Keys in `.env` work without this. |
-| **Test keys** | Sends one tiny request to every model your keys can use and shows which answer. |
-| **Advanced (for developers)** | Links to the **Tools** and **Skills** pages. You never need them: AutoMoto picks tools and skills for each task. |
+| **Folders** | Add project folders the assistant may also use (it still asks before touching them). |
+| **Providers** | Which AI *Auto* tries first, keys for this tab only, and **Test keys**. |
+| **More** | Connectors (enable, then **Reconnect now**), and links to Tools and Skills if you want to look under the hood. You never need those lists: AutoMoto picks them. |
 
 ![Settings: connectors](gui-guide/18-settings-connectors.png)
 

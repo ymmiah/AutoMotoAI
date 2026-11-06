@@ -82,3 +82,50 @@ a { color:inherit; text-underline-offset:3px; } a:hover { color:var(--acc); }
   .local-features { margin:16px 0; gap:10px; font-size:12px; }
   .foot { margin-top:18px; }
 }
+
+/* Windows caption metrics: height 40px, menu 64px, caption button 46px. Keep in sync with chrome.rs. */
+html[data-chrome="custom"] { --chrome-h: 40px; }
+.am-chrome {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 80;
+  height: 40px; display: none; align-items: stretch;
+  background: color-mix(in srgb, var(--bg) 88%, var(--accent, var(--acc)) 12%);
+  color: var(--text, var(--fg));
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  font: 13px/1.2 inherit;
+}
+html[data-chrome="custom"] .am-chrome { display: flex; }
+.am-chrome button { font: inherit; cursor: pointer; color: inherit; }
+.am-chrome button:focus-visible { outline: 2px solid var(--accent, var(--acc)); outline-offset: -2px; border-radius: 0; }
+.am-menu { width: 64px; height: 40px; flex: none; border: 0; background: transparent; color: var(--dim); font-weight: 600; letter-spacing: .01em; }
+.am-menu:hover, .am-controls button:hover { background: var(--hover, var(--line)); color: var(--text, var(--fg)); }
+.am-drag { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: 2px; }
+.am-mark {
+  width: 18px; height: 18px; border-radius: 5px; flex: none;
+  display: grid; place-items: center; font-size: 11px; font-weight: 800;
+  background: var(--accent, var(--acc)); color: var(--on-accent, var(--ink));
+}
+.am-caption { font-weight: 600; letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-controls { display: flex; flex: none; }
+.am-controls button { width: 46px; height: 40px; border: 0; background: transparent; color: var(--dim, var(--fg)); display: grid; place-items: center; padding: 0; }
+.am-controls svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.am-controls .ico-restore { display: none; }
+.am-controls button.is-restore .ico-max { display: none; }
+.am-controls button.is-restore .ico-restore { display: block; }
+.am-controls [data-chrome="close"]:hover { background: var(--bad); color: #fff; }
+.am-appmenu {
+  position: absolute; top: calc(100% + 4px); left: 8px; z-index: 2;
+  min-width: 280px; padding: 6px; display: flex; flex-direction: column;
+  background: var(--panel, var(--bg)); color: var(--text, var(--fg));
+  border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow, 0 12px 40px rgba(0,0,0,.28));
+}
+.am-appmenu button {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  border: 0; background: transparent; border-radius: 8px; padding: 8px 10px; font-size: 13px;
+}
+.am-appmenu button:hover, .am-appmenu button:focus-visible { background: var(--hover, var(--line)); }
+.am-appmenu .k { margin-left: auto; color: var(--dim); font-size: 11px; }
+.am-appmenu [role="separator"] { height: 1px; margin: 4px 8px; background: var(--line); }
+
+html[data-chrome="custom"] body { padding-top: var(--chrome-h); }

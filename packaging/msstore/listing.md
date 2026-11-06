@@ -67,7 +67,7 @@ productivity
 ## What's new in this version
 
 ```
-5.6.0 Beta 5: redesigned start screen and workspace, filterable task ideas, easier AI setup, draft recovery while navigating, better keyboard access, and more reliable local-engine updates. Offline AI can run a stronger free model on this PC and does not switch to the cloud while Offline mode is on.
+5.6.0 Beta 5: the Windows app has its own window bar, and Settings is grouped into Assistant, Offline AI, Appearance, Folders, Providers and More. Also: redesigned start screen and workspace, filterable task ideas, easier AI setup, draft recovery while navigating, better keyboard access, and more reliable local-engine updates. Offline AI can run a stronger free model on this PC and does not switch to the cloud while Offline mode is on.
 ```
 
 ## Other fields
