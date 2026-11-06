@@ -332,7 +332,9 @@ let browser;
   await page.locator('#vsPageTabs [data-page-index="0"]').click();
   assert.equal(await page.locator('#vsPageName').inputValue(),'Page 1');
   await page.locator('#vsSave').click();
-  await page.waitForFunction(()=>/Saved artifacts\/visual-studio\//.test(document.querySelector('#vsStatus')?.textContent||''));
+  await page.waitForFunction(()=>/Saved artifacts\/visual-studio\/|Save failed:/.test(document.querySelector('#vsStatus')?.textContent||''));
+  assert.match(await page.locator('#vsStatus').innerText(),/Saved artifacts\/visual-studio\//,
+    'multi-page draft save must succeed before testing its reopen and exports');
   const savedDoc=await page.locator('#vsDraft').inputValue();
   assert.ok(savedDoc.endsWith('.design.json'));
   await page.locator('#vsLoad').click();
