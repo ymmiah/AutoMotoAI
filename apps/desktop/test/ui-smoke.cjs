@@ -15,7 +15,10 @@ const token = randomBytes(32).toString('hex');
 const base = 'http://127.0.0.1:8876';
 const server = spawn(process.env.PYTHON || 'python', ['-m', 'automoto', 'serve', '--no-browser', '--port', '8876'], {
   cwd: root,
-  env: { ...process.env, AUTOMOTO_DATA_DIR: data, AUTOMOTO_LAUNCH_TOKEN: token, AUTOMOTO_SANDBOX: 'local' },
+  // This smoke test exercises many renderer previews in one minute. Use a
+  // higher limit only in its isolated ephemeral server, never in production.
+  env: { ...process.env, AUTOMOTO_DATA_DIR: data, AUTOMOTO_LAUNCH_TOKEN: token,
+    AUTOMOTO_SANDBOX: 'local', AUTOMOTO_RATE_LIMIT: '10000' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let log = '';
@@ -253,9 +256,11 @@ let browser;
   await page.unroute('**/api/visual/studio/ai-review');
   // v7: choose independent objects, distribute, align and group via the
   // actual editor, not a duplicated test-only geometry implementation.
-  page.once('dialog', dialog => dialog.accept());
+  const acceptV7CanvasReset=dialog=>dialog.accept();
+  page.on('dialog',acceptV7CanvasReset);
   await page.locator('#vsTemplate').selectOption('workflow');
   await page.locator('#vsTemplate').selectOption('blank');
+  page.off('dialog',acceptV7CanvasReset);
   for (const [x, y] of [[140,120],[340,250],[550,400]]) {
     await page.locator('#vsAddIcon').click();
     await page.locator('#vsProperties [data-key="x"]').fill(String(x));
@@ -297,6 +302,72 @@ let browser;
   assert.match(await page.locator('#vsSelectedCount').innerText(), /3 layers selected/);
   await page.locator('#vsClearSelection').click();
   assert.match(await page.locator('#vsSelectedCount').innerText(), /0 layers selected/);
+  // v8: save and reopen a genuinely multi-page editable project. In all-page
+  // PDF/PPTX mode, every canvas must be rendered, not just the current one.
+  const acceptDocumentChanges=dialog=>dialog.accept();
+  page.on('dialog',acceptDocumentChanges);
+  await page.locator('#vsTemplate').selectOption('workflow');
+  await page.locator('#vsTemplate').selectOption('blank');
+  page.off('dialog',acceptDocumentChanges);
+  await page.locator('#vsAddText').click();
+  await page.locator('#vsProperties [data-key="text"]').fill('First page');
+  await page.locator('#vsProperties [data-key="text"]').press('Tab');
+  await page.locator('#vsPageAdd').click();
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
+  assert.match(await page.locator('#vsPageCount').innerText(),/2 \/ 2/);
+  await page.locator('#vsPageName').fill('Second page');
+  await page.locator('#vsPageName').press('Tab');
+  await page.locator('#vsAddText').click();
+  await page.locator('#vsProperties [data-key="text"]').fill('Second page text');
+  await page.locator('#vsProperties [data-key="text"]').press('Tab');
+  await page.locator('#vsPageTabs [data-page-index="0"]').click();
+  assert.match(await page.locator('#vsPageCount').innerText(),/1 \/ 2/);
+  assert.equal(await page.locator('#vsElement option').count(),2,
+    'returning to page one restores its editable object');
+  await page.locator('#vsPageDuplicate').click();
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),3);
+  await page.locator('#vsPageUp').click();
+  assert.match(await page.locator('#vsPageCount').innerText(),/1 \/ 3/);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#vsPageDelete').click();
+  // The duplicate was removed; original pages and their exact text remain.
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
+  await page.locator('#vsPageTabs [data-page-index="0"]').click();
+  assert.equal(await page.locator('#vsPageName').inputValue(),'Page 1');
+  const saving=page.waitForResponse(r=>r.url().includes('/api/visual/studio/document/save')&&
+    r.request().method()==='POST');
+  await page.locator('#vsSave').click();
+  const savedResponse=await saving;
+  assert.equal(savedResponse.status(),200,await savedResponse.text());
+  const savedDoc=(await savedResponse.json()).path;
+  await page.waitForFunction(path=>document.querySelector('#vsDraft')?.value===path,savedDoc);
+  assert.ok(savedDoc.endsWith('.design.json'));
+  await page.locator('#vsLoad').click();
+  assert.equal(await page.locator('#vsPageTabs [data-page-index]').count(),2);
+  assert.equal(await page.locator('#vsPageTabs [data-page-index="1"]').innerText().then(x=>x.includes('Second page')),true);
+  await page.locator('#vsFormat').selectOption('pptx');
+  await page.locator('#vsOutputMode').selectOption('layered');
+  assert.match(await page.locator('#vsPageExportHint').innerText(),/All 2 pages/);
+  const exportingSlides=page.waitForResponse(r=>r.url().includes('/api/visual/studio/document/export')&&
+    r.request().method()==='POST');
+  await page.locator('#vsExport').click();
+  const slidesResponse=await exportingSlides;
+  assert.equal(slidesResponse.status(),200,await slidesResponse.text());
+  assert.equal((await slidesResponse.json()).page_count,2);
+  await page.waitForFunction(()=>decodeURIComponent(document.querySelector('#vsOutput a[download]')?.href||'').includes('.pptx'));
+  assert.equal(await page.locator('#vsOutput a[download]').count()>=2,true,
+    'multi-page editable PowerPoint must provide an editable project download');
+  await page.locator('#vsFormat').selectOption('pdf');
+  const exportingPdf=page.waitForResponse(r=>r.url().includes('/api/visual/studio/document/export')&&
+    r.request().method()==='POST');
+  await page.locator('#vsExport').click();
+  const pdfResponse=await exportingPdf;
+  assert.equal(pdfResponse.status(),200,await pdfResponse.text());
+  assert.equal((await pdfResponse.json()).page_count,2);
+  await page.waitForFunction(()=>decodeURIComponent(document.querySelector('#vsOutput a[download]')?.href||'').includes('.pdf'));
+  await page.screenshot({path:path.join(output,'visual-studio-v8-multipage-export.png')});
+  await page.locator('#vsFormat').selectOption('png');
+  assert.match(await page.locator('#vsPageExportHint').innerText(),/Only page/);
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();

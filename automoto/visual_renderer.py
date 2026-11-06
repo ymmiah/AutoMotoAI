@@ -466,8 +466,8 @@ def render(scene:dict,path:Path,*,animation:dict|None=None,scenes:list[dict]|Non
     if path.exists():raise VisualError("output already exists; choose a new filename")
     if ext not in {".png",".jpg",".jpeg",".gif",".svg",".pptx",".pdf"}:
         raise VisualError("output must be PNG, JPEG, GIF, SVG, PPTX or PDF")
-    if ext!=".pptx" and scenes is not None and len(scenes)>1:
-        raise VisualError("multiple scenes are supported only by PowerPoint")
+    if ext not in {".pptx", ".pdf"} and scenes is not None and len(scenes)>1:
+        raise VisualError("multiple scenes require PowerPoint or PDF")
     findings=[]
     selected=scenes or [scene]
     for item in selected:
@@ -509,7 +509,11 @@ def render(scene:dict,path:Path,*,animation:dict|None=None,scenes:list[dict]|Non
                 if getattr(check,"n_frames",1)<2:
                     raise VisualError("GIF output is static: the animation was not rendered")
         elif ext==".pdf":
-            raster(scene).save(str(path),format="PDF",resolution=96)
+            # Each compiled canvas is a real page. PDF is deliberately
+            # flattened; choose PPTX for native editable shape/text slides.
+            pages=[raster(item) for item in selected]
+            pages[0].save(str(path),format="PDF",save_all=True,
+                          append_images=pages[1:],resolution=96)
         else:
             fmt="JPEG" if ext in {".jpeg",".jpg"} else "PNG"
             raster(scene).save(str(path),format=fmt,quality=93)

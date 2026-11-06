@@ -1,6 +1,6 @@
 # AutoMoto Visual Studio — Editable design editor
 
-**Development status:** Visual Studio v1–v6 have been merged into the source repository. **v7 advanced layer controls** (multi-selection, snapping, alignment, distribution, simple grouping) are proposed in [PR #21](https://github.com/ymmiah/AutoMotoAI/pull/21). Read [the v7 layer guide](VISUAL-STUDIO-ADVANCED-LAYERS-V7.md), [v6 local AI review](VISUAL-AI-REVIEW-V6.md) and [v5 selective repair](VISUAL-SELECTIVE-REVIEW-V5.md). **Microsoft Store publication is deferred until all planned AutoMoto AI development phases are complete.**
+**Development status:** Visual Studio v1–v7 are merged in the source repository. **v8 multi-page editing** is being developed in [PR #22](https://github.com/ymmiah/AutoMotoAI/pull/22): multiple editable canvases, page duplication/reordering, legacy draft loading and real multi-page PDF/native-slide PowerPoint exports. See [the v8 page guide](VISUAL-STUDIO-MULTIPAGE-V8.md), [v7 advanced layers](VISUAL-STUDIO-ADVANCED-LAYERS-V7.md), [v6 local AI review](VISUAL-AI-REVIEW-V6.md) and [v5 selective repairs](VISUAL-SELECTIVE-REVIEW-V5.md). **Microsoft Store publication remains deferred until all planned AutoMoto AI phases are complete.**
 
 ## Open it
 
