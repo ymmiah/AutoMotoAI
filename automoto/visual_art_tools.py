@@ -56,7 +56,10 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None,
             raise ToolFailed("Visual Studio layered projects currently support one canvas; "
                              "use editable PowerPoint for multi-slide designs")
         from automoto.visual_projects import scene_project
-        try: project_spec=scene_project(scenes[0])
+        try:
+            # Already-authored editor canvases are the source of truth: preserve
+            # even hidden/locked objects, grouped layers and animation timing.
+            project_spec = spec if spec.get("layout")=="canvas" else scene_project(scenes[0])
         except (VisualError,OSError,ValueError) as exc: raise ToolFailed(str(exc)) from None
     try:
         render(scenes[0],out,scenes=scenes,animation=animation or spec.get("animation"))
@@ -100,7 +103,8 @@ def visual_create(ctx:ToolContext,path:str,spec:Any,animation:dict|None=None,
             f"theme {scenes[0]['theme']}, format {out.suffix.lower()[1:]}. "
             "Bounds, text fitting, contrast and source-file integrity passed. "
             "Manually review final appearance and font rendering. "
-            "GIF output uses genuine multi-frame animation with moving elements.")
+            ("GIF output uses genuine multi-frame animation with moving elements."
+             if out.suffix.lower()==".gif" else "This is a static exported artwork."))
 
 def visual_check(ctx:ToolContext,path:str) -> str:
     p=sandbox.resolve(path,allow_outside=True)
