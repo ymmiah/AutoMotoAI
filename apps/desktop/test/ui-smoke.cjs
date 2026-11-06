@@ -251,6 +251,46 @@ let browser;
   assert.equal(await page.locator('#vsRepairReview').isVisible(), false);
   await page.locator('#vsUndo').click();
   await page.unroute('**/api/visual/studio/ai-review');
+  // v7: choose independent objects, distribute, align and group via the
+  // actual editor, not a duplicated test-only geometry implementation.
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#vsTemplate').selectOption('blank');
+  for (const [x, y] of [[140,120],[340,250],[550,400]]) {
+    await page.locator('#vsAddIcon').click();
+    await page.locator('#vsProperties [data-key="x"]').fill(String(x));
+    await page.locator('#vsProperties [data-key="x"]').press('Tab');
+    await page.locator('#vsProperties [data-key="y"]').fill(String(y));
+    await page.locator('#vsProperties [data-key="y"]').press('Tab');
+  }
+  await page.locator('#vsSelectAll').click();
+  assert.match(await page.locator('#vsSelectedCount').innerText(), /3 layers selected/);
+  assert.equal(await page.locator('#vsDistribute').isEnabled(), true);
+  await page.locator('#vsDistributeMode').selectOption('horizontal');
+  await page.locator('#vsDistribute').click();
+  await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  await page.locator('#vsClearSelection').click();
+  const layerButtons=page.locator('#vsLayers [data-layer-act="select"]');
+  await layerButtons.nth(0).click();
+  await layerButtons.nth(1).click({modifiers:['Shift']});
+  assert.match(await page.locator('#vsSelectedCount').innerText(), /2 layers selected/);
+  assert.equal(await page.locator('#vsAlign').isEnabled(), true);
+  await page.locator('#vsAlignMode').selectOption('left');
+  await page.locator('#vsAlign').click();
+  await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  await page.locator('#vsGroup').click();
+  assert.ok(await page.locator('#vsLayers [data-layer-key^="group:studio_group_"]').count() >= 3,
+    'two native objects must become a group unit with visibility, lock and order controls');
+  assert.equal(await page.locator('#vsUngroup').isEnabled(), true);
+  await page.screenshot({path:path.join(output,'visual-studio-v7-group-align.png')});
+  await page.locator('#vsUngroup').click();
+  assert.match(await page.locator('#vsSelectedCount').innerText(), /2 layers selected/);
+  await page.locator('#vsUndo').click();
+  assert.equal(await page.locator('#vsLayers [data-layer-key^="group:studio_group_"]').count() >= 3, true,
+    'Undo must restore the grouped layer without losing original object editability');
+  await page.locator('#vsRedo').click();
+  assert.equal(await page.locator('#vsSnap').isChecked(), true);
+  await page.locator('#vsClearSelection').click();
+  assert.match(await page.locator('#vsSelectedCount').innerText(), /0 layers selected/);
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
