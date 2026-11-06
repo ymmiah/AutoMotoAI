@@ -56,15 +56,43 @@ def _text_lines(e):
                           "shorten the wording or increase the canvas size")
     return lines,f,line_h
 
+def _luminance(hex_colour):
+    channels=[component/255 for component in _hexrgb(hex_colour)]
+    adjusted=[channel/12.92 if channel<=0.04045 else ((channel+0.055)/1.055)**2.4
+              for channel in channels]
+    return sum(a*b for a,b in zip(adjusted,(0.2126,0.7152,0.0722)))
+
+def _contrast(a,b):
+    la,lb=_luminance(a),_luminance(b)
+    hi,lo=max(la,lb),min(la,lb)
+    return (hi+0.05)/(lo+0.05)
+
 def quality(scene):
     from PIL import features
     findings=[]
+    rectangles=[]
     for e in scene["elements"]:
+        if e["type"]=="rect":
+            rectangles.append(e)
         if e["type"]=="text":
             try:_text_lines(e)
             except VisualError as exc:findings.append(str(exc))
             if re.search(r"[\u0590-\u08FF]",e["text"]) and not features.check("raqm"):
                 findings.append("complex-script shaping support is unavailable for raster export")
+            if not e["text"].strip():
+                continue
+            px=e["x"]+e["w"]/2
+            py=e["y"]+min(e["h"]/2,e["size"]*.65)
+            bg=scene["tokens"]["background"]
+            for rect in rectangles:
+                if rect["x"]<=px<=rect["x"]+rect["w"] and rect["y"]<=py<=rect["y"]+rect["h"]:
+                    bg=rect["fill"]
+            # WCAG AA: 4.5:1 normal text, 3:1 larger/bold display text.
+            target=3.0 if (e["size"]>=24 and e.get("bold")) or e["size"]>=30 else 4.5
+            ratio=_contrast(e["colour"],bg)
+            if ratio<target:
+                findings.append(f"low contrast ({ratio:.1f}:1) in {e.get('role') or 'text'}; "
+                                f"requires at least {target:.1f}:1")
     return findings
 
 def _icon_png(draw,e,scale=1):
