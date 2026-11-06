@@ -158,6 +158,27 @@ def presets(request: Request):
             "size_limits": {"width": [640, 1920], "height": [400, 1080], "gif_pixels": 1_000_000}}
 
 
+@router.post("/inspect")
+def inspect_artwork(body: DesignIn, request: Request):
+    """Read-only inspection; never saves, mutates, exports or uploads."""
+    _auth(request)
+    from automoto.visual_repair import inspect
+    spec=_validate(body.spec)
+    return inspect(spec)
+
+
+@router.post("/repair")
+def suggest_repairs(body: DesignIn, request: Request):
+    """Return a candidate edit list; the user must accept/save explicitly."""
+    _auth(request)
+    from automoto.visual_repair import repair
+    spec=_validate(body.spec)
+    try:
+        return repair(spec)
+    except (VisualError, ValueError, OSError, TypeError) as exc:
+        raise HTTPException(422, str(exc)[:1000]) from None
+
+
 @router.post("/preview")
 def preview(body: PreviewIn, request: Request):
     _auth(request)
