@@ -124,6 +124,14 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<div class="vs-toolbar" style="margin-top:12px"><button class="btn" id="vsDuplicate">Duplicate</button>'+
     '<button class="btn danger" id="vsDelete">Delete</button></div>'+
     '<p class="vs-inspector-note">Grouped components move together. Exact text stays editable. Original uploaded imagery is not AI-redrawn.</p></aside></div>'+
+    '<section class="vs-repair" aria-label="Design inspection and repair">'+
+    '<div class="vs-repair-head"><strong>Visual quality checks</strong>'+
+    '<span>Fix only what is necessary. Original images, locked layers and exact words remain unchanged.</span></div>'+
+    '<div class="vs-toolbar"><button class="btn" id="vsInspect">Inspect design</button>'+
+    '<button class="btn" id="vsSuggest">Suggest safe fixes</button>'+
+    '<button class="btn primary" id="vsApply" disabled>Apply fixes (undoable)</button></div>'+
+    '<div id="vsFindings" class="vs-repair-results" role="status" aria-live="polite">Run an inspection to check text, contrast and overlapping objects.</div>'+
+    '</section>'+
     '<section class="vs-export"><label>Output <select id="vsOutputMode" aria-label="Image delivery type">'+
     '<option value="flat">Single finished file</option><option value="layered">Editable layers + file</option></select></label>'+
     '<label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
@@ -147,14 +155,14 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
-  let previewSequence=0,previewTimer=null,drag=null;
+  let previewSequence=0,previewTimer=null,drag=null,pendingRepair=null;
   const status=(message,bad=false)=>{at("vsStatus").textContent=message;at("vsStatus").classList.toggle("bad",bad);};
   const snap=()=>copy(spec);
   function record(previous){
     if(JSON.stringify(previous)===JSON.stringify(spec))return;
     undoStack.push(previous);
     if(undoStack.length>40)undoStack.shift();
-    redoStack=[];dirty=true;buttons();schedule();
+    redoStack=[];dirty=true;pendingRepair=null;at("vsApply").disabled=true;buttons();schedule();
   }
   function change(fn){
     const before=snap();fn();
@@ -169,12 +177,14 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   function undo(){
     if(!undoStack.length)return;
     redoStack.push(snap());spec=undoStack.pop();selected=-1;
+    pendingRepair=null;at("vsApply").disabled=true;
     at("vsEffect").value=spec.animation?.effect||"flow";
     draw();schedule();
   }
   function redo(){
     if(!redoStack.length)return;
     undoStack.push(snap());spec=redoStack.pop();selected=-1;
+    pendingRepair=null;at("vsApply").disabled=true;
     at("vsEffect").value=spec.animation?.effect||"flow";
     draw();schedule();
   }
@@ -505,6 +515,61 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       at("vsLoop").value=spec.animation.loop??0;
     }
     drawTimeline();schedule();
+  };
+  function showAudit(report,heading){
+    const items=(report?.issues||[]).slice(0,15);
+    at("vsFindings").innerHTML='<strong>'+esc(heading)+'</strong>'+
+      '<p>'+esc(items.length?items.length+" issue(s) detected.":"No issues found by structural inspection.")+'</p>'+
+      (items.length?'<ol>'+items.map(issue=>'<li><b>'+esc(issue.code)+':</b> '+esc(issue.message)+'</li>').join("")+'</ol>':'');
+  }
+  at("vsInspect").onclick=async()=>{
+    const button=at("vsInspect");button.disabled=true;
+    try{
+      const result=await api("/api/visual/studio/inspect",{name,spec});
+      pendingRepair=null;at("vsApply").disabled=true;
+      showAudit(result,"Current design inspection");
+      status(result.passed?"No structural issues detected. Visual review is still required.":
+        result.issue_count+" structural issue(s) detected.");
+    }catch(e){status("Inspection failed: "+e.message,true);}
+    finally{button.disabled=false;}
+  };
+  at("vsSuggest").onclick=async()=>{
+    const button=at("vsSuggest");button.disabled=true;
+    try{
+      const original=JSON.stringify(spec);
+      const result=await api("/api/visual/studio/repair",{name,spec});
+      if(original!==JSON.stringify(spec)){
+        pendingRepair=null;status("Design changed during inspection. Request new suggestions.",true);return;
+      }
+      pendingRepair={snapshot:original,result};
+      at("vsApply").disabled=!result.changed;
+      showAudit(result.after,result.changed?
+        result.changes.length+" proposed field adjustment(s) — not yet applied":
+        "No safe automatic repair available");
+      if(result.changed){
+        const list=result.changes.slice(0,18).map(change=>
+          '<li>Layer '+(change.element+1)+': '+esc(change.field)+' '+
+          esc(String(change.before))+' → '+esc(String(change.after))+
+          ' ('+esc(change.reason)+')</li>').join("");
+        at("vsFindings").insertAdjacentHTML("beforeend",
+          '<details open><summary>Review suggested changes</summary><ol>'+list+'</ol></details>');
+      }
+      status(result.message);
+    }catch(e){status("Repair suggestion failed: "+e.message,true);}
+    finally{button.disabled=false;}
+  };
+  at("vsApply").onclick=()=>{
+    if(!pendingRepair||!pendingRepair.result.changed)return;
+    if(JSON.stringify(spec)!==pendingRepair.snapshot){
+      pendingRepair=null;at("vsApply").disabled=true;
+      status("Design changed. Request fresh suggestions before applying.",true);return;
+    }
+    const before=snap(),suggestion=pendingRepair.result;
+    spec=copy(suggestion.spec);selected=-1;
+    record(before);draw();schedule(0);
+    showAudit(suggestion.after,"Suggestions applied — use Undo to restore the original layout");
+    status(suggestion.after.passed?"Repaired structural issues. Please review the new rendering.":
+      "Some problems remain; review the inspection findings manually.");
   };
   at("vsSave").onclick=async()=>{
     const btn=at("vsSave");btn.disabled=true;

@@ -93,6 +93,16 @@ let browser;
   assert.equal(await page.locator('#composerInput').inputValue(), 'Keep this draft while I check settings');
   await page.locator('#composerInput').fill('');
   await page.screenshot({ path: path.join(output, 'workspace-dark.png') });
+  // All generated image requests (not only GIFs) must ask whether to keep
+  // an editable layered project; cancellation cannot discard the draft.
+  const imageBrief='Generate a landscape illustration for a poster';
+  await page.locator('#composerInput').fill(imageBrief);
+  await page.locator('#sendBtn').click();
+  await page.locator('#modal [data-output="layered"]').waitFor();
+  assert.equal(await page.locator('#modal [data-output]').count(), 5);
+  await page.locator('#modal [data-output="cancel"]').click();
+  assert.equal(await page.locator('#composerInput').inputValue(), imageBrief);
+  await page.locator('#composerInput').fill('');
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
   await page.locator('.nav [data-page="visual"]').click();
   await page.locator('#vsPreview').waitFor();
@@ -138,7 +148,19 @@ let browser;
   await page.locator('#vsAddText').click();
   await page.locator('#vsProperties textarea[data-key="text"]').fill('Exact source copy');
   await page.locator('#vsProperties textarea[data-key="text"]').press('Tab');
+  // Deliberately create unreadable white text, then inspect, propose and
+  // explicitly accept a reversible, non-destructive contrast repair.
+  await page.locator('#vsProperties [data-key="colour"]').fill('#ffffff');
+  await page.locator('#vsProperties [data-key="colour"]').press('Tab');
+  await page.locator('#vsInspect').click();
+  assert.match(await page.locator('#vsFindings').innerText(), /contrast/);
+  await page.locator('#vsSuggest').click();
+  await page.locator('#vsApply:not([disabled])').waitFor();
+  assert.match(await page.locator('#vsFindings').innerText(), /proposed field adjustment/);
+  await page.locator('#vsApply').click();
+  assert.match(await page.locator('#vsFindings').innerText(), /Suggestions applied/);
   await page.waitForFunction(() => document.querySelector('#vsStage')?.getAttribute('aria-busy') === 'false');
+  await page.screenshot({ path: path.join(output, 'visual-studio-repair.png') });
   await page.locator('#vsSave').click();
   await page.waitForFunction(() => document.querySelectorAll('#vsDraft option').length > 1);
   await page.locator('#vsFormat').selectOption('gif');
