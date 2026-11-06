@@ -156,7 +156,7 @@ def _fix_contrast(spec: dict[str, Any], changes: list[dict[str, Any]]) -> None:
         "editorial-light":"#F8F9F7", "illustrated-workflow":"#FAFAF6",
         "premium-tech":"#0D1729", "commercial":"#FBF7F0",
     }.get(spec.get("theme"),"#FFFFFF")
-    background = spec.get("colours",{}).get("background",background)
+    background = (spec.get("colours") or {}).get("background",background)
     for i,e in enumerate(spec["elements"]):
         if e.get("type")!="text" or not _unlocked(e) or _group_locked(spec["elements"],e):
             continue
