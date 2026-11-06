@@ -464,6 +464,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   };
   at("vsDuplicate").onclick=()=>{
     if(selected<0||isLocked())return;
+    const unit=currentUnit();
+    if(spec.elements.length+(unit?.indices.length||1)>40){
+      toast("Duplicating this group would exceed the 40-object canvas limit.","bad");return;
+    }
     change(()=>{
       const selectedElement=spec.elements[selected],g=selectedElement.group;
       const set=g?spec.elements.filter(e=>e.group===g):[selectedElement];
