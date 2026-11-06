@@ -1,6 +1,8 @@
 /* Visual Studio: native exported scene renderer, editable layers and bounded GIF tracks.
    Backend renders the final preview. Edits keep source imagery unchanged. */
-import {layerUnits,toggleLayer,moveLayer,selectionBox,resizeSelection,
+import {layerUnits,unitKey,toggleLayer,moveLayer,selectionBox,resizeSelection,
+        selectedLayerUnits,selectionBounds,translateLayerUnits,alignLayerUnits,
+        distributeLayerUnits,groupLayerUnits,ungroupLayerUnits,snapLayerDelta,
         sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
@@ -136,6 +138,20 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<div id="vsProperties" class="vs-fields"></div>'+
     '<h3 class="vs-layer-heading">Layers <span class="vs-small">Front → back</span></h3>'+
     '<div id="vsLayers" class="vs-layers" aria-label="Visual design layers"></div>'+
+    '<div class="vs-toolbar vs-multi-controls"><button class="btn" id="vsSelectAll">Select unlocked</button>'+
+    '<button class="btn" id="vsClearSelection">Clear selection</button>'+
+    '<span id="vsSelectedCount" class="vs-small" role="status"></span></div>'+
+    '<div class="vs-toolbar vs-multi-controls">'+
+    '<label>Align <select class="input" id="vsAlignMode" aria-label="Align selected layers">'+
+    '<option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option>'+
+    '<option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select></label>'+
+    '<button class="btn" id="vsAlign">Align</button>'+
+    '<label>Distribute <select class="input" id="vsDistributeMode" aria-label="Distribute selected layers">'+
+    '<option value="horizontal">Horizontally</option><option value="vertical">Vertically</option></select></label>'+
+    '<button class="btn" id="vsDistribute">Distribute</button></div>'+
+    '<div class="vs-toolbar vs-multi-controls"><button class="btn" id="vsGroup">Group</button>'+
+    '<button class="btn" id="vsUngroup">Ungroup</button>'+
+    '<label class="vs-snap-toggle"><input type="checkbox" id="vsSnap" checked> Snap on drag</label></div>'+
     '<div class="vs-toolbar" style="margin-top:12px"><button class="btn" id="vsDuplicate">Duplicate</button>'+
     '<button class="btn danger" id="vsDelete">Delete</button></div>'+
     '<p class="vs-inspector-note">Grouped components move together. Exact text stays editable. Original uploaded imagery is not AI-redrawn.</p></aside></div>'+
@@ -162,6 +178,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
+  let selectionKeys=new Set();
   let pendingRepair=null,repairRequest=0,inspectionRequest=0;
   let previewSequence=0,previewTimer=null,drag=null;
   const status=(message,bad=false)=>{at("vsStatus").textContent=message;at("vsStatus").classList.toggle("bad",bad);};
@@ -180,26 +197,38 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     redoStack=[];dirty=true;buttons();schedule();
   }
   function change(fn){
-    const before=snap();fn();
+    const before=snap(),result=fn();
     if(spec.animation?.effect==="sequence"){
       const next=normaliseSequence(spec);
       if(next)spec.animation=next;
       else delete spec.animation;
     }
-    record(before);draw();
+    record(before);draw();return result;
   }
   function buttons(){at("vsUndo").disabled=!undoStack.length;at("vsRedo").disabled=!redoStack.length;}
   function undo(){
     if(!undoStack.length)return;
-    redoStack.push(snap());spec=undoStack.pop();selected=-1;
+    redoStack.push(snap());spec=undoStack.pop();selected=-1;selectionKeys.clear();
     at("vsEffect").value=spec.animation?.effect||"flow";
     draw();schedule();
   }
   function redo(){
     if(!redoStack.length)return;
-    undoStack.push(snap());spec=redoStack.pop();selected=-1;
+    undoStack.push(snap());spec=redoStack.pop();selected=-1;selectionKeys.clear();
     at("vsEffect").value=spec.animation?.effect||"flow";
     draw();schedule();
+  }
+  function selectedUnits(){return selectedLayerUnits(spec,selectionKeys);}
+  function choose(index,extend=false){
+    const unit=layerUnits(spec).find(u=>u.indices.includes(index));
+    if(!extend)selectionKeys.clear();
+    if(unit){
+      if(extend && selectionKeys.has(unit.key))selectionKeys.delete(unit.key);
+      else selectionKeys.add(unit.key);
+    }
+    const units=selectedUnits();
+    selected=units.length?(unit&&selectionKeys.has(unit.key)?index:units[0].indices[0]):-1;
+    draw();
   }
   function currentUnit(index=selected){
     return layerUnits(spec).find(u=>u.indices.includes(index));
@@ -208,11 +237,12 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   function drawLayers(){
     const layers=layerUnits(spec).slice().reverse();
     at("vsLayers").innerHTML=layers.map((u,order)=>{
-      const active=u.indices.includes(selected),iconName=u.isConnector?"link":u.key.startsWith("group:")?"folder":"file";
+      const active=selectionKeys.has(u.key),iconName=u.isConnector?"link":u.key.startsWith("group:")?"folder":"file";
       const label=u.label+" ("+u.indices.length+")";
       const common=' data-layer-key="'+esc(u.key)+'"';
       return '<div class="vs-layer'+(active?' active':'')+(u.hidden?' hidden-layer':'')+'">'+
-        '<button class="vs-layer-name" data-layer-act="select"'+common+' title="'+esc(label)+'">'+
+        '<button class="vs-layer-name" data-layer-act="select"'+common+
+        ' aria-pressed="'+String(active)+'" title="'+esc(label)+' · Shift/Ctrl-click to select multiple">'+
         icon(iconName)+' '+esc(label)+'</button>'+
         '<button class="vs-layer-btn" data-layer-act="visibility"'+common+
         ' aria-label="'+(u.hidden?'Show ':'Hide ')+esc(u.label)+'" aria-pressed="'+String(u.hidden)+'">'+
@@ -256,28 +286,32 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       }
       overlay.appendChild(hit);
     });
-    if(selected<0||!spec.elements[selected]||spec.elements[selected].hidden)return;
-    const e=spec.elements[selected];
-    const chosen=e.group?spec.elements.filter(a=>a.group===e.group):[e];
-    const xs=chosen.map(a=>bounds(a)),x=Math.min(...xs.map(a=>a.x)),y=Math.min(...xs.map(a=>a.y));
-    const right=Math.max(...xs.map(a=>a.x+a.w)),bottom=Math.max(...xs.map(a=>a.y+a.h));
-    const mark=document.createElementNS(NS,"rect");
-    mark.setAttribute("class","vs-selected");mark.setAttribute("x",String(Math.max(0,x-5)));
-    mark.setAttribute("y",String(Math.max(0,y-5)));mark.setAttribute("width",String(Math.min(spec.width-x+5,right-x+10)));
-    mark.setAttribute("height",String(Math.min(spec.height-y+5,bottom-y+10)));
-    overlay.appendChild(mark);
-    if(!isLocked() && e.type!=="line"){
-      const grip=document.createElementNS(NS,"rect");
-      grip.setAttribute("data-i",String(selected));
-      grip.setAttribute("data-resize","se");
-      grip.setAttribute("class","vs-resize-handle");
-      grip.setAttribute("x",String(clamp(right-8,0,spec.width-20)));
-      grip.setAttribute("y",String(clamp(bottom-8,0,spec.height-20)));
-      grip.setAttribute("width","20");
-      grip.setAttribute("height","20");
-      grip.setAttribute("aria-label","Drag to resize selected design element");
-      overlay.appendChild(grip);
+    const units=selectedUnits();
+    if(!units.length)return;
+    for(const unit of units){
+      const area=selectionBox(spec,unit.indices[0]);
+      if(!area)continue;
+      const mark=document.createElementNS(NS,"rect");
+      mark.setAttribute("class","vs-selected");
+      mark.setAttribute("x",String(Math.max(0,area.x-5)));
+      mark.setAttribute("y",String(Math.max(0,area.y-5)));
+      mark.setAttribute("width",String(Math.min(spec.width-area.x+5,area.w+10)));
+      mark.setAttribute("height",String(Math.min(spec.height-area.y+5,area.h+10)));
+      overlay.appendChild(mark);
     }
+    if(units.length!==1||selected<0||!spec.elements[selected]||isLocked()||
+       spec.elements[selected].type==="line")return;
+    const area=selectionBox(spec,selected);
+    if(!area)return;
+    const grip=document.createElementNS(NS,"rect");
+    grip.setAttribute("data-i",String(selected));
+    grip.setAttribute("data-resize","se");
+    grip.setAttribute("class","vs-resize-handle");
+    grip.setAttribute("x",String(clamp(area.x+area.w-8,0,spec.width-20)));
+    grip.setAttribute("y",String(clamp(area.y+area.h-8,0,spec.height-20)));
+    grip.setAttribute("width","20");grip.setAttribute("height","20");
+    grip.setAttribute("aria-label","Drag to resize selected design element");
+    overlay.appendChild(grip);
   }
   function inspector(){
     const pick=at("vsElement");
@@ -285,6 +319,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       spec.elements.map((e,i)=>'<option value="'+i+'"'+(i===selected?' selected':'')+'>'+
         (i+1)+' · '+esc(e.type)+' '+(e.type==="text"?esc(e.text.slice(0,20)):esc(e.group||""))+'</option>').join("");
     const area=at("vsProperties");
+    if(selectedUnits().length>1){
+      area.innerHTML='<p class="vs-inspector-note full">Multiple layers selected. Use Align, Distribute, Group or drag to move them. Choose one layer to edit individual properties.</p>';
+      return;
+    }
     if(selected<0||!spec.elements[selected]){
       area.innerHTML='<p class="vs-inspector-note full">Choose an element from the canvas or this list.</p>';return;
     }
@@ -343,14 +381,29 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     });
   }
   function draw(){
+    const available=new Set(layerUnits(spec).map(u=>u.key));
+    selectionKeys=new Set([...selectionKeys].filter(k=>available.has(k)));
+    if(!selectionKeys.size && selected>=0 && spec.elements[selected]){
+      selectionKeys.add(unitKey(spec.elements[selected],selected));
+    }
+    if(selectionKeys.size && !selectedUnits().some(u=>u.indices.includes(selected))){
+      selected=selectedUnits()[0].indices[0];
+    }
     stage.style.aspectRatio=spec.width+"/"+spec.height;
     overlay.setAttribute("viewBox","0 0 "+spec.width+" "+spec.height);
     at("vsTitle").value=spec.title||"";
     at("vsSubtitle").value=spec.subtitle||"";
     at("vsTheme").value=spec.theme;
     at("vsCount").textContent=spec.elements.length+" editable elements";
-    at("vsDelete").disabled=selected<0||isLocked();
-    at("vsDuplicate").disabled=selected<0||isLocked();
+    const units=selectedUnits(),allowed=units.every(u=>!u.locked&&!u.hidden&&!u.isConnector);
+    at("vsSelectedCount").textContent=units.length+" layer"+(units.length===1?"":"s")+" selected";
+    at("vsAlign").disabled=units.length<2||!allowed;
+    at("vsDistribute").disabled=units.length<3||!allowed;
+    at("vsGroup").disabled=units.length<2||!allowed||units.some(u=>u.key.startsWith("group:"));
+    at("vsUngroup").disabled=units.length!==1||!allowed||!units[0].key.startsWith("group:");
+    at("vsClearSelection").disabled=!units.length;
+    at("vsDelete").disabled=units.length!==1||selected<0||isLocked();
+    at("vsDuplicate").disabled=units.length!==1||selected<0||isLocked();
     at("vsElement").disabled=false;
     inspector();drawLayers();highlight();buttons();drawTimeline();
   }
