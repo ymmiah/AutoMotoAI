@@ -100,3 +100,20 @@
 .vs-repair-image {display:block;max-width:100%;width:100%;height:auto;max-height:340px;object-fit:contain;border:1px solid var(--line);border-radius:9px;background:var(--panel);}
 .vs-repair-list {margin:0;padding-left:20px;display:grid;gap:5px;font-size:12px;color:var(--dim);max-height:190px;overflow:auto;}
 .vs-repair-review .vs-toolbar {gap:8px;}
+
+/* v5: real before/after review with independently selectable field fixes. */
+.vs-repair-compare {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.vs-repair-compare figure {min-width:0;margin:0;display:grid;gap:6px;align-content:start;}
+.vs-repair-compare figcaption {font-size:12px;font-weight:600;color:var(--dim);}
+.vs-repair-compare .vs-repair-image {max-height:240px;}
+.vs-repair-compare img[hidden] {display:none!important;}
+.vs-repair-controls {flex-wrap:wrap;}
+.vs-repair-controls .vs-small {margin-right:auto;}
+.vs-repair-choice {display:flex;align-items:start;gap:10px;cursor:pointer;line-height:1.5;}
+.vs-repair-choice input {flex:none;margin-top:3px;accent-color:var(--accent);}
+.vs-repair-list li {overflow-wrap:anywhere;}
+.vs-repair-note-head {font-size:13px;margin:4px 0 0;}
+@media(max-width:640px) {
+  .vs-repair-compare {grid-template-columns:minmax(0,1fr);}
+  .vs-repair-compare .vs-repair-image {max-height:260px;}
+}
