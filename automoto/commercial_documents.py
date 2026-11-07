@@ -62,6 +62,11 @@ class Brand(BaseModel):
     def safe_title(self):
         if DISALLOWED.search(self.display_name) or not self.display_name.strip():
             raise ValueError("Invalid business display name.")
+        rgb = [int(self.accent[i:i+2], 16) for i in (1, 3, 5)]
+        components = [v / 255 / 12.92 if v / 255 <= 0.04045 else ((v / 255 + 0.055) / 1.055) ** 2.4 for v in rgb]
+        luminance = 0.2126 * components[0] + 0.7152 * components[1] + 0.0722 * components[2]
+        if (1.05 / (luminance + 0.05)) < 4.5:
+            raise ValueError("Choose a dark, high-contrast brand accent colour for readable PDF headings.")
         return self
 
 
