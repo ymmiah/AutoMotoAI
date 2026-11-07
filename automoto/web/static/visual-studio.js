@@ -407,6 +407,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         '<button type="button" class="btn" data-motion-remove="'+esc(track.group)+'"'+
         (chosen===0||chosen===track.keyframes.length-1?' disabled':'')+'>Remove key</button></div>'+
         '<div class="vs-motion-fields">'+
+        (chosen>0&&chosen<track.keyframes.length-1
+          ?'<label>Key time %<input type="number" data-motion-field="at" data-motion-group="'+
+            esc(track.group)+'" min="1" max="99" step="1" value="'+Math.round(key.at*100)+
+            '" aria-label="Keyframe timing for '+esc(track.group)+'"></label>':'')+
         field('dx','X offset',-250,250,1)+field('dy','Y offset',-250,250,1)+
         field('scale','Scale',0.5,1.5,0.01)+field('opacity','Opacity',0,1,0.05)+
         field('rotation','Rotation',-45,45,1)+
