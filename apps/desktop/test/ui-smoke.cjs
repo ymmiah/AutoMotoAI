@@ -102,7 +102,7 @@ let browser;
   await page.locator('#daSource').waitFor();
   assert.equal(await page.locator('#daMode').innerText(), 'Editable draft');
   await page.locator('#daName').fill('Document smoke report');
-  await page.locator('#daSource').fill('# Document smoke report\\n\\n## Findings\\n\\nOriginal body wording for review.');
+  await page.locator('#daSource').fill('# Document smoke report\n\n## Findings\n\nOriginal body wording for review.');
   assert.match(await page.locator('#daPaper h1').innerText(),/Document smoke report/);
   const savingDocument=page.waitForResponse(r=>r.url().includes('/api/documents/save')&&r.request().method()==='POST');
   await page.locator('#daSave').click();
