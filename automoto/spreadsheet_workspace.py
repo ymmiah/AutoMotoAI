@@ -295,6 +295,9 @@ def _write_xlsx(path: Path, workbook: dict[str, Any]) -> None:
 
 
 def _safe_csv_cell(value: Any) -> str:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        # True numeric cells, including negatives, are not spreadsheet formulas.
+        return str(value)
     text = "" if value is None else str(value)
     # CSV clients may interpret any of these prefixes as formula instructions.
     if text.lstrip().startswith(("=", "+", "-", "@")) or text.startswith(("\t", "\r", "\n")):
