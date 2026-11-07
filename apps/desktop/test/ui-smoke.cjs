@@ -522,16 +522,21 @@ let browser;
   assert.equal(await page.locator('#saiProposal').isHidden(),true);
 
   // V6 approval validation never writes. A malicious or stale digest cannot apply changes.
-  const validatingV6=await page.request.post(base+'/api/spreadsheets/ai/validate',{
-    data:{
-      workbook:{name:'QA offline workbook',calculation_mode:'formulas',sheets:[{
-        name:'Sheet1',rows:[['Item','Value'],['',20,null]]
-      }]},
-      sheet:0,target_cell:'C2',original:null,proposal:'=B2*2',mode:'formula',
-      snapshot_sha256:'0'.repeat(64),approve:true
-    }
+  const validatingV6=await page.evaluate(async()=>{
+    const response=await fetch('/api/spreadsheets/ai/validate',{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        workbook:{name:'QA offline workbook',calculation_mode:'formulas',sheets:[{
+          name:'Sheet1',rows:[['Item','Value'],['',20,null]]
+        }]},
+        sheet:0,target_cell:'C2',original:null,proposal:'=B2*2',mode:'formula',
+        snapshot_sha256:'0'.repeat(64),approve:true
+      })
+    });
+    return response.status;
   });
-  assert.equal(validatingV6.status(),409);
+  assert.equal(validatingV6,409);
   await page.screenshot({path:path.join(output,'invoice-spreadsheet-v6-offline-ai.png')});
 
   await page.locator('#ssTabInvoice').click();
