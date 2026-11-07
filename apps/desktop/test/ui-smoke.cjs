@@ -594,6 +594,67 @@ let browser;
   assert.equal(pdfDownload.status(),200);
   assert.ok((await pdfDownload.body()).subarray(0,5).toString()==='%PDF-');
   await page.screenshot({path:path.join(output,'invoice-spreadsheet-v4-quotation-pdf.png')});
+
+  // V5: user-confirmed cash, planned exclusion, private snapshots and real reporting.
+  await page.locator('#ssTabFinance').click();
+  await page.locator('#fiName').fill('QA cash-flow test');
+  await page.locator('#fiOpening').fill('10.00');
+  await page.locator('#fiFrom').fill('2026-01-01');
+  await page.locator('#fiTo').fill('2026-12-31');
+  await page.locator('#fiAdd').click();
+  await page.locator('#fiEntries [data-index="0"][data-key="transaction_date"]').fill('2026-11-07');
+  await page.locator('#fiEntries [data-index="0"][data-key="amount"]').fill('120.00');
+  await page.locator('#fiEntries [data-index="0"][data-key="description"]').fill('Confirmed service receipt');
+  await page.locator('#fiEntries [data-index="0"][data-key="status"]').selectOption('actual');
+  await page.locator('#fiAdd').click();
+  await page.locator('#fiEntries [data-index="1"][data-key="kind"]').selectOption('expense');
+  await page.locator('#fiEntries [data-index="1"][data-key="amount"]').fill('20.00');
+  await page.locator('#fiEntries [data-index="1"][data-key="description"]').fill('Confirmed software spend');
+  await page.locator('#fiEntries [data-index="1"][data-key="status"]').selectOption('actual');
+  await page.locator('#fiAdd').click();
+  await page.locator('#fiEntries [data-index="2"][data-key="amount"]').fill('1000.00');
+  await page.locator('#fiEntries [data-index="2"][data-key="description"]').fill('Forecast only');
+  assert.equal(await page.locator('#fiEntries [data-index="2"][data-key="status"]').inputValue(),'planned');
+  const analysingV5=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/finance/analyse')&&r.request().method()==='POST');
+  await page.locator('#fiAnalyse').click();
+  const analysisResponse=await analysingV5;
+  assert.equal(analysisResponse.status(),200);
+  const financeReport=await analysisResponse.json();
+  assert.equal(financeReport.revenue,'120.00');
+  assert.equal(financeReport.expenses,'20.00');
+  assert.equal(financeReport.operating_surplus,'100.00');
+  assert.equal(financeReport.closing_cash,'110.00');
+  assert.equal(financeReport.planned_revenue,'1000.00');
+  assert.equal(financeReport.invoices_included,false);
+  await page.waitForFunction(()=>document.querySelector('#fiMetrics')?.textContent?.includes('GBP 110.00'));
+  assert.ok(await page.locator('#fiChart .fi-bar-track').count()>=2);
+
+  const savingV5=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/finance/save')&&r.request().method()==='POST');
+  await page.locator('#fiSave').click();
+  const savedV5=await savingV5;
+  assert.equal(savedV5.status(),200);
+  const financePath=(await savedV5.json()).path;
+  assert.ok(financePath.endsWith('.finance.json'));
+  const loadedV5=await page.request.get(base+'/api/spreadsheets/finance/load?path='+
+    encodeURIComponent(financePath));
+  assert.equal(loadedV5.status(),200);
+  assert.equal((await loadedV5.json()).book.entries.length,3);
+
+  const exportingV5=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/finance/export')&&r.request().method()==='POST');
+  await page.locator('#fiExportPDF').click();
+  const exportedV5=await exportingV5;
+  assert.equal(exportedV5.status(),200);
+  const reportPDF=await exportedV5.json();
+  assert.equal(reportPDF.verified,false);
+  assert.ok(reportPDF.path.endsWith('.pdf'));
+  const financePDFDownload=await page.request.get(base+'/api/files/download?path='+
+    encodeURIComponent(reportPDF.path));
+  assert.equal(financePDFDownload.status(),200);
+  assert.equal((await financePDFDownload.body()).subarray(0,5).toString(),'%PDF-');
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v5-financial-dashboard.png')});
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
