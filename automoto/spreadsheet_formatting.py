@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import math
 import re
-from copy import copy
 from typing import Any, Literal
 
 from fastapi import HTTPException
@@ -16,7 +15,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 COLUMN = re.compile(r"^[A-P]$")
-CELL = re.compile(r"^([A-P])([1-9][0-9]?)$")
+CELL = re.compile(r"^([A-P])(100|[1-9][0-9]?)$")
 COLOUR = r"^#[0-9A-Fa-f]{6}$"
 FORMAT_MAP = {
     "general": "General",
