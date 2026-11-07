@@ -607,7 +607,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
         op.cell=Number(at("daRichCell").value);
         op.expected=at("daRichCurrent").value;
         op.text=at("daRichNew").value;
-      }else op.values=at("daRichNew").value.split(/\\r?\\n/);
+      }else op.values=at("daRichNew").value.split(/\r?\n/);
     }else if(action==="insert_image"){
       const image=at("daRichImage").files?.[0];
       if(!image){richStatus("Choose a private PNG or JPEG file.",true);return;}
