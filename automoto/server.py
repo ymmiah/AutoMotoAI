@@ -123,6 +123,8 @@ from automoto import document_workspace
 app.include_router(document_workspace.router)  # private document library and Office-backed drafts
 from automoto import document_ai
 app.include_router(document_ai.router)  # explicitly requested, local-only AI document suggestions
+from automoto import document_rich
+app.include_router(document_rich.router)  # authenticated non-destructive DOCX editing
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
