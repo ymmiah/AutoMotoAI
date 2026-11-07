@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
+from pypdf.errors import PdfReadError
 
 from automoto import office, tenancy, local_llm
 from automoto.document_ai import _loopback_ollama, _selected_model
@@ -93,7 +94,6 @@ def _snapshot(source: PinnedSource) -> tuple[list[tuple[str, int | None, str]], 
             sections = [("Extracted Word text", None, office.read_docx(path))]
         else:
             from pypdf import PdfReader
-            from pypdf.errors import PdfReadError
             reader = PdfReader(str(path))
             if reader.is_encrypted:
                 raise HTTPException(422, "Encrypted PDFs require an independently unlocked copy.")
@@ -108,7 +108,7 @@ def _snapshot(source: PinnedSource) -> tuple[list[tuple[str, int | None, str]], 
                     break
     except HTTPException:
         raise
-    except (OSError, ValueError, TypeError, UnicodeError, KeyError, IndexError, EOFError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError, KeyError, IndexError, EOFError, PdfReadError) as exc:
         raise HTTPException(422, "Could not safely extract this source: " + str(exc)[:160]) from None
     bounded = []
     remaining = MAX_SOURCE_CHARS
