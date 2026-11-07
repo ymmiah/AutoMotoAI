@@ -1,7 +1,7 @@
 /* Pure, offline v1 spreadsheet view model — no code execution, no formula evaluator. */
 export const MAX_SHEETS=5, MAX_ROWS=100, MAX_COLS=16;
 export function blankBook(){
-  return {name:"Untitled workbook",sheets:[{name:"Sheet1",rows:[["Item","Value"],["",""]]}]};
+  return {name:"Untitled workbook",calculation_mode:"formulas",sheets:[{name:"Sheet1",rows:[["Item","Value"],["",""]]}]};
 }
 export function coerceCell(raw){
   const text=String(raw??"");
@@ -46,7 +46,9 @@ export function workbookPayload(book){
     });
     return {name:label,rows};
   });
-  return {name,sheets};
+  const mode=book.calculation_mode;
+  if(mode!==undefined&&mode!=="literal"&&mode!=="formulas")throw Error("Unknown formula mode.");
+  return {...(mode===undefined?{}:{calculation_mode:mode}),name,sheets};
 }
 export function invoicePayload(form,lines){
   if(!Array.isArray(lines)||lines.length<1||lines.length>40)throw Error("Add between one and forty invoice items.");
@@ -57,5 +59,34 @@ export function invoicePayload(form,lines){
     currency:String(form.currency||"GBP"),tax_rate:String(form.tax_rate??"0"),
     lines:lines.map(line=>({description:String(line.description||"").trim(),
       quantity:String(line.quantity||""),unit_price:String(line.unit_price||"")}))
+  };
+}
+
+
+// V2 bounded undo/redo: snapshots include formula mode, sheet data and names.
+// No data is sent or persisted when navigating history.
+export function createWorkbookHistory(initial,limit=40){
+  const clone=value=>JSON.parse(JSON.stringify(value));
+  let present=clone(initial),past=[],future=[];
+  const state=()=>({canUndo:past.length>0,canRedo:future.length>0,
+    undoDepth:past.length,redoDepth:future.length});
+  return {
+    state,
+    reset(next){present=clone(next);past=[];future=[];return clone(present);},
+    record(next){
+      if(JSON.stringify(present)===JSON.stringify(next))return state();
+      past.push(present);
+      if(past.length>limit)past.shift();
+      present=clone(next);future=[];
+      return state();
+    },
+    undo(){
+      if(!past.length)return null;
+      future.push(present);present=past.pop();return clone(present);
+    },
+    redo(){
+      if(!future.length)return null;
+      past.push(present);present=future.pop();return clone(present);
+    }
   };
 }
