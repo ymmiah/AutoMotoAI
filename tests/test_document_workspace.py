@@ -194,3 +194,35 @@ def test_pdf_export_uses_existing_local_office_converter(client, monkeypatch):
     assert response.status_code == 501, response.text
     assert not list((sandbox.default_root() / "artifacts" / "documents").glob("*.pdf")) if (
         sandbox.default_root() / "artifacts" / "documents").exists() else True
+
+
+def test_pdf_powerpoint_and_excel_imports_are_explicitly_read_only(client):
+    from pypdf import PdfWriter
+    from pptx import Presentation
+    from pptx.util import Inches
+    from openpyxl import Workbook
+
+    root = sandbox.default_root() / "uploads"
+    root.mkdir(parents=True, exist_ok=True)
+    writer = PdfWriter()
+    writer.add_blank_page(width=600, height=800)
+    with (root / "source.pdf").open("wb") as stream:
+        writer.write(stream)
+    slides = Presentation()
+    slide = slides.slides.add_slide(slides.slide_layouts[5])
+    slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1)).text = "Original slide caption"
+    slides.save(str(root / "source.pptx"))
+    workbook = Workbook()
+    workbook.active["A1"] = "Original spreadsheet cell"
+    workbook.save(str(root / "source.xlsx"))
+    for name, excerpt in [("source.pdf", "PDF: 1 page"),
+                          ("source.pptx", "Original slide caption"),
+                          ("source.xlsx", "Original spreadsheet cell")]:
+        response = client.get(BASE + "/open", headers=AUTH,
+                              params={"path": f"uploads/{name}"})
+        assert response.status_code == 200, (name, response.text)
+        data = response.json()
+        assert data["editable"] is False
+        assert excerpt in data["extracted_text"]
+        assert data["sha256"] == hashlib.sha256((root / name).read_bytes()).hexdigest()
+        assert "read-only extraction" in data["notice"].lower()
