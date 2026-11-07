@@ -365,7 +365,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     const visible=new Set(filterIndices(currentSheet(),viewColumn,viewFilter));
     for(let r=0;r<gridRows;r++){
       const row=document.createElement("tr");
-      row.hidden=Boolean(viewFilter)&&r<currentSheet().rows.length&&!visible.has(r);
+      row.hidden=Boolean(viewFilter)&&!visible.has(r);
       const number=document.createElement("th");number.scope="row";number.textContent=String(r+1);row.append(number);
       for(let c=0;c<gridCols;c++){
         const td=document.createElement("td"),input=document.createElement("input");
