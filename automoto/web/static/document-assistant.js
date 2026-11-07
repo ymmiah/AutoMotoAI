@@ -136,6 +136,43 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
             <div class="da-extraction"><div class="da-section-head"><strong>Extracted text</strong><span class="muted small">Read-only · not layout-equivalent</span></div>
               <pre id="daExtracted"></pre></div>
           </div>
+          <details class="da-rich" id="daRich" hidden>
+            <summary>Advanced Word copy editing · preserve the original</summary>
+            <div class="da-rich-content">
+              <p class="muted small">Edit a specific existing Word text run, paragraph style or simple table cell, append a table row, or insert your own uploaded image. These actions create a NEW genuine Word file and never overwrite the original. Review the exported pages.</p>
+              <p id="daRichStats" class="muted small">Loading Word structure…</p>
+              <div class="da-rich-controls">
+                <label>Action<select class="input" id="daRichAction">
+                  <option value="replace_run">Replace exact text run</option>
+                  <option value="set_style">Change paragraph style</option>
+                  <option value="table_cell">Edit a simple table cell</option>
+                  <option value="append_row">Append one table row</option>
+                  <option value="insert_image">Insert an uploaded image</option>
+                </select></label>
+                <label id="daRichParagraphLabel">Paragraph<select class="input" id="daRichParagraph"></select></label>
+                <label id="daRichRunLabel">Text run<select class="input" id="daRichRun"></select></label>
+                <label id="daRichStyleLabel" hidden>New style<select class="input" id="daRichStyle">
+                  <option value="Normal">Normal</option><option value="Title">Title</option>
+                  <option value="Subtitle">Subtitle</option><option value="Quote">Quote</option>
+                  <option value="Heading 1">Heading 1</option><option value="Heading 2">Heading 2</option>
+                  <option value="Heading 3">Heading 3</option><option value="Heading 4">Heading 4</option>
+                  <option value="Heading 5">Heading 5</option><option value="Heading 6">Heading 6</option>
+                </select></label>
+                <label id="daRichTableLabel" hidden>Table<select class="input" id="daRichTable"></select></label>
+                <label id="daRichRowLabel" hidden>Row number (0-based)<input class="input" type="number" id="daRichRow" min="0" max="11" value="0"></label>
+                <label id="daRichCellLabel" hidden>Column number (0-based)<input class="input" type="number" id="daRichCell" min="0" max="11" value="0"></label>
+                <label id="daRichImageLabel" hidden>Image file (PNG or JPEG)<input class="input" type="file" id="daRichImage" accept=".png,.jpg,.jpeg,image/png,image/jpeg"></label>
+                <label id="daRichWidthLabel" hidden>Image width (cm)<input class="input" type="number" id="daRichWidth" min="1" max="14" step="0.5" value="5"></label>
+              </div>
+              <label id="daRichCurrentLabel" class="da-rich-description">Existing text
+                <textarea id="daRichCurrent" rows="2" readonly aria-label="Original Word text"></textarea></label>
+              <label id="daRichNewLabel" class="da-rich-description">Replacement text
+                <textarea id="daRichNew" rows="3" maxlength="12000" aria-label="Replacement Word text"></textarea></label>
+              <p class="muted small" id="daRichInstruction">Replace only the selected run to keep surrounding Word formatting.</p>
+              <button type="button" class="btn primary" id="daRichSave">Create revised DOCX copy</button>
+              <p class="da-ai-status" id="daRichStatus" role="status" aria-live="polite">No changes have been made.</p>
+            </div>
+          </details>
           <section class="da-replace" id="daReplace" hidden>
             <h3>Save a revised Word copy</h3>
             <p class="muted small">Find and replace exact text in a NEW DOCX copy. Your uploaded file is never overwritten; inspect the exported copy before using it.</p>
