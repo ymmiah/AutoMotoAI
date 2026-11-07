@@ -54,6 +54,8 @@ def test_requires_auth_and_scoped_hosted_routes(client):
 
 def test_deterministic_local_retrieval_never_calls_model_or_writes_files(client, monkeypatch):
     p = make_text("paper.txt", "The annual research budget for 2025 was £120,000. " * 40)
+    root = sandbox.default_root()
+    before_files = {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
     info = client.get(BASE + "/source-info", params={"path": "uploads/paper.txt"}, headers=AUTH)
     assert info.status_code == 200, info.text
     assert info.json()["sha256"] == pinned(p)["sha256"]
@@ -73,7 +75,8 @@ def test_deterministic_local_retrieval_never_calls_model_or_writes_files(client,
     assert body["evidence"][0]["sha256"] == pinned(p)["sha256"]
     assert body["evidence"][0]["page"] is None
     assert body["evidence"][0]["quote"] in p.read_text(encoding="utf-8")
-    assert not (sandbox.default_root() / "artifacts").exists()
+    after_files = {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
+    assert after_files == before_files, "Search must not write or index any research files"
 
 
 def test_two_sources_have_unique_verified_ids_and_search_relevance(client):
