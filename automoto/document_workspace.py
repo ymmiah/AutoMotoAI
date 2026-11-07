@@ -81,7 +81,7 @@ def _allowed_source(raw: str) -> Path:
         raise HTTPException(403, "document is outside your private workspace") from None
     # A document can be imported only from an uploads folder or opened from
     # this application's own output folder; no arbitrary private files.
-    if not ((relative.parts[0] == "uploads" and len(relative.parts) >= 2)
+    if not relative.parts or not ((relative.parts[0] == "uploads" and len(relative.parts) >= 2)
             or (relative.parts[:2] == ("artifacts", "documents") and len(relative.parts) >= 3)):
         raise HTTPException(403, "open documents only from uploads or Document Assistant")
     if path.is_symlink() or any(p.is_symlink() for p in path.parents if p != _root()):
@@ -264,6 +264,8 @@ def replace_copy(body: ReplaceIn, request: Request):
         if not count:
             raise HTTPException(422, "the exact phrase was not found; no copy was saved")
         office.inspect_file(temporary)
+        if temporary.stat().st_size > MAX_DOCUMENT_BYTES:
+            raise HTTPException(413, "revised document exceeds the 20 MB document limit")
         if _sha(source) != body.sha256:
             raise HTTPException(409, "original changed during editing; no copy was saved")
         _quota_check(temporary.stat().st_size)
