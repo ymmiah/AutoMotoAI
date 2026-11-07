@@ -218,7 +218,7 @@ def save_document(body: DocumentSource, request: Request):
         draft["options"] = body.options.model_dump()
     if body.publication is not None:
         draft["schema"] = 3
-        draft["publication"] = body.publication.model_dump()
+        draft["publication"] = body.publication.model_dump(exclude_none=True)
     raw = json.dumps(draft, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(raw) > MAX_DRAFT_CHARS * 4 + 1024:
         raise HTTPException(413, "document draft is too large")
