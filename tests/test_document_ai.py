@@ -186,3 +186,26 @@ def test_imported_docx_is_server_verified_and_never_modified(client, monkeypatch
     outside = client.post(BASE, headers=AUTH, json={
         "mode": "summary", "source_path": "../../secret.docx", "source_sha256": digest})
     assert outside.status_code in (403, 404)
+
+
+def test_imported_source_modified_during_model_generation_is_rejected(client, monkeypatch):
+    root = sandbox.default_root()
+    original = root / "uploads" / "changing.docx"
+    original.parent.mkdir(parents=True, exist_ok=True)
+    doc = Document()
+    doc.add_paragraph("The dated evidence remains in the document.")
+    doc.save(original)
+    digest = hashlib.sha256(original.read_bytes()).hexdigest()
+    _fake_ollama(monkeypatch, {})
+    def changed_while_generating(model, mode, selected):
+        revised = Document()
+        revised.add_paragraph("This file was changed after the review began.")
+        revised.save(original)
+        return {"points": [{"claim": "Evidence was present.", "quote": "The dated evidence"}]}
+    monkeypatch.setattr(document_ai, "_ask_model", changed_while_generating)
+    response = client.post(BASE, headers=AUTH, json={
+        "mode": "summary", "source_path": "uploads/changing.docx",
+        "source_sha256": digest,
+    })
+    assert response.status_code == 409, response.text
+    assert "changed" in response.text.lower()
