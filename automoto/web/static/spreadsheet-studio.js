@@ -5,6 +5,7 @@ import {blankBook,setGridCell,workbookPayload,invoicePayload,createWorkbookHisto
 import {styleAt,applyCellStyle,setColumnRule,validateEntry,filterIndices,sortSheetRows,NUMBER_FORMATS}
   from "./spreadsheet-editing.js";
 import {mountCommercialStudio} from "./commercial-studio.js";
+import {mountFinancialStudio} from "./financial-studio.js";
 
 export async function mountSpreadsheetStudio({api,page,uploadFile}){
   const html='<div class="ss-shell">'+
@@ -12,6 +13,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       '<button type="button" role="tab" id="ssTabBook" aria-selected="true" aria-controls="ssBook">Spreadsheets</button>'+
       '<button type="button" role="tab" id="ssTabInvoice" aria-selected="false" aria-controls="ssInvoice">Basic invoices</button>'+
       '<button type="button" role="tab" id="ssTabCommercial" aria-selected="false" aria-controls="ssCommercial">Business documents</button>'+
+      '<button type="button" role="tab" id="ssTabFinance" aria-selected="false" aria-controls="ssFinance">Financial dashboard</button>'+
     '</div>'+
     '<section id="ssBook" role="tabpanel" aria-labelledby="ssTabBook">'+
       '<div class="ss-panel ss-tools"><div><h3>Workbook editor</h3><p>Safe offline formulas, dependencies, validation and private workbook drafts.</p></div>'+
@@ -100,6 +102,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       '<p class="ss-hint">Draft only. Verify seller identity, VAT registration, terms, currency and tax before you issue any invoice. PDF invoicing and richer templates follow in v4.</p>'+
     '</section>'+
     '<section id="ssCommercial" role="tabpanel" aria-labelledby="ssTabCommercial" hidden><div id="ssCommercialRoot"></div></section>'+
+    '<section id="ssFinance" role="tabpanel" aria-labelledby="ssTabFinance" hidden><div id="ssFinanceRoot"></div></section>'+
     '<p id="ssStatus" class="ss-status" role="status" aria-live="polite">Ready. Changes are kept in this session until you save or export.</p>'+
     '<div id="ssDownload" class="ss-download" aria-live="polite"></div></div>';
   const root=page("Invoice & Spreadsheet Intelligence",
@@ -129,21 +132,23 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     el("ssBook").hidden=tab!=="book";
     el("ssInvoice").hidden=tab!=="invoice";
     el("ssCommercial").hidden=tab!=="commercial";
-    for(const [name,id] of [["book","ssTabBook"],["invoice","ssTabInvoice"],["commercial","ssTabCommercial"]]){
+    el("ssFinance").hidden=tab!=="finance";
+    for(const [name,id] of [["book","ssTabBook"],["invoice","ssTabInvoice"],["commercial","ssTabCommercial"],["finance","ssTabFinance"]]){
       el(id).setAttribute("aria-selected",String(tab===name));
     }
   };
   el("ssTabBook").onclick=()=>setTab("book");
   el("ssTabInvoice").onclick=()=>setTab("invoice");
   el("ssTabCommercial").onclick=()=>setTab("commercial");
+  el("ssTabFinance").onclick=()=>setTab("finance");
   root.querySelector(".ss-tabs").onkeydown=e=>{
     if(!["ArrowLeft","ArrowRight"].includes(e.key))return;
     e.preventDefault();
-    const tabs=["book","invoice","commercial"];
-    const current=e.target===el("ssTabCommercial")?2:e.target===el("ssTabInvoice")?1:0;
+    const tabs=["book","invoice","commercial","finance"];
+    const current=e.target===el("ssTabFinance")?3:e.target===el("ssTabCommercial")?2:e.target===el("ssTabInvoice")?1:0;
     const next=tabs[(current+(e.key==="ArrowRight"?1:tabs.length-1))%tabs.length];
     setTab(next);
-    el(next==="book"?"ssTabBook":next==="invoice"?"ssTabInvoice":"ssTabCommercial").focus();
+    el(next==="book"?"ssTabBook":next==="invoice"?"ssTabInvoice":next==="commercial"?"ssTabCommercial":"ssTabFinance").focus();
   };
   const heading=col=>String.fromCharCode(65+col);
   const syncName=()=>{book.name=el("ssBookName").value;};
@@ -669,6 +674,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   };
   openBook(book);renderInvoiceLines();
   mountCommercialStudio({host:el("ssCommercialRoot"),api,status,showDownload});
+  mountFinancialStudio({host:el("ssFinanceRoot"),api,status,showDownload});
   try{await refreshLibrary();}catch(error){status("Could not load workspace files: "+error.message,true);}
   return root;
 }
