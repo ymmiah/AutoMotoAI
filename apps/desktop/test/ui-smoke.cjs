@@ -232,6 +232,32 @@ let browser;
   assert.match(await page.locator('#daExtracted').innerText(),/Original body wording for review/);
   assert.equal(await page.locator('#daEditBody').isVisible(),false);
   assert.equal(await page.locator('#daReplace').isVisible(),true);
+  // v5: real DOCX structure inspection and explicit create-only copy editing.
+  await page.locator('#daRichParagraph option').first().waitFor({state:'attached'});
+  assert.equal(await page.locator('#daRich').isVisible(),true);
+  await page.locator('#daRich summary').click();
+  await page.locator('#daRichAction').selectOption('set_style');
+  await page.locator('#daRichParagraph').selectOption('2');
+  await page.locator('#daRichStyle').selectOption('Heading 3');
+  const editingCopy=page.waitForResponse(r=>r.url().includes('/api/documents/docx/revise')&&r.request().method()==='POST');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#daRichSave').click();
+  const updatedWord=await editingCopy;
+  assert.equal(updatedWord.status(),200,await updatedWord.text());
+  const richCopyPath=(await updatedWord.json()).path;
+  assert.ok(richCopyPath.endsWith('.docx'));
+  const richCopyDownload=await page.request.get(base+'/api/files/download?path='+encodeURIComponent(richCopyPath));
+  assert.equal(richCopyDownload.status(),200);
+  assert.equal((await richCopyDownload.body()).subarray(0,2).toString('ascii'),'PK');
+  assert.match(await page.locator('#daRichStatus').innerText(),/separate Word copy/i);
+  const importPath=await page.locator('#daLibrary [data-da-open]')
+    .filter({hasText:'review-import.docx'}).first().getAttribute('data-da-open');
+  const untouchedOriginal=await page.request.get(base+'/api/files/download?path='+
+    encodeURIComponent(importPath));
+  assert.equal(untouchedOriginal.status(),200);
+  assert.ok((await untouchedOriginal.body()).equals(wordBytes),
+    'the original imported Word content must remain byte-for-byte unchanged');
+  await page.screenshot({path:path.join(output,'document-assistant-v5-word-copy.png')});
   await page.locator('#daFind').fill('Original body wording');
   await page.locator('#daReplaceWith').fill('Reviewed and approved wording');
   page.once('dialog',dialog=>dialog.accept());

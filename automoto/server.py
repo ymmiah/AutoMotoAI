@@ -123,6 +123,8 @@ from automoto import document_workspace
 app.include_router(document_workspace.router)  # private document library and Office-backed drafts
 from automoto import document_ai
 app.include_router(document_ai.router)  # explicitly requested, local-only AI document suggestions
+from automoto import document_rich
+app.include_router(document_rich.router)  # authenticated non-destructive DOCX editing
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
@@ -133,7 +135,7 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/visual/studio/animation-preview",
              "/api/visual/studio/document/export",
              "/api/documents/open", "/api/documents/export", "/api/documents/preflight", "/api/documents/replace-copy",
-             "/api/documents/ai/review")
+             "/api/documents/ai/review", "/api/documents/docx/structure", "/api/documents/docx/revise")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
 
