@@ -1,0 +1,43 @@
+/* V6 review-first offline intelligence; untrusted data never becomes markup. */
+.ss-ai-panel{min-width:0}
+.sai-head{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.sai-head h3{font-size:17px;margin:4px 0}
+.sai-head p{max-width:730px;color:var(--dim);line-height:1.55;font-size:12px}
+.sai-kicker{font-size:10px;letter-spacing:.1em;font-weight:800;color:var(--accent)}
+.sai-note{font-size:11px;line-height:1.65;color:var(--dim);padding:11px 13px;
+ border:1px solid var(--line);border-radius:9px;background:var(--bg2);margin-top:10px}
+.sai-note strong{color:var(--text)}
+.sai-controls{display:grid;grid-template-columns:minmax(170px,2fr) 110px auto;gap:10px;
+ align-items:end;margin:15px 0}
+.sai-controls label{display:grid;gap:5px;font-size:12px;font-weight:650;color:var(--dim)}
+.sai-controls .input{width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--line2);
+ background:var(--bg2);color:var(--text);border-radius:8px;font-size:12px}
+.sai-controls textarea{resize:vertical;line-height:1.5}
+.sai-controls .sai-prompt,.sai-controls .sai-consent{grid-column:1/-1}
+.sai-controls .sai-consent{display:flex;align-items:flex-start;gap:10px;line-height:1.5}
+.sai-controls .sai-consent input{margin-top:3px}
+.sai-controls #saiReview{grid-column:1/-1;justify-self:start}
+.sai-status{font-size:12px;color:var(--dim);padding:11px 13px;border:1px solid var(--line);
+ background:var(--bg2);border-radius:9px}
+.sai-status.sai-error{color:var(--bad);border-color:var(--bad)}
+.sai-findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:12px}
+.sai-finding{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg2);min-width:0}
+.sai-finding strong{font-size:12px;color:var(--text)}
+.sai-finding p{font-size:12px;color:var(--dim);line-height:1.55;margin:7px 0}
+.sai-finding blockquote{font-size:11px;border-left:2px solid var(--accent);padding-left:9px;
+ color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere}
+.sai-proposal{display:grid;gap:10px;border:1px solid var(--line);padding:15px;
+ background:var(--panel2);border-radius:12px;margin-top:13px}
+.sai-proposal[hidden]{display:none!important}
+.sai-proposal h4{margin:0;font-size:14px}
+.sai-diff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sai-diff>div{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg2);min-width:0}
+.sai-diff strong{font-size:12px}
+.sai-diff pre{font:12px/1.5 var(--mono);margin:7px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text)}
+.sai-evidence{color:var(--dim);font-size:11px}
+.sai-evidence p{margin:4px 0;overflow-wrap:anywhere}
+.sai-actions{display:flex;flex-wrap:wrap;gap:9px}
+.sai-panel :is(button,input,textarea,select):focus-visible,
+.ss-ai-panel :is(button,input,textarea,select):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:680px){.sai-controls{grid-template-columns:minmax(0,1fr) 90px}
+.sai-controls #saiUseSelected{grid-column:1/-1}.sai-diff{grid-template-columns:1fr}}
