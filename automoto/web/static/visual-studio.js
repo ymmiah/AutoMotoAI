@@ -6,6 +6,8 @@ import {layerUnits,unitKey,toggleLayer,moveLayer,selectionBox,resizeSelection,
         sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
 import {BRAND_COLOUR_KEYS,paletteFromKit,applyBrandKit,brandTextRole}
   from "./visual-studio-brands.js";
+import {normaliseMotion,addMotionKey,removeMotionKey,editMotionKey,MOTION_FIELDS,MOTION_EASINGS}
+  from "./visual-studio-motion.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const copy=v=>JSON.parse(JSON.stringify(v));
@@ -206,7 +208,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
     '<option value="pptx">Editable PowerPoint</option><option value="pdf">PDF</option><option value="jpg">JPEG</option><option value="gif">Animated GIF</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Motion <select id="vsEffect"><option value="flow">Flow</option><option value="pulse">Pulse</option>'+
-    '<option value="reveal">Reveal</option><option value="float">Float</option><option value="sequence">Layer timeline</option></select></label>'+
+    '<option value="reveal">Reveal</option><option value="float">Float</option><option value="sequence">Layer timeline</option>'+
+    '<option value="keyframes">Keyframe motion</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Frames <input id="vsFrames" type="number" min="8" max="48" value="20"></label>'+
     '<label class="vs-gif-settings" hidden>Milliseconds/frame <input id="vsDelay" type="number" min="50" max="500" value="110"></label>'+
     '<label class="vs-gif-settings" hidden>Loop <select id="vsLoop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label>'+
@@ -214,9 +217,13 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<span class="spacer"></span><button class="btn primary" id="vsExport">'+icon("download")+' Export</button>'+
     '<div id="vsOutput" class="vs-output" hidden></div></section>'+
     '<section class="vs-timeline" id="vsTimeline" hidden aria-label="Animated layer timeline">'+
-    '<div class="vs-time-head"><strong>GIF scene timeline</strong>'+
-    '<span>Set when each group appears; export keeps the exact timing.</span></div>'+
+    '<div class="vs-time-head"><strong id="vsTimeTitle">GIF scene timeline</strong>'+
+    '<span id="vsTimeHelp">Set when each group appears; export keeps the exact timing.</span></div>'+
     '<div id="vsTracks" class="vs-tracks"></div>'+
+    '<div class="vs-toolbar vs-motion-actions" id="vsMotionControls" hidden>'+
+    '<button type="button" class="btn primary" id="vsMotionPlay">Play motion preview</button>'+
+    '<button type="button" class="btn" id="vsMotionStop">Stop playback</button>'+
+    '<span class="vs-inspector-note">Real GIF preview is generated locally; no per-frame network polling.</span></div>'+
     '<label class="vs-scrub">Preview at <output id="vsFrameLabel">0%</output>'+
     '<input id="vsPlayhead" type="range" min="0" max="99" step="1" value="0" aria-label="Preview timeline position"></label>'+
     '</section></div>';
@@ -225,7 +232,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
-  let selectionKeys=new Set();
+  let selectionKeys=new Set(),motionSelected=new Map();
   let pages=[{name:"Page 1",spec}],activePage=0;
   let pendingRepair=null,repairRequest=0,inspectionRequest=0;
   let previewSequence=0,previewTimer=null,drag=null;
@@ -356,19 +363,57 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     }).join("")||'<p class="vs-inspector-note">No objects yet. Add text, shapes or images.</p>';
   }
   function drawTimeline(){
-    const enabled=at("vsFormat").value==="gif" && at("vsEffect").value==="sequence";
+    const gif=at("vsFormat").value==="gif",effect=at("vsEffect").value;
+    const enabled=gif && (effect==="sequence"||effect==="keyframes");
     at("vsTimeline").hidden=!enabled;
+    at("vsMotionControls").hidden=!gif||effect!=="keyframes";
     if(!enabled)return;
-    const config=normaliseSequence(spec);
-    if(!config){
-      at("vsTracks").innerHTML='<p class="vs-inspector-note">Add a grouped workflow or feature cards to use this animation timeline.</p>';
+    if(effect==="sequence"){
+      at("vsTimeTitle").textContent="GIF scene timeline";
+      at("vsTimeHelp").textContent="Set when each group appears; export keeps the exact timing.";
+      const config=normaliseSequence(spec);
+      if(!config){
+        at("vsTracks").innerHTML='<p class="vs-inspector-note">Group visible layers before using the reveal timeline.</p>';
+        return;
+      }
+      at("vsTracks").innerHTML=config.stages.map(({group,start},index)=>
+         '<label class="vs-track"><span class="vs-track-name">'+esc(group)+'</span>'+
+         '<input type="range" data-track="'+index+'" min="0" max="90" step="5" value="'+Math.round(start*100)+'" aria-label="Reveal '+esc(group)+' at percent">'+
+         '<output>'+Math.round(start*100)+'%</output></label>'
+      ).join("");
       return;
     }
-    at("vsTracks").innerHTML=config.stages.map(({group,start},index)=>
-       '<label class="vs-track"><span class="vs-track-name">'+esc(group)+'</span>'+
-       '<input type="range" data-track="'+index+'" min="0" max="90" step="5" value="'+Math.round(start*100)+'" aria-label="Reveal '+esc(group)+' at percent">'+
-       '<output>'+Math.round(start*100)+'%</output></label>'
-    ).join("");
+    at("vsTimeTitle").textContent="Motion keyframe editor";
+    at("vsTimeHelp").textContent="Animate group position, size, opacity and rotation. Each track starts at 0% and ends at 100%.";
+    const config=normaliseMotion(spec);
+    if(!config){
+      at("vsTracks").innerHTML='<p class="vs-inspector-note">Group two or more native layers to create a motion track. Original photos and wording stay unchanged.</p>';
+      return;
+    }
+    at("vsTracks").innerHTML=config.tracks.map(track=>{
+      const chosen=Math.min(motionSelected.get(track.group)??0,track.keyframes.length-1);
+      motionSelected.set(track.group,chosen);
+      const key=track.keyframes[chosen];
+      const field=(name,label,min,max,step)=>'<label>'+label+
+        '<input type="number" data-motion-field="'+name+'" data-motion-group="'+esc(track.group)+
+        '" min="'+min+'" max="'+max+'" step="'+step+'" value="'+key[name]+'" aria-label="'+label+' for '+esc(track.group)+'"></label>';
+      return '<section class="vs-motion-track" data-motion-group="'+esc(track.group)+'">'+
+        '<div class="vs-motion-track-head"><strong>'+esc(track.group)+'</strong>'+
+        '<label>Keyframe <select data-motion-select="'+esc(track.group)+'" aria-label="Select keyframe for '+esc(track.group)+'">'+
+        track.keyframes.map((k,i)=>'<option value="'+i+'"'+(i===chosen?' selected':'')+'>'+
+        Math.round(k.at*100)+'%</option>').join('')+'</select></label>'+
+        '<button type="button" class="btn" data-motion-add="'+esc(track.group)+'"'+
+        (track.keyframes.length>=6?' disabled':'')+'>Add at playhead</button>'+
+        '<button type="button" class="btn" data-motion-remove="'+esc(track.group)+'"'+
+        (chosen===0||chosen===track.keyframes.length-1?' disabled':'')+'>Remove key</button></div>'+
+        '<div class="vs-motion-fields">'+
+        field('dx','X offset',-250,250,1)+field('dy','Y offset',-250,250,1)+
+        field('scale','Scale',0.5,1.5,0.01)+field('opacity','Opacity',0,1,0.05)+
+        field('rotation','Rotation',-45,45,1)+
+        '<label>Easing <select data-motion-easing="'+esc(track.group)+'" aria-label="Easing for '+esc(track.group)+'">'+
+        MOTION_EASINGS.map(v=>'<option value="'+v+'"'+(key.easing===v?' selected':'')+'>'+v+'</option>').join('')+
+        '</select></label></div></section>';
+    }).join("");
   }
   function highlight(){
     overlay.replaceChildren();
