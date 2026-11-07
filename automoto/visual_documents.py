@@ -92,6 +92,14 @@ def _write(name: str, pages: list[dict[str, Any]]) -> str:
     return target.relative_to(_root()).as_posix()
 
 
+@router.post("/validate")
+def validate_document(body: DocumentIn, request: Request):
+    """Validate entire candidate document without touching the workspace."""
+    _auth(request)
+    pages, _ = _pages(body.pages)
+    return {"valid": True, "page_count": len(pages), "message": "all pages pass the export quality gate"}
+
+
 @router.post("/save")
 def save_document(body: DocumentIn, request: Request):
     _auth(request)

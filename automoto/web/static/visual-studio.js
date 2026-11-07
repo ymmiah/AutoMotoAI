@@ -4,16 +4,18 @@ import {layerUnits,unitKey,toggleLayer,moveLayer,selectionBox,resizeSelection,
         selectedLayerUnits,selectionBounds,translateLayerUnits,alignLayerUnits,
         distributeLayerUnits,groupLayerUnits,ungroupLayerUnits,snapLayerDelta,
         sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
+import {BRAND_COLOUR_KEYS,paletteFromKit,applyBrandKit,brandTextRole}
+  from "./visual-studio-brands.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const copy=v=>JSON.parse(JSON.stringify(v));
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const NS="http://www.w3.org/2000/svg";
 const PALETTES={
-  "illustrated-workflow":{ink:"#22252C",muted:"#5A606B",card:"#FFFFFF",border:"#25252D",tones:["#E8DBFA","#D6E9FF","#FFF1AA"]},
-  "editorial-light":{ink:"#172638",muted:"#526476",card:"#FFFFFF",border:"#DCE5E9",tones:["#E8F3F1","#E7ECFB","#FFF0CF"]},
-  "premium-tech":{ink:"#F8FAFC",muted:"#C3D0E1",card:"#19283E",border:"#34465E",tones:["#203D64","#234E51","#534267"]},
-  "commercial":{ink:"#2C2520",muted:"#61594F",card:"#FFFFFF",border:"#E6D8CB",tones:["#F6E3D5","#EDE1D1","#F6D9D7"]}
+  "illustrated-workflow":{background:"#FAFAF6",accent:"#6350A4",ink:"#22252C",muted:"#5A606B",card:"#FFFFFF",border:"#25252D",tones:["#E8DBFA","#D6E9FF","#FFF1AA"]},
+  "editorial-light":{background:"#F8F9F7",accent:"#246D83",ink:"#172638",muted:"#526476",card:"#FFFFFF",border:"#DCE5E9",tones:["#E8F3F1","#E7ECFB","#FFF0CF"]},
+  "premium-tech":{background:"#0D1729",accent:"#56B2FA",ink:"#F8FAFC",muted:"#C3D0E1",card:"#19283E",border:"#34465E",tones:["#203D64","#234E51","#534267"]},
+  "commercial":{background:"#FBF7F0",accent:"#A65B42",ink:"#2C2520",muted:"#61594F",card:"#FFFFFF",border:"#E6D8CB",tones:["#F6E3D5","#EDE1D1","#F6D9D7"]}
 };
 const ICONS=["check","shield","idea","chart","users","clock","target","cloud","file","image","sparkle","globe","code","lock","settings"];
 
@@ -26,8 +28,8 @@ function template(kind,theme){
     a.push({type:"rect",group:id,x,y,w,h,fill:p.card,stroke:p.border,radius:23,auto_fill:"card",auto_stroke:"border"});
     a.push({type:"rect",group:id,x:x+20,y:y+20,w:79,h:74,fill:p.tones[i%3],radius:18,auto_fill:"tone"+(i%3)});
     a.push({type:"icon",group:id,x:x+39,y:y+35,w:43,h:43,name:ico,colour:p.ink,auto_colour:"ink"});
-    a.push({type:"text",group:id,x:x+22,y:y+110,w:w-44,h:46,text:title,font_size:27,bold:true,colour:p.ink,auto_colour:"ink"});
-    a.push({type:"text",group:id,x:x+22,y:y+163,w:w-44,h:39,text:body,font_size:18,colour:p.muted,auto_colour:"muted"});
+    a.push({type:"text",group:id,x:x+22,y:y+110,w:w-44,h:46,text:title,font_size:27,style_role:"heading",bold:true,colour:p.ink,auto_colour:"ink"});
+    a.push({type:"text",group:id,x:x+22,y:y+163,w:w-44,h:39,text:body,font_size:18,style_role:"body",colour:p.muted,auto_colour:"muted"});
   };
   if(kind==="cards"){
     spec.title="Four powerful capabilities";
@@ -37,6 +39,17 @@ function template(kind,theme){
       ["Editable output","Native shapes and text","chart"],
       ["Animation","Genuine animated GIF","sparkle"]];
     for(let i=0;i<4;i++)makeCard("card"+i,70+(i%2)*575,210+Math.floor(i/2)*220,542,205,...cards[i],i);
+  }else if(kind==="brand-launch"){
+    spec.title="A confident brand introduction";
+    spec.subtitle="What we believe in, beautifully presented";
+    makeCard("story",72,254,538,248,"Our purpose","A clear message that matters.","target",0);
+    makeCard("values",669,254,538,248,"Our promise","Thoughtful details. Real value.","sparkle",1);
+  }else if(kind==="executive-brief"){
+    spec.title="Executive performance brief";
+    spec.subtitle="The decisions, evidence and next actions";
+    makeCard("outcome",65,275,367,238,"Outcomes","Highlights that matter.","chart",0);
+    makeCard("evidence",458,275,367,238,"Evidence","Measured and accountable.","shield",1);
+    makeCard("next",851,275,367,238,"Next steps","Clear ownership and action.","target",2);
   }else if(kind==="poster"){
     spec.title="Original editorial poster";
     makeCard("poster",95,250,700,275,"A more visual idea","Give your message space to stand out.","idea",0);
@@ -98,7 +111,7 @@ function relink(spec){
 export async function mountVisualStudio({api,page,toast,esc,icon}){
   const html='<div class="vs-studio">'+
     '<div class="vs-toolbar"><input class="input vs-name" id="vsName" value="My visual design" maxlength="100" aria-label="Design name">'+
-    '<label>Template <select class="input" id="vsTemplate"><option value="workflow">Workflow</option><option value="cards">Feature cards</option><option value="poster">Poster</option><option value="blank">Blank canvas</option></select></label>'+
+    '<label>Template <select class="input" id="vsTemplate"><option value="workflow">Workflow</option><option value="cards">Feature cards</option><option value="poster">Poster</option><option value="brand-launch">Brand launch</option><option value="executive-brief">Executive brief</option><option value="blank">Blank canvas</option></select></label>'+
     '<label>Theme <select class="input" id="vsTheme"><option value="illustrated-workflow">Illustrated</option><option value="editorial-light">Editorial light</option><option value="premium-tech">Premium tech</option><option value="commercial">Commercial</option></select></label>'+
     '<button class="btn" id="vsUndo">Undo</button><button class="btn" id="vsRedo">Redo</button>'+
     '<button class="btn" id="vsInspect">'+icon("check")+' Inspect & repair</button>'+
@@ -114,6 +127,29 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<button class="btn" id="vsLoad">Open</button></div>'+
     '<div class="vs-toolbar"><input id="vsTitle" class="input" aria-label="Design title" maxlength="130" placeholder="Title" style="flex:1;min-width:160px">'+
     '<input id="vsSubtitle" class="input" aria-label="Design subtitle" maxlength="250" placeholder="Subtitle" style="flex:1;min-width:160px"></div>'+
+    '<section class="vs-brands" aria-label="Reusable brand kits">'+
+    '<div class="vs-brands-head"><strong>Brand kits</strong><span class="vs-small">Private to your workspace · review before applying</span></div>'+
+    '<div class="vs-toolbar vs-brand-controls">'+
+    '<label>Kit name <input class="input" id="vsBrandName" maxlength="80" placeholder="New brand kit"></label>'+
+    '<label>Saved kit <select class="input" id="vsBrandKits" aria-label="Saved brand kits"><option value="">Select a kit</option></select></label>'+
+    '<button type="button" class="btn" id="vsBrandLoad">Load kit</button>'+
+    '<button type="button" class="btn danger" id="vsBrandDelete">Delete kit</button></div>'+
+    '<div id="vsBrandColours" class="vs-brand-colours">'+
+    BRAND_COLOUR_KEYS.map(key=>'<label>'+key.replace(/^./,c=>c.toUpperCase())+
+      '<input type="color" data-brand-colour="'+key+'" aria-label="Brand '+key+' colour"></label>').join("")+
+    '</div>'+
+    '<div class="vs-toolbar vs-brand-controls">'+
+    '<label>Heading size <input class="input" id="vsBrandHeading" type="number" min="12" max="90" value="27"></label>'+
+    '<label>Body size <input class="input" id="vsBrandBody" type="number" min="12" max="90" value="18"></label>'+
+    '<label>Original logo <select class="input" id="vsBrandLogo" aria-label="Original uploaded brand logo"><option value="">No logo selected</option></select></label></div>'+
+    '<div class="vs-toolbar vs-brand-controls">'+
+    '<button type="button" class="btn" id="vsBrandCapture">Use current palette</button>'+
+    '<button type="button" class="btn" id="vsBrandSave">Save reusable kit</button>'+
+    '<button type="button" class="btn" id="vsBrandApplyPage">Apply to page</button>'+
+    '<button type="button" class="btn" id="vsBrandApplyAll">Apply to all pages</button>'+
+    '<button type="button" class="btn" id="vsBrandPlaceLogo">Place logo on this page</button></div>'+
+    '<p class="vs-inspector-note">Only palette-linked colours and explicitly assigned heading/body styles are updated. Manual colours, locked layers, wording and image pixels are preserved.</p>'+
+    '</section>'+
     '<section class="vs-pages" aria-label="Document pages">'+
     '<div class="vs-pages-head"><strong>Document pages</strong><span id="vsPageCount" class="vs-small" role="status"></span></div>'+
     '<div id="vsPageTabs" class="vs-page-tabs" role="navigation" aria-label="Choose document page"></div>'+
@@ -403,6 +439,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(e.type==="text"){
         html+='<label class="full">Exact wording<textarea data-key="text" maxlength="1600">'+esc(e.text)+'</textarea></label>';
         field("font_size","Font size",e.font_size||22);
+        html+='<label class="full">Brand typography role<select data-key="style_role">'+
+          [['manual','Manual (preserve size)'],['heading','Heading'],['body','Body']].map(([value,label])=>
+          '<option value="'+value+'"'+((e.style_role||'manual')===value?' selected':'')+'>'+
+          label+'</option>').join('')+'</select></label>';
         field("colour","Text colour",e.colour||"#22252C","color");
       }else if(e.type==="rect"){
         field("fill","Fill",e.fill||"#FFFFFF","color");
@@ -430,7 +470,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
         const value=numeric?Number(input.value):input.value;
         if(["x","y","w","h","x1","y1","x2","y2"].includes(key)){
           e[key]=clamp(value,key==="w"||key==="h"?1:0,key.startsWith("y")||key==="h"?spec.height:spec.width);
-        }else if(key==="font_size"){e[key]=clamp(value,12,90);}
+        }else if(key==="font_size"){e[key]=clamp(value,12,90);delete e.style_role;}
+        else if(key==="style_role"){brandTextRole(e,value);}
         else if(key==="radius"){e[key]=clamp(value,0,100);}
         else{
           e[key]=value;
@@ -506,7 +547,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     change(()=>{
       const {x,y}=place,p=PALETTES[spec.theme];
       let e;
-      if(type==="text")e={type,x,y,w:400,h:70,text:"Your headline",font_size:34,colour:p.ink,auto_colour:"ink",bold:true};
+      if(type==="text")e={type,x,y,w:400,h:70,text:"Your headline",font_size:34,style_role:"heading",colour:p.ink,auto_colour:"ink",bold:true};
       if(type==="rect")e={type,x,y,w:250,h:150,fill:p.tones[0],stroke:p.border,radius:18,auto_fill:"tone0",auto_stroke:"border"};
       if(type==="icon")e={type,x,y,w:85,h:85,name:"sparkle",colour:p.ink,auto_colour:"ink"};
       if(type==="image")e={type,x,y,w:340,h:220,path:at("vsAssets").value,alt:"Original source image"};
@@ -518,10 +559,140 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     try{
       const data=await api("/api/files?dir=uploads");
       const imgs=data.items.filter(e=>!e.dir&&/\.(png|jpg|jpeg|webp|bmp)$/i.test(e.name));
-      at("vsAssets").innerHTML='<option value="">Choose uploaded image</option>'+imgs.map(e=>
-        '<option value="'+esc(e.path)+'">'+esc(e.name)+'</option>').join("");
+      const options=imgs.map(e=>'<option value="'+esc(e.path)+'">'+esc(e.name)+'</option>').join("");
+      const oldLogo=at("vsBrandLogo").value;
+      at("vsAssets").innerHTML='<option value="">Choose uploaded image</option>'+options;
+      at("vsBrandLogo").innerHTML='<option value="">No logo selected</option>'+options;
+      if(oldLogo && imgs.some(item=>item.path===oldLogo))at("vsBrandLogo").value=oldLogo;
     }catch{ /* Uploads folder may not exist yet. */ }
   }
+  function captureBrandForm(){
+    const theme=PALETTES[spec.theme],overrides=spec.colours||{};
+    const values={...theme,...overrides};
+    for(const key of BRAND_COLOUR_KEYS){
+      const source=key.startsWith("tone")?theme.tones[Number(key.slice(4))]:values[key];
+      const input=Q('[data-brand-colour="'+key+'"]',root);
+      if(input)input.value=source||"#777777";
+    }
+    at("vsBrandHeading").value=spec.brand_style?.heading_size||27;
+    at("vsBrandBody").value=spec.brand_style?.body_size||18;
+  }
+  function readBrandForm(){
+    const colours=Object.fromEntries(BRAND_COLOUR_KEYS.map(key=>
+      [key,Q('[data-brand-colour="'+key+'"]',root).value.toUpperCase()]));
+    const kit={name:at("vsBrandName").value.trim(),colours,
+      heading_size:Number(at("vsBrandHeading").value),
+      body_size:Number(at("vsBrandBody").value),
+      logo:at("vsBrandLogo").value||null};
+    paletteFromKit(kit);
+    if(!kit.name||kit.name.length>80)throw Error("Give your brand kit a name (1–80 characters).");
+    return kit;
+  }
+  function showBrandKit(kit){
+    at("vsBrandName").value=kit.name;
+    const colours=paletteFromKit(kit);
+    for(const key of BRAND_COLOUR_KEYS){
+      Q('[data-brand-colour="'+key+'"]',root).value=colours[key];
+    }
+    at("vsBrandHeading").value=kit.heading_size;
+    at("vsBrandBody").value=kit.body_size;
+    if(kit.logo && !QA("option",at("vsBrandLogo")).some(o=>o.value===kit.logo)){
+      at("vsBrandLogo").add(new Option(kit.logo,kit.logo));
+    }
+    at("vsBrandLogo").value=kit.logo||"";
+  }
+  async function loadBrandKits(){
+    try{
+      const result=await api("/api/visual/studio/brand-kits/list");
+      const current=at("vsBrandKits").value;
+      at("vsBrandKits").innerHTML='<option value="">Select a kit</option>'+
+        result.kits.map(k=>'<option value="'+esc(k.path)+'">'+esc(k.name)+'</option>').join("");
+      if(result.kits.some(k=>k.path===current))at("vsBrandKits").value=current;
+    }catch(e){status("Could not load brand kits: "+e.message,true);}
+  }
+  at("vsBrandCapture").onclick=()=>{captureBrandForm();toast("Current page palette captured. Save to reuse it.");};
+  at("vsBrandSave").onclick=async()=>{
+    const button=at("vsBrandSave");button.disabled=true;
+    try{
+      const result=await api("/api/visual/studio/brand-kits/save",readBrandForm());
+      await loadBrandKits();at("vsBrandKits").value=result.path;
+      toast("Brand kit saved privately");status("Reusable brand kit saved.");
+    }catch(e){status("Brand kit save failed: "+e.message,true);}
+    finally{button.disabled=false;}
+  };
+  at("vsBrandLoad").onclick=async()=>{
+    const path=at("vsBrandKits").value;
+    if(!path){status("Choose a saved brand kit first.",true);return;}
+    try{
+      const result=await api("/api/visual/studio/brand-kits/load?path="+encodeURIComponent(path));
+      showBrandKit(result.kit);toast("Brand kit loaded. Review colours before applying.");
+    }catch(e){status("Could not open brand kit: "+e.message,true);}
+  };
+  at("vsBrandDelete").onclick=async()=>{
+    const path=at("vsBrandKits").value;
+    if(!path||!window.confirm("Delete this saved brand kit? Existing designs will not be changed."))return;
+    try{
+      await api("/api/visual/studio/brand-kits/delete",{path});
+      await loadBrandKits();
+      toast("Saved brand kit deleted. Existing designs remain unchanged.");
+    }catch(e){status("Could not delete brand kit: "+e.message,true);}
+  };
+  async function applySelectedBrand(allPages){
+    const btn=at(allPages?"vsBrandApplyAll":"vsBrandApplyPage");
+    btn.disabled=true;
+    try{
+      const {kit}=await api("/api/visual/studio/brand-kits/validate",readBrandForm());
+      const previous=documentPages(),snapshot=JSON.stringify(previous);
+      const candidates=previous.map((p,i)=>{
+        const next=copy(p);
+        if(allPages||i===activePage)applyBrandKit(next.spec,kit);
+        return next;
+      });
+      if(JSON.stringify(candidates)===snapshot){toast("These pages already use this kit.");return;}
+      if(allPages && pages.length>1 &&
+         !window.confirm("Apply this brand kit to all "+pages.length+" pages? Each page keeps its own Undo history."))return;
+      // All pages, including an untouched current page, must pass the real
+      // renderer before any mutated layer enters the editing session.
+      await api("/api/visual/studio/document/validate",{name,pages:candidates});
+      if(JSON.stringify(documentPages())!==snapshot){
+        status("Document changed while checking the brand kit. Apply it again.",true);return;
+      }
+      for(let i=0;i<pages.length;i++){
+        if(JSON.stringify(previous[i])===JSON.stringify(candidates[i]))continue;
+        const history=i===activePage?undoStack:(pages[i]._undo||[]);
+        history.push(previous[i].spec);
+        if(history.length>40)history.shift();
+        pages[i]._undo=history;pages[i]._redo=[];
+        pages[i].spec=candidates[i].spec;
+      }
+      spec=pages[activePage].spec;
+      undoStack=pages[activePage]._undo||[];redoStack=[];
+      selected=-1;selectionKeys.clear();dirty=true;closeRepair();
+      draw();schedule(0);
+      toast(allPages?"Brand kit applied to the document.":"Brand kit applied to this page.");
+    }catch(e){status("Brand kit not applied: "+e.message,true);}
+    finally{btn.disabled=false;}
+  }
+  at("vsBrandApplyPage").onclick=()=>applySelectedBrand(false);
+  at("vsBrandApplyAll").onclick=()=>applySelectedBrand(true);
+  at("vsBrandPlaceLogo").onclick=async()=>{
+    const button=at("vsBrandPlaceLogo");button.disabled=true;
+    try{
+      const {kit}=await api("/api/visual/studio/brand-kits/validate",readBrandForm());
+      if(!kit.logo)throw Error("Choose an original uploaded logo first.");
+      if(spec.elements.length>=40)throw Error("This page already has 40 editable elements.");
+      const pos=freePosition(spec,170,90);
+      if(!pos)throw Error("No clear space for the logo. Move existing elements first.");
+      const candidate=copy(spec);
+      candidate.elements.push({type:"image",x:pos.x,y:pos.y,w:170,h:90,
+        path:kit.logo,alt:"Original supplied brand logo"});
+      await api("/api/visual/studio/preview",{spec:candidate,name});
+      change(()=>{spec.elements=candidate.elements;selected=spec.elements.length-1;
+        selectionKeys=new Set([unitKey(spec.elements[selected],selected)]);});
+      toast("Original logo placed as an editable image layer; source pixels untouched.");
+    }catch(e){status("Logo not placed: "+e.message,true);}
+    finally{button.disabled=false;}
+  };
   async function loadDrafts(){
     try{
       const data=await api("/api/visual/studio/list");
@@ -536,7 +707,10 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     storePage();
     draw();schedule(0);
   };
-  at("vsTheme").onchange=e=>change(()=>themeElements(spec,e.target.value));
+  at("vsTheme").onchange=e=>{
+    change(()=>themeElements(spec,e.target.value));
+    captureBrandForm();
+  };
   at("vsUndo").onclick=undo;at("vsRedo").onclick=redo;
   // Reconstruct a subset from the immutable original, never from a previous
   // proposal. The server's normal preview endpoint is the final quality gate.
@@ -1037,8 +1211,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       change(()=>{if(translateLayerUnits(spec,[...selectionKeys],delta[0]*amount,delta[1]*amount))relink(spec);});
     }
   });
-  draw();schedule(0);
-  await Promise.all([loadAssets(),loadDrafts()]);
+  captureBrandForm();draw();schedule(0);
+  await Promise.all([loadAssets(),loadDrafts(),loadBrandKits()]);
   const openImage=sessionStorage.getItem("automoto_visual_open_image");
   const openDraft=sessionStorage.getItem("automoto_visual_open_draft");
   if(openImage||openDraft){
