@@ -257,6 +257,9 @@ def raster(scene,scale=1.0,progress=None,effect="flow",animation=None):
     im=Image.new("RGB",(round(w*scale),round(h*scale)),scene["tokens"]["background"])
     draw=ImageDraw.Draw(im)
     elements=scene["elements"]
+    if progress is not None and effect=="keyframes":
+        from automoto.visual_motion import motion_raster
+        return motion_raster(scene, progress, animation or {}, scale)
     if progress is not None and effect=="sequence":
         starts=sequence_stages(scene,animation or {})
         visible={group for group,start in starts.items() if progress>=start}
@@ -493,13 +496,17 @@ def render(scene:dict,path:Path,*,animation:dict|None=None,scenes:list[dict]|Non
             effect=str(config.get("effect","flow"))
             if not 8<=frames<=48 or not 50<=duration<=500 or not 0<=loops<=20:
                 raise VisualError("GIF needs 8-48 frames, 50-500ms and loop 0-20")
-            if effect not in {"flow","pulse","float","reveal","sequence"}:
-                raise VisualError("GIF effect must be flow, pulse, float, reveal or sequence")
+            if effect not in {"flow","pulse","float","reveal","sequence","keyframes"}:
+                raise VisualError("GIF effect must be flow, pulse, float, reveal, sequence or keyframes")
             if effect=="sequence":
                 sequence_stages(scene,config)
+            if effect=="keyframes":
+                from automoto.visual_motion import validate_keyframes
+                validate_keyframes(scene,config)
             images=[]
             for index in range(frames):
-                images.append(raster(scene,progress=index/frames,effect=effect,animation=config))
+                images.append(raster(scene,progress=index/(frames-1) if effect=="keyframes" else index/frames,
+                                     effect=effect,animation=config))
             # Single palette avoids visible colour flicker between GIF frames.
             palette=images[-1].quantize(colors=192)
             paletted=[im.quantize(palette=palette,dither=Image.Dither.NONE) for im in images]
