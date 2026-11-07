@@ -1693,6 +1693,7 @@ const COMMANDS = [
   { t: "Tasks", i: "activity", run: () => (location.hash = "#/tasks") },
   { t: "Memory", i: "brain", run: () => (location.hash = "#/memory") },
   { t: "Document Assistant", i: "file", run: () => (location.hash = "#/documents") },
+  { t: "Invoices & Spreadsheets", i: "sheet", run: () => (location.hash = "#/spreadsheets") },
   { t: "Routines", i: "clock", run: () => (location.hash = "#/routines") },
   { t: "Skills", i: "book", run: () => (location.hash = "#/skills") },
   { t: "Tools", i: "wrench", run: () => (location.hash = "#/tools") },
@@ -1779,6 +1780,11 @@ document.addEventListener("keydown", (e) => {
 PAGES.documents = async () => {
   const { mountDocuments } = await import("./document-assistant.js?v=" + encodeURIComponent(VERSION));
   return mountDocuments({ api, page, toast, esc, icon, uploadFile });
+};
+
+PAGES.spreadsheets = async () => {
+  const { mountSpreadsheetStudio } = await import("./spreadsheet-studio.js?v=" + encodeURIComponent(VERSION));
+  return mountSpreadsheetStudio({ api, page, uploadFile });
 };
 
 PAGES.visual = async () => {
