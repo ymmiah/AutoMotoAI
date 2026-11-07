@@ -198,6 +198,71 @@ let browser;
   assert.notEqual(revisionPath,wordFile);
   assert.match(await page.locator('#daStatus').innerText(),/revised copy/i);
   await page.screenshot({path:path.join(output,'document-assistant-v1-workspace.png')});
+  // v3: deterministic intercepted local-AI responses. Python tests exercise
+  // the real model-provider contract; browser tests prove explicit approval,
+  // read-only imported summaries and reversible edit suggestions.
+  assert.equal(await page.locator('#daAIAction').inputValue(),'summary',
+    'imported Office documents must never expose a rewrite action');
+  assert.equal(await page.locator('#daAIAction option[value="rewrite"]').isDisabled(),true);
+  const quote='Original body wording for review.';
+  const originalExtract=await page.locator('#daExtracted').innerText();
+  assert.ok(originalExtract.includes(quote));
+  let modelRequests=0;
+  await page.route('**/api/documents/ai/review',async route=>{
+    modelRequests++;
+    const request=route.request().postDataJSON();
+    const summary=request.mode==='summary';
+    const data=summary
+      ?{mode:'summary',provider:'ollama-local',model:'ci-local-stub',requires_approval:true,
+        applied:false,source:'verified-import',selection:{start:0,end:originalExtract.length},
+        sha256:request.source_sha256,proposal:null,changed:false,
+        evidence:[{claim:'The imported document contains a statement about review.',
+          quote,offset:originalExtract.indexOf(quote)}],
+        explanation:'Verbatim source excerpt verified.',limitations:'Verify AI interpretation.'}
+      :{mode:'proofread',provider:'ollama-local',model:'ci-local-stub',requires_approval:true,
+        applied:false,source:'editable',selection:{start:request.start,end:request.end},
+        sha256:request.sha256,proposal:'This sentence has an error.',changed:true,
+        evidence:[],explanation:'Corrected grammar.',limitations:'Review the suggested wording.'};
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+  });
+  await page.locator('#daAIRun').click();
+  await page.locator('#daAIResult .da-ai-evidence blockquote').waitFor();
+  assert.equal(await page.locator('#daAIApply').isVisible(),false);
+  assert.match(await page.locator('#daAIEvidence').innerText(),/Original body wording/);
+  await page.locator('#daNew').click();
+  await page.locator('#daSource').fill('This sentences has a error.\n\nThe source remains unchanged.');
+  await page.locator('#daAIAction').selectOption('proofread');
+  await page.locator('#daSource').evaluate(el=>{
+    el.focus();el.setSelectionRange(0,'This sentences has a error.'.length);
+  });
+  const originalAIText=await page.locator('#daSource').inputValue();
+  await page.locator('#daAIRun').click();
+  await page.locator('#daAIProposal').waitFor({state:'visible'});
+  assert.equal(await page.locator('#daAIProposal').inputValue(),'This sentence has an error.');
+  assert.equal(await page.locator('#daSource').inputValue(),originalAIText,
+    'review must not automatically change document content');
+  assert.equal(await page.locator('#daAIApply').isVisible(),true);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#daAIApply').click();
+  assert.match(await page.locator('#daSource').inputValue(),/^This sentence has an error\./);
+  assert.match(await page.locator('#daSource').inputValue(),/The source remains unchanged/);
+  await page.locator('#daUndo').click();
+  assert.equal(await page.locator('#daSource').inputValue(),originalAIText);
+  await page.locator('#daRedo').click();
+  assert.match(await page.locator('#daSource').inputValue(),/^This sentence has an error\./);
+  assert.equal(modelRequests,2);
+  // A stale review must be refused even when a model returns a valid proposal.
+  await page.locator('#daAIClear').click();
+  await page.locator('#daSource').evaluate(el=>{
+    el.focus();el.setSelectionRange(0,'This sentence has an error.'.length);
+  });
+  await page.locator('#daAIRun').click();
+  await page.locator('#daAIProposal').waitFor({state:'visible'});
+  await page.locator('#daSource').fill('New text written while review was open.');
+  await page.locator('#daAIApply').click();
+  assert.equal(await page.locator('#daSource').inputValue(),
+    'New text written while review was open.','stale AI proposal must not overwrite fresh edits');
+  await page.screenshot({path:path.join(output,'document-assistant-v3-offline-ai-review.png')});
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
