@@ -96,6 +96,60 @@ let browser;
   assert.equal(await page.locator('#composerInput').inputValue(), 'Keep this draft while I check settings');
   await page.locator('#composerInput').fill('');
   await page.screenshot({ path: path.join(output, 'workspace-dark.png') });
+  // Document Assistant v1: real Office publishing, editable draft roundtrip,
+  // uploaded document inspection and a non-destructive DOCX revision.
+  await page.locator('.nav [data-page="documents"]').click();
+  await page.locator('#daSource').waitFor();
+  assert.equal(await page.locator('#daMode').innerText(), 'Editable draft');
+  await page.locator('#daName').fill('Document smoke report');
+  await page.locator('#daSource').fill('# Document smoke report\\n\\n## Findings\\n\\nOriginal body wording for review.');
+  assert.match(await page.locator('#daPaper h1').innerText(),/Document smoke report/);
+  const savingDocument=page.waitForResponse(r=>r.url().includes('/api/documents/save')&&r.request().method()==='POST');
+  await page.locator('#daSave').click();
+  const savedDocument=await savingDocument;
+  assert.equal(savedDocument.status(),200,await savedDocument.text());
+  const savedDraft=(await savedDocument.json()).path;
+  assert.ok(savedDraft.endsWith('.document.json'));
+  await page.waitForFunction(path=>[...document.querySelectorAll('#daLibrary [data-da-open]')]
+    .some(x=>x.dataset.daOpen===path),savedDraft);
+  const exportingDocument=page.waitForResponse(r=>r.url().includes('/api/documents/export')&&r.request().method()==='POST');
+  await page.locator('#daExportWord').click();
+  const exportedDocument=await exportingDocument;
+  assert.equal(exportedDocument.status(),200,await exportedDocument.text());
+  const wordFile=(await exportedDocument.json()).path;
+  assert.ok(wordFile.endsWith('.docx'));
+  const wordDownload=await page.request.get(base+'/api/files/download?path='+encodeURIComponent(wordFile));
+  assert.equal(wordDownload.status(),200);
+  const wordBytes=await wordDownload.body();
+  assert.equal(wordBytes.subarray(0,2).toString('ascii'),'PK');
+  // Reopen the native Markdown draft to verify its source was not flattened.
+  await page.locator('#daSource').fill('Temporary unsaved text');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#daLibrary [data-da-open]').filter({hasText:'document-smoke-report'}).first().click();
+  await page.waitForFunction(()=>document.querySelector('#daSource')?.value.includes('Original body wording for review.'));
+  assert.equal(await page.locator('#daName').inputValue(),'Document smoke report');
+  await page.locator('#daImportFile').setInputFiles({
+    name:'review-import.docx',
+    mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    buffer:wordBytes
+  });
+  await page.waitForFunction(()=>document.querySelector('#daMode')?.textContent?.includes('Read-only Office'));
+  assert.match(await page.locator('#daExtracted').innerText(),/Original body wording for review/);
+  assert.equal(await page.locator('#daEditBody').isVisible(),false);
+  assert.equal(await page.locator('#daReplace').isVisible(),true);
+  await page.locator('#daFind').fill('Original body wording');
+  await page.locator('#daReplaceWith').fill('Reviewed and approved wording');
+  page.once('dialog',dialog=>dialog.accept());
+  const revision=page.waitForResponse(r=>r.url().includes('/api/documents/replace-copy')&&r.request().method()==='POST');
+  await page.locator('#daReplaceCopy').click();
+  const revisedDocument=await revision;
+  assert.equal(revisedDocument.status(),200,await revisedDocument.text());
+  const revisionPath=(await revisedDocument.json()).path;
+  assert.notEqual(revisionPath,wordFile);
+  assert.match(await page.locator('#daStatus').innerText(),/revised copy/i);
+  await page.screenshot({path:path.join(output,'document-assistant-v1-workspace.png')});
+  await page.locator('#newChat').click();
+  await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
   await page.locator('.nav [data-page="visual"]').click();
   await page.locator('#vsPreview').waitFor();
