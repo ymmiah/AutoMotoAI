@@ -201,7 +201,14 @@ def review_document(body: AIReviewIn, request: Request):
     # Validate the provider before contacting the model. No cloud fallback.
     _loopback_ollama()
     model = _selected_model()
-    result = _validated(body.mode, text, _ask_model(model, body.mode, text))
+    proposal = _ask_model(model, body.mode, text)
+    if provenance == "verified-import":
+        # Model generation can take time: source identity must still match
+        # after inference before showing a purportedly grounded summary.
+        path = _allowed_source(body.source_path or "")
+        if _sha(path) != body.source_sha256:
+            raise HTTPException(409, "Imported source changed during review. Reopen it.")
+    result = _validated(body.mode, text, proposal)
     return {
         "mode": body.mode, "model": model, "provider": "ollama-local",
         "requires_approval": True, "applied": False, "source": provenance,
