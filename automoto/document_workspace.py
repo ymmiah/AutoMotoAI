@@ -26,7 +26,8 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 DOCUMENTS_DIR = "artifacts/documents"
 MAX_DRAFT_CHARS = 120_000
 MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
-VISIBLE_EXT = {".document.json", ".md", ".txt", ".docx", ".pdf", ".pptx", ".xlsx"}
+READABLE_EXT = {".docx", ".pdf", ".pptx", ".xlsx", ".md", ".txt",
+                ".doc", ".odt", ".rtf", ".ppt", ".odp", ".xls", ".ods"}
 
 
 class DocumentSource(BaseModel):
@@ -93,7 +94,7 @@ def _allowed_source(raw: str) -> Path:
     if path.name.endswith(".document.json"):
         if relative.parts[:2] != ("artifacts", "documents"):
             raise HTTPException(403, "editable drafts belong to the Document Assistant folder")
-    elif path.suffix.lower() not in {".docx", ".pdf", ".pptx", ".xlsx", ".md", ".txt"}:
+    elif path.suffix.lower() not in READABLE_EXT:
         raise HTTPException(415, "unsupported document format")
     return path
 
@@ -140,8 +141,7 @@ def list_documents(request: Request):
         for path in folder.iterdir():
             if path.is_symlink() or not path.is_file():
                 continue
-            if not (path.name.endswith(".document.json") or path.suffix.lower() in
-                    {".docx", ".pdf", ".pptx", ".xlsx", ".md", ".txt"}):
+            if not (path.name.endswith(".document.json") or path.suffix.lower() in READABLE_EXT):
                 continue
             stat = path.stat()
             if stat.st_size > MAX_DOCUMENT_BYTES:
