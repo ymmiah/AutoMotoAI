@@ -90,7 +90,7 @@ def _source(body: AIReviewIn) -> tuple[str, int, int, str]:
         if _sha(path) != body.source_sha256:
             raise HTTPException(409, "The imported file changed since opening. Reopen it before reviewing.")
         try:
-            extracted = office.read(path.relative_to(path.parents[1]).as_posix(),
+            extracted = office.read(path.relative_to(_root()).as_posix(),
                                     max_chars=MAX_SOURCE + 1, max_rows=40)
         except (office.OfficeError, ValueError, OSError, UnicodeError) as exc:
             raise HTTPException(422, f"Could not read the imported document: {str(exc)[:160]}") from None
