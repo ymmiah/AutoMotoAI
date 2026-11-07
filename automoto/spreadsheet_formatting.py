@@ -79,8 +79,9 @@ def normalise_metadata(sheet: Any, rows: list[list[Any]]) -> dict[str, Any]:
     if "filter_enabled" in fields:
         result["filter_enabled"] = sheet.filter_enabled
     if "column_widths" in fields:
-        if any(not COLUMN.fullmatch(key) for key in sheet.column_widths):
-            raise HTTPException(422, "Widths require a column A–P.")
+        if any(not COLUMN.fullmatch(key) or not 8 <= width <= 48
+               for key, width in sheet.column_widths.items()):
+            raise HTTPException(422, "Column widths must use A–P and values from 8–48.")
         result["column_widths"] = dict(sheet.column_widths)
     if "validations" in fields:
         seen = set()
