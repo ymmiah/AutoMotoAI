@@ -135,6 +135,8 @@ from automoto import spreadsheet_workspace
 app.include_router(spreadsheet_workspace.router)  # offline private spreadsheet/invoice workspace
 from automoto import commercial_documents
 app.include_router(commercial_documents.router)  # V4 private invoice, quotation and contact drafts
+from automoto import financial_intelligence
+app.include_router(financial_intelligence.router)  # V5 private manual cash ledger and reports
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
@@ -147,7 +149,7 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/documents/open", "/api/documents/export", "/api/documents/preflight", "/api/documents/replace-copy",
              "/api/documents/ai/review", "/api/documents/docx/structure", "/api/documents/docx/revise",
              "/api/documents/research/query",
-             "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/documents/recovery/save", "/api/documents/recovery/load",
+             "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/spreadsheets/finance/export", "/api/documents/recovery/save", "/api/documents/recovery/load",
              "/api/documents/quality/audit")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
