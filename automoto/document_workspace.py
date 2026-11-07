@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from automoto import office, office_build, sandbox
 from automoto.visual_studio import _auth, _quota_check
@@ -30,9 +30,24 @@ READABLE_EXT = {".docx", ".pdf", ".pptx", ".xlsx", ".md", ".txt",
                 ".doc", ".odt", ".rtf", ".ppt", ".odp", ".xls", ".ods"}
 
 
+class LayoutOptions(BaseModel):
+    """Bounded author-controlled page styles, never arbitrary Office properties."""
+    model_config = ConfigDict(extra="forbid")
+    page_size: Literal["A4", "Letter"] = "A4"
+    orientation: Literal["portrait", "landscape"] = "portrait"
+    margins_cm: float = Field(2.5, ge=1.2, le=4, allow_inf_nan=False)
+    font: Literal["Calibri", "Arial", "Aptos", "Georgia", "Times New Roman",
+                  "Liberation Serif"] = "Calibri"
+    font_size: int = Field(11, ge=9, le=16)
+    line_spacing: float = Field(1.15, ge=1, le=2, allow_inf_nan=False)
+    heading_color: str = Field("#1F3864", pattern=r"^#[0-9a-fA-F]{6}$")
+    page_numbers: bool = True
+
+
 class DocumentSource(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     markdown: str = Field(..., max_length=MAX_DRAFT_CHARS)
+    options: LayoutOptions | None = None
 
 
 class ExportIn(DocumentSource):
@@ -122,12 +137,15 @@ def _atomic_file(target: Path, data: bytes) -> None:
 def _draft(path: Path) -> dict[str, Any]:
     try:
         obj = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(obj, dict) or obj.get("schema") != 1:
+        if not isinstance(obj, dict) or obj.get("schema") not in (1, 2):
             raise ValueError("unrecognised document draft")
-        source = DocumentSource.model_validate({"name": obj.get("name"), "markdown": obj.get("markdown")})
+        # v1 drafts contain only name and Markdown; v2 adds optional options.
+        source = DocumentSource.model_validate({
+            "name": obj.get("name"), "markdown": obj.get("markdown"),
+            "options": obj.get("options")})
     except (ValueError, OSError, UnicodeError):
         raise HTTPException(422, "saved document draft is not valid") from None
-    return source.model_dump()
+    return source.model_dump(exclude_none=True)
 
 
 @router.get("/list")
@@ -163,7 +181,8 @@ def open_document(request: Request, path: str):
     if kind == "draft":
         data = _draft(file)
         return {"path": relative, "name": data["name"], "kind": "draft",
-                "markdown": data["markdown"], "editable": True, "sha256": _sha(file),
+                "markdown": data["markdown"], "options": data.get("options"),
+                "editable": True, "sha256": _sha(file),
                 "notice": "Native editable Markdown draft. The original source remains unchanged."}
     if kind in {"md", "txt"}:
         if file.stat().st_size > MAX_DRAFT_CHARS:
@@ -190,8 +209,11 @@ def open_document(request: Request, path: str):
 def save_document(body: DocumentSource, request: Request):
     _auth(request)
     name = _name(body.name)
-    raw = json.dumps({"schema": 1, "name": name, "markdown": body.markdown},
-                     ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    draft: dict[str, Any] = {"schema": 1, "name": name, "markdown": body.markdown}
+    if body.options is not None:
+        draft["schema"] = 2
+        draft["options"] = body.options.model_dump()
+    raw = json.dumps(draft, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(raw) > MAX_DRAFT_CHARS * 4 + 1024:
         raise HTTPException(413, "document draft is too large")
     path = _unique(name, ".document.json")
@@ -209,8 +231,16 @@ def _build_spec(body: DocumentSource) -> dict[str, Any]:
         raise HTTPException(422, "embedded image paths are not supported in v1; add images in the existing Office tools")
     # The Word engine owns actual page layout. Markdown remains the editable
     # source and is not misrepresented as a round-trip Word document editor.
-    spec.update({"properties": {"title": name, "language": "en-GB"},
-                 "page": {"size": "A4", "margins_cm": 2.5}})
+    options = body.options or LayoutOptions()
+    spec.update({
+        "properties": {"title": name, "language": "en-GB"},
+        "page": {"size": options.page_size, "orientation": options.orientation,
+                 "margins_cm": options.margins_cm},
+        "theme": {"font": options.font, "heading_font": options.font,
+                  "size": options.font_size, "line_spacing": options.line_spacing,
+                  "heading_color": options.heading_color.removeprefix("#")},
+        "page_numbers": options.page_numbers,
+    })
     return spec
 
 
