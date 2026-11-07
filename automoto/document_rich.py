@@ -169,9 +169,9 @@ def _apply(doc: Any, operation: RichOperation) -> str:
                 not isinstance(value, str) or len(value) > 500 for value in values):
             raise HTTPException(422, "Provide one short value for each of the existing table columns")
         # Reject merged rows, whose span and cell geometry cannot be preserved.
-        for row in table.rows:
-            for idx in range(len(row.cells)):
-                _cell(table, table.rows.index(row), idx)
+        for row_index, previous in enumerate(table.rows):
+            for cell_index in range(len(previous.cells)):
+                _cell(table, row_index, cell_index)
         row = table.add_row()
         for cell, value in zip(row.cells, values):
             cell.text = value
