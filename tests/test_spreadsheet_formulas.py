@@ -98,13 +98,16 @@ def test_injection_and_unsupported_features_never_evaluate(client):
         "=[1]Sheet1!A1", "=SUM(A1;B1)", '=HYPERLINK("https://example.invalid","click")',
         "=A1:A1000", "=1+abc",
     ]
+    root = sandbox.default_root()
+    before = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
     result = calculate(client, [hostile])
     assert result.status_code == 200, result.text
     assert len(result.json()["errors"]) == len(hostile)
     assert all(row["error"] in ("#NAME?", "#PARSE!", "#REF!", "#VALUE!")
                for row in result.json()["results"])
     # Errors and formula previews never create or modify files.
-    assert not (sandbox.default_root() / "artifacts").exists()
+    after = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+    assert after == before
 
 
 def test_formula_limit_and_overlong_formulas(client):
