@@ -40,6 +40,7 @@ MAX_SAVED_BYTES = 750_000
 SHEET_FILE = re.compile(r"^[a-z0-9-]{1,48}-[0-9a-f]{12}\.sheet\.json$")
 INVOICE_FILE = re.compile(r"^[a-z0-9-]{1,48}-[0-9a-f]{12}\.invoice\.json$")
 BAD_SHEET_NAME = re.compile(r"[\[\]:*?/\\\\]")
+ILLEGAL_XML = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
 class SheetIn(BaseModel):
@@ -111,11 +112,13 @@ def _normalise(book: BookIn) -> dict[str, Any]:
     name = book.name.strip()
     if not name:
         raise HTTPException(422, "Enter a workbook name.")
+    if ILLEGAL_XML.search(name):
+        raise HTTPException(422, "Workbook name includes invalid control characters.")
     used: set[str] = set()
     sheets = []
     for sheet in book.sheets:
         label = sheet.name.strip()
-        if not label or BAD_SHEET_NAME.search(label) or label.startswith("'") or label.endswith("'"):
+        if not label or BAD_SHEET_NAME.search(label) or ILLEGAL_XML.search(label) or label.startswith("'") or label.endswith("'"):
             raise HTTPException(422, "A worksheet name is invalid for Excel.")
         if label.casefold() in used:
             raise HTTPException(422, "Worksheet names must be unique.")
@@ -129,8 +132,8 @@ def _normalise(book: BookIn) -> dict[str, Any]:
                 if value is None or isinstance(value, bool):
                     clean_row.append(value)
                 elif isinstance(value, str):
-                    if len(value) > MAX_CELL_CHARS:
-                        raise HTTPException(422, "One cell exceeds the 2,000-character limit.")
+                    if len(value) > MAX_CELL_CHARS or ILLEGAL_XML.search(value):
+                        raise HTTPException(422, "One cell exceeds limits or contains invalid control characters.")
                     clean_row.append(value)
                 elif isinstance(value, (int, float)):
                     if isinstance(value, float) and not math.isfinite(value) or abs(value) > 1e12:
@@ -314,12 +317,16 @@ def _money(raw: str, *, positive: bool = False, places: int = 2, maximum: str = 
 
 
 def _invoice_preview(invoice: InvoiceIn) -> dict[str, Any]:
+    if any(ILLEGAL_XML.search(text) for text in (invoice.number, invoice.seller, invoice.customer)):
+        raise HTTPException(422, "Invoice fields contain invalid control characters.")
+    if not all(text.strip() for text in (invoice.number, invoice.seller, invoice.customer)):
+        raise HTTPException(422, "Invoice number, seller and customer are required.")
     rate = _money(invoice.tax_rate, maximum="100")
     lines = []
     net = Decimal("0")
     for item in invoice.lines:
-        if not item.description.strip():
-            raise HTTPException(422, "Invoice item descriptions cannot be blank.")
+        if not item.description.strip() or ILLEGAL_XML.search(item.description):
+            raise HTTPException(422, "Invoice item description is invalid.")
         qty = _money(item.quantity, positive=True, places=3)
         price = _money(item.unit_price)
         total = (qty * price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -347,6 +354,9 @@ def _write_invoice(path: Path, inv: InvoiceIn, totals: dict[str, Any]) -> None:
     ws["A5"], ws["B5"] = "Due date", inv.due_date.isoformat()
     ws["A7"], ws["C7"] = "From", "Bill to"
     ws["A8"], ws["C8"] = inv.seller, inv.customer
+    # User-controlled identifiers and business names are always literal cells.
+    for address in ("B3", "A8", "C8"):
+        ws[address].data_type = "s"
     ws["A8"].alignment = ws["C8"].alignment = Alignment(wrap_text=True, vertical="top")
     ws.row_dimensions[8].height = 62
     for j, value in enumerate(("Description", "Qty", f"Unit ({inv.currency})", f"Line ({inv.currency})"), start=1):
