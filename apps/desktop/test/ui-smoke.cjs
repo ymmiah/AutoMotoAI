@@ -125,6 +125,33 @@ let browser;
   const widthAfter = Number(await page.locator('#vsProperties [data-key="w"]').inputValue());
   assert.ok(widthAfter > widthBefore, 'drag-resize must update native element width');
   await page.screenshot({ path: path.join(output, 'visual-studio-layers-resize.png') });
+  // v10: real keyframe motion on native groups, not CSS-only fake playback.
+  await page.locator('#vsFormat').selectOption('gif');
+  await page.locator('#vsEffect').selectOption('keyframes');
+  assert.equal(await page.locator('#vsTimeline').isVisible(),true);
+  assert.equal(await page.locator('.vs-motion-track').count(),3);
+  await page.locator('#vsPlayhead').evaluate(input=>{
+    input.value='50';input.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.locator('[data-motion-add="stage0"]').click();
+  assert.equal(await page.locator('[data-motion-select="stage0"] option').count(),3);
+  assert.equal(await page.locator('[data-motion-select="stage0"]').inputValue(),'1');
+  await page.locator('.vs-motion-track[data-motion-group="stage0"] [data-motion-field="dx"]').fill('45');
+  await page.locator('.vs-motion-track[data-motion-group="stage0"] [data-motion-field="dx"]').press('Tab');
+  assert.equal(await page.locator('.vs-motion-track[data-motion-group="stage0"] [data-motion-field="dx"]').inputValue(),'45');
+  await page.locator('.vs-motion-track[data-motion-group="stage0"] [data-motion-easing="stage0"]').selectOption('ease-in');
+  const motionResponse=page.waitForResponse(r=>r.url().includes('/api/visual/studio/animation-preview')&&
+    r.request().method()==='POST');
+  await page.locator('#vsMotionPlay').click();
+  const playback=await motionResponse;
+  assert.equal(playback.status(),200,await playback.text());
+  assert.match((await playback.json()).image,/^data:image\/gif;base64,/);
+  await page.waitForFunction(()=>document.querySelector('#vsPreview')?.src?.startsWith('data:image/gif;base64,'));
+  await page.locator('#vsMotionStop').click();
+  await page.waitForFunction(()=>document.querySelector('#vsPreview')?.src?.startsWith('data:image/png;base64,')&&
+    document.querySelector('#vsStage')?.getAttribute('aria-busy')==='false');
+  await page.screenshot({path:path.join(output,'visual-studio-v10-keyframe-timeline.png')});
+  // Switching back to the original v2 layer timeline must remain compatible.
   // A sequence timeline exposes group keyframes and renders the selected frame.
   await page.locator('#vsFormat').selectOption('gif');
   await page.locator('#vsEffect').selectOption('sequence');
