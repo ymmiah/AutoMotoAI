@@ -263,7 +263,6 @@ let browser;
   assert.equal(await page.locator('#daSource').inputValue(),
     'New text written while review was open.','stale AI proposal must not overwrite fresh edits');
   await page.screenshot({path:path.join(output,'document-assistant-v3-offline-ai-review.png')});
-  page.once('dialog',dialog=>dialog.accept());
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
