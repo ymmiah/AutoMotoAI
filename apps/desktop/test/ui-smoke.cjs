@@ -249,8 +249,14 @@ let browser;
   assert.equal(auditResult.structurally_exportable,true);
   assert.match(await page.locator('#daQualityResult').innerText(),/human review is still required/i);
   await page.locator('#daSource').fill('Temporary unsaved modifications.');
+  const loadingRecovery=page.waitForResponse(r=>r.url().includes('/api/documents/recovery/load')&&
+    r.request().method()==='GET');
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('[data-recovery-load="'+checkpointId+'"]').click();
+  const restoredResponse=await loadingRecovery;
+  assert.equal(restoredResponse.status(),200,await restoredResponse.text());
+  await page.waitForFunction(expected=>
+    document.querySelector('#daSource')?.value===expected,v7Source);
   assert.equal(await page.locator('#daSource').inputValue(),v7Source,
     'explicitly restored checkpoint must match saved Markdown');
   await page.locator('#daUndo').click();
