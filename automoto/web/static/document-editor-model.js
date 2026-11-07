@@ -119,7 +119,12 @@ export function renderDocumentPreview(markdown,escape){
       const rows=[];
       while(i<lines.length&&/^\|.*\|$/.test(lines[i].trim())&&rows.length<60){
         const cells=lines[i].trim().slice(1,-1).split("|").map(cell=>cell.trim());
-        if(cells.length>12)break;
+        if(cells.length>12){
+          // Consume malformed/wide rows rather than revisiting the same
+          // source line indefinitely; always render their text escaped.
+          parts.push("<p>"+inline(lines[i])+"</p>");
+          i++;break;
+        }
         if(!cells.every(cell=>/^:?-{2,}:?$/.test(cell)))rows.push(cells);
         i++;
       }
