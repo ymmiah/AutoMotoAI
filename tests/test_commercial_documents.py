@@ -58,7 +58,7 @@ def test_authentication_and_hosted_scopes(client):
         if method == "GET":
             result = client.get(API + path, params={"path": "artifacts/spreadsheets/safe-abcdefabcdef.commercial.json"}) if path.endswith("/load") else client.get(API + path)
         else:
-            result = client.post(API + path, json=body)
+            result = client.post(API + path, json=party() if path == "/customer/save" else body)
         assert result.status_code == 403, (path, result.status_code)
     assert not path_allowed("POST", API + "/pay")
     assert not path_allowed("POST", API + "/send")
