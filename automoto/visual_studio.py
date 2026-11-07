@@ -102,6 +102,12 @@ def _validate(spec: dict[str, Any]) -> dict[str, Any]:
 def _compiled(spec: dict[str, Any]) -> dict[str, Any]:
     try:
         scene = compile_scene(_validate(spec))
+        # Reject malformed keyframes when saving or reopening native drafts,
+        # not only when a GIF export is requested.
+        motion = spec.get("animation")
+        if isinstance(motion, dict) and motion.get("effect") == "keyframes":
+            from automoto.visual_motion import validate_keyframes
+            validate_keyframes(scene, motion)
         repair_text_fitting(scene)
         warnings = quality(scene)
     except (VisualError, ValueError, OSError) as exc:
