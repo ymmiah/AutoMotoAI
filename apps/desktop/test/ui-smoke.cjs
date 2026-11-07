@@ -427,6 +427,19 @@ let browser;
   await page.locator('#ssBookName').waitFor();
   await page.locator('#ssBookName').fill('QA offline workbook');
   await page.locator('#ssGrid input[data-row="1"][data-col="1"]').fill('42.50');
+  // V3 browser acceptance: style B2, freeze panes, width and validated numeric column.
+  await page.locator('#ssStyleBold').check();
+  await page.locator('#ssStyleFill').fill('#dce8f2');
+  await page.locator('#ssStyleFormat').selectOption('gbp');
+  await page.locator('#ssApplyStyle').click();
+  await page.locator('#ssToolsColumn').selectOption('1');
+  await page.locator('#ssFreeze').selectOption('both');
+  await page.locator('#ssWidth').fill('25');
+  await page.locator('#ssApplyLayout').click();
+  await page.locator('#ssValidationKind').selectOption('decimal');
+  await page.locator('#ssValidationMin').fill('0');
+  await page.locator('#ssValidationMax').fill('100');
+  await page.locator('#ssApplyValidation').click();
   const bookSaving=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/save')&&
     r.request().method()==='POST');
   await page.locator('#ssSave').click();
@@ -434,6 +447,14 @@ let browser;
   assert.equal(bookSaved.status(),200,'private workbook save should succeed');
   const workbookPath=(await bookSaved.json()).path;
   assert.ok(workbookPath.endsWith('.sheet.json'));
+  const storedV3=await page.request.get(base+'/api/spreadsheets/load?path='+encodeURIComponent(workbookPath));
+  assert.equal(storedV3.status(),200);
+  const styledSheet=(await storedV3.json()).workbook.sheets[0];
+  assert.equal(styledSheet.cell_styles.B2.bold,true);
+  assert.equal(styledSheet.cell_styles.B2.number_format,'gbp');
+  assert.equal(styledSheet.freeze,'both');
+  assert.equal(styledSheet.column_widths.B,25);
+  assert.equal(styledSheet.validations[0].kind,'decimal');
   const bookExporting=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/export')&&
     r.request().method()==='POST');
   await page.locator('#ssExport').click();
@@ -470,6 +491,16 @@ let browser;
   await page.locator('#ssUndo').click();
   await page.waitForFunction(() =>
     !document.querySelector('#ssCalcResults')?.textContent?.includes('#CYCLE!'));
+  await page.locator('#ssSortAsc').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#ssStatus')?.textContent?.includes('Sorting worksheets with formulas'));
+  await page.locator('#ssFilterText').fill('20');
+  assert.equal(await page.locator('#ssGrid tbody tr:not([hidden])').count(),2,
+    'filter shows header plus the matching B-column row');
+  await page.locator('#ssClearFilter').click();
+  assert.equal(await page.locator('#ssGrid tbody tr[hidden]').count(),0,
+    'clearing filters restores every row');
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v3-professional-editing.png')});
 
   await page.locator('#ssTabInvoice').click();
   await page.locator('#ssInvoiceNumber').fill('QA-2026-1');

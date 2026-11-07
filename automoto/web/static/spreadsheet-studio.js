@@ -1,7 +1,9 @@
-/* AutoMoto AI — Invoice & Spreadsheet Intelligence v2.
-   Explicit opt-in calculation, private documents, no eval/network scripting. */
+/* AutoMoto AI — Invoice & Spreadsheet Intelligence v3.
+   Safe XLSX styling, bounded editing, local sorting/filtering and cell validation. */
 import {blankBook,setGridCell,workbookPayload,invoicePayload,createWorkbookHistory,MAX_SHEETS,MAX_ROWS,MAX_COLS}
   from "./spreadsheet-model.js";
+import {styleAt,applyCellStyle,setColumnRule,validateEntry,filterIndices,sortSheetRows,NUMBER_FORMATS}
+  from "./spreadsheet-editing.js";
 
 export async function mountSpreadsheetStudio({api,page,uploadFile}){
   const html='<div class="ss-shell">'+
@@ -21,7 +23,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
         '<label>Calculation mode<select class="input" id="ssCalcMode" aria-describedby="ssCalcHint"><option value="formulas">Enable safe formulas</option><option value="literal">Literal text (legacy/imports)</option></select></label></div>'+
       '<div class="ss-panel ss-calc-controls"><div><strong>Formula calculation</strong><p id="ssCalcHint">Formulas operate only on the selected worksheet, without macros, remote links or arbitrary code. Old workbooks stay literal until enabled.</p></div>'+
         '<button type="button" class="btn" id="ssCalculate">Recalculate</button></div>'+
-      '<div class="ss-import ss-panel"><div><strong>Import from this workspace</strong><p>CSV and XLSX only. Originals remain unchanged; complex formatting is not round-tripped in v1.</p></div>'+
+      '<div class="ss-import ss-panel"><div><strong>Import from this workspace</strong><p>CSV and XLSX only. V3 imports basic visible cell styling; advanced layouts are not round-tripped, and originals remain unchanged.</p></div>'+
         '<div class="ss-actions"><select class="input" id="ssImportPick" aria-label="Previously uploaded spreadsheets"></select>'+
           '<button type="button" class="btn" id="ssImport">Open upload</button>'+
           '<label class="ss-file-btn btn" for="ssUpload">Upload CSV/XLSX</label><input type="file" id="ssUpload" accept=".csv,.xlsx" hidden></div></div>'+
@@ -33,6 +35,40 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
           '<button class="btn" id="ssRenameSheet" type="button">Rename</button>'+
           '<button class="btn" id="ssRows" type="button">+10 rows</button>'+
           '<button class="btn" id="ssCols" type="button">+1 column</button></div></div>'+
+      '<section class="ss-panel ss-edit-panel" aria-label="Professional spreadsheet editing">'+
+        '<div class="ss-edit-title"><strong>Professional editing</strong><span>Formatting, sort/filter and column rules · offline</span></div>'+
+        '<div class="ss-edit-group">'+
+          '<label>Column<select class="input" id="ssToolsColumn"></select></label>'+
+          '<label>Filter contains<input class="input" type="search" id="ssFilterText" placeholder="Show matching rows"></label>'+
+          '<button type="button" class="btn" id="ssSortAsc">Sort A–Z</button>'+
+          '<button type="button" class="btn" id="ssSortDesc">Sort Z–A</button>'+
+          '<button type="button" class="btn" id="ssClearFilter">Clear filter</button>'+
+        '</div>'+
+        '<div class="ss-edit-group">'+
+          '<label>Freeze<select class="input" id="ssFreeze"><option value="none">No panes</option><option value="row">Header row</option><option value="column">First column</option><option value="both">Row and column</option></select></label>'+
+          '<label>Column width<input class="input" id="ssWidth" type="number" min="8" max="48" step="1" value="18"></label>'+
+          '<label class="ss-check"><input type="checkbox" id="ssExcelFilter" checked> Excel filter buttons</label>'+
+          '<button type="button" class="btn" id="ssApplyLayout">Apply layout</button>'+
+        '</div>'+
+        '<div class="ss-edit-group">'+
+          '<label>Selected cell<input class="input" readonly id="ssSelectedCell" value="A1"></label>'+
+          '<label class="ss-check"><input type="checkbox" id="ssStyleBold"> Bold</label>'+
+          '<label class="ss-check"><input type="checkbox" id="ssStyleItalic"> Italic</label>'+
+          '<label>Alignment<select class="input" id="ssStyleAlign"><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></label>'+
+          '<label>Number format<select class="input" id="ssStyleFormat"><option value="general">General</option><option value="number">Number</option><option value="integer">Integer</option><option value="gbp">GBP</option><option value="usd">USD</option><option value="eur">EUR</option><option value="percent">Percentage</option></select></label>'+
+          '<label>Fill<input aria-label="Cell fill colour" id="ssStyleFill" type="color" value="#ffffff"></label>'+
+          '<label>Text<input aria-label="Cell text colour" id="ssStyleText" type="color" value="#1e293b"></label>'+
+          '<button type="button" class="btn primary" id="ssApplyStyle">Style selected cell</button>'+
+        '</div>'+
+        '<div class="ss-edit-group">'+
+          '<label>Column rule<select class="input" id="ssValidationKind"><option value="none">No new rule</option><option value="list">Dropdown list</option><option value="whole">Whole number</option><option value="decimal">Decimal number</option></select></label>'+
+          '<label>List choices (comma-separated)<input class="input" id="ssValidationOptions" maxlength="240" placeholder="Open,In progress,Closed"></label>'+
+          '<label>Minimum<input class="input" type="number" id="ssValidationMin" step="any" value="0"></label>'+
+          '<label>Maximum<input class="input" type="number" id="ssValidationMax" step="any" value="100"></label>'+
+          '<button type="button" class="btn" id="ssApplyValidation">Apply column rule</button>'+
+        '</div>'+
+        '<p class="ss-hint">Sort keeps the header and matching cell formatting together. Sorting is disabled when a worksheet contains formulas to protect references. Filtering changes only the visible view; exports still contain every row.</p>'+
+      '</section>'+
       '<div class="ss-grid-wrap" tabindex="0" aria-label="Editable workbook grid"><table class="ss-grid" id="ssGrid"></table></div>'+
       '<section class="ss-panel ss-formula-panel" aria-label="Formula results"><strong>Calculated values</strong>'+
         '<p id="ssCalcSummary" role="status" aria-live="polite">No formulas calculated.</p>'+
@@ -104,6 +140,105 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   };
   const heading=col=>String.fromCharCode(65+col);
   const syncName=()=>{book.name=el("ssBookName").value;};
+  let selectedCell="A1",viewFilter="",viewColumn=0;
+  for(let n=0;n<MAX_COLS;n++){
+    const option=document.createElement("option");
+    option.value=String(n);option.textContent=heading(n);
+    el("ssToolsColumn").append(option);
+  }
+  function currentSheet(){return book.sheets[activeSheet];}
+  function syncStyleControls(){
+    const style=styleAt(currentSheet(),selectedCell);
+    el("ssSelectedCell").value=selectedCell;
+    el("ssStyleBold").checked=style.bold;
+    el("ssStyleItalic").checked=style.italic;
+    el("ssStyleAlign").value=style.align;
+    el("ssStyleFormat").value=style.number_format;
+    el("ssStyleFill").value=style.fill;
+    el("ssStyleText").value=style.color;
+  }
+  function syncSheetControls(){
+    const sheet=currentSheet();
+    el("ssFreeze").value=sheet.freeze??"row";
+    el("ssExcelFilter").checked=sheet.filter_enabled??true;
+    const letter=heading(viewColumn);
+    el("ssWidth").value=String(sheet.column_widths?.[letter]??18);
+    const rule=(sheet.validations||[]).find(x=>x.column===letter);
+    el("ssValidationKind").value=rule?.kind??"none";
+    el("ssValidationOptions").value=(rule?.options||[]).join(",");
+    el("ssValidationMin").value=String(rule?.min_value??0);
+    el("ssValidationMax").value=String(rule?.max_value??100);
+    syncStyleControls();
+  }
+  el("ssToolsColumn").onchange=()=>{
+    viewColumn=Number(el("ssToolsColumn").value);syncSheetControls();renderGrid();
+  };
+  el("ssFilterText").oninput=()=>{
+    viewFilter=el("ssFilterText").value;renderGrid();
+    status(viewFilter?"Temporary view filter active. No rows are deleted.":"Showing all rows.");
+  };
+  el("ssClearFilter").onclick=()=>{
+    viewFilter="";el("ssFilterText").value="";renderGrid();status("All rows restored.");
+  };
+  function sortRows(descending){
+    try{
+      sortSheetRows(currentSheet(),viewColumn,descending);
+      recordWorkbookChange();renderGrid();recalculate();
+      status("Sorted entire data rows with header and cell formatting preserved. Save to keep it.");
+    }catch(error){status(error.message,true);}
+  }
+  el("ssSortAsc").onclick=()=>sortRows(false);
+  el("ssSortDesc").onclick=()=>sortRows(true);
+  el("ssApplyLayout").onclick=()=>{
+    try{
+      const width=Number(el("ssWidth").value);
+      if(!Number.isInteger(width)||width<8||width>48)throw Error("Column width must be 8–48.");
+      currentSheet().freeze=el("ssFreeze").value;
+      currentSheet().filter_enabled=el("ssExcelFilter").checked;
+      currentSheet().column_widths={...(currentSheet().column_widths||{}),[heading(viewColumn)]:width};
+      recordWorkbookChange();renderGrid();
+      status("Freeze, Excel filtering and column width updated in your workbook.");
+    }catch(error){status(error.message,true);}
+  };
+  el("ssApplyStyle").onclick=()=>{
+    try{
+      applyCellStyle(currentSheet(),selectedCell,{
+        bold:el("ssStyleBold").checked,italic:el("ssStyleItalic").checked,
+        align:el("ssStyleAlign").value,number_format:el("ssStyleFormat").value,
+        fill:el("ssStyleFill").value,color:el("ssStyleText").value
+      });
+      recordWorkbookChange();renderGrid();
+      status("Applied formatting to "+selectedCell+". Save a private copy to retain it.");
+    }catch(error){status(error.message,true);}
+  };
+  el("ssApplyValidation").onclick=()=>{
+    const sheet=currentSheet(),column=heading(viewColumn);
+    const previous=[...(sheet.validations||[])];
+    try{
+      const kind=el("ssValidationKind").value;
+      if(kind==="none"){
+        sheet.validations=previous.filter(x=>x.column!==column);
+      }else{
+        setColumnRule(sheet,{column,kind,options:el("ssValidationOptions").value,
+          min_value:el("ssValidationMin").value,max_value:el("ssValidationMax").value});
+        for(let rowIndex=1;rowIndex<sheet.rows.length;rowIndex++){
+          const issue=validateEntry(sheet,rowIndex,viewColumn,sheet.rows[rowIndex]?.[viewColumn]);
+          if(issue)throw Error("Existing row "+(rowIndex+1)+": "+issue);
+        }
+      }
+      recordWorkbookChange();renderGrid();syncSheetControls();
+      status("Column "+column+" validation updated. It will also be written to XLSX.");
+    }catch(error){
+      sheet.validations=previous;
+      status("Validation not applied: "+error.message,true);
+    }
+  };
+  el("ssGrid").addEventListener("focusin",event=>{
+    const input=event.target.closest("input.ss-cell");
+    if(!input)return;
+    selectedCell=heading(Number(input.dataset.col))+(Number(input.dataset.row)+1);
+    syncStyleControls();
+  });
   function updateHistoryButtons(){
     const controls=history.state();
     el("ssUndo").disabled=!controls.canUndo;
@@ -123,7 +258,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     el("ssCalcMode").value=book.calculation_mode||"literal";
     ++calculationSeq;calculation=null;
     el("ssDownload").replaceChildren();
-    updateHistoryButtons();renderSheets();renderGrid();recalculate();
+    updateHistoryButtons();renderSheets();syncSheetControls();renderGrid();recalculate();
     status("Workbook change restored in memory. Save a new private copy when ready.");
   }
   el("ssUndo").onclick=()=>restoreHistory(history.undo());
@@ -207,7 +342,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       button.className="ss-sheet-tab";
       button.textContent=sheet.name;
       button.setAttribute("aria-selected",String(index===activeSheet));
-      button.onclick=()=>{activeSheet=index;renderSheets();renderGrid();refreshCalculatedCells();};
+      button.onclick=()=>{activeSheet=index;selectedCell="A1";viewFilter="";el("ssFilterText").value="";renderSheets();syncSheetControls();renderGrid();refreshCalculatedCells();};
       tabs.append(button);
     });
     el("ssSheetLabel").textContent=book.sheets[activeSheet].name;
@@ -220,12 +355,17 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     const corner=document.createElement("th");
     corner.textContent="#";corner.scope="col";header.append(corner);
     for(let c=0;c<gridCols;c++){
-      const th=document.createElement("th");th.scope="col";th.textContent=heading(c);header.append(th);
+      const th=document.createElement("th");th.scope="col";th.textContent=heading(c);
+      const width=currentSheet().column_widths?.[heading(c)];
+      if(width)th.style.minWidth=String(width*8)+"px";
+      header.append(th);
     }
     head.append(header);table.append(head);
     const body=document.createElement("tbody");
+    const visible=new Set(filterIndices(currentSheet(),viewColumn,viewFilter));
     for(let r=0;r<gridRows;r++){
       const row=document.createElement("tr");
+      row.hidden=Boolean(viewFilter)&&!visible.has(r);
       const number=document.createElement("th");number.scope="row";number.textContent=String(r+1);row.append(number);
       for(let c=0;c<gridCols;c++){
         const td=document.createElement("td"),input=document.createElement("input");
@@ -233,6 +373,18 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
         input.dataset.row=String(r);input.dataset.col=String(c);
         input.setAttribute("aria-label",heading(c)+(r+1));
         input.value=String(book.sheets[activeSheet].rows[r]?.[c]??"");
+        input.dataset.prev=input.value;
+        const address=heading(c)+(r+1);
+        const width=currentSheet().column_widths?.[heading(c)];
+        if(width)td.style.minWidth=String(width*8)+"px";
+        if(currentSheet().cell_styles?.[address]){
+          const format=styleAt(currentSheet(),address);
+          td.style.backgroundColor=format.fill;
+          input.style.color=format.color;
+          input.style.fontWeight=format.bold?"700":"400";
+          input.style.fontStyle=format.italic?"italic":"normal";
+          input.style.textAlign=format.align;
+        }
         const preview=document.createElement("small");
         preview.className="ss-evaluated";
         preview.setAttribute("aria-live","off");
@@ -258,7 +410,19 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     if(e.target.matches("input.ss-cell"))updateCell(e.target);
   });
   el("ssGrid").addEventListener("change",e=>{
-    if(e.target.matches("input.ss-cell")){recordWorkbookChange();recalculate();}
+    const input=e.target.closest("input.ss-cell");
+    if(!input)return;
+    const r=Number(input.dataset.row),c=Number(input.dataset.col);
+    const issue=validateEntry(currentSheet(),r,c,currentSheet().rows[r]?.[c]);
+    if(issue){
+      setGridCell(book,activeSheet,r,c,input.dataset.prev);
+      input.value=input.dataset.prev;
+      status(issue+" Change rejected.",true);
+      ++calculationSeq;calculation=null;
+      recalculate();return;
+    }
+    input.dataset.prev=input.value;
+    recordWorkbookChange();recalculate();
   });
   el("ssGrid").addEventListener("keydown",e=>{
     if(e.key==="Enter"&&e.target.matches("input.ss-cell")&&!e.isComposing){
@@ -276,16 +440,22 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     const baseRow=Number(input.dataset.row),baseCol=Number(input.dataset.col);
     const lines=clipboard.replace(/\r\n?/g,"\n").replace(/\n$/,"").split("\n");
     let changed=0;
+    const patches=[];
     for(let r=0;r<lines.length&&baseRow+r<MAX_ROWS;r++){
       const cols=lines[r].split("\t");
       for(let c=0;c<cols.length&&baseCol+c<MAX_COLS;c++){
-        setGridCell(book,activeSheet,baseRow+r,baseCol+c,cols[c]);changed++;
+        const targetRow=baseRow+r,targetCol=baseCol+c;
+        const raw=cols[c];
+        const issue=validateEntry(currentSheet(),targetRow,targetCol,raw);
+        if(issue){status(issue+" Nothing was pasted.",true);return;}
+        patches.push({r:targetRow,c:targetCol,value:raw});
       }
     }
+    for(const patch of patches){setGridCell(book,activeSheet,patch.r,patch.c,patch.value);changed++;}
     gridRows=Math.min(MAX_ROWS,Math.max(gridRows,baseRow+Math.min(lines.length,MAX_ROWS-baseRow)));
     gridCols=Math.min(MAX_COLS,Math.max(gridCols,baseCol+Math.max(...lines.map(v=>v.split("\t").length))));
     renderGrid();recordWorkbookChange();recalculate();
-    status("Pasted "+changed+" cells. Save a private copy.");
+    status("Pasted "+changed+" validated cells. Save a private copy.");
     el("ssGrid").querySelector('input[data-row="'+baseRow+'"][data-col="'+baseCol+'"]')?.focus();
   });
   function openBook(data){
@@ -297,7 +467,9 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     history.reset(book);updateHistoryButtons();
     ++calculationSeq;calculation=null;
     el("ssDownload").replaceChildren();
-    renderSheets();renderGrid();setTab("book");recalculate();
+    selectedCell="A1";viewFilter="";viewColumn=0;
+    el("ssFilterText").value="";el("ssToolsColumn").value="0";
+    renderSheets();syncSheetControls();renderGrid();setTab("book");recalculate();
   }
   el("ssBookName").oninput=()=>{syncName();status("Unsaved workbook name change.");};
   el("ssBookName").onchange=()=>recordWorkbookChange();
@@ -310,7 +482,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     let n=book.sheets.length+1,label="Sheet"+n;
     while(book.sheets.some(s=>s.name.toLowerCase()===label.toLowerCase()))label="Sheet"+(++n);
     book.sheets.push({name:label,rows:[]});activeSheet=book.sheets.length-1;
-    renderSheets();renderGrid();recordWorkbookChange();recalculate();
+    renderSheets();syncSheetControls();renderGrid();recordWorkbookChange();recalculate();
     status("New worksheet created; save to keep it.");
   };
   el("ssRenameSheet").onclick=()=>{

@@ -44,7 +44,13 @@ export function workbookPayload(book){
         throw Error("Cell values must be short text or finite numbers.");
       });
     });
-    return {name:label,rows};
+    const metadata={};
+    if(sheet.cell_styles!==undefined)metadata.cell_styles=sheet.cell_styles;
+    if(sheet.freeze!==undefined)metadata.freeze=sheet.freeze;
+    if(sheet.filter_enabled!==undefined)metadata.filter_enabled=sheet.filter_enabled;
+    if(sheet.column_widths!==undefined)metadata.column_widths=sheet.column_widths;
+    if(sheet.validations!==undefined)metadata.validations=sheet.validations;
+    return {name:label,rows,...metadata};
   });
   const mode=book.calculation_mode;
   if(mode!==undefined&&mode!=="literal"&&mode!=="formulas")throw Error("Unknown formula mode.");

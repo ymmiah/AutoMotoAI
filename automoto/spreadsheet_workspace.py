@@ -25,7 +25,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from automoto import office, spreadsheet_formulas
+from automoto import office, spreadsheet_formulas, spreadsheet_formatting
 from automoto.document_workspace import _atomic_file, _root
 from automoto.visual_studio import _auth
 
@@ -47,6 +47,12 @@ class SheetIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(..., min_length=1, max_length=31)
     rows: list[list[Any]] = Field(default_factory=list, max_length=MAX_ROWS)
+    # Optional V3 metadata; absent keys preserve all V1/V2 drafts exactly.
+    cell_styles: dict[str, spreadsheet_formatting.CellFormat] = Field(default_factory=dict, max_length=500)
+    freeze: Literal["none", "row", "column", "both"] = "row"
+    filter_enabled: bool = True
+    column_widths: dict[str, int] = Field(default_factory=dict, max_length=16)
+    validations: list[spreadsheet_formatting.ColumnValidation] = Field(default_factory=list, max_length=16)
 
 
 class BookIn(BaseModel):
@@ -147,7 +153,9 @@ def _normalise(book: BookIn) -> dict[str, Any]:
                 else:
                     raise HTTPException(422, "Cells must contain text, numbers, booleans or blanks.")
             clean_rows.append(clean_row)
-        sheets.append({"name": label, "rows": clean_rows})
+        entry = {"name": label, "rows": clean_rows}
+        entry.update(spreadsheet_formatting.normalise_metadata(sheet, clean_rows))
+        sheets.append(entry)
     result = {"name": name, "sheets": sheets}
     # An absent mode remains absent, preserving old V1 saved JSON/API responses.
     if "calculation_mode" in book.model_fields_set:
@@ -236,11 +244,23 @@ def _import_source(path: Path) -> dict[str, Any]:
             try:
                 for ws in wb.worksheets[:MAX_SHEETS]:
                     rows = []
-                    for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row or 1, MAX_ROWS),
-                                            min_col=1, max_col=min(ws.max_column or 1, MAX_COLS),
-                                            values_only=True):
-                        rows.append([_literal(v, warnings) for v in row])
-                    sheets.append({"name": ws.title, "rows": rows})
+                    styles: dict[str, Any] = {}
+                    for row_index, row in enumerate(ws.iter_rows(
+                            min_row=1, max_row=min(ws.max_row or 1, MAX_ROWS),
+                            min_col=1, max_col=min(ws.max_column or 1, MAX_COLS),
+                            values_only=False), start=1):
+                        values = []
+                        for col_index, cell in enumerate(row):
+                            values.append(_literal(cell.value, warnings))
+                            style = spreadsheet_formatting.import_cell_style(cell, warnings)
+                            if style is not None and len(styles) < spreadsheet_formatting.MAX_STYLES:
+                                styles[f"{chr(65+col_index)}{row_index}"] = style
+                        rows.append(values)
+                    entry = {"name": ws.title, "rows": rows}
+                    if styles:
+                        entry["cell_styles"] = styles
+                    sheets.append(entry)
+                    warnings.add("Only recognised visible cell styles are imported; source validations, column widths, filters, freezes, charts and other advanced layout are not preserved.")
                     if (ws.max_row or 0) > MAX_ROWS or (ws.max_column or 0) > MAX_COLS:
                         warnings.add("Some source rows or columns were excluded by V1 preview limits.")
                 if len(wb.worksheets) > MAX_SHEETS:
@@ -302,6 +322,7 @@ def _write_xlsx(path: Path, workbook: dict[str, Any]) -> None:
         if source["rows"]:
             last = get_column_letter(max((len(r) for r in source["rows"]), default=1))
             sheet.auto_filter.ref = f"A1:{last}{len(source['rows'])}"
+        spreadsheet_formatting.apply_formatting(sheet, source)
     book.save(path)
 
 
