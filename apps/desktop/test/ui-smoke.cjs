@@ -422,6 +422,58 @@ let browser;
   await page.screenshot({path:path.join(output,'document-assistant-v3-offline-ai-review.png')});
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
+  // Spreadsheet v1: real browser -> authenticated Python API -> genuine XLSX.
+  await page.locator('.nav [data-page="spreadsheets"]').click();
+  await page.locator('#ssBookName').waitFor();
+  await page.locator('#ssBookName').fill('QA offline workbook');
+  await page.locator('#ssGrid input[data-row="1"][data-col="1"]').fill('42.50');
+  const bookSaving=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/save')&&
+    r.request().method()==='POST');
+  await page.locator('#ssSave').click();
+  const bookSaved=await bookSaving;
+  assert.equal(bookSaved.status(),200,'private workbook save should succeed');
+  const workbookPath=(await bookSaved.json()).path;
+  assert.ok(workbookPath.endsWith('.sheet.json'));
+  const bookExporting=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/export')&&
+    r.request().method()==='POST');
+  await page.locator('#ssExport').click();
+  const bookExported=await bookExporting;
+  assert.equal(bookExported.status(),200);
+  const workbookXlsx=(await bookExported.json()).path;
+  assert.ok(workbookXlsx.endsWith('.xlsx'));
+  assert.ok((await page.request.get(base+'/api/files/download?path='+encodeURIComponent(workbookXlsx))).ok());
+
+  await page.locator('#ssTabInvoice').click();
+  await page.locator('#ssInvoiceNumber').fill('QA-2026-1');
+  await page.locator('#ssSeller').fill('Example business, Birmingham');
+  await page.locator('#ssCustomer').fill('Example customer, London');
+  await page.locator('#ssIssued').fill('2026-11-07');
+  await page.locator('#ssDue').fill('2026-12-07');
+  await page.locator('#ssTax').fill('20');
+  await page.locator('#ssInvoiceLines input[data-field="description"]').fill('V1 test service');
+  await page.locator('#ssInvoiceLines input[data-field="quantity"]').fill('2');
+  await page.locator('#ssInvoiceLines input[data-field="unit_price"]').fill('7.50');
+  const invoiceChecking=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/invoice/preview')&&
+    r.request().method()==='POST');
+  await page.locator('#ssPreview').click();
+  assert.equal((await invoiceChecking).status(),200);
+  await page.waitForFunction(()=>document.querySelector('#ssTotals')?.textContent?.includes('GBP 18.00'));
+  const invoiceSaving=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/invoice/save')&&
+    r.request().method()==='POST');
+  await page.locator('#ssInvoiceSave').click();
+  assert.equal((await invoiceSaving).status(),200);
+  const invoiceExporting=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/invoice/export')&&
+    r.request().method()==='POST');
+  await page.locator('#ssInvoiceExport').click();
+  const invoiceExported=await invoiceExporting;
+  assert.equal(invoiceExported.status(),200);
+  const invoiceData=await invoiceExported.json();
+  assert.equal(invoiceData.draft_only,true);
+  assert.equal(invoiceData.sent,false);
+  assert.equal(invoiceData.totals.total,'18.00');
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v1-workspace.png')});
+  await page.locator('#newChat').click();
+  await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
   await page.locator('.nav [data-page="visual"]').click();
   await page.locator('#vsPreview').waitFor();
