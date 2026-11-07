@@ -147,10 +147,15 @@ def test_private_immutable_snapshots_and_isolation(client):
 
 
 def test_manual_report_does_not_automatically_read_draft_invoices(client):
-    from automoto.commercial_documents import CommercialIn
-    from tests.test_commercial_documents import document
-    commercial = client.post("/api/spreadsheets/commercial/save", headers=AUTH,
-                             json=document())
+    draft = {
+        "kind": "quotation", "number": "DRAFT-Q-01", "issue_date": "2026-11-07",
+        "due_date": "2026-12-07", "currency": "GBP", "review_state": "reviewed",
+        "seller": {"name": "Example seller", "address": "UK"},
+        "customer": {"name": "Example buyer", "address": "UK"},
+        "brand": {"display_name": "Example", "accent": "#183153"},
+        "lines": [{"description": "Future work", "quantity": "1", "unit_price": "500000.00"}]
+    }
+    commercial = client.post("/api/spreadsheets/commercial/save", headers=AUTH, json=draft)
     assert commercial.status_code == 200, commercial.text
     value = book()
     value["entries"] = []
