@@ -97,7 +97,7 @@ def interpolate(keys: list[dict], progress: float) -> dict[str, float]:
 
 def motion_raster(scene: dict, progress: float, config: dict, scale: float = 1.0):
     """Render visible group sprites in paint order; no workspace modifications."""
-    from PIL import Image, ImageDraw, ImageEnhance
+    from PIL import Image, ImageDraw
     # Lazy import avoids a circular dependency with the normal renderer.
     from automoto.visual_renderer import _draw_element
     tracks = validate_keyframes(scene, config)
@@ -116,7 +116,26 @@ def motion_raster(scene: dict, progress: float, config: dict, scale: float = 1.0
     for element in scene["elements"]:
         group = element.get("group")
         if group not in tracks:
-            _draw_element(frame, draw, element, scale)
+            # Keep workflow connectors attached to moving groups' translated
+            # anchors. Rotation/scale of a group remain visual transforms,
+            # not mutations to the connector's original scene coordinates.
+            drawn = element
+            if element["type"] == "line":
+                source = element.get("from_group")
+                target = element.get("to_group")
+                a = interpolate(tracks[source], progress) if source in tracks else None
+                b = interpolate(tracks[target], progress) if target in tracks else None
+                if ((a and a["opacity"] <= 0.03) or (b and b["opacity"] <= 0.03)):
+                    continue
+                if a or b:
+                    drawn = dict(element)
+                    if a:
+                        drawn["x1"] += a["dx"]
+                        drawn["y1"] += a["dy"]
+                    if b:
+                        drawn["x2"] += b["dx"]
+                        drawn["y2"] += b["dy"]
+            _draw_element(frame, draw, drawn, scale)
             continue
         if group in rendered:
             continue
