@@ -569,9 +569,9 @@ let browser;
   const v4Saving=page.waitForResponse(r=>
     r.url().includes('/api/spreadsheets/commercial/save')&&r.request().method()==='POST');
   await page.locator('#csSave').click();
-  const v4Saved=await v4Saving;
-  assert.equal(v4Saved.status(),200);
-  const v4Path=(await v4Saved.json()).path;
+  const commercialSaved=await v4Saving;
+  assert.equal(commercialSaved.status(),200);
+  const v4Path=(await commercialSaved.json()).path;
   assert.ok(v4Path.endsWith('.commercial.json'));
   const v4Loaded=await page.request.get(base+'/api/spreadsheets/commercial/load?path='+
     encodeURIComponent(v4Path));
