@@ -29,11 +29,34 @@ const path=require("node:path");
   assert.equal(invoice.lines[0].unit_price,"9.99");
   assert.equal(invoice.currency,"GBP");
   assert.throws(()=>model.invoicePayload({},[]),/forty/);
+
+  const newer=model.blankBook();
+  assert.equal(newer.calculation_mode,"formulas");
+  assert.equal(model.workbookPayload(newer).calculation_mode,"formulas");
+  const legacy={name:"Legacy",sheets:[{name:"Sheet1",rows:[["=1+2"]]}]};
+  assert.ok(!("calculation_mode" in model.workbookPayload(legacy)));
+  const history=model.createWorkbookHistory(newer,3);
+  const edited=structuredClone(newer);
+  model.setGridCell(edited,0,1,1,"=A1*2");
+  history.record(edited);
+  assert.equal(history.state().canUndo,true);
+  const before=history.undo();
+  assert.equal(before.sheets[0].rows[1][1],"");
+  assert.equal(history.state().canRedo,true);
+  const after=history.redo();
+  assert.equal(after.sheets[0].rows[1][1],"=A1*2");
+  after.sheets[0].rows[1][1]="hijacked";
+  assert.equal(history.undo().sheets[0].rows[1][1],"");
+  assert.equal(history.redo().sheets[0].rows[1][1],"=A1*2",
+    "history snapshots must not alias mutable editor objects");
+  history.reset(newer);
+  assert.equal(history.state().canUndo,false);
+
   const app=readFileSync(path.resolve(__dirname,
     "../../../automoto/web/static/spreadsheet-studio.js"),"utf8");
   assert.match(app,/invoice\/preview/);
   assert.match(app,/spreadsheets\/export/);
   assert.doesNotMatch(app,/eval\s*\(/);
   assert.match(app,/originals remain unchanged/i);
-  console.log("Spreadsheet v1 grid, literal formulas, invoice draft and app wiring passed.");
+  console.log("Spreadsheet v2 formula opt-in, history, legacy compatibility and v1 invoice tests passed.");
 })().catch(err=>{console.error(err);process.exitCode=1;});
