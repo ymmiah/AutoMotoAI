@@ -258,6 +258,37 @@ let browser;
   assert.ok((await untouchedOriginal.body()).equals(wordBytes),
     'the original imported Word content must remain byte-for-byte unchanged');
   await page.screenshot({path:path.join(output,'document-assistant-v5-word-copy.png')});
+  // v6: real local evidence retrieval from a checksum-pinned imported Word
+  // document without model access, invented references or source writes.
+  await page.locator('#daResearch summary').click();
+  await page.locator('#daResearchSources input[type="checkbox"]').first()
+    .waitFor({state:'attached'});
+  const selectedSources=await page.locator('#daResearchSources input[type="checkbox"]:checked').count();
+  assert.ok(selectedSources>=1,'current imported Word file becomes a research source');
+  await page.locator('#daResearchQuestion').fill('What is the original body wording for review?');
+  const searchingEvidence=page.waitForResponse(r=>
+    r.url().includes('/api/documents/research/query')&&r.request().method()==='POST');
+  await page.locator('#daResearchRun').click();
+  const evidenceResponse=await searchingEvidence;
+  assert.equal(evidenceResponse.status(),200,await evidenceResponse.text());
+  assert.equal((await evidenceResponse.json()).mode,'evidence');
+  await page.locator('#daResearchEvidence blockquote').first().waitFor();
+  assert.match(await page.locator('#daResearchEvidence').innerText(),/Original body wording for review/);
+  assert.match(await page.locator('#daResearchNotes').inputValue(),/Research evidence notes/);
+  assert.match(await page.locator('#daResearchNotes').inputValue(),/not verified facts or bibliographic citations/);
+  await page.locator('#daResearchMode').selectOption('outline');
+  const searchingOutline=page.waitForResponse(r=>
+    r.url().includes('/api/documents/research/query')&&r.request().method()==='POST');
+  await page.locator('#daResearchRun').click();
+  const outlineResponse=await searchingOutline;
+  assert.equal(outlineResponse.status(),200,await outlineResponse.text());
+  assert.equal((await outlineResponse.json()).mode,'outline');
+  assert.match(await page.locator('#daResearchNotes').inputValue(),/Suggested academic structure/);
+  const researchOriginal=await page.request.get(base+'/api/files/download?path='+
+    encodeURIComponent(importPath));
+  assert.ok((await researchOriginal.body()).equals(wordBytes),
+    'research review must not modify the imported Word file');
+  await page.screenshot({path:path.join(output,'document-assistant-v6-offline-research.png')});
   await page.locator('#daFind').fill('Original body wording');
   await page.locator('#daReplaceWith').fill('Reviewed and approved wording');
   page.once('dialog',dialog=>dialog.accept());
