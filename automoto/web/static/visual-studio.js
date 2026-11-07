@@ -309,6 +309,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(next)spec.animation=next;
       else delete spec.animation;
     }
+    if(spec.animation?.effect==="keyframes"){
+      const next=normaliseMotion(spec);
+      if(next)spec.animation=next;
+      else delete spec.animation;
+    }
     record(before);draw();return result;
   }
   function buttons(){at("vsUndo").disabled=!undoStack.length;at("vsRedo").disabled=!redoStack.length;}
