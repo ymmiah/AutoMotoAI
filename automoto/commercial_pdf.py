@@ -154,7 +154,7 @@ def render_pdf(body, totals: dict, destination: Path) -> None:
         ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ("RIGHTPADDING", (0, 0), (-1, -1), 10),
     ]))
-    story.append(KeepTogether(totals_table))
+    story.append(KeepTogether([totals_table]))
     story.append(Spacer(1, 8 * mm))
     for title, value in (("Notes", body.notes), ("Terms", body.terms)):
         if value:
