@@ -355,7 +355,10 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     const corner=document.createElement("th");
     corner.textContent="#";corner.scope="col";header.append(corner);
     for(let c=0;c<gridCols;c++){
-      const th=document.createElement("th");th.scope="col";th.textContent=heading(c);header.append(th);
+      const th=document.createElement("th");th.scope="col";th.textContent=heading(c);
+      const width=currentSheet().column_widths?.[heading(c)];
+      if(width)th.style.minWidth=String(width*8)+"px";
+      header.append(th);
     }
     head.append(header);table.append(head);
     const body=document.createElement("tbody");
@@ -371,12 +374,17 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
         input.setAttribute("aria-label",heading(c)+(r+1));
         input.value=String(book.sheets[activeSheet].rows[r]?.[c]??"");
         input.dataset.prev=input.value;
-        const format=styleAt(currentSheet(),heading(c)+(r+1));
-        td.style.backgroundColor=format.fill;
-        input.style.color=format.color;
-        input.style.fontWeight=format.bold?"700":"400";
-        input.style.fontStyle=format.italic?"italic":"normal";
-        input.style.textAlign=format.align;
+        const address=heading(c)+(r+1);
+        const width=currentSheet().column_widths?.[heading(c)];
+        if(width)td.style.minWidth=String(width*8)+"px";
+        if(currentSheet().cell_styles?.[address]){
+          const format=styleAt(currentSheet(),address);
+          td.style.backgroundColor=format.fill;
+          input.style.color=format.color;
+          input.style.fontWeight=format.bold?"700":"400";
+          input.style.fontStyle=format.italic?"italic":"normal";
+          input.style.textAlign=format.align;
+        }
         const preview=document.createElement("small");
         preview.className="ss-evaluated";
         preview.setAttribute("aria-live","off");
