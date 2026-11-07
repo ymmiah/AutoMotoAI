@@ -275,6 +275,9 @@ let browser;
   assert.equal(deletion.status(),200,await deletion.text());
   await page.locator('#daRecoveryList').getByText('No private recovery checkpoints saved yet.').waitFor();
   await page.screenshot({path:path.join(output,'document-assistant-v7-recovery-acceptance.png')});
+  // Restoring intentionally marks the new editor state unsaved. Accept the
+  // standard "leave unsaved changes" confirmation before importing the file.
+  page.once('dialog',dialog=>dialog.accept());
   await page.locator('#daImportFile').setInputFiles({
     name:'review-import.docx',
     mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
