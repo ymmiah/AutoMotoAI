@@ -104,6 +104,14 @@ def test_zero_revenue_margin_is_null_and_loss_is_negative(client):
     assert summary["operating_margin_percent"] is None
     assert summary["operating_surplus"] == "-150.00"
     assert summary["closing_cash"] == "-50.00", "negative closing cash must be shown, not clipped"
+    csv_export = client.post(API + "/export", headers=AUTH,
+                             json={**value, "format": "csv"})
+    assert csv_export.status_code == 200, csv_export.text
+    output = (sandbox.default_root() / csv_export.json()["path"]).read_text(encoding="utf-8-sig")
+    rows = list(csv.reader(io.StringIO(output)))
+    assert ["Operating cash surplus (not statutory profit)", "-150.00"] in rows
+    assert ["Closing cash", "-50.00"] in rows
+
 
 
 def test_planned_only_cannot_be_mistaken_for_real_revenue(client):
