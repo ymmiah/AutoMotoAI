@@ -94,8 +94,7 @@ def normalise_metadata(sheet: Any, rows: list[list[Any]]) -> dict[str, Any]:
                     continue
                 value = row[index]
                 if isinstance(value, str) and value.startswith("="):
-                    # The formula engine is authoritative for formula values.
-                    continue
+                    raise HTTPException(422, f"Formulas are not permitted in validated column {rule.column}.")
                 if rule.kind == "list" and str(value) not in rule.options:
                     raise HTTPException(422, f"Column {rule.column} contains a value outside its permitted list.")
                 if rule.kind != "list":
