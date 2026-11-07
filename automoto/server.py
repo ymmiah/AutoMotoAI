@@ -121,6 +121,8 @@ from automoto import visual_brand_kits
 app.include_router(visual_brand_kits.router)  # private validated reusable design brand kits
 from automoto import document_workspace
 app.include_router(document_workspace.router)  # private document library and Office-backed drafts
+from automoto import document_ai
+app.include_router(document_ai.router)  # explicitly requested, local-only AI document suggestions
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
