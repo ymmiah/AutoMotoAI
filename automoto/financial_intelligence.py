@@ -280,7 +280,9 @@ def _csv(book: FinanceBook, report: dict) -> bytes:
         ("Capital in", "capital_in"), ("Capital out", "capital_out"),
         ("Cash movement", "net_cash_movement"), ("Closing cash", "closing_cash"),
     ]:
-        writer.writerow([_csv_safe(label), _csv_safe(str(report[key]))])
+        # Calculated monetary fields are trusted numeric strings. Preserve negative
+        # values as numbers in Excel; only user-controlled report names need escaping.
+        writer.writerow([label, _csv_safe(report[key]) if key == "name" else report[key]])
     writer.writerow([])
     writer.writerow(["Month", "Revenue", "Expenses", "Cash operating surplus",
                      "Cash financing", "Cash movement", "Closing cash"])
