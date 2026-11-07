@@ -70,3 +70,22 @@
  .ss-actions{width:100%}.ss-actions .btn{flex:1}
  .ss-grid-wrap{max-height:480px}
 }
+
+
+/* V2: visible calculated values without hiding the editable source formula. */
+.ss-calc-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ss-calc-controls strong,.ss-formula-panel>strong{font-size:13px}
+.ss-calc-controls p{max-width:750px}
+.ss-calc-controls .btn{min-height:36px}
+.ss-formula-panel{display:grid;gap:9px}
+.ss-formula-results{display:flex;flex-wrap:wrap;gap:7px}
+.ss-formula-item{background:var(--bg2);color:var(--text);border:1px solid var(--line2);
+ border-radius:8px;padding:7px 10px;font:500 12px/1.4 var(--mono);cursor:pointer}
+.ss-formula-item:hover{border-color:var(--accent)}
+.ss-formula-error{color:var(--bad)!important}
+.ss-grid .ss-evaluated{display:block;min-height:18px;padding:1px 9px 4px;
+ font:500 11px/1.4 var(--mono);color:var(--ok);overflow-wrap:anywhere}
+.ss-grid .ss-evaluated[hidden]{display:none}
+.ss-grid td:has(.ss-evaluated:not([hidden])){background:var(--bg2)}
+.ss-grid td:has(.ss-evaluated:not([hidden])) input{font-weight:650}
+@media(max-width:680px){.ss-calc-controls .btn{width:100%}.ss-formula-item{max-width:100%;overflow-wrap:anywhere}}
