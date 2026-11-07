@@ -359,8 +359,10 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     }
     head.append(header);table.append(head);
     const body=document.createElement("tbody");
+    const visible=new Set(filterIndices(currentSheet(),viewColumn,viewFilter));
     for(let r=0;r<gridRows;r++){
       const row=document.createElement("tr");
+      row.hidden=Boolean(viewFilter)&&r<currentSheet().rows.length&&!visible.has(r);
       const number=document.createElement("th");number.scope="row";number.textContent=String(r+1);row.append(number);
       for(let c=0;c<gridCols;c++){
         const td=document.createElement("td"),input=document.createElement("input");
@@ -368,6 +370,13 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
         input.dataset.row=String(r);input.dataset.col=String(c);
         input.setAttribute("aria-label",heading(c)+(r+1));
         input.value=String(book.sheets[activeSheet].rows[r]?.[c]??"");
+        input.dataset.prev=input.value;
+        const format=styleAt(currentSheet(),heading(c)+(r+1));
+        td.style.backgroundColor=format.fill;
+        input.style.color=format.color;
+        input.style.fontWeight=format.bold?"700":"400";
+        input.style.fontStyle=format.italic?"italic":"normal";
+        input.style.textAlign=format.align;
         const preview=document.createElement("small");
         preview.className="ss-evaluated";
         preview.setAttribute("aria-live","off");
@@ -393,7 +402,19 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     if(e.target.matches("input.ss-cell"))updateCell(e.target);
   });
   el("ssGrid").addEventListener("change",e=>{
-    if(e.target.matches("input.ss-cell")){recordWorkbookChange();recalculate();}
+    const input=e.target.closest("input.ss-cell");
+    if(!input)return;
+    const r=Number(input.dataset.row),c=Number(input.dataset.col);
+    const issue=validateEntry(currentSheet(),r,c,currentSheet().rows[r]?.[c]);
+    if(issue){
+      setGridCell(book,activeSheet,r,c,input.dataset.prev);
+      input.value=input.dataset.prev;
+      status(issue+" Change rejected.",true);
+      ++calculationSeq;calculation=null;
+      recalculate();return;
+    }
+    input.dataset.prev=input.value;
+    recordWorkbookChange();recalculate();
   });
   el("ssGrid").addEventListener("keydown",e=>{
     if(e.key==="Enter"&&e.target.matches("input.ss-cell")&&!e.isComposing){
@@ -411,16 +432,22 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     const baseRow=Number(input.dataset.row),baseCol=Number(input.dataset.col);
     const lines=clipboard.replace(/\r\n?/g,"\n").replace(/\n$/,"").split("\n");
     let changed=0;
+    const patches=[];
     for(let r=0;r<lines.length&&baseRow+r<MAX_ROWS;r++){
       const cols=lines[r].split("\t");
       for(let c=0;c<cols.length&&baseCol+c<MAX_COLS;c++){
-        setGridCell(book,activeSheet,baseRow+r,baseCol+c,cols[c]);changed++;
+        const targetRow=baseRow+r,targetCol=baseCol+c;
+        const raw=cols[c];
+        const issue=validateEntry(currentSheet(),targetRow,targetCol,raw);
+        if(issue){status(issue+" Nothing was pasted.",true);return;}
+        patches.push({r:targetRow,c:targetCol,value:raw});
       }
     }
+    for(const patch of patches){setGridCell(book,activeSheet,patch.r,patch.c,patch.value);changed++;}
     gridRows=Math.min(MAX_ROWS,Math.max(gridRows,baseRow+Math.min(lines.length,MAX_ROWS-baseRow)));
     gridCols=Math.min(MAX_COLS,Math.max(gridCols,baseCol+Math.max(...lines.map(v=>v.split("\t").length))));
     renderGrid();recordWorkbookChange();recalculate();
-    status("Pasted "+changed+" cells. Save a private copy.");
+    status("Pasted "+changed+" validated cells. Save a private copy.");
     el("ssGrid").querySelector('input[data-row="'+baseRow+'"][data-col="'+baseCol+'"]')?.focus();
   });
   function openBook(data){
