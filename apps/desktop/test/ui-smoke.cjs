@@ -250,10 +250,10 @@ let browser;
   assert.equal(richCopyDownload.status(),200);
   assert.equal((await richCopyDownload.body()).subarray(0,2).toString('ascii'),'PK');
   assert.match(await page.locator('#daRichStatus').innerText(),/separate Word copy/i);
-  const untouchedOriginal=await page.request.get(base+'/api/files/download?path='+encodeURIComponent(
-    (await page.request.get(base+'/api/documents/docx/structure?path='+encodeURIComponent(
-      (await page.locator('#daLibrary [data-da-open]').filter({hasText:'review-import.docx'}).first()
-         .getAttribute('data-da-open'))))).json()).path));
+  const importPath=await page.locator('#daLibrary [data-da-open]')
+    .filter({hasText:'review-import.docx'}).first().getAttribute('data-da-open');
+  const untouchedOriginal=await page.request.get(base+'/api/files/download?path='+
+    encodeURIComponent(importPath));
   assert.equal(untouchedOriginal.status(),200);
   assert.ok((await untouchedOriginal.body()).equals(wordBytes),
     'the original imported Word content must remain byte-for-byte unchanged');
