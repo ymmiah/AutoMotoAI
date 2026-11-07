@@ -146,7 +146,7 @@ def apply_formatting(ws: Any, sheet: dict[str, Any]) -> None:
 
 def import_cell_style(cell: Any, warnings: set[str]) -> dict[str, Any] | None:
     """Safely extract visible bounded styles; unsupported Excel styles are never copied raw."""
-    if not cell.has_style:
+    if not getattr(cell, "has_style", False):
         return None
     result = CellFormat().model_dump()
     result["bold"] = bool(cell.font.bold)
