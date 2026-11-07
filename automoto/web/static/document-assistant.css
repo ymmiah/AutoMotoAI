@@ -130,3 +130,30 @@
 .da-ai-result .btn {justify-self:start;min-height:36px;}
 @media(max-width:650px){.da-ai {padding:12px;}.da-ai-controls .btn {flex:1 1 auto;}
   .da-ai-result .btn {justify-self:stretch;}}
+
+/* v4: professional publication settings and source-owned references. */
+.da-publication {border:1px solid var(--line);border-radius:12px;background:var(--bg2);min-width:0;}
+.da-publication[hidden] {display:none!important;}
+.da-publication>summary {font-weight:650;font-size:13px;padding:12px 15px;cursor:pointer;color:var(--text);}
+.da-publication>summary:hover {background:var(--hover);}
+.da-pub-content {display:grid;gap:14px;border-top:1px solid var(--line);padding:14px;}
+.da-pub-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end;}
+.da-pub-row label,.da-ref-add label {display:grid;gap:5px;color:var(--dim);font-size:11px;min-width:0;}
+.da-pub-row input,.da-pub-row select,.da-ref-add input,.da-ref-add select {width:100%;min-width:0;}
+.da-pub-row .btn {min-height:35px;}
+.da-pub-check {display:flex!important;align-items:center;gap:9px;font-size:12px;color:var(--dim);min-height:35px;}
+.da-pub-check input[type=checkbox] {width:16px;height:16px;accent-color:var(--accent);}
+.da-pub-check button {flex-shrink:0;}
+.da-ref-library {display:grid;gap:11px;border-top:1px solid var(--line);padding-top:12px;}
+.da-reference-list {display:grid;gap:6px;}
+.da-ref-card {display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--panel);
+  border:1px solid var(--line);border-radius:9px;flex-wrap:wrap;}
+.da-ref-id {font:11px var(--mono);padding:4px 6px;color:var(--dim);border:1px solid var(--line2);border-radius:5px;}
+.da-ref-name {font-size:12px;line-height:1.4;overflow-wrap:anywhere;flex:1 1 220px;}
+.da-ref-card button {min-height:30px;}
+.da-ref-add {display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;gap:10px;}
+.da-ref-add .btn {min-height:35px;}
+.da-pub-content code {font:11px var(--mono);background:var(--panel);padding:2px 4px;border-radius:4px;}
+.da-publication :is(input,select,button,summary):focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+@media(max-width:650px){.da-pub-content{padding:11px;}.da-pub-row,.da-ref-add{grid-template-columns:1fr;}
+ .da-pub-check{align-items:flex-start;flex-wrap:wrap;}}
