@@ -605,7 +605,9 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   }
   async function saveRecoveryCheckpoint(automatic=false){
     if(recoveryBusy||at("daEditBody").hidden)return;
-    const data=editorData(),fingerprint=JSON.stringify(data);
+    let data,fingerprint;
+    try{data=editorData();fingerprint=JSON.stringify(data);}
+    catch(error){recoveryStatus("Cannot checkpoint document: "+error.message,true);return;}
     if(automatic&&fingerprint===lastRecoveryFingerprint)return;
     recoveryBusy=true;at("daRecoverySave").disabled=true;
     recoveryStatus(automatic?"Creating an automatic private recovery point…":
