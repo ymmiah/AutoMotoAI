@@ -443,6 +443,34 @@ let browser;
   assert.ok(workbookXlsx.endsWith('.xlsx'));
   assert.ok((await page.request.get(base+'/api/files/download?path='+encodeURIComponent(workbookXlsx))).ok());
 
+  // V2: formula evaluation, dependency change and history are exercised via the real API.
+  assert.equal(await page.locator('#ssCalcMode').inputValue(),'formulas');
+  await page.locator('#ssGrid input[data-row="1"][data-col="2"]').fill('=B2*2');
+  const calculating=page.waitForResponse(r=>r.url().includes('/api/spreadsheets/calculate')&&
+    r.request().method()==='POST');
+  await page.locator('#ssCalculate').click();
+  assert.equal((await calculating).status(),200);
+  await page.waitForFunction(() =>
+    document.querySelector('#ssCalcResults')?.textContent?.includes('C2 = 85'));
+  await page.locator('#ssUndo').click();
+  assert.equal(await page.locator('#ssGrid input[data-row="1"][data-col="2"]').inputValue(),'');
+  await page.locator('#ssRedo').click();
+  assert.equal(await page.locator('#ssGrid input[data-row="1"][data-col="2"]').inputValue(),'=B2*2');
+  await page.waitForFunction(() =>
+    document.querySelector('#ssCalcResults')?.textContent?.includes('C2 = 85'));
+  await page.locator('#ssGrid input[data-row="1"][data-col="1"]').fill('20');
+  await page.locator('#ssCalculate').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#ssCalcResults')?.textContent?.includes('C2 = 40'));
+  await page.locator('#ssGrid input[data-row="2"][data-col="0"]').fill('=A3');
+  await page.locator('#ssCalculate').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#ssCalcResults')?.textContent?.includes('#CYCLE!'));
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v2-formulas.png')});
+  await page.locator('#ssUndo').click();
+  await page.waitForFunction(() =>
+    !document.querySelector('#ssCalcResults')?.textContent?.includes('#CYCLE!'));
+
   await page.locator('#ssTabInvoice').click();
   await page.locator('#ssInvoiceNumber').fill('QA-2026-1');
   await page.locator('#ssSeller').fill('Example business, Birmingham');
