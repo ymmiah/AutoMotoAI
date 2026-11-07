@@ -154,7 +154,7 @@ def presets(request: Request):
     _auth(request)
     return {"themes": list(THEMES), "layouts": ["workflow", "cards", "hero", "canvas"],
             "output_modes": ["flat","layered"],
-            "formats": sorted(FORMATS), "animation_effects": ["flow", "pulse", "float", "reveal", "sequence"],
+            "formats": sorted(FORMATS), "animation_effects": ["flow", "pulse", "float", "reveal", "sequence", "keyframes"],
             "size_limits": {"width": [640, 1920], "height": [400, 1080], "gif_pixels": 1_000_000}}
 
 
@@ -165,10 +165,14 @@ def preview(body: PreviewIn, request: Request):
     try:
         if body.frame is not None:
             config=body.animation or body.spec.get("animation") or {}
-            if not isinstance(config,dict) or config.get("effect")!="sequence":
-                raise VisualError("timeline frame preview requires a sequence animation")
-            sequence_stages(scene,config)
-            im = raster(scene,progress=body.frame,effect="sequence",animation=config)
+            if not isinstance(config,dict) or config.get("effect") not in {"sequence","keyframes"}:
+                raise VisualError("timeline frame preview requires a sequence or keyframe animation")
+            if config["effect"]=="sequence":
+                sequence_stages(scene,config)
+            else:
+                from automoto.visual_motion import validate_keyframes
+                validate_keyframes(scene,config)
+            im = raster(scene,progress=body.frame,effect=config["effect"],animation=config)
         else:
             im = raster(scene)
         data = io.BytesIO()
