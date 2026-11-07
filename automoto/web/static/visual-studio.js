@@ -571,7 +571,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       stage.setAttribute("aria-busy","true");
       try{
         const body={spec,name};
-        if(at("vsFormat").value==="gif" && at("vsEffect").value==="sequence" && spec.animation?.effect==="sequence"){
+        if(at("vsFormat").value==="gif" && ["sequence","keyframes"].includes(at("vsEffect").value) &&
+           spec.animation?.effect===at("vsEffect").value){
           body.animation=spec.animation;
           body.frame=Number(at("vsPlayhead").value)/100;
         }
@@ -989,8 +990,50 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     schedule(300);
   };
   at("vsTracks").onchange=e=>{
-    if(!e.target.matches("[data-track]"))return;
-    record(trackPrevious||snap());trackPrevious=null;
+    const select=e.target.closest("[data-motion-select]");
+    if(select){
+      motionSelected.set(select.dataset.motionSelect,Number(select.value));
+      drawTimeline();return;
+    }
+    const group=e.target.dataset.motionGroup||e.target.dataset.motionEasing;
+    if(group){
+      if(spec.animation?.effect!=="keyframes")return;
+      const config=normaliseMotion(spec),index=motionSelected.get(group)??0;
+      if(!config)return;
+      const field=e.target.dataset.motionField||"easing";
+      const value=field==="easing"?e.target.value:
+        field==="at"?Number(e.target.value)/100:Number(e.target.value);
+      const revised=editMotionKey(config,group,index,field,value);
+      if(!revised){status("Invalid keyframe value; check limits and key order.",true);drawTimeline();return;}
+      change(()=>{spec.animation=revised;});
+      return;
+    }
+    if(e.target.matches("[data-track]")){
+      record(trackPrevious||snap());trackPrevious=null;
+    }
+  };
+  at("vsTracks").onclick=e=>{
+    const add=e.target.closest("[data-motion-add]");
+    const remove=e.target.closest("[data-motion-remove]");
+    if(!add&&!remove)return;
+    if(spec.animation?.effect!=="keyframes")return;
+    const group=add?add.dataset.motionAdd:remove.dataset.motionRemove;
+    const config=normaliseMotion(spec);
+    if(!config)return;
+    const current=motionSelected.get(group)??0;
+    const revised=add
+      ?addMotionKey(config,group,Number(at("vsPlayhead").value)/100)
+      :removeMotionKey(config,group,current);
+    if(!revised){
+      status(add?"Choose a free playhead position between 1% and 99%, with at most six keys.":
+        "Only intermediate keyframes can be removed.",true);
+      return;
+    }
+    const track=revised.tracks.find(t=>t.group===group);
+    const nextIndex=add?track.keyframes.findIndex(k=>k.at===Math.round(Number(at("vsPlayhead").value))/100):
+      Math.max(0,current-1);
+    motionSelected.set(group,nextIndex);
+    change(()=>{spec.animation=revised;});
   };
   at("vsPlayhead").oninput=e=>{
     at("vsFrameLabel").textContent=e.target.value+"%";
@@ -1008,6 +1051,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(!tracks)return null;
       options.stages=tracks.stages;
     }
+    if(effect==="keyframes"){
+      const motion=normaliseMotion(spec);
+      if(!motion)return null;
+      options.tracks=motion.tracks;
+    }
     return options;
   };
   function updateGifSpec(){
@@ -1018,6 +1066,36 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     spec.animation=next;
     record(before);draw();
   }
+  at("vsMotionPlay").onclick=async()=>{
+    const button=at("vsMotionPlay");
+    const config=gifOptions();
+    if(!config||config.effect!=="keyframes"){
+      status("Group visible editable objects and choose Keyframe motion first.",true);return;
+    }
+    button.disabled=true;
+    const original=snap(),current=++previewSequence;
+    if(previewTimer)clearTimeout(previewTimer);
+    stage.setAttribute("aria-busy","true");
+    status("Rendering one real local GIF for smooth keyframe playback…");
+    try{
+      const result=await api("/api/visual/studio/animation-preview",
+        {spec:original,name,animation:config});
+      if(!root.isConnected||current!==previewSequence)return;
+      at("vsPreview").src=result.image;
+      status("Playing real motion preview · "+result.frames+" frames. Stop to return to frame inspection.");
+    }catch(error){
+      if(root.isConnected&&current===previewSequence)
+        status("Motion playback unavailable: "+error.message,true);
+    }finally{
+      if(root.isConnected){button.disabled=false;
+        if(current===previewSequence)stage.setAttribute("aria-busy","false");}
+    }
+  };
+  at("vsMotionStop").onclick=()=>{
+    // The still preview stops displaying the animated GIF. Do not try to
+    // manipulate a paused GIF with unsupported browser-specific APIs.
+    schedule(0);
+  };
   at("vsEffect").onchange=updateGifSpec;
   for(const id of ["vsFrames","vsDelay","vsLoop"])at(id).onchange=updateGifSpec;
   at("vsDelete").onclick=()=>{
