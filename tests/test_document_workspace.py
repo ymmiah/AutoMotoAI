@@ -142,7 +142,7 @@ def test_revision_rejects_stale_digest_and_unmatched_phrase(client):
 
 
 @pytest.mark.parametrize("path", [
-    "../outside.docx", "/etc/passwd", "settings.json",
+    ".", "uploads/..", "../outside.docx", "/etc/passwd", "settings.json",
     "artifacts/visual-studio/private.docx", "uploads/../../other.docx",
     "uploads/.secret.json",
 ])
