@@ -128,6 +128,56 @@ let browser;
   await page.locator('#daLibrary [data-da-open="'+savedDraft+'"]').click();
   await page.waitForFunction(()=>document.querySelector('#daSource')?.value.includes('Original body wording for review.'));
   assert.equal(await page.locator('#daName').inputValue(),'Document smoke report');
+  // v2: native heading outline, table operations, layout, undo/redo and
+  // persisted layout settings in a brand-new backward-compatible draft.
+  assert.equal(await page.locator('#daOutline [data-da-heading]').count(),2);
+  await page.locator('#daHeadingLevel').selectOption('3');
+  await page.locator('#daSource').evaluate(el=>{
+    const start=el.value.indexOf('Findings');el.focus();
+    el.setSelectionRange(start,start);
+  });
+  await page.locator('[data-da-insert="heading"]').click();
+  assert.match(await page.locator('#daSource').inputValue(),/### Findings/);
+  assert.equal(await page.locator('#daPaper h3').count(),1);
+  await page.locator('#daSource').evaluate(el=>{
+    el.focus();el.setSelectionRange(el.value.length,el.value.length);
+  });
+  await page.locator('[data-da-insert="table"]').click();
+  assert.equal(await page.locator('#daPaper .da-table').count(),1);
+  assert.equal(await page.locator('#daPaper .da-table th').count(),3);
+  await page.locator('#daSource').evaluate(el=>{
+    const cursor=el.value.indexOf('Value 1');el.focus();el.setSelectionRange(cursor,cursor);
+  });
+  await page.locator('[data-da-insert="table-row"]').click();
+  assert.equal(await page.locator('#daPaper .da-table tr').count(),4);
+  await page.locator('#daOrientation').selectOption('landscape');
+  await page.locator('#daPageSize').selectOption('Letter');
+  await page.locator('#daFont').selectOption('Georgia');
+  await page.locator('#daMargins').fill('3.1');
+  await page.locator('#daMargins').press('Tab');
+  await page.locator('#daFontSize').fill('13');
+  await page.locator('#daFontSize').press('Tab');
+  await page.locator('#daPageNumbers').uncheck();
+  assert.equal(await page.locator('#daPaper').getAttribute('data-orientation'),'landscape');
+  await page.locator('#daUndo').click();
+  assert.equal(await page.locator('#daPageNumbers').isChecked(),true);
+  await page.locator('#daRedo').click();
+  assert.equal(await page.locator('#daPageNumbers').isChecked(),false);
+  const savingV2=page.waitForResponse(r=>r.url().includes('/api/documents/save')&&r.request().method()==='POST');
+  await page.locator('#daSave').click();
+  const v2Response=await savingV2;
+  assert.equal(v2Response.status(),200,await v2Response.text());
+  const savedV2=(await v2Response.json()).path;
+  const reopenedV2=await page.request.get(base+'/api/documents/open?path='+encodeURIComponent(savedV2));
+  assert.equal(reopenedV2.status(),200);
+  const v2Data=await reopenedV2.json();
+  assert.equal(v2Data.options.orientation,'landscape');
+  assert.equal(v2Data.options.page_size,'Letter');
+  assert.equal(v2Data.options.font,'Georgia');
+  assert.equal(v2Data.options.font_size,13);
+  assert.equal(v2Data.options.page_numbers,false);
+  assert.match(v2Data.markdown,/\| Column A \| Column B \|/);
+  await page.screenshot({path:path.join(output,'document-assistant-v2-editor.png')});
   await page.locator('#daImportFile').setInputFiles({
     name:'review-import.docx',
     mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
