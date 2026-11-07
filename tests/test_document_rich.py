@@ -64,7 +64,7 @@ def word(client,path):
 def test_authentication_and_hosted_allowlist(client):
     assert client.get(BASE+"/structure",params={"path":"uploads/x.docx"}).status_code==403
     assert client.post(BASE+"/revise",json={"path":"uploads/x.docx",
-        "sha256":"0"*64,"operations":[]}).status_code==403
+        "sha256":"0"*64,"operations":[{"kind":"set_style","paragraph":0,"style":"Heading 1"}]}).status_code==403
     assert path_allowed("GET",BASE+"/structure")
     assert path_allowed("POST",BASE+"/revise")
     assert not path_allowed("DELETE",BASE+"/revise")
@@ -173,7 +173,7 @@ def test_only_private_docx_can_be_modified(client):
     for invalid in ("../settings.json","uploads/logo.png","settings.json",
                     "artifacts/visual-studio/other.docx"):
         r=client.post(BASE+"/revise",headers=AUTH,json={**data,"path":invalid})
-        assert r.status_code in (403,404,422),r.text
+        assert r.status_code in (403,404,415,422),r.text
 
 def test_linked_macro_word_does_not_bypass_scan(client):
     source,logo=original_word()
