@@ -42,7 +42,8 @@ const path=require('node:path');
   const cursor=inserted.value.indexOf("Value 1");
   const appended=model.appendTableRow(inserted.value,cursor);
   assert.ok(appended);
-  assert.equal((appended.value.match(/\| New value/g)||[]).length,1);
+  assert.equal((appended.value.match(/\| New value/g)||[]).length,3,
+    'the added table row contains one new editable cell for each column');
   assert.equal(model.appendTableRow("No table here.",4),null);
   const escape=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const output=model.renderDocumentPreview("# Head\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n<script>alert(1)</script>",escape);
