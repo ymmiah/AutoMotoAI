@@ -352,6 +352,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     setOptions(DEFAULT_LAYOUT);
     history.reset(snapshot());
     showEditor(true);
+    refreshAIContext();
     status("New source document. Save a draft or export Word when ready.");
     source.focus();
   }
