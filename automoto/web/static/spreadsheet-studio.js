@@ -104,6 +104,99 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   };
   const heading=col=>String.fromCharCode(65+col);
   const syncName=()=>{book.name=el("ssBookName").value;};
+  function updateHistoryButtons(){
+    const controls=history.state();
+    el("ssUndo").disabled=!controls.canUndo;
+    el("ssRedo").disabled=!controls.canRedo;
+  }
+  function recordWorkbookChange(){
+    history.record(book);
+    updateHistoryButtons();
+  }
+  function restoreHistory(next){
+    if(!next)return;
+    book=next;
+    activeSheet=Math.min(activeSheet,book.sheets.length-1);
+    gridRows=Math.min(MAX_ROWS,Math.max(gridRows,...book.sheets.map(s=>s.rows.length)));
+    gridCols=Math.min(MAX_COLS,Math.max(gridCols,...book.sheets.flatMap(s=>s.rows.map(row=>row.length))));
+    el("ssBookName").value=book.name;
+    el("ssCalcMode").value=book.calculation_mode||"literal";
+    ++calculationSeq;calculation=null;
+    el("ssDownload").replaceChildren();
+    updateHistoryButtons();renderSheets();renderGrid();recalculate();
+    status("Workbook change restored in memory. Save a new private copy when ready.");
+  }
+  el("ssUndo").onclick=()=>restoreHistory(history.undo());
+  el("ssRedo").onclick=()=>restoreHistory(history.redo());
+  el("ssCalcMode").onchange=()=>{
+    book.calculation_mode=el("ssCalcMode").value;
+    recordWorkbookChange();++calculationSeq;calculation=null;
+    refreshCalculatedCells();recalculate();
+    status(book.calculation_mode==="formulas"
+      ?"Safe formula calculation enabled. Existing =-prefixed text will be interpreted as formulas."
+      :"Literal mode enabled. All =-prefixed text remains unchanged.");
+  };
+  el("ssCalculate").onclick=()=>recalculate();
+  function refreshCalculatedCells(){
+    const mode=book.calculation_mode||"literal";
+    const sheetName=book.sheets[activeSheet].name;
+    const byCell=new Map((calculation?.results||[])
+      .filter(row=>row.sheet===sheetName).map(item=>[item.cell,item]));
+    el("ssGrid").querySelectorAll("input.ss-cell").forEach(input=>{
+      const row=Number(input.dataset.row),col=Number(input.dataset.col);
+      const address=heading(col)+(row+1);
+      const original=book.sheets[activeSheet].rows[row]?.[col];
+      const label=input.parentElement.querySelector(".ss-evaluated");
+      if(!label)return;
+      const value=byCell.get(address);
+      label.hidden=!(mode==="formulas"&&typeof original==="string"&&original.startsWith("="));
+      label.textContent=value?"→ "+String(value.value??""):"Awaiting calculation";
+      label.classList.toggle("ss-formula-error",Boolean(value?.error));
+    });
+    const panel=el("ssCalcResults");
+    panel.replaceChildren();
+    const results=(calculation?.results||[]).filter(row=>row.sheet===sheetName);
+    for(const result of results){
+      const button=document.createElement("button");
+      button.type="button";button.className="ss-formula-item";
+      button.textContent=result.cell+" = "+String(result.value??"");
+      button.classList.toggle("ss-formula-error",Boolean(result.error));
+      button.title=result.error?"Formula error "+result.error:"Show formula in "+result.cell;
+      button.onclick=()=>{
+        const cell=/^([A-P])([1-9][0-9]*)$/.exec(result.cell);
+        if(!cell)return;
+        const input=el("ssGrid").querySelector(
+          'input[data-row="'+(Number(cell[2])-1)+'"][data-col="'+(cell[1].charCodeAt(0)-65)+'"]');
+        input?.focus();input?.select();
+      };
+      panel.append(button);
+    }
+    const summary=el("ssCalcSummary");
+    if(mode==="literal")summary.textContent="Literal mode: formulas are preserved as text. Enable safe formulas to calculate.";
+    else if(!calculation)summary.textContent="Awaiting local formula calculation…";
+    else summary.textContent=calculation.formula_count+" formula(s) in workbook, "+
+      calculation.errors.length+" error(s). Errors must be corrected before exporting.";
+  }
+  async function recalculate(){
+    const run=++calculationSeq;
+    if((book.calculation_mode||"literal")==="literal"){
+      calculation=null;refreshCalculatedCells();return;
+    }
+    el("ssCalcSummary").textContent="Calculating locally…";
+    try{
+      const response=await api("/api/spreadsheets/calculate",workbookPayload(book));
+      if(!root.isConnected||run!==calculationSeq)return;
+      calculation=response;
+      refreshCalculatedCells();
+      if(response.errors?.length)status(response.errors.length+
+        " formula error(s). Check the calculated values panel and correct them before exporting.",true);
+    }catch(error){
+      if(!root.isConnected||run!==calculationSeq)return;
+      calculation=null;refreshCalculatedCells();
+      el("ssCalcSummary").textContent="Calculation failed: "+error.message;
+      status("Formula calculation failed: "+error.message,true);
+    }
+  }
   function renderSheets(){
     const tabs=el("ssSheets");
     tabs.replaceChildren();
@@ -155,8 +248,9 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   }
   function updateCell(input){
     const r=Number(input.dataset.row),c=Number(input.dataset.col);
-    ++calculationSeq;
+    ++calculationSeq;calculation=null;
     setGridCell(book,activeSheet,r,c,input.value);
+    refreshCalculatedCells();
     status("Unsaved worksheet edits. Save a private copy to keep them.");
     el("ssDownload").replaceChildren();
   }
