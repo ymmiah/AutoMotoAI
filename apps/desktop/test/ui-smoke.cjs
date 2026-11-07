@@ -225,6 +225,50 @@ let browser;
   assert.equal(v4Draft.publication.references[0].title,'Verified source title');
   assert.match(v4Draft.markdown,/\[@author2025\]/);
   await page.screenshot({path:path.join(output,'document-assistant-v4-publication.png')});
+  // v7 final reliability: private opt-in recovery and real OOXML acceptance
+  // are user-controlled, reversible and cannot overwrite imported sources.
+  await page.locator('#daAcceptance summary').click();
+  assert.equal(await page.locator('#daRecoveryAuto').isChecked(),false);
+  const v7Source=await page.locator('#daSource').inputValue();
+  const savingRecovery=page.waitForResponse(r=>r.url().includes('/api/documents/recovery/save')&&
+    r.request().method()==='POST');
+  await page.locator('#daRecoverySave').click();
+  const recoveryResp=await savingRecovery;
+  assert.equal(recoveryResp.status(),200,await recoveryResp.text());
+  const checkpointId=(await recoveryResp.json()).id;
+  assert.equal(checkpointId.length,24);
+  await page.locator('[data-recovery-load="'+checkpointId+'"]').waitFor();
+  const auditing=page.waitForResponse(r=>r.url().includes('/api/documents/quality/audit')&&
+    r.request().method()==='POST');
+  await page.locator('#daQualityRun').click();
+  const auditResponse=await auditing;
+  assert.equal(auditResponse.status(),200,await auditResponse.text());
+  const auditResult=await auditResponse.json();
+  assert.equal(auditResult.files_saved,false);
+  assert.equal(auditResult.human_review_required,true);
+  assert.equal(auditResult.structurally_exportable,true);
+  assert.match(await page.locator('#daQualityResult').innerText(),/human review is still required/i);
+  await page.locator('#daSource').fill('Temporary unsaved modifications.');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('[data-recovery-load="'+checkpointId+'"]').click();
+  assert.equal(await page.locator('#daSource').inputValue(),v7Source,
+    'explicitly restored checkpoint must match saved Markdown');
+  await page.locator('#daUndo').click();
+  assert.equal(await page.locator('#daSource').inputValue(),'Temporary unsaved modifications.');
+  await page.locator('#daRedo').click();
+  assert.equal(await page.locator('#daSource').inputValue(),v7Source);
+  await page.locator('#daRecoveryAuto').check();
+  assert.match(await page.locator('#daRecoveryStatus').innerText(),/enabled for this editing session/);
+  await page.locator('#daRecoveryAuto').uncheck();
+  assert.match(await page.locator('#daRecoveryStatus').innerText(),/Automatic recovery is off/);
+  const deletingRecovery=page.waitForResponse(r=>r.url().includes('/api/documents/recovery/')&&
+    r.request().method()==='DELETE');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('[data-recovery-delete="'+checkpointId+'"]').click();
+  const deletion=await deletingRecovery;
+  assert.equal(deletion.status(),200,await deletion.text());
+  await page.locator('#daRecoveryList').getByText('No private recovery checkpoints saved yet.').waitFor();
+  await page.screenshot({path:path.join(output,'document-assistant-v7-recovery-acceptance.png')});
   await page.locator('#daImportFile').setInputFiles({
     name:'review-import.docx',
     mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
