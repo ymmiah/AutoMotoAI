@@ -1,6 +1,6 @@
-/* AutoMoto AI — Invoice & Spreadsheet Intelligence v1.
-   Literal cells only; no eval, remote AI, external links or automatic invoice issue. */
-import {blankBook,setGridCell,workbookPayload,invoicePayload,MAX_SHEETS,MAX_ROWS,MAX_COLS}
+/* AutoMoto AI — Invoice & Spreadsheet Intelligence v2.
+   Explicit opt-in calculation, private documents, no eval/network scripting. */
+import {blankBook,setGridCell,workbookPayload,invoicePayload,createWorkbookHistory,MAX_SHEETS,MAX_ROWS,MAX_COLS}
   from "./spreadsheet-model.js";
 
 export async function mountSpreadsheetStudio({api,page,uploadFile}){
@@ -10,12 +10,17 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       '<button type="button" role="tab" id="ssTabInvoice" aria-selected="false" aria-controls="ssInvoice">Invoices</button>'+
     '</div>'+
     '<section id="ssBook" role="tabpanel" aria-labelledby="ssTabBook">'+
-      '<div class="ss-panel ss-tools"><div><h3>Workbook editor</h3><p>Local, literal-value worksheets · formulas are not evaluated in v1.</p></div>'+
+      '<div class="ss-panel ss-tools"><div><h3>Workbook editor</h3><p>Safe offline formulas, dependencies, validation and private workbook drafts.</p></div>'+
       '<div class="ss-actions"><button type="button" class="btn" id="ssNew">New workbook</button>'+
+        '<button type="button" class="btn" id="ssUndo" disabled>Undo</button>'+
+        '<button type="button" class="btn" id="ssRedo" disabled>Redo</button>'+
         '<button type="button" class="btn" id="ssSave">Save private copy</button>'+
         '<button type="button" class="btn primary" id="ssExport">Export XLSX</button></div></div>'+
       '<div class="ss-fields"><label>Workbook name<input class="input" id="ssBookName" maxlength="100"></label>'+
-        '<label>Export format<select class="input" id="ssFormat"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV (single sheet)</option></select></label></div>'+
+        '<label>Export format<select class="input" id="ssFormat"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV (single sheet)</option></select></label>'+
+        '<label>Calculation mode<select class="input" id="ssCalcMode" aria-describedby="ssCalcHint"><option value="formulas">Enable safe formulas</option><option value="literal">Literal text (legacy/imports)</option></select></label></div>'+
+      '<div class="ss-panel ss-calc-controls"><div><strong>Formula calculation</strong><p id="ssCalcHint">Formulas operate only on the selected worksheet, without macros, remote links or arbitrary code. Old workbooks stay literal until enabled.</p></div>'+
+        '<button type="button" class="btn" id="ssCalculate">Recalculate</button></div>'+
       '<div class="ss-import ss-panel"><div><strong>Import from this workspace</strong><p>CSV and XLSX only. Originals remain unchanged; complex formatting is not round-tripped in v1.</p></div>'+
         '<div class="ss-actions"><select class="input" id="ssImportPick" aria-label="Previously uploaded spreadsheets"></select>'+
           '<button type="button" class="btn" id="ssImport">Open upload</button>'+
@@ -29,7 +34,10 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
           '<button class="btn" id="ssRows" type="button">+10 rows</button>'+
           '<button class="btn" id="ssCols" type="button">+1 column</button></div></div>'+
       '<div class="ss-grid-wrap" tabindex="0" aria-label="Editable workbook grid"><table class="ss-grid" id="ssGrid"></table></div>'+
-      '<p class="ss-hint">Type text or numbers directly into cells. Paste tab-separated rows from a spreadsheet. Enter moves to the cell below. Values beginning with = are saved as text; the v2 formula engine is not active.</p>'+
+      '<section class="ss-panel ss-formula-panel" aria-label="Formula results"><strong>Calculated values</strong>'+
+        '<p id="ssCalcSummary" role="status" aria-live="polite">No formulas calculated.</p>'+
+        '<div id="ssCalcResults" class="ss-formula-results"></div></section>'+
+      '<p class="ss-hint">Formula mode supports +, −, ×, ÷, ^, comparisons, IF, SUM, AVERAGE, MIN, MAX, COUNT and COUNTA, with same-sheet A1:P100 references and ranges. Imported/legacy workbooks remain literal unless calculation mode is enabled. Excel must recalculate exported formula cells when opened.</p>'+
     '</section>'+
     '<section id="ssInvoice" role="tabpanel" aria-labelledby="ssTabInvoice" hidden>'+
       '<div class="ss-panel ss-tools"><div><h3>Invoice drafts</h3><p>Create private draft invoices with precise decimal totals. No invoices are sent or marked paid.</p></div>'+
@@ -60,6 +68,8 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   root.classList.add("ss-page");
   const el=id=>root.querySelector("#"+id);
   let book=blankBook(),activeSheet=0,gridRows=15,gridCols=8;
+  const history=createWorkbookHistory(book);
+  let calculationSeq=0,calculation=null;
   let invoiceLines=[{description:"",quantity:"1",unit_price:"0.00"}];
   let invoiceResult=null;
   const status=(message,error=false)=>{
@@ -94,6 +104,99 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   };
   const heading=col=>String.fromCharCode(65+col);
   const syncName=()=>{book.name=el("ssBookName").value;};
+  function updateHistoryButtons(){
+    const controls=history.state();
+    el("ssUndo").disabled=!controls.canUndo;
+    el("ssRedo").disabled=!controls.canRedo;
+  }
+  function recordWorkbookChange(){
+    history.record(book);
+    updateHistoryButtons();
+  }
+  function restoreHistory(next){
+    if(!next)return;
+    book=next;
+    activeSheet=Math.min(activeSheet,book.sheets.length-1);
+    gridRows=Math.min(MAX_ROWS,Math.max(gridRows,...book.sheets.map(s=>s.rows.length)));
+    gridCols=Math.min(MAX_COLS,Math.max(gridCols,...book.sheets.flatMap(s=>s.rows.map(row=>row.length))));
+    el("ssBookName").value=book.name;
+    el("ssCalcMode").value=book.calculation_mode||"literal";
+    ++calculationSeq;calculation=null;
+    el("ssDownload").replaceChildren();
+    updateHistoryButtons();renderSheets();renderGrid();recalculate();
+    status("Workbook change restored in memory. Save a new private copy when ready.");
+  }
+  el("ssUndo").onclick=()=>restoreHistory(history.undo());
+  el("ssRedo").onclick=()=>restoreHistory(history.redo());
+  el("ssCalcMode").onchange=()=>{
+    book.calculation_mode=el("ssCalcMode").value;
+    recordWorkbookChange();++calculationSeq;calculation=null;
+    refreshCalculatedCells();recalculate();
+    status(book.calculation_mode==="formulas"
+      ?"Safe formula calculation enabled. Existing =-prefixed text will be interpreted as formulas."
+      :"Literal mode enabled. All =-prefixed text remains unchanged.");
+  };
+  el("ssCalculate").onclick=()=>recalculate();
+  function refreshCalculatedCells(){
+    const mode=book.calculation_mode||"literal";
+    const sheetName=book.sheets[activeSheet].name;
+    const byCell=new Map((calculation?.results||[])
+      .filter(row=>row.sheet===sheetName).map(item=>[item.cell,item]));
+    el("ssGrid").querySelectorAll("input.ss-cell").forEach(input=>{
+      const row=Number(input.dataset.row),col=Number(input.dataset.col);
+      const address=heading(col)+(row+1);
+      const original=book.sheets[activeSheet].rows[row]?.[col];
+      const label=input.parentElement.querySelector(".ss-evaluated");
+      if(!label)return;
+      const value=byCell.get(address);
+      label.hidden=!(mode==="formulas"&&typeof original==="string"&&original.startsWith("="));
+      label.textContent=value?"→ "+String(value.value??""):"Awaiting calculation";
+      label.classList.toggle("ss-formula-error",Boolean(value?.error));
+    });
+    const panel=el("ssCalcResults");
+    panel.replaceChildren();
+    const results=(calculation?.results||[]).filter(row=>row.sheet===sheetName);
+    for(const result of results){
+      const button=document.createElement("button");
+      button.type="button";button.className="ss-formula-item";
+      button.textContent=result.cell+" = "+String(result.value??"");
+      button.classList.toggle("ss-formula-error",Boolean(result.error));
+      button.title=result.error?"Formula error "+result.error:"Show formula in "+result.cell;
+      button.onclick=()=>{
+        const cell=/^([A-P])([1-9][0-9]*)$/.exec(result.cell);
+        if(!cell)return;
+        const input=el("ssGrid").querySelector(
+          'input[data-row="'+(Number(cell[2])-1)+'"][data-col="'+(cell[1].charCodeAt(0)-65)+'"]');
+        input?.focus();input?.select();
+      };
+      panel.append(button);
+    }
+    const summary=el("ssCalcSummary");
+    if(mode==="literal")summary.textContent="Literal mode: formulas are preserved as text. Enable safe formulas to calculate.";
+    else if(!calculation)summary.textContent="Awaiting local formula calculation…";
+    else summary.textContent=calculation.formula_count+" formula(s) in workbook, "+
+      calculation.errors.length+" error(s). Errors must be corrected before exporting.";
+  }
+  async function recalculate(){
+    const run=++calculationSeq;
+    if((book.calculation_mode||"literal")==="literal"){
+      calculation=null;refreshCalculatedCells();return;
+    }
+    el("ssCalcSummary").textContent="Calculating locally…";
+    try{
+      const response=await api("/api/spreadsheets/calculate",workbookPayload(book));
+      if(!root.isConnected||run!==calculationSeq)return;
+      calculation=response;
+      refreshCalculatedCells();
+      if(response.errors?.length)status(response.errors.length+
+        " formula error(s). Check the calculated values panel and correct them before exporting.",true);
+    }catch(error){
+      if(!root.isConnected||run!==calculationSeq)return;
+      calculation=null;refreshCalculatedCells();
+      el("ssCalcSummary").textContent="Calculation failed: "+error.message;
+      status("Formula calculation failed: "+error.message,true);
+    }
+  }
   function renderSheets(){
     const tabs=el("ssSheets");
     tabs.replaceChildren();
@@ -104,7 +207,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       button.className="ss-sheet-tab";
       button.textContent=sheet.name;
       button.setAttribute("aria-selected",String(index===activeSheet));
-      button.onclick=()=>{activeSheet=index;renderSheets();renderGrid();};
+      button.onclick=()=>{activeSheet=index;renderSheets();renderGrid();refreshCalculatedCells();};
       tabs.append(button);
     });
     el("ssSheetLabel").textContent=book.sheets[activeSheet].name;
@@ -130,22 +233,32 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
         input.dataset.row=String(r);input.dataset.col=String(c);
         input.setAttribute("aria-label",heading(c)+(r+1));
         input.value=String(book.sheets[activeSheet].rows[r]?.[c]??"");
-        td.append(input);row.append(td);
+        const preview=document.createElement("small");
+        preview.className="ss-evaluated";
+        preview.setAttribute("aria-live","off");
+        preview.hidden=true;
+        td.append(input,preview);row.append(td);
       }
       body.append(row);
     }
     table.append(body);
     el("ssRows").disabled=gridRows>=MAX_ROWS;
     el("ssCols").disabled=gridCols>=MAX_COLS;
+    refreshCalculatedCells();
   }
   function updateCell(input){
     const r=Number(input.dataset.row),c=Number(input.dataset.col);
+    ++calculationSeq;calculation=null;
     setGridCell(book,activeSheet,r,c,input.value);
+    refreshCalculatedCells();
     status("Unsaved worksheet edits. Save a private copy to keep them.");
     el("ssDownload").replaceChildren();
   }
   el("ssGrid").addEventListener("input",e=>{
     if(e.target.matches("input.ss-cell"))updateCell(e.target);
+  });
+  el("ssGrid").addEventListener("change",e=>{
+    if(e.target.matches("input.ss-cell")){recordWorkbookChange();recalculate();}
   });
   el("ssGrid").addEventListener("keydown",e=>{
     if(e.key==="Enter"&&e.target.matches("input.ss-cell")&&!e.isComposing){
@@ -171,7 +284,8 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     }
     gridRows=Math.min(MAX_ROWS,Math.max(gridRows,baseRow+Math.min(lines.length,MAX_ROWS-baseRow)));
     gridCols=Math.min(MAX_COLS,Math.max(gridCols,baseCol+Math.max(...lines.map(v=>v.split("\t").length))));
-    renderGrid();status("Pasted "+changed+" literal cells. Save a private copy.");
+    renderGrid();recordWorkbookChange();recalculate();
+    status("Pasted "+changed+" cells. Save a private copy.");
     el("ssGrid").querySelector('input[data-row="'+baseRow+'"][data-col="'+baseCol+'"]')?.focus();
   });
   function openBook(data){
@@ -179,10 +293,14 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     gridRows=Math.min(MAX_ROWS,Math.max(15,...book.sheets.map(s=>s.rows.length)));
     gridCols=Math.min(MAX_COLS,Math.max(8,...book.sheets.flatMap(s=>s.rows.map(row=>row.length))));
     el("ssBookName").value=book.name;
+    el("ssCalcMode").value=book.calculation_mode||"literal";
+    history.reset(book);updateHistoryButtons();
+    ++calculationSeq;calculation=null;
     el("ssDownload").replaceChildren();
-    renderSheets();renderGrid();setTab("book");
+    renderSheets();renderGrid();setTab("book");recalculate();
   }
   el("ssBookName").oninput=()=>{syncName();status("Unsaved workbook name change.");};
+  el("ssBookName").onchange=()=>recordWorkbookChange();
   el("ssNew").onclick=()=>{
     if(!window.confirm("Create a new empty workspace? Unsaved edits in this view will be lost."))return;
     openBook(blankBook());status("New unsaved workbook.");
@@ -192,7 +310,8 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     let n=book.sheets.length+1,label="Sheet"+n;
     while(book.sheets.some(s=>s.name.toLowerCase()===label.toLowerCase()))label="Sheet"+(++n);
     book.sheets.push({name:label,rows:[]});activeSheet=book.sheets.length-1;
-    renderSheets();renderGrid();status("New worksheet created; save to keep it.");
+    renderSheets();renderGrid();recordWorkbookChange();recalculate();
+    status("New worksheet created; save to keep it.");
   };
   el("ssRenameSheet").onclick=()=>{
     const old=book.sheets[activeSheet].name;
@@ -203,7 +322,8 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
        book.sheets.some((s,i)=>i!==activeSheet&&s.name.toLowerCase()===value.toLowerCase())){
       status("Enter a unique Excel-compatible worksheet name.",true);return;
     }
-    book.sheets[activeSheet].name=value;renderSheets();status("Worksheet renamed; save to keep it.");
+    book.sheets[activeSheet].name=value;renderSheets();recordWorkbookChange();recalculate();
+    status("Worksheet renamed; save to keep it.");
   };
   el("ssRows").onclick=()=>{gridRows=Math.min(MAX_ROWS,gridRows+10);renderGrid();};
   el("ssCols").onclick=()=>{gridCols=Math.min(MAX_COLS,gridCols+1);renderGrid();};
@@ -269,7 +389,9 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       status("Creating a local "+data.format.toUpperCase()+" export…");
       const result=await api("/api/spreadsheets/export",data);
       showDownload(result);
-      status("Export ready. Excel-formula text was not executed.");
+      status(data.calculation_mode==="formulas"
+        ?"Export ready. Supported formulas use safe Excel references; Excel recalculates when opened."
+        :"Export ready. Literal formula-looking text was not executed.");
     }catch(error){status("Export failed: "+error.message,true);}
   };
 

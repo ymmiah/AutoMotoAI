@@ -56,7 +56,7 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("DELETE", r"/api/documents/recovery/[a-f0-9]{24}"),
     ("POST", r"/api/documents/quality/audit"),
     ("GET", r"/api/spreadsheets/(list|load)"),
-    ("POST", r"/api/spreadsheets/(import|save|export)"),
+    ("POST", r"/api/spreadsheets/(import|save|export|calculate)"),
     ("GET", r"/api/spreadsheets/invoice/load"),
     ("POST", r"/api/spreadsheets/invoice/(preview|save|export)"),
     ("POST", r"/api/files/archive"), ("POST", r"/api/files/delete"),
