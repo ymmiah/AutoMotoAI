@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from automoto import local_llm, office, tenancy
-from automoto.document_workspace import _allowed_source, _sha
+from automoto.document_workspace import _allowed_source, _sha, _root
 from automoto.visual_studio import _auth
 
 router = APIRouter(prefix="/api/documents/ai", tags=["document-ai"])
