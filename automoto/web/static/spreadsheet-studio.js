@@ -140,6 +140,105 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   };
   const heading=col=>String.fromCharCode(65+col);
   const syncName=()=>{book.name=el("ssBookName").value;};
+  let selectedCell="A1",viewFilter="",viewColumn=0;
+  for(let n=0;n<MAX_COLS;n++){
+    const option=document.createElement("option");
+    option.value=String(n);option.textContent=heading(n);
+    el("ssToolsColumn").append(option);
+  }
+  function currentSheet(){return book.sheets[activeSheet];}
+  function syncStyleControls(){
+    const style=styleAt(currentSheet(),selectedCell);
+    el("ssSelectedCell").value=selectedCell;
+    el("ssStyleBold").checked=style.bold;
+    el("ssStyleItalic").checked=style.italic;
+    el("ssStyleAlign").value=style.align;
+    el("ssStyleFormat").value=style.number_format;
+    el("ssStyleFill").value=style.fill;
+    el("ssStyleText").value=style.color;
+  }
+  function syncSheetControls(){
+    const sheet=currentSheet();
+    el("ssFreeze").value=sheet.freeze??"row";
+    el("ssExcelFilter").checked=sheet.filter_enabled??true;
+    const letter=heading(viewColumn);
+    el("ssWidth").value=String(sheet.column_widths?.[letter]??18);
+    const rule=(sheet.validations||[]).find(x=>x.column===letter);
+    el("ssValidationKind").value=rule?.kind??"none";
+    el("ssValidationOptions").value=(rule?.options||[]).join(",");
+    el("ssValidationMin").value=String(rule?.min_value??0);
+    el("ssValidationMax").value=String(rule?.max_value??100);
+    syncStyleControls();
+  }
+  el("ssToolsColumn").onchange=()=>{
+    viewColumn=Number(el("ssToolsColumn").value);syncSheetControls();renderGrid();
+  };
+  el("ssFilterText").oninput=()=>{
+    viewFilter=el("ssFilterText").value;renderGrid();
+    status(viewFilter?"Temporary view filter active. No rows are deleted.":"Showing all rows.");
+  };
+  el("ssClearFilter").onclick=()=>{
+    viewFilter="";el("ssFilterText").value="";renderGrid();status("All rows restored.");
+  };
+  function sortRows(descending){
+    try{
+      sortSheetRows(currentSheet(),viewColumn,descending);
+      recordWorkbookChange();renderGrid();recalculate();
+      status("Sorted entire data rows with header and cell formatting preserved. Save to keep it.");
+    }catch(error){status(error.message,true);}
+  }
+  el("ssSortAsc").onclick=()=>sortRows(false);
+  el("ssSortDesc").onclick=()=>sortRows(true);
+  el("ssApplyLayout").onclick=()=>{
+    try{
+      const width=Number(el("ssWidth").value);
+      if(!Number.isInteger(width)||width<8||width>48)throw Error("Column width must be 8–48.");
+      currentSheet().freeze=el("ssFreeze").value;
+      currentSheet().filter_enabled=el("ssExcelFilter").checked;
+      currentSheet().column_widths={...(currentSheet().column_widths||{}),[heading(viewColumn)]:width};
+      recordWorkbookChange();renderGrid();
+      status("Freeze, Excel filtering and column width updated in your workbook.");
+    }catch(error){status(error.message,true);}
+  };
+  el("ssApplyStyle").onclick=()=>{
+    try{
+      applyCellStyle(currentSheet(),selectedCell,{
+        bold:el("ssStyleBold").checked,italic:el("ssStyleItalic").checked,
+        align:el("ssStyleAlign").value,number_format:el("ssStyleFormat").value,
+        fill:el("ssStyleFill").value,color:el("ssStyleText").value
+      });
+      recordWorkbookChange();renderGrid();
+      status("Applied formatting to "+selectedCell+". Save a private copy to retain it.");
+    }catch(error){status(error.message,true);}
+  };
+  el("ssApplyValidation").onclick=()=>{
+    const sheet=currentSheet(),column=heading(viewColumn);
+    const previous=[...(sheet.validations||[])];
+    try{
+      const kind=el("ssValidationKind").value;
+      if(kind==="none"){
+        sheet.validations=previous.filter(x=>x.column!==column);
+      }else{
+        setColumnRule(sheet,{column,kind,options:el("ssValidationOptions").value,
+          min_value:el("ssValidationMin").value,max_value:el("ssValidationMax").value});
+        for(let rowIndex=1;rowIndex<sheet.rows.length;rowIndex++){
+          const issue=validateEntry(sheet,rowIndex,viewColumn,sheet.rows[rowIndex]?.[viewColumn]);
+          if(issue)throw Error("Existing row "+(rowIndex+1)+": "+issue);
+        }
+      }
+      recordWorkbookChange();renderGrid();syncSheetControls();
+      status("Column "+column+" validation updated. It will also be written to XLSX.");
+    }catch(error){
+      sheet.validations=previous;
+      status("Validation not applied: "+error.message,true);
+    }
+  };
+  el("ssGrid").addEventListener("focusin",event=>{
+    const input=event.target.closest("input.ss-cell");
+    if(!input)return;
+    selectedCell=heading(Number(input.dataset.col))+(Number(input.dataset.row)+1);
+    syncStyleControls();
+  });
   function updateHistoryButtons(){
     const controls=history.state();
     el("ssUndo").disabled=!controls.canUndo;
@@ -159,7 +258,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     el("ssCalcMode").value=book.calculation_mode||"literal";
     ++calculationSeq;calculation=null;
     el("ssDownload").replaceChildren();
-    updateHistoryButtons();renderSheets();renderGrid();recalculate();
+    updateHistoryButtons();renderSheets();syncSheetControls();renderGrid();recalculate();
     status("Workbook change restored in memory. Save a new private copy when ready.");
   }
   el("ssUndo").onclick=()=>restoreHistory(history.undo());
@@ -243,7 +342,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       button.className="ss-sheet-tab";
       button.textContent=sheet.name;
       button.setAttribute("aria-selected",String(index===activeSheet));
-      button.onclick=()=>{activeSheet=index;renderSheets();renderGrid();refreshCalculatedCells();};
+      button.onclick=()=>{activeSheet=index;selectedCell="A1";viewFilter="";el("ssFilterText").value="";renderSheets();syncSheetControls();renderGrid();refreshCalculatedCells();};
       tabs.append(button);
     });
     el("ssSheetLabel").textContent=book.sheets[activeSheet].name;
@@ -333,7 +432,9 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     history.reset(book);updateHistoryButtons();
     ++calculationSeq;calculation=null;
     el("ssDownload").replaceChildren();
-    renderSheets();renderGrid();setTab("book");recalculate();
+    selectedCell="A1";viewFilter="";viewColumn=0;
+    el("ssFilterText").value="";el("ssToolsColumn").value="0";
+    renderSheets();syncSheetControls();renderGrid();setTab("book");recalculate();
   }
   el("ssBookName").oninput=()=>{syncName();status("Unsaved workbook name change.");};
   el("ssBookName").onchange=()=>recordWorkbookChange();
@@ -346,7 +447,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     let n=book.sheets.length+1,label="Sheet"+n;
     while(book.sheets.some(s=>s.name.toLowerCase()===label.toLowerCase()))label="Sheet"+(++n);
     book.sheets.push({name:label,rows:[]});activeSheet=book.sheets.length-1;
-    renderSheets();renderGrid();recordWorkbookChange();recalculate();
+    renderSheets();syncSheetControls();renderGrid();recordWorkbookChange();recalculate();
     status("New worksheet created; save to keep it.");
   };
   el("ssRenameSheet").onclick=()=>{
