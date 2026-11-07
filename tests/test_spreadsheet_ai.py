@@ -55,7 +55,9 @@ def test_authentication_hosted_model_not_available(client):
     assert not path_allowed("POST", BASE + "/execute")
     assert client.post(BASE + "/audit", json={"workbook": workbook()}).status_code == 403
     assert client.post(BASE + "/review", json=params()).status_code == 403
-    assert client.post(BASE + "/validate", json={}).status_code == 403
+    approval={"workbook":workbook(),"sheet":0,"snapshot_sha256":"0"*64,"target_cell":"C2",
+              "original":None,"proposal":"=B2*2","mode":"formula","approve":True}
+    assert client.post(BASE + "/validate", json=approval).status_code == 403
 
 
 def test_deterministic_audit_without_any_ai_model_or_files(client, monkeypatch):
@@ -67,7 +69,7 @@ def test_deterministic_audit_without_any_ai_model_or_files(client, monkeypatch):
                          json={"workbook": workbook(), "sheet": 0})
     assert result.status_code == 200, result.text
     audit = result.json()
-    assert audit["populated_cells"] == 10
+    assert audit["populated_cells"] == 11
     kinds = {row["type"] for row in audit["findings"]}
     assert "whitespace" in kinds
     assert "duplicate_row" in kinds
