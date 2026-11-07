@@ -218,6 +218,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   let current=null,documentList=[],dirty=false,openSequence=0,previewPage=1,libreoffice=false;
   let pendingAI=null,aiRequestId=0,aiRunning=false;
   let publication=publicationOptions(),templates=[];
+  let richStructure=null;
   const source=at("daSource");
   const settingIds={
     page_size:"daPageSize",orientation:"daOrientation",margins_cm:"daMargins",
@@ -297,6 +298,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     at("daName").readOnly=!isEditable;
     at("daSettings").hidden=!isEditable;
     at("daPublication").hidden=!isEditable;
+    at("daRich").hidden=isEditable||current?.kind!=="docx";
     renderWriting();historyButtons();
   }
   function aiStatus(message,error=false){
@@ -481,6 +483,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       const data=await api("/api/documents/open?path="+encodeURIComponent(path));
       if(sequence!==openSequence||!root.isConnected)return;
       current=data;previewPage=1;dirty=false;
+      richStructure=null;
       resetAI();
       at("daName").value=data.name;
       at("daDownloads").replaceChildren();
@@ -502,11 +505,144 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
         at("daImportNote").textContent=data.notice+(data.truncated?" The text extract was truncated; use the original for complete content.":"");
         at("daReplace").hidden=data.kind!=="docx";
         updatePagePreview();
+        if(data.kind==="docx")await loadRichStructure(data);
         status("Opened "+data.name+" for read-only inspection.");
       }
       libraryRender();refreshAIContext();
     }catch(error){status("Could not open document: "+error.message,true);}
   }
+  function richStatus(text,error=false){
+    at("daRichStatus").textContent=text;
+    at("daRichStatus").classList.toggle("da-error",error);
+  }
+  async function loadRichStructure(documentData){
+    richStatus("Reading actual Word paragraphs, text runs and table cells…");
+    try{
+      const value=await api("/api/documents/docx/structure?path="+encodeURIComponent(documentData.path));
+      if(!root.isConnected||!current||current.path!==documentData.path)return;
+      if(value.sha256!==documentData.sha256)throw Error("Original changed; reopen document.");
+      richStructure=value;
+      at("daRichStats").textContent=value.paragraphs.length+" displayed paragraphs · "+
+        value.tables.length+" tables · "+value.images+" images · "+value.sections+
+        " sections"+(value.truncated?" (large structure truncated; edit visible items only)":"");
+      at("daRichParagraph").innerHTML=value.paragraphs.map(p=>
+        '<option value="'+p.index+'">'+p.index+' · '+esc(p.style)+' · '+
+        esc((p.text||"(empty)").slice(0,62))+'</option>').join("");
+      at("daRichTable").innerHTML=value.tables.map(t=>
+        '<option value="'+t.index+'">Table '+t.index+' · '+t.rows+' rows × '+
+        t.columns+' columns</option>').join("");
+      at("daRichRow").value="0";at("daRichCell").value="0";
+      renderRichControls();
+      richStatus("Word structure loaded. Every operation produces a new copy.");
+    }catch(error){richStructure=null;richStatus("Cannot edit this Word structure: "+error.message,true);}
+  }
+  const richAt=id=>at("daRich"+id);
+  function renderRichControls(){
+    if(!richStructure)return;
+    const action=at("daRichAction").value;
+    const paragraph=richStructure.paragraphs.find(
+      x=>x.index===Number(at("daRichParagraph").value))||richStructure.paragraphs[0];
+    const table=richStructure.tables.find(
+      x=>x.index===Number(at("daRichTable").value))||richStructure.tables[0];
+    const pNeeded=["replace_run","set_style","insert_image"].includes(action);
+    const tableNeeded=["table_cell","append_row"].includes(action);
+    at("daRichParagraphLabel").hidden=!pNeeded;
+    at("daRichRunLabel").hidden=action!=="replace_run";
+    at("daRichStyleLabel").hidden=action!=="set_style";
+    at("daRichTableLabel").hidden=!tableNeeded;
+    at("daRichRowLabel").hidden=action!=="table_cell";
+    at("daRichCellLabel").hidden=action!=="table_cell";
+    at("daRichImageLabel").hidden=action!=="insert_image";
+    at("daRichWidthLabel").hidden=action!=="insert_image";
+    at("daRichCurrentLabel").hidden=!["replace_run","table_cell"].includes(action);
+    at("daRichNewLabel").hidden=!["replace_run","table_cell","append_row"].includes(action);
+    at("daRichRun").innerHTML=paragraph?paragraph.runs.map(r=>
+      '<option value="'+r.index+'">Run '+r.index+' · '+esc((r.text||"(empty)").slice(0,80))+
+      '</option>').join(""):"";
+    if(table){
+      at("daRichRow").max=Math.max(0,Math.min(table.rows,12)-1);
+      at("daRichCell").max=Math.max(0,Math.min(table.columns,12)-1);
+    }
+    const run=paragraph?.runs.find(r=>r.index===Number(at("daRichRun").value));
+    const row=Number(at("daRichRow").value),cell=Number(at("daRichCell").value);
+    const existing=action==="replace_run"?run?.text:
+      action==="table_cell"?table?.preview[row]?.[cell]:"";
+    if(existing!==undefined&&existing!==null)at("daRichCurrent").value=existing;
+    else at("daRichCurrent").value="";
+    if(action==="append_row"){
+      at("daRichNewLabel").firstChild.textContent="New row values (one cell per line)";
+      at("daRichInstruction").textContent="Enter "+(table?.columns||0)+
+        " values, one per line; complex merged tables are refused.";
+    }else if(action==="table_cell"){
+      at("daRichNewLabel").firstChild.textContent="Replacement cell text";
+      at("daRichInstruction").textContent="Only single-paragraph simple cells are edited; other Word formatting stays unchanged.";
+    }else if(action==="replace_run"){
+      at("daRichNewLabel").firstChild.textContent="Replacement run text";
+      at("daRichInstruction").textContent="This operation preserves other runs, inline images and paragraph styles.";
+    }else if(action==="set_style"){
+      at("daRichInstruction").textContent="Change only the selected paragraph's style; words, tables and images stay intact.";
+    }else{
+      at("daRichInstruction").textContent="Choose your private PNG/JPEG. It will be inserted after the selected paragraph in a new Word copy.";
+    }
+    at("daRichSave").disabled=!richStructure||
+      (pNeeded&&!paragraph)||(tableNeeded&&!table)||
+      (action==="replace_run"&&!run);
+  }
+  async function saveRichCopy(){
+    if(!current||current.kind!=="docx"||!richStructure)return;
+    if(current.sha256!==richStructure.sha256){richStatus("Original changed. Reopen it before editing.",true);return;}
+    const action=at("daRichAction").value;
+    const op={kind:action};
+    if(["replace_run","set_style","insert_image"].includes(action))
+      op.paragraph=Number(at("daRichParagraph").value);
+    if(action==="replace_run"){
+      op.run=Number(at("daRichRun").value);
+      op.expected=at("daRichCurrent").value;
+      op.text=at("daRichNew").value;
+    }else if(action==="set_style")op.style=at("daRichStyle").value;
+    else if(["table_cell","append_row"].includes(action)){
+      op.table=Number(at("daRichTable").value);
+      if(action==="table_cell"){
+        op.row=Number(at("daRichRow").value);
+        op.cell=Number(at("daRichCell").value);
+        op.expected=at("daRichCurrent").value;
+        op.text=at("daRichNew").value;
+      }else op.values=at("daRichNew").value.split(/\\r?\\n/);
+    }else if(action==="insert_image"){
+      const image=at("daRichImage").files?.[0];
+      if(!image){richStatus("Choose a private PNG or JPEG file.",true);return;}
+      op.width_cm=Number(at("daRichWidth").value);
+      if(!Number.isFinite(op.width_cm)||op.width_cm<=0||op.width_cm>14){
+        richStatus("Image width must be between 0 and 14 cm.",true);return;
+      }
+    }
+    if(!window.confirm("Create a new Word copy with this change? The original will remain unchanged."))return;
+    const button=at("daRichSave");button.disabled=true;
+    try{
+      richStatus("Applying the approved structured edit to a separate Word copy…");
+      if(action==="insert_image"){
+        const uploaded=await uploadFile(at("daRichImage").files[0],"uploads");
+        op.image_path=uploaded.path;
+      }
+      const result=await api("/api/documents/docx/revise",{
+        path:current.path,sha256:current.sha256,operations:[op]});
+      linkTo(result.path,"Download edited DOCX");
+      richStatus("Created a separate Word copy. Inspect it before sharing: "+result.path);
+      await refreshLibrary();
+      toast("Revised Word copy saved");
+    }catch(error){richStatus("Word copy edit failed: "+error.message,true);}
+    finally{button.disabled=false;renderRichControls();}
+  }
+  at("daRichAction").onchange=()=>{at("daRichNew").value="";renderRichControls();};
+  at("daRichParagraph").onchange=()=>{at("daRichRun").value="0";renderRichControls();};
+  at("daRichRun").onchange=()=>{const paragraph=richStructure?.paragraphs.find(
+    p=>p.index===Number(at("daRichParagraph").value));
+    const run=paragraph?.runs.find(r=>r.index===Number(at("daRichRun").value));
+    at("daRichCurrent").value=run?.text||"";};
+  for(const id of ["daRichTable","daRichRow","daRichCell"]){
+    at(id).onchange=renderRichControls;
+  }
+  at("daRichSave").onclick=saveRichCopy;
   function updatePagePreview(){
     if(!current||current.editable)return;
     at("daPageLabel").textContent="Page "+previewPage;
