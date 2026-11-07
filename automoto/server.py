@@ -129,6 +129,8 @@ from automoto import document_research
 app.include_router(document_research.router)  # source-verified, read-only local academic evidence
 from automoto import document_recovery
 app.include_router(document_recovery.router)  # private, source-preserving recovery points
+from automoto import document_quality
+app.include_router(document_quality.router)  # local no-write publication/structure acceptance checks
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
