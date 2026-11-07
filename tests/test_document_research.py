@@ -286,3 +286,14 @@ def test_source_change_during_ai_synthesis_invalidates_answer(client, monkeypatc
     result = client.post(BASE + "/query", headers=AUTH,
                          json=request("research budget", [data], "synthesis"))
     assert result.status_code == 409
+
+
+def test_malformed_pdf_fails_cleanly_without_creating_research_output(client):
+    path = sandbox.default_root() / "uploads" / "malformed.pdf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"%PDF-1.7\nnot a valid xref table\n%%EOF\n")
+    response = client.post(BASE + "/query", headers=AUTH,
+                           json=request("research budget", [pinned(path)]))
+    assert response.status_code == 422, response.text
+    assert "Could not safely extract" in response.text
+    assert path.read_bytes().startswith(b"%PDF-1.7")
