@@ -46,6 +46,8 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("POST", r"/api/visual/studio/document/validate"),
     ("GET", r"/api/visual/studio/brand-kits/(list|load)"),
     ("POST", r"/api/visual/studio/brand-kits/(validate|save|delete)"),
+    ("GET", r"/api/documents/(list|open)"),
+    ("POST", r"/api/documents/(save|export|replace-copy)"),
     ("POST", r"/api/files/archive"), ("POST", r"/api/files/delete"),
     ("GET", r"/api/admin/(users|settings|invites|usage|audit)"), ("PUT", r"/api/admin/settings"),
     ("PATCH", r"/api/admin/users/\w+"), ("DELETE", r"/api/admin/users/\w+"),
