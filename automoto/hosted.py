@@ -65,6 +65,8 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("GET", r"/api/spreadsheets/commercial/customer/load"),
     ("GET", r"/api/spreadsheets/finance/(list|load)"),
     ("POST", r"/api/spreadsheets/finance/(analyse|save|export)"),
+    ("POST", r"/api/spreadsheets/ai/audit"),
+    ("POST", r"/api/spreadsheets/ai/validate"),
     ("POST", r"/api/files/archive"), ("POST", r"/api/files/delete"),
     ("GET", r"/api/admin/(users|settings|invites|usage|audit)"), ("PUT", r"/api/admin/settings"),
     ("PATCH", r"/api/admin/users/\w+"), ("DELETE", r"/api/admin/users/\w+"),
