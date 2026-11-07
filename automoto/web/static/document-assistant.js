@@ -5,6 +5,8 @@ import {editableReviewRequest,applyReviewedProposal,supportedEvidence,sourceDige
   from "./document-ai-review.js";
 import {publicationOptions,DEFAULT_PUBLICATION,addReference,removeReference,insertCitation,templateById}
   from "./document-publishing.js";
+import {researchCandidates,researchRequest,verifiedResearchView,researchNotes,MAX_RESEARCH_SOURCES}
+  from "./document-research-model.js";
 export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   const html = `
     <div class="da-shell">
@@ -208,6 +210,40 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
             <button type="button" id="daAIApply" class="btn primary" hidden>Apply to editable source (Undo available)</button>
           </div>
         </section>
+        <details class="da-research" id="daResearch">
+          <summary>Academic Research · Offline multi-document evidence</summary>
+          <div class="da-research-content">
+            <p class="muted small">Search up to five selected local Word, PDF, text or draft documents. Evidence search works without any AI model. Optional synthesis requires enabled local Ollama and never edits source files. Exact quotes are not proof that a claim is true.</p>
+            <div class="da-research-settings">
+              <label class="da-research-question">Research question
+                <textarea id="daResearchQuestion" rows="2" maxlength="320"
+                  placeholder="What does the selected source evidence say about…?"></textarea>
+              </label>
+              <label>Mode<select class="input" id="daResearchMode">
+                <option value="evidence">Find exact evidence</option>
+                <option value="outline">Evidence and literature-review outline</option>
+                <option value="synthesis">Optional local-AI synthesis</option>
+              </select></label>
+            </div>
+            <div class="da-research-sources-head">
+              <strong>Private research sources</strong>
+              <span id="daResearchCount" class="muted small">0 of 5 selected</span>
+            </div>
+            <div id="daResearchSources" class="da-research-sources" role="group" aria-label="Select up to five local research sources"></div>
+            <button type="button" id="daResearchRun" class="btn primary">Search selected documents</button>
+            <p id="daResearchStatus" class="da-ai-status" role="status" aria-live="polite">Choose a saved or uploaded source, then enter a question.</p>
+            <section id="daResearchResult" class="da-research-result" hidden aria-label="Research evidence results">
+              <p id="daResearchSummary" class="muted small"></p>
+              <div id="daResearchEvidence" class="da-research-evidence"></div>
+              <div id="daResearchSynthesis" class="da-research-synthesis"></div>
+              <label class="da-research-notes">Read-only research notes and evidence outline
+                <textarea readonly id="daResearchNotes" rows="12" spellcheck="false"
+                  aria-label="Copyable research notes with exact quoted sources"></textarea>
+              </label>
+              <p class="muted small" id="daResearchLimitations"></p>
+            </section>
+          </div>
+        </details>
         <div id="daDownloads" class="da-downloads" aria-live="polite"></div>
       </section>
     </div>`;
@@ -218,6 +254,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   let current=null,documentList=[],dirty=false,openSequence=0,previewPage=1,libreoffice=false;
   let pendingAI=null,aiRequestId=0,aiRunning=false;
   let publication=publicationOptions(),templates=[];
+  let researchSelection=new Set(),researchRunId=0,researchBusy=false;
   let richStructure=null;
   const source=at("daSource");
   const settingIds={
@@ -472,7 +509,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       at("daEnvironment").textContent=libreoffice?
         "Local LibreOffice is ready for Word/PDF rendering. Imported originals remain unchanged.":
         "DOCX export is available. PDF publishing and some page previews need locally installed LibreOffice.";
-      libraryRender();renderWriting();
+      libraryRender();renderResearchSources();renderWriting();
     }catch(error){status("Could not load the document library: "+error.message,true);}
   }
   async function openDocument(path){
@@ -483,6 +520,9 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       const data=await api("/api/documents/open?path="+encodeURIComponent(path));
       if(sequence!==openSequence||!root.isConnected)return;
       current=data;previewPage=1;dirty=false;
+      if(researchCandidates([{path:data.path}]).length&&researchSelection.size<MAX_RESEARCH_SOURCES){
+        researchSelection.add(data.path);renderResearchSources();
+      }
       richStructure=null;
       resetAI();
       at("daName").value=data.name;
@@ -511,6 +551,129 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       libraryRender();refreshAIContext();
     }catch(error){status("Could not open document: "+error.message,true);}
   }
+  function researchStatus(message,error=false){
+    at("daResearchStatus").textContent=message;
+    at("daResearchStatus").classList.toggle("da-error",Boolean(error));
+  }
+  function resetResearchResults(){
+    ++researchRunId;
+    at("daResearchResult").hidden=true;
+    at("daResearchEvidence").replaceChildren();
+    at("daResearchSynthesis").replaceChildren();
+    at("daResearchNotes").value="";
+  }
+  function renderResearchSources(){
+    const candidates=researchCandidates(documentList).slice(0,100);
+    const valid=new Set(candidates.map(item=>item.path));
+    for(const path of [...researchSelection])if(!valid.has(path))researchSelection.delete(path);
+    at("daResearchCount").textContent=researchSelection.size+" of "+MAX_RESEARCH_SOURCES+" selected";
+    const panel=at("daResearchSources");
+    panel.innerHTML=candidates.length?candidates.map(item=>
+      '<label class="da-research-source"><input type="checkbox" data-research-path="'+esc(item.path)+
+      '" '+(researchSelection.has(item.path)?"checked":"")+' '+
+      (!researchSelection.has(item.path)&&researchSelection.size>=MAX_RESEARCH_SOURCES?"disabled":"")+'>'+
+      '<span>'+esc(item.name)+'</span><small>'+esc(item.kind.toUpperCase())+
+      '</small></label>').join(""):
+      '<p class="muted small">No supported documents yet. Save a draft or import a local Word/PDF/text document.</p>';
+  }
+  at("daResearchSources").onchange=event=>{
+    const checkbox=event.target.closest("input[data-research-path]");
+    if(!checkbox)return;
+    if(checkbox.checked){
+      if(researchSelection.size>=MAX_RESEARCH_SOURCES){
+        checkbox.checked=false;researchStatus("You can select at most five sources.",true);return;
+      }
+      researchSelection.add(checkbox.dataset.researchPath);
+    }else researchSelection.delete(checkbox.dataset.researchPath);
+    resetResearchResults();renderResearchSources();
+  };
+  at("daResearchQuestion").oninput=resetResearchResults;
+  at("daResearchMode").onchange=resetResearchResults;
+  at("daResearchRun").onclick=async()=>{
+    if(researchBusy)return;
+    const question=at("daResearchQuestion").value.trim();
+    const chosen=[...researchSelection];
+    const mode=at("daResearchMode").value;
+    resetResearchResults();
+    const token=++researchRunId;
+    researchBusy=true;at("daResearchRun").disabled=true;
+    try{
+      if(!chosen.length||chosen.length>MAX_RESEARCH_SOURCES)
+        throw Error("Select between one and five private source documents.");
+      if(question.length<3||question.length>320)
+        throw Error("Enter a question between 3 and 320 characters.");
+      researchStatus("Verifying selected files and searching source text locally…");
+      const infos=await Promise.all(chosen.map(path=>
+        api("/api/documents/research/source-info?path="+encodeURIComponent(path))));
+      if(!root.isConnected||token!==researchRunId)return;
+      const pinned=Object.fromEntries(infos.map(source=>[source.path,source]));
+      const request=researchRequest(question,chosen,pinned,mode);
+      researchStatus(mode==="synthesis"?
+        "Searching source passages, then preparing optional local-model notes…":
+        "Retrieving exact passage evidence without calling any AI model…");
+      const result=await api("/api/documents/research/query",request);
+      if(!root.isConnected||token!==researchRunId||
+          question!==at("daResearchQuestion").value.trim()||
+          mode!==at("daResearchMode").value)return;
+      const view=verifiedResearchView(result,request);
+      at("daResearchResult").hidden=false;
+      at("daResearchSummary").textContent=view.evidence.length+
+        " source-grounded passage(s) from "+request.sources.length+
+        " selected file(s)."+(view.partialSources.length?
+          " Warning: some source contents were truncated.":"");
+      const container=at("daResearchEvidence");
+      container.replaceChildren();
+      for(const item of view.evidence){
+        const card=document.createElement("article");
+        card.className="da-research-evidence-card";
+        const name=document.createElement("h4");
+        name.textContent="["+item.id+"] "+item.source+
+          (item.page?" · PDF page "+item.page:" · "+item.section);
+        const quote=document.createElement("blockquote");
+        quote.textContent=item.quote;
+        const details=document.createElement("p");
+        details.className="muted small";
+        details.textContent="Source SHA-256: "+item.sha256.slice(0,16)+
+          "… · Extracted section offset "+item.offset+
+          " · Verify full source context before citing.";
+        card.append(name,quote,details);
+        const open=document.createElement("button");
+        open.type="button";open.className="btn";
+        open.textContent="Open original source";
+        open.onclick=()=>openDocument(item.source);
+        card.append(open);
+        container.append(card);
+      }
+      const points=at("daResearchSynthesis");
+      points.replaceChildren();
+      if(view.synthesis.length){
+        const heading=document.createElement("h4");
+        heading.textContent="Local AI interpretations — not independently verified";
+        points.append(heading);
+        for(const claim of view.synthesis){
+          const paragraph=document.createElement("p");
+          paragraph.textContent=claim.claim+" ("+claim.evidence_ids.join(", ")+")";
+          points.append(paragraph);
+        }
+      }
+      if(!view.evidence.length){
+        const noResult=document.createElement("p");
+        noResult.textContent="No matching passages were found in the selected, extracted text. This does not prove that the topic is absent from the original files.";
+        container.append(noResult);
+      }
+      at("daResearchNotes").value=researchNotes(question,view);
+      at("daResearchLimitations").textContent=view.limitations;
+      researchStatus("Research results are read-only. Copy notes if useful; verify every quotation and add real reference details yourself.");
+    }catch(error){
+      if(token===researchRunId&&root.isConnected){
+        at("daResearchResult").hidden=true;
+        researchStatus("Research search failed: "+error.message,true);
+      }
+    }finally{
+      researchBusy=false;
+      if(root.isConnected)at("daResearchRun").disabled=false;
+    }
+  };
   function richStatus(text,error=false){
     at("daRichStatus").textContent=text;
     at("daRichStatus").classList.toggle("da-error",error);
