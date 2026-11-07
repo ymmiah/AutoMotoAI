@@ -4,12 +4,14 @@ import {blankBook,setGridCell,workbookPayload,invoicePayload,createWorkbookHisto
   from "./spreadsheet-model.js";
 import {styleAt,applyCellStyle,setColumnRule,validateEntry,filterIndices,sortSheetRows,NUMBER_FORMATS}
   from "./spreadsheet-editing.js";
+import {mountCommercialStudio} from "./commercial-studio.js";
 
 export async function mountSpreadsheetStudio({api,page,uploadFile}){
   const html='<div class="ss-shell">'+
     '<div class="ss-tabs" role="tablist" aria-label="Workspace mode">'+
       '<button type="button" role="tab" id="ssTabBook" aria-selected="true" aria-controls="ssBook">Spreadsheets</button>'+
-      '<button type="button" role="tab" id="ssTabInvoice" aria-selected="false" aria-controls="ssInvoice">Invoices</button>'+
+      '<button type="button" role="tab" id="ssTabInvoice" aria-selected="false" aria-controls="ssInvoice">Basic invoices</button>'+
+      '<button type="button" role="tab" id="ssTabCommercial" aria-selected="false" aria-controls="ssCommercial">Business documents</button>'+
     '</div>'+
     '<section id="ssBook" role="tabpanel" aria-labelledby="ssTabBook">'+
       '<div class="ss-panel ss-tools"><div><h3>Workbook editor</h3><p>Safe offline formulas, dependencies, validation and private workbook drafts.</p></div>'+
@@ -97,6 +99,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
         '<button type="button" class="btn" id="ssInvoiceLoad">Load selected draft</button></div>'+
       '<p class="ss-hint">Draft only. Verify seller identity, VAT registration, terms, currency and tax before you issue any invoice. PDF invoicing and richer templates follow in v4.</p>'+
     '</section>'+
+    '<section id="ssCommercial" role="tabpanel" aria-labelledby="ssTabCommercial" hidden><div id="ssCommercialRoot"></div></section>'+
     '<p id="ssStatus" class="ss-status" role="status" aria-live="polite">Ready. Changes are kept in this session until you save or export.</p>'+
     '<div id="ssDownload" class="ss-download" aria-live="polite"></div></div>';
   const root=page("Invoice & Spreadsheet Intelligence",
@@ -123,20 +126,24 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     panel.append(a);
   };
   const setTab=(tab)=>{
-    const bookTab=tab==="book";
-    el("ssBook").hidden=!bookTab;
-    el("ssInvoice").hidden=bookTab;
-    el("ssTabBook").setAttribute("aria-selected",String(bookTab));
-    el("ssTabInvoice").setAttribute("aria-selected",String(!bookTab));
+    el("ssBook").hidden=tab!=="book";
+    el("ssInvoice").hidden=tab!=="invoice";
+    el("ssCommercial").hidden=tab!=="commercial";
+    for(const [name,id] of [["book","ssTabBook"],["invoice","ssTabInvoice"],["commercial","ssTabCommercial"]]){
+      el(id).setAttribute("aria-selected",String(tab===name));
+    }
   };
   el("ssTabBook").onclick=()=>setTab("book");
   el("ssTabInvoice").onclick=()=>setTab("invoice");
+  el("ssTabCommercial").onclick=()=>setTab("commercial");
   root.querySelector(".ss-tabs").onkeydown=e=>{
     if(!["ArrowLeft","ArrowRight"].includes(e.key))return;
     e.preventDefault();
-    const next=e.target===el("ssTabBook")?"invoice":"book";
+    const tabs=["book","invoice","commercial"];
+    const current=e.target===el("ssTabCommercial")?2:e.target===el("ssTabInvoice")?1:0;
+    const next=tabs[(current+(e.key==="ArrowRight"?1:tabs.length-1))%tabs.length];
     setTab(next);
-    el(next==="book"?"ssTabBook":"ssTabInvoice").focus();
+    el(next==="book"?"ssTabBook":next==="invoice"?"ssTabInvoice":"ssTabCommercial").focus();
   };
   const heading=col=>String.fromCharCode(65+col);
   const syncName=()=>{book.name=el("ssBookName").value;};
@@ -661,6 +668,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     }catch(error){status("Invoice export failed: "+error.message,true);}
   };
   openBook(book);renderInvoiceLines();
+  mountCommercialStudio({host:el("ssCommercialRoot"),api,status,showDownload});
   try{await refreshLibrary();}catch(error){status("Could not load workspace files: "+error.message,true);}
   return root;
 }

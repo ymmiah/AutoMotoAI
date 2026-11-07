@@ -531,6 +531,69 @@ let browser;
   assert.equal(invoiceData.sent,false);
   assert.equal(invoiceData.totals.total,'18.00');
   await page.screenshot({path:path.join(output,'invoice-spreadsheet-v1-workspace.png')});
+
+  // V4: actual browser -> local commercial API -> branded PDF document.
+  await page.locator('#ssTabCommercial').click();
+  await page.locator('#csBrandName').fill('QA Commerce Studio');
+  await page.locator('#csKind').selectOption('quotation');
+  await page.locator('#csReview').selectOption('reviewed');
+  await page.locator('#csNumber').fill('QUOTE-QA-2026');
+  await page.locator('#csDate').fill('2026-11-07');
+  await page.locator('#csDue').fill('2026-12-07');
+  await page.locator('#csSellerName').fill('QA Local Business Ltd');
+  await page.locator('#csSellerAddress').fill('10 Example Square, Birmingham');
+  await page.locator('#csCustomerName').fill('QA Customer Ltd');
+  await page.locator('#csCustomerAddress').fill('22 Test Road, London');
+  await page.locator('#csLines input[data-index="0"][data-field="description"]').fill('Development service');
+  await page.locator('#csLines input[data-index="0"][data-field="quantity"]').fill('2');
+  await page.locator('#csLines input[data-index="0"][data-field="unit_price"]').fill('19.99');
+  await page.locator('#csLines input[data-index="0"][data-field="discount_percent"]').fill('10');
+  await page.locator('#csOrderDiscount').fill('5');
+  await page.locator('#csTaxRate').fill('20');
+  await page.locator('#csTaxLabel').selectOption('VAT');
+  const v4Previewing=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/commercial/preview')&&r.request().method()==='POST');
+  await page.locator('#csPreview').click();
+  const v4Preview=await v4Previewing;
+  assert.equal(v4Preview.status(),200);
+  assert.equal((await v4Preview.json()).total,'41.02');
+  await page.waitForFunction(() =>
+    document.querySelector('#csTotals')?.textContent?.includes('GBP 41.02'));
+
+  const customerSaving=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/commercial/customer/save')&&r.request().method()==='POST');
+  await page.locator('#csContactSave').click();
+  assert.equal((await customerSaving).status(),200);
+  await page.waitForFunction(()=>document.querySelector('#csContacts')?.options?.length>=2);
+
+  const v4Saving=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/commercial/save')&&r.request().method()==='POST');
+  await page.locator('#csSave').click();
+  const commercialSaved=await v4Saving;
+  assert.equal(commercialSaved.status(),200);
+  const v4Path=(await commercialSaved.json()).path;
+  assert.ok(v4Path.endsWith('.commercial.json'));
+  const v4Loaded=await page.request.get(base+'/api/spreadsheets/commercial/load?path='+
+    encodeURIComponent(v4Path));
+  assert.equal(v4Loaded.status(),200);
+  assert.equal((await v4Loaded.json()).document.kind,'quotation');
+
+  const v4Exporting=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/commercial/export')&&r.request().method()==='POST');
+  await page.locator('#csExport').click();
+  const v4Exported=await v4Exporting;
+  assert.equal(v4Exported.status(),200);
+  const v4PDF=await v4Exported.json();
+  assert.equal(v4PDF.draft_only,true);
+  assert.equal(v4PDF.issued,false);
+  assert.equal(v4PDF.sent,false);
+  assert.equal(v4PDF.paid,false);
+  assert.ok(v4PDF.path.endsWith('.pdf'));
+  const pdfDownload=await page.request.get(base+'/api/files/download?path='+
+    encodeURIComponent(v4PDF.path));
+  assert.equal(pdfDownload.status(),200);
+  assert.ok((await pdfDownload.body()).subarray(0,5).toString()==='%PDF-');
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v4-quotation-pdf.png')});
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
