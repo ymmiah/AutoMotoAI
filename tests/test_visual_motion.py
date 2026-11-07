@@ -201,3 +201,29 @@ def test_motion_tracks_do_not_modify_compiled_scene():
     image = motion_raster(scene, .65, motion())
     assert image.size == (800, 500)
     assert scene == copy_scene
+
+
+def test_invalid_keyframes_cannot_be_saved_as_an_editable_draft(client):
+    artwork, animation = spec(), motion()
+    animation["tracks"][0]["keyframes"][0]["dx"] = 900
+    artwork["animation"] = animation
+    response = client.post(BASE + "/save", headers=H,
+                           json={"spec": artwork, "name": "Untrusted draft"})
+    assert response.status_code == 422, response.text
+    folder = sandbox.default_root() / "artifacts" / "visual-studio"
+    assert not folder.exists() or not list(folder.glob("*.design.json"))
+
+
+def test_motion_connectors_follow_translation_without_mutating_inputs():
+    artwork = spec()
+    artwork["elements"].insert(0, {
+        "type": "line", "x1": 310, "y1": 240, "x2": 470, "y2": 240,
+        "colour": "#526476", "stroke_width": 3,
+        "from_group": "left", "to_group": "right",
+    })
+    scene = compile_scene(artwork)
+    before = copy.deepcopy(scene)
+    early = motion_raster(scene, .1, motion())
+    later = motion_raster(scene, .9, motion())
+    assert ImageChops.difference(early, later).getbbox() is not None
+    assert scene == before
