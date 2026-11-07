@@ -6,6 +6,8 @@ import {layerUnits,unitKey,toggleLayer,moveLayer,selectionBox,resizeSelection,
         sequenceTracks,normaliseSequence} from "./visual-studio-layers.js";
 import {BRAND_COLOUR_KEYS,paletteFromKit,applyBrandKit,brandTextRole}
   from "./visual-studio-brands.js";
+import {normaliseMotion,addMotionKey,removeMotionKey,editMotionKey,MOTION_FIELDS,MOTION_EASINGS}
+  from "./visual-studio-motion.js";
 const Q=(s,r=document)=>r.querySelector(s);
 const QA=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const copy=v=>JSON.parse(JSON.stringify(v));
@@ -206,7 +208,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<label>Format <select id="vsFormat"><option value="png">PNG image</option><option value="svg">Editable SVG</option>'+
     '<option value="pptx">Editable PowerPoint</option><option value="pdf">PDF</option><option value="jpg">JPEG</option><option value="gif">Animated GIF</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Motion <select id="vsEffect"><option value="flow">Flow</option><option value="pulse">Pulse</option>'+
-    '<option value="reveal">Reveal</option><option value="float">Float</option><option value="sequence">Layer timeline</option></select></label>'+
+    '<option value="reveal">Reveal</option><option value="float">Float</option><option value="sequence">Layer timeline</option>'+
+    '<option value="keyframes">Keyframe motion</option></select></label>'+
     '<label class="vs-gif-settings" hidden>Frames <input id="vsFrames" type="number" min="8" max="48" value="20"></label>'+
     '<label class="vs-gif-settings" hidden>Milliseconds/frame <input id="vsDelay" type="number" min="50" max="500" value="110"></label>'+
     '<label class="vs-gif-settings" hidden>Loop <select id="vsLoop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label>'+
@@ -214,9 +217,13 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     '<span class="spacer"></span><button class="btn primary" id="vsExport">'+icon("download")+' Export</button>'+
     '<div id="vsOutput" class="vs-output" hidden></div></section>'+
     '<section class="vs-timeline" id="vsTimeline" hidden aria-label="Animated layer timeline">'+
-    '<div class="vs-time-head"><strong>GIF scene timeline</strong>'+
-    '<span>Set when each group appears; export keeps the exact timing.</span></div>'+
+    '<div class="vs-time-head"><strong id="vsTimeTitle">GIF scene timeline</strong>'+
+    '<span id="vsTimeHelp">Set when each group appears; export keeps the exact timing.</span></div>'+
     '<div id="vsTracks" class="vs-tracks"></div>'+
+    '<div class="vs-toolbar vs-motion-actions" id="vsMotionControls" hidden>'+
+    '<button type="button" class="btn primary" id="vsMotionPlay">Play motion preview</button>'+
+    '<button type="button" class="btn" id="vsMotionStop">Stop playback</button>'+
+    '<span class="vs-inspector-note">Real GIF preview is generated locally; no per-frame network polling.</span></div>'+
     '<label class="vs-scrub">Preview at <output id="vsFrameLabel">0%</output>'+
     '<input id="vsPlayhead" type="range" min="0" max="99" step="1" value="0" aria-label="Preview timeline position"></label>'+
     '</section></div>';
@@ -225,7 +232,7 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
   root.classList.add("vs-page");
   const at=id=>Q("#"+id,root),overlay=at("vsOverlay"),stage=at("vsStage");
   let spec=template("workflow","illustrated-workflow"),name="My visual design",selected=-1,undoStack=[],redoStack=[],dirty=false;
-  let selectionKeys=new Set();
+  let selectionKeys=new Set(),motionSelected=new Map();
   let pages=[{name:"Page 1",spec}],activePage=0;
   let pendingRepair=null,repairRequest=0,inspectionRequest=0;
   let previewSequence=0,previewTimer=null,drag=null;
@@ -302,6 +309,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(next)spec.animation=next;
       else delete spec.animation;
     }
+    if(spec.animation?.effect==="keyframes"){
+      const next=normaliseMotion(spec);
+      if(next)spec.animation=next;
+      else delete spec.animation;
+    }
     record(before);draw();return result;
   }
   function buttons(){at("vsUndo").disabled=!undoStack.length;at("vsRedo").disabled=!redoStack.length;}
@@ -356,19 +368,61 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     }).join("")||'<p class="vs-inspector-note">No objects yet. Add text, shapes or images.</p>';
   }
   function drawTimeline(){
-    const enabled=at("vsFormat").value==="gif" && at("vsEffect").value==="sequence";
+    const gif=at("vsFormat").value==="gif",effect=at("vsEffect").value;
+    const enabled=gif && (effect==="sequence"||effect==="keyframes");
     at("vsTimeline").hidden=!enabled;
+    at("vsMotionControls").hidden=!gif||effect!=="keyframes";
     if(!enabled)return;
-    const config=normaliseSequence(spec);
-    if(!config){
-      at("vsTracks").innerHTML='<p class="vs-inspector-note">Add a grouped workflow or feature cards to use this animation timeline.</p>';
+    if(effect==="sequence"){
+      at("vsTimeTitle").textContent="GIF scene timeline";
+      at("vsTimeHelp").textContent="Set when each group appears; export keeps the exact timing.";
+      const config=normaliseSequence(spec);
+      if(!config){
+        at("vsTracks").innerHTML='<p class="vs-inspector-note">Group visible layers before using the reveal timeline.</p>';
+        return;
+      }
+      at("vsTracks").innerHTML=config.stages.map(({group,start},index)=>
+         '<label class="vs-track"><span class="vs-track-name">'+esc(group)+'</span>'+
+         '<input type="range" data-track="'+index+'" min="0" max="90" step="5" value="'+Math.round(start*100)+'" aria-label="Reveal '+esc(group)+' at percent">'+
+         '<output>'+Math.round(start*100)+'%</output></label>'
+      ).join("");
       return;
     }
-    at("vsTracks").innerHTML=config.stages.map(({group,start},index)=>
-       '<label class="vs-track"><span class="vs-track-name">'+esc(group)+'</span>'+
-       '<input type="range" data-track="'+index+'" min="0" max="90" step="5" value="'+Math.round(start*100)+'" aria-label="Reveal '+esc(group)+' at percent">'+
-       '<output>'+Math.round(start*100)+'%</output></label>'
-    ).join("");
+    at("vsTimeTitle").textContent="Motion keyframe editor";
+    at("vsTimeHelp").textContent="Animate group position, size, opacity and rotation. Each track starts at 0% and ends at 100%.";
+    const config=normaliseMotion(spec);
+    if(!config){
+      at("vsTracks").innerHTML='<p class="vs-inspector-note">Group two or more native layers to create a motion track. Original photos and wording stay unchanged.</p>';
+      return;
+    }
+    at("vsTracks").innerHTML=config.tracks.map(track=>{
+      const chosen=Math.min(motionSelected.get(track.group)??0,track.keyframes.length-1);
+      motionSelected.set(track.group,chosen);
+      const key=track.keyframes[chosen];
+      const field=(name,label,min,max,step)=>'<label>'+label+
+        '<input type="number" data-motion-field="'+name+'" data-motion-group="'+esc(track.group)+
+        '" min="'+min+'" max="'+max+'" step="'+step+'" value="'+key[name]+'" aria-label="'+label+' for '+esc(track.group)+'"></label>';
+      return '<section class="vs-motion-track" data-motion-group="'+esc(track.group)+'">'+
+        '<div class="vs-motion-track-head"><strong>'+esc(track.group)+'</strong>'+
+        '<label>Keyframe <select data-motion-select="'+esc(track.group)+'" aria-label="Select keyframe for '+esc(track.group)+'">'+
+        track.keyframes.map((k,i)=>'<option value="'+i+'"'+(i===chosen?' selected':'')+'>'+
+        Math.round(k.at*100)+'%</option>').join('')+'</select></label>'+
+        '<button type="button" class="btn" data-motion-add="'+esc(track.group)+'"'+
+        (track.keyframes.length>=6?' disabled':'')+'>Add at playhead</button>'+
+        '<button type="button" class="btn" data-motion-remove="'+esc(track.group)+'"'+
+        (chosen===0||chosen===track.keyframes.length-1?' disabled':'')+'>Remove key</button></div>'+
+        '<div class="vs-motion-fields">'+
+        (chosen>0&&chosen<track.keyframes.length-1
+          ?'<label>Key time %<input type="number" data-motion-field="at" data-motion-group="'+
+            esc(track.group)+'" min="1" max="99" step="1" value="'+Math.round(key.at*100)+
+            '" aria-label="Keyframe timing for '+esc(track.group)+'"></label>':'')+
+        field('dx','X offset',-250,250,1)+field('dy','Y offset',-250,250,1)+
+        field('scale','Scale',0.5,1.5,0.01)+field('opacity','Opacity',0,1,0.05)+
+        field('rotation','Rotation',-45,45,1)+
+        '<label>Easing <select data-motion-easing="'+esc(track.group)+'" aria-label="Easing for '+esc(track.group)+'">'+
+        MOTION_EASINGS.map(v=>'<option value="'+v+'"'+(key.easing===v?' selected':'')+'>'+v+'</option>').join('')+
+        '</select></label></div></section>';
+    }).join("");
   }
   function highlight(){
     overlay.replaceChildren();
@@ -526,7 +580,8 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       stage.setAttribute("aria-busy","true");
       try{
         const body={spec,name};
-        if(at("vsFormat").value==="gif" && at("vsEffect").value==="sequence" && spec.animation?.effect==="sequence"){
+        if(at("vsFormat").value==="gif" && ["sequence","keyframes"].includes(at("vsEffect").value) &&
+           spec.animation?.effect===at("vsEffect").value){
           body.animation=spec.animation;
           body.frame=Number(at("vsPlayhead").value)/100;
         }
@@ -944,8 +999,50 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     schedule(300);
   };
   at("vsTracks").onchange=e=>{
-    if(!e.target.matches("[data-track]"))return;
-    record(trackPrevious||snap());trackPrevious=null;
+    const select=e.target.closest("[data-motion-select]");
+    if(select){
+      motionSelected.set(select.dataset.motionSelect,Number(select.value));
+      drawTimeline();return;
+    }
+    const group=e.target.dataset.motionGroup||e.target.dataset.motionEasing;
+    if(group){
+      if(spec.animation?.effect!=="keyframes")return;
+      const config=normaliseMotion(spec),index=motionSelected.get(group)??0;
+      if(!config)return;
+      const field=e.target.dataset.motionField||"easing";
+      const value=field==="easing"?e.target.value:
+        field==="at"?Number(e.target.value)/100:Number(e.target.value);
+      const revised=editMotionKey(config,group,index,field,value);
+      if(!revised){status("Invalid keyframe value; check limits and key order.",true);drawTimeline();return;}
+      change(()=>{spec.animation=revised;});
+      return;
+    }
+    if(e.target.matches("[data-track]")){
+      record(trackPrevious||snap());trackPrevious=null;
+    }
+  };
+  at("vsTracks").onclick=e=>{
+    const add=e.target.closest("[data-motion-add]");
+    const remove=e.target.closest("[data-motion-remove]");
+    if(!add&&!remove)return;
+    if(spec.animation?.effect!=="keyframes")return;
+    const group=add?add.dataset.motionAdd:remove.dataset.motionRemove;
+    const config=normaliseMotion(spec);
+    if(!config)return;
+    const current=motionSelected.get(group)??0;
+    const revised=add
+      ?addMotionKey(config,group,Number(at("vsPlayhead").value)/100)
+      :removeMotionKey(config,group,current);
+    if(!revised){
+      status(add?"Choose a free playhead position between 1% and 99%, with at most six keys.":
+        "Only intermediate keyframes can be removed.",true);
+      return;
+    }
+    const track=revised.tracks.find(t=>t.group===group);
+    const nextIndex=add?track.keyframes.findIndex(k=>k.at===Math.round(Number(at("vsPlayhead").value))/100):
+      Math.max(0,current-1);
+    motionSelected.set(group,nextIndex);
+    change(()=>{spec.animation=revised;});
   };
   at("vsPlayhead").oninput=e=>{
     at("vsFrameLabel").textContent=e.target.value+"%";
@@ -963,6 +1060,11 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
       if(!tracks)return null;
       options.stages=tracks.stages;
     }
+    if(effect==="keyframes"){
+      const motion=normaliseMotion(spec);
+      if(!motion)return null;
+      options.tracks=motion.tracks;
+    }
     return options;
   };
   function updateGifSpec(){
@@ -973,6 +1075,36 @@ export async function mountVisualStudio({api,page,toast,esc,icon}){
     spec.animation=next;
     record(before);draw();
   }
+  at("vsMotionPlay").onclick=async()=>{
+    const button=at("vsMotionPlay");
+    const config=gifOptions();
+    if(!config||config.effect!=="keyframes"){
+      status("Group visible editable objects and choose Keyframe motion first.",true);return;
+    }
+    button.disabled=true;
+    const original=snap(),current=++previewSequence;
+    if(previewTimer)clearTimeout(previewTimer);
+    stage.setAttribute("aria-busy","true");
+    status("Rendering one real local GIF for smooth keyframe playback…");
+    try{
+      const result=await api("/api/visual/studio/animation-preview",
+        {spec:original,name,animation:config});
+      if(!root.isConnected||current!==previewSequence)return;
+      at("vsPreview").src=result.image;
+      status("Playing real motion preview · "+result.frames+" frames. Stop to return to frame inspection.");
+    }catch(error){
+      if(root.isConnected&&current===previewSequence)
+        status("Motion playback unavailable: "+error.message,true);
+    }finally{
+      if(root.isConnected){button.disabled=false;
+        if(current===previewSequence)stage.setAttribute("aria-busy","false");}
+    }
+  };
+  at("vsMotionStop").onclick=()=>{
+    // The still preview stops displaying the animated GIF. Do not try to
+    // manipulate a paused GIF with unsupported browser-specific APIs.
+    schedule(0);
+  };
   at("vsEffect").onchange=updateGifSpec;
   for(const id of ["vsFrames","vsDelay","vsLoop"])at(id).onchange=updateGifSpec;
   at("vsDelete").onclick=()=>{

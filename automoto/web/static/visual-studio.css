@@ -177,3 +177,23 @@
 @media(max-width:600px){.vs-brand-colours{grid-template-columns:repeat(3,minmax(0,1fr));}
   .vs-brand-controls label{flex:1 1 100%;justify-content:space-between;}
   .vs-brand-controls .input{flex:1;max-width:none;}}
+
+/* Visual Studio v10: bounded keyframe motion controls and playback. */
+.vs-motion-track {display:grid;gap:10px;min-width:0;padding:12px;border:1px solid var(--line);
+  background:var(--panel);border-radius:12px;}
+.vs-motion-track-head {display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.vs-motion-track-head strong {margin-right:auto;min-width:85px;font-size:13px;}
+.vs-motion-track-head label,.vs-motion-fields label {display:grid;gap:4px;font-size:12px;color:var(--dim);}
+.vs-motion-track-head select,.vs-motion-fields input,.vs-motion-fields select {
+  min-height:34px;color:var(--text);background:var(--bg2);
+  border:1px solid var(--line2);border-radius:8px;padding:5px 8px;font-size:12px;}
+.vs-motion-fields {display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;}
+.vs-motion-fields input,.vs-motion-fields select {width:100%;min-width:0;}
+.vs-motion-fields input:focus-visible,.vs-motion-fields select:focus-visible,
+.vs-motion-track-head select:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.vs-motion-actions {gap:10px;align-items:center;}
+.vs-motion-actions .vs-inspector-note {margin:0;flex:1 1 170px;}
+@media(max-width:1050px){.vs-motion-fields{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:650px){.vs-motion-fields{grid-template-columns:repeat(2,minmax(0,1fr));}
+ .vs-motion-track-head label{flex:1 1 100%;}
+ .vs-motion-track-head select{width:100%;}}

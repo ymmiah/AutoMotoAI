@@ -102,6 +102,12 @@ def _validate(spec: dict[str, Any]) -> dict[str, Any]:
 def _compiled(spec: dict[str, Any]) -> dict[str, Any]:
     try:
         scene = compile_scene(_validate(spec))
+        # Reject malformed keyframes when saving or reopening native drafts,
+        # not only when a GIF export is requested.
+        motion = spec.get("animation")
+        if isinstance(motion, dict) and motion.get("effect") == "keyframes":
+            from automoto.visual_motion import validate_keyframes
+            validate_keyframes(scene, motion)
         repair_text_fitting(scene)
         warnings = quality(scene)
     except (VisualError, ValueError, OSError) as exc:
@@ -154,7 +160,7 @@ def presets(request: Request):
     _auth(request)
     return {"themes": list(THEMES), "layouts": ["workflow", "cards", "hero", "canvas"],
             "output_modes": ["flat","layered"],
-            "formats": sorted(FORMATS), "animation_effects": ["flow", "pulse", "float", "reveal", "sequence"],
+            "formats": sorted(FORMATS), "animation_effects": ["flow", "pulse", "float", "reveal", "sequence", "keyframes"],
             "size_limits": {"width": [640, 1920], "height": [400, 1080], "gif_pixels": 1_000_000}}
 
 
@@ -165,10 +171,14 @@ def preview(body: PreviewIn, request: Request):
     try:
         if body.frame is not None:
             config=body.animation or body.spec.get("animation") or {}
-            if not isinstance(config,dict) or config.get("effect")!="sequence":
-                raise VisualError("timeline frame preview requires a sequence animation")
-            sequence_stages(scene,config)
-            im = raster(scene,progress=body.frame,effect="sequence",animation=config)
+            if not isinstance(config,dict) or config.get("effect") not in {"sequence","keyframes"}:
+                raise VisualError("timeline frame preview requires a sequence or keyframe animation")
+            if config["effect"]=="sequence":
+                sequence_stages(scene,config)
+            else:
+                from automoto.visual_motion import validate_keyframes
+                validate_keyframes(scene,config)
+            im = raster(scene,progress=body.frame,effect=config["effect"],animation=config)
         else:
             im = raster(scene)
         data = io.BytesIO()
@@ -181,6 +191,50 @@ def preview(body: PreviewIn, request: Request):
             "width": scene["width"], "height": scene["height"],
             "adjustments": scene.get("text_repairs", []), "frame": body.frame,
             "quality": "passed structural checks; manual visual review required"}
+
+
+@router.post("/animation-preview")
+def animation_preview(body: PreviewIn, request: Request):
+    """Real, on-demand GIF playback; no files written or per-frame requests."""
+    _auth(request)
+    scene = _compiled(body.spec)
+    config = body.animation or body.spec.get("animation") or {}
+    try:
+        from automoto.visual_motion import validate_keyframes
+        if not isinstance(config, dict) or config.get("effect") != "keyframes":
+            raise VisualError("animation playback requires a keyframe timeline")
+        validate_keyframes(scene, config)
+        frames, ms, loops = (config.get("frames", 20), config.get("duration_ms", 110),
+                             config.get("loop", 0))
+        if any(isinstance(v, bool) or not isinstance(v, int) for v in (frames, ms, loops)):
+            raise VisualError("frame count, duration and loop must be integers")
+        if not 8 <= frames <= 48 or not 50 <= ms <= 500 or not 0 <= loops <= 20:
+            raise VisualError("GIF needs 8-48 frames, 50-500ms and loop 0-20")
+        if scene["width"] * scene["height"] > 1_000_000:
+            raise VisualError("animation preview canvas exceeds one megapixel")
+        scale = min(1.0, 720 / max(scene["width"], scene["height"]))
+        count = min(frames, 24)
+        duration = min(1000, round(ms * frames / count))
+        samples = [raster(scene, scale=scale, progress=i / (count - 1),
+                          effect="keyframes", animation=config) for i in range(count)]
+        palette = samples[-1].quantize(colors=192)
+        paletted = [image.quantize(palette=palette, dither=Image.Dither.NONE)
+                    for image in samples]
+        stream = io.BytesIO()
+        paletted[0].save(stream, format="GIF", save_all=True,
+                         append_images=paletted[1:], duration=duration,
+                         loop=loops, disposal=2, optimize=False)
+        if stream.tell() > 4 * 1024 * 1024:
+            raise VisualError("animation playback exceeds the 4 MB preview limit")
+        stream.seek(0)
+        with Image.open(stream) as check:
+            if getattr(check, "n_frames", 1) < 2:
+                raise VisualError("animation is static; adjust the keyframes")
+    except (VisualError, OSError, ValueError) as exc:
+        raise HTTPException(422, str(exc)[:800]) from None
+    return {"image": "data:image/gif;base64," + base64.b64encode(stream.getvalue()).decode("ascii"),
+            "frames": count, "duration_ms": duration,
+            "message": "Real animated preview; original source assets are unchanged"}
 
 
 @router.post("/repair")
