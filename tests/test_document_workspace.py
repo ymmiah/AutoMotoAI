@@ -226,3 +226,89 @@ def test_pdf_powerpoint_and_excel_imports_are_explicitly_read_only(client):
         assert excerpt in data["extracted_text"]
         assert data["sha256"] == hashlib.sha256((root / name).read_bytes()).hexdigest()
         assert "read-only extraction" in data["notice"].lower()
+
+
+def _v2_options():
+    return {"page_size": "Letter", "orientation": "landscape", "margins_cm": 3.1,
+            "font": "Georgia", "font_size": 13, "line_spacing": 1.5,
+            "heading_color": "#345678", "page_numbers": False}
+
+
+def test_v2_draft_persists_page_settings_and_is_backward_compatible(client):
+    source = {"name": "Document settings", "markdown": "# Report\n\nContent",
+              "options": _v2_options()}
+    saved = client.post(BASE + "/save", headers=AUTH, json=source)
+    assert saved.status_code == 200, saved.text
+    target = sandbox.default_root() / saved.json()["path"]
+    stored = json.loads(target.read_text(encoding="utf-8"))
+    assert stored["schema"] == 2 and stored["options"] == source["options"]
+    loaded = client.get(BASE + "/open", headers=AUTH,
+                        params={"path": saved.json()["path"]})
+    assert loaded.status_code == 200 and loaded.json()["options"] == source["options"]
+    old = client.post(BASE + "/save", headers=AUTH, json={
+        "name": "Version one", "markdown": "# Legacy source"})
+    assert old.status_code == 200
+    legacy_file = sandbox.default_root() / old.json()["path"]
+    assert json.loads(legacy_file.read_text()) == {
+        "schema": 1, "name": "Version one", "markdown": "# Legacy source"}
+    reopened = client.get(BASE + "/open", headers=AUTH,
+                          params={"path": old.json()["path"]})
+    assert reopened.status_code == 200
+    assert reopened.json()["options"] is None
+    assert reopened.json()["markdown"] == "# Legacy source"
+
+
+def test_v2_word_export_applies_page_orientation_font_margins_and_table(client):
+    source = {"name": "Structured Word", "options": _v2_options(), "markdown":
+              "# Executive summary\n\n## Financial performance\n\n"
+              "| Metric | Actual | Budget |\n"
+              "| --- | --- | --- |\n"
+              "| Revenue | 150 | 120 |\n"
+              "| Costs | 60 | 70 |\n"}
+    response = client.post(BASE + "/export", headers=AUTH,
+                           json={**source, "format": "docx"})
+    assert response.status_code == 200, response.text
+    output = Document(str(sandbox.default_root() / response.json()["path"]))
+    from docx.enum.section import WD_ORIENT
+    from docx.shared import Cm
+    section = output.sections[0]
+    assert section.orientation == WD_ORIENT.LANDSCAPE
+    assert abs(section.page_width - Cm(27.94)) < Cm(0.15)
+    assert abs(section.page_height - Cm(21.59)) < Cm(0.15)
+    assert abs(section.left_margin - Cm(3.1)) < Cm(0.15)
+    assert output.styles["Normal"].font.name == "Georgia"
+    assert round(output.styles["Normal"].font.size.pt, 1) == 13
+    assert round(output.styles["Normal"].paragraph_format.line_spacing, 2) == 1.5
+    assert str(output.styles["Heading 1"].font.color.rgb) == "345678"
+    assert len(output.tables) == 1
+    table = output.tables[0]
+    assert [cell.text for cell in table.rows[0].cells] == ["Metric", "Actual", "Budget"]
+    assert table.cell(1, 1).text == "150"
+    assert table.cell(2, 2).text == "70"
+    assert any(p.style.name == "Heading 2" and p.text == "Financial performance"
+               for p in output.paragraphs)
+    footer_xml = section.footer._element.xml
+    assert "PAGE" not in footer_xml and "NUMPAGES" not in footer_xml
+
+
+@pytest.mark.parametrize("bad", [
+    {"page_size": "Tabloid"},
+    {"orientation": "upside-down"},
+    {"margins_cm": 0.1},
+    {"margins_cm": 10},
+    {"margins_cm": "nan"},
+    {"font": "<script>alert(1)</script>"},
+    {"font_size": 40},
+    {"line_spacing": -1},
+    {"heading_color": "#BAD; background:url(javascript:1)"},
+    {"page_numbers": "not a boolean"},
+    {"unknown_option": "arbitrary office injection"},
+])
+def test_v2_rejects_malicious_or_out_of_bounds_layout(client, bad):
+    payload = {"name": "Bad source", "markdown": "# Heading",
+               "options": {**_v2_options(), **bad}}
+    for action in ("save", "export"):
+        if action == "export":
+            payload["format"] = "docx"
+        result = client.post(BASE + "/" + action, headers=AUTH, json=payload)
+        assert result.status_code == 422, (action, bad, result.text)
