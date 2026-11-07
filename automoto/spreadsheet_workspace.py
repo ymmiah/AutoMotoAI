@@ -25,7 +25,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from automoto import office
+from automoto import office, spreadsheet_formulas
 from automoto.document_workspace import _atomic_file, _root
 from automoto.visual_studio import _auth
 
@@ -53,6 +53,8 @@ class BookIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(..., min_length=1, max_length=100)
     sheets: list[SheetIn] = Field(..., min_length=1, max_length=MAX_SHEETS)
+    # Legacy v1 records omit this key and must retain literal =-prefixed text.
+    calculation_mode: Literal["literal", "formulas"] = "literal"
 
 
 class ExportIn(BookIn):
@@ -134,6 +136,9 @@ def _normalise(book: BookIn) -> dict[str, Any]:
                 elif isinstance(value, str):
                     if len(value) > MAX_CELL_CHARS or ILLEGAL_XML.search(value):
                         raise HTTPException(422, "One cell exceeds limits or contains invalid control characters.")
+                    if (book.calculation_mode == "formulas" and value.startswith("=")
+                            and len(value) > spreadsheet_formulas.MAX_FORMULA_LENGTH):
+                        raise HTTPException(422, "Formula exceeds the 300-character V2 limit.")
                     clean_row.append(value)
                 elif isinstance(value, (int, float)):
                     if isinstance(value, float) and not math.isfinite(value) or abs(value) > 1e12:
@@ -143,7 +148,11 @@ def _normalise(book: BookIn) -> dict[str, Any]:
                     raise HTTPException(422, "Cells must contain text, numbers, booleans or blanks.")
             clean_rows.append(clean_row)
         sheets.append({"name": label, "rows": clean_rows})
-    return {"name": name, "sheets": sheets}
+    result = {"name": name, "sheets": sheets}
+    # An absent mode remains absent, preserving old V1 saved JSON/API responses.
+    if "calculation_mode" in book.model_fields_set:
+        result["calculation_mode"] = book.calculation_mode
+    return result
 
 
 def _make_path(name: str, suffix: str) -> Path:
@@ -274,9 +283,11 @@ def _write_xlsx(path: Path, workbook: dict[str, Any]) -> None:
             for j, value in enumerate(row, start=1):
                 cell = sheet.cell(i, j)
                 cell.value = value
-                # A literal beginning with '=' must never become executable Excel code.
+                # Only explicitly enabled and fully parser-validated formulas
+                # can be exported as Excel formula cells. Legacy imports stay literal.
                 if isinstance(value, str):
-                    cell.data_type = "s"
+                    cell.data_type = ("f" if workbook.get("calculation_mode") == "formulas"
+                                      and value.startswith("=") else "s")
                 cell.alignment = Alignment(vertical="center", wrap_text=True)
                 if i == 1:
                     cell.fill = PatternFill("solid", fgColor="1E293B")
@@ -390,7 +401,25 @@ def _write_invoice(path: Path, inv: InvoiceIn, totals: dict[str, Any]) -> None:
     book.save(path)
 
 
+def _calculated(workbook: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return spreadsheet_formulas.calculate(workbook)
+    except spreadsheet_formulas.FormulaError as exc:
+        raise HTTPException(422, f"{exc.code} {exc.detail}") from None
+
+
+def _checked_calculation(workbook: dict[str, Any]) -> dict[str, Any]:
+    report = _calculated(workbook)
+    if report["errors"]:
+        first = report["errors"][0]
+        raise HTTPException(
+            422, f"Fix spreadsheet formula errors before exporting: "
+                 f"{first['sheet']}!{first['cell']} {first['code']}.")
+    return report
+
+
 def _deliver_excel(workbook: dict[str, Any], name: str) -> dict[str, Any]:
+    report = _checked_calculation(workbook)
     target = _make_path(name, "xlsx")
     with tempfile.TemporaryDirectory(prefix="automoto-sheet-") as folder:
         temporary = Path(folder) / "safe.xlsx"
@@ -401,7 +430,9 @@ def _deliver_excel(workbook: dict[str, Any], name: str) -> dict[str, Any]:
         _atomic_file(target, temporary.read_bytes())
     return {"path": target.relative_to(_root()).as_posix(), "format": "xlsx",
             "download_url": "/api/files/download?path=" + target.relative_to(_root()).as_posix(),
-            "formulas_evaluated": False, "original_unchanged": True}
+            "formulas_evaluated": report["mode"] == "formulas",
+            "needs_spreadsheet_recalculation": report["formula_count"] > 0,
+            "original_unchanged": True}
 
 
 @router.get("/list")
@@ -439,6 +470,12 @@ def import_spreadsheet(body: ImportIn, request: Request):
     return _import_source(_upload(body.path))
 
 
+@router.post("/calculate")
+def calculate_spreadsheet(body: BookIn, request: Request):
+    _auth(request)
+    return _calculated(_normalise(body))
+
+
 @router.post("/save")
 def save_spreadsheet(body: BookIn, request: Request):
     _auth(request)
@@ -462,11 +499,21 @@ def export_spreadsheet(body: ExportIn, request: Request):
         return _deliver_excel(book, book["name"])
     if len(book["sheets"]) != 1:
         raise HTTPException(422, "CSV export needs exactly one worksheet.")
+    calculated = _checked_calculation(book)
+    computed = {(item["sheet"], item["cell"]): item["value"]
+                for item in calculated["results"]}
     target = _make_path(book["name"], "csv")
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
-    for row in book["sheets"][0]["rows"]:
-        writer.writerow([_safe_csv_cell(v) for v in row])
+    sheet = book["sheets"][0]
+    for row_number, row in enumerate(sheet["rows"], start=1):
+        values = []
+        for col_number, value in enumerate(row):
+            address = f"{chr(65 + col_number)}{row_number}"
+            if book.get("calculation_mode") == "formulas" and isinstance(value, str) and value.startswith("="):
+                value = computed[(sheet["name"], address)]
+            values.append(_safe_csv_cell(value))
+        writer.writerow(values)
     _atomic_file(target, stream.getvalue().encode("utf-8-sig"))
     rel = target.relative_to(_root()).as_posix()
     return {"path": rel, "format": "csv", "download_url": "/api/files/download?path=" + rel,
