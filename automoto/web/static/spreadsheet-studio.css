@@ -1,0 +1,72 @@
+/* Invoice & Spreadsheet Intelligence — v1 private workspace */
+.ss-page{max-width:1600px;width:100%}
+.ss-shell{display:grid;gap:16px;min-width:0;padding-bottom:26px}
+.ss-tabs{display:flex;gap:6px;padding:5px;background:var(--bg2);border:1px solid var(--line);border-radius:13px;width:max-content;max-width:100%}
+.ss-tabs button{border:0;background:transparent;color:var(--dim);padding:10px 16px;border-radius:9px;font-weight:650;cursor:pointer}
+.ss-tabs button[aria-selected=true]{background:var(--panel2);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.ss-shell section[hidden]{display:none!important}
+.ss-shell #ssBook,.ss-shell #ssInvoice{display:grid;gap:13px;min-width:0}
+.ss-panel{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px;min-width:0}
+.ss-panel h3{margin:0 0 4px;font-size:16px;font-weight:700}
+.ss-panel p{margin:0;font-size:12px;line-height:1.55;color:var(--dim)}
+.ss-tools{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.ss-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.ss-actions .btn,.ss-saved .btn{min-height:35px}
+.ss-fields{display:grid;grid-template-columns:minmax(200px,2fr) minmax(180px,1fr);gap:12px}
+.ss-fields label,.ss-saved label{display:grid;gap:5px;font-size:12px;font-weight:650;color:var(--dim);min-width:0}
+.ss-fields .input,.ss-saved .input,.ss-import .input{min-height:38px;width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:9px;padding:9px 11px}
+.ss-import{display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,1.3fr);align-items:center;gap:14px}
+.ss-import strong{font-size:13px}
+.ss-import select{max-width:300px}
+.ss-file-btn{display:inline-flex;align-items:center;cursor:pointer}
+.ss-saved{display:flex;gap:12px;align-items:end}
+.ss-saved label{flex:1}
+.ss-sheets{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ss-sheet-tab{border:1px solid var(--line);background:var(--panel);color:var(--dim);border-radius:9px 9px 0 0;padding:8px 14px;font:600 12px var(--font);cursor:pointer}
+.ss-sheet-tab[aria-selected=true]{border-color:var(--accent);color:var(--text);box-shadow:inset 0 -2px var(--accent)}
+.ss-grid-tools{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.ss-grid-tools strong{font-size:13px}
+.ss-grid-wrap{max-width:100%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;max-height:530px;outline-offset:2px}
+.ss-grid{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12px}
+.ss-grid thead th{position:sticky;top:0;z-index:2;background:var(--panel2);color:var(--dim);padding:9px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center;min-width:135px}
+.ss-grid thead th:first-child{left:0;z-index:3;min-width:45px;width:45px}
+.ss-grid tbody th{position:sticky;left:0;z-index:1;width:45px;min-width:45px;background:var(--panel2);color:var(--dim);text-align:center;font-weight:500;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.ss-grid td{min-width:135px;width:135px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0}
+.ss-cell{min-width:0;width:100%;height:33px;padding:5px 9px;border:0;background:transparent;color:var(--text);font:12px/1.4 var(--font)}
+.ss-cell:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--bg2);position:relative;z-index:1}
+.ss-hint{font-size:12px;line-height:1.55;color:var(--dim);margin:0}
+.ss-invoice-fields{grid-template-columns:repeat(4,minmax(120px,1fr))}
+.ss-invoice-fields label:nth-child(5),.ss-invoice-fields label:nth-child(6){grid-column:span 2}
+.ss-invoice-fields textarea{resize:vertical;min-height:82px}
+.ss-invoice-fields .ss-hint{grid-column:span 3;align-self:center}
+.ss-line-head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ss-invoice-table-wrap{overflow-x:auto}
+.ss-line-table{width:100%;border-collapse:collapse;min-width:580px}
+.ss-line-table th{font-size:11px;text-align:left;color:var(--dim);border-bottom:1px solid var(--line);padding:7px}
+.ss-line-table td{border-bottom:1px solid var(--line);padding:6px}
+.ss-line-table td:first-child{width:50%}
+.ss-line-table .input{width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--line2);border-radius:8px;min-height:34px;padding:7px}
+.ss-line-table .btn{font-size:11px;min-height:32px}
+.ss-summary{display:grid;gap:12px}
+.ss-summary #ssTotals{display:grid;gap:7px;font-size:13px;max-width:380px}
+.ss-summary #ssTotals h3{font-size:14px}
+.ss-total-row{display:flex;justify-content:space-between;gap:25px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.ss-total-row:last-child{border-bottom:0;font-size:16px}
+.ss-status{margin:0;padding:10px 13px;border-radius:9px;background:var(--bg2);color:var(--dim);border:1px solid var(--line);font-size:12px}
+.ss-status.ss-error{border-color:var(--bad);color:var(--bad)}
+.ss-download{display:flex;gap:10px;align-items:center}
+.ss-download:empty{display:none}
+.ss-shell :is(button,input,select,textarea,a):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:950px){.ss-invoice-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.ss-invoice-fields .ss-hint{grid-column:span 1}}
+@media(max-width:680px){
+ .ss-tabs{width:100%}.ss-tabs button{flex:1;padding:9px 8px;font-size:12px}
+ .ss-panel{padding:12px}
+ .ss-fields,.ss-import,.ss-invoice-fields{grid-template-columns:1fr}
+ .ss-invoice-fields label:nth-child(5),.ss-invoice-fields label:nth-child(6),.ss-invoice-fields .ss-hint{grid-column:auto}
+ .ss-import .ss-actions{align-items:stretch}
+ .ss-import select{max-width:none}
+ .ss-saved{align-items:stretch;flex-direction:column}
+ .ss-sheets{gap:3px}.ss-sheet-tab{padding:8px 10px}
+ .ss-actions{width:100%}.ss-actions .btn{flex:1}
+ .ss-grid-wrap{max-height:480px}
+}
