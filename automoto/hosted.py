@@ -50,6 +50,8 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("POST", r"/api/documents/preflight"),
     ("POST", r"/api/documents/(save|export|replace-copy)"),
     ("GET", r"/api/documents/docx/structure"), ("POST", r"/api/documents/docx/revise"),
+    ("GET", r"/api/documents/research/source-info"),
+    ("POST", r"/api/documents/research/query"),
     ("POST", r"/api/files/archive"), ("POST", r"/api/files/delete"),
     ("GET", r"/api/admin/(users|settings|invites|usage|audit)"), ("PUT", r"/api/admin/settings"),
     ("PATCH", r"/api/admin/users/\w+"), ("DELETE", r"/api/admin/users/\w+"),
