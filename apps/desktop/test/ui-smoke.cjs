@@ -100,7 +100,9 @@ let browser;
   // uploaded document inspection and a non-destructive DOCX revision.
   await page.locator('.nav [data-page="documents"]').click();
   await page.locator('#daSource').waitFor();
-  assert.equal(await page.locator('#daMode').innerText(), 'Editable draft');
+  await page.waitForFunction(() =>
+    document.querySelector('#daMode')?.textContent === 'Editable Markdown source');
+  assert.equal(await page.locator('#daMode').innerText(), 'Editable Markdown source');
   await page.locator('#daName').fill('Document smoke report');
   await page.locator('#daSource').fill('# Document smoke report\n\n## Findings\n\nOriginal body wording for review.');
   assert.match(await page.locator('#daPaper h1').innerText(),/Document smoke report/);
