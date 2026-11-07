@@ -244,6 +244,32 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
             </section>
           </div>
         </details>
+        <details class="da-acceptance" id="daAcceptance">
+          <summary>Document safety · Recovery and publication readiness</summary>
+          <div class="da-acceptance-content">
+            <section class="da-checkpoint-panel" aria-label="Private document recovery">
+              <div class="da-section-head"><strong>Private recovery checkpoints</strong>
+                <span class="muted small">Create-only, original files preserved</span></div>
+              <p class="muted small">Private snapshots store your editable source and settings. Automatic recovery is disabled unless you explicitly turn it on. A maximum of 16 recent checkpoints are retained.</p>
+              <label class="da-check"><input type="checkbox" id="daRecoveryAuto">
+                Enable automatic private recovery while editing</label>
+              <div class="da-acceptance-actions">
+                <button type="button" id="daRecoverySave" class="btn">Save recovery point</button>
+                <button type="button" id="daRecoveryRefresh" class="btn">Refresh checkpoints</button>
+              </div>
+              <p class="da-ai-status" id="daRecoveryStatus" role="status" aria-live="polite">Automatic recovery is off.</p>
+              <div id="daRecoveryList" class="da-recovery-list" aria-label="Available recovery points"></div>
+            </section>
+            <section class="da-quality-panel" aria-label="Professional document acceptance audit">
+              <div class="da-section-head"><strong>Document acceptance checks</strong>
+                <span class="muted small">Technical inspection, not a factual guarantee</span></div>
+              <p class="muted small">Build a temporary Word file and check heading structure, tables, template placeholders and publication metadata. Final page appearance, accessibility and evidence accuracy require human review.</p>
+              <button type="button" id="daQualityRun" class="btn primary">Run document acceptance audit</button>
+              <p id="daQualityStatus" class="da-ai-status" role="status" aria-live="polite">Run the audit before publishing a document.</p>
+              <div id="daQualityResult" class="da-quality-results" hidden aria-label="Document quality findings"></div>
+            </section>
+          </div>
+        </details>
         <div id="daDownloads" class="da-downloads" aria-live="polite"></div>
       </section>
     </div>`;
@@ -256,6 +282,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   let publication=publicationOptions(),templates=[];
   let researchSelection=new Set(),researchRunId=0,researchBusy=false;
   let richStructure=null;
+  let recoveryTimer=null,recoveryBusy=false,lastRecoveryFingerprint=null;
+  let qualityBusy=false;
   const source=at("daSource");
   const settingIds={
     page_size:"daPageSize",orientation:"daOrientation",margins_cm:"daMargins",
@@ -288,6 +316,9 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   function commitEditor(kind="edit",coalesce=false){
     history.commit(snapshot(),{kind,coalesce});
     dirty=true;status("Unsaved changes. Save a new draft to preserve them.");
+    at("daQualityResult").hidden=true;
+    at("daQualityStatus").textContent="Document changed. Run the acceptance audit again.";
+    scheduleRecoveryCheckpoint();
     renderWriting();historyButtons();
   }
   function restoreEditor(state){
@@ -296,6 +327,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     setOptions(state.options);
     setPublication(state.publication);
     dirty=true;status("Change restored. Save as a new draft to preserve this version.");
+    at("daQualityResult").hidden=true;
+    scheduleRecoveryCheckpoint();
     renderWriting();historyButtons();
   }
   const downloadUrl=path=>"/api/files/download?path="+encodeURIComponent(path);
@@ -336,6 +369,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     at("daSettings").hidden=!isEditable;
     at("daPublication").hidden=!isEditable;
     at("daRich").hidden=isEditable||current?.kind!=="docx";
+    at("daRecoverySave").disabled=!isEditable;
+    at("daQualityRun").disabled=!isEditable;
     renderWriting();historyButtons();
   }
   function aiStatus(message,error=false){
@@ -473,6 +508,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     current=null;previewPage=1;dirty=false;
     at("daName").value="Untitled document";
     source.value="# Untitled document\n\n";
+    if(recoveryTimer){clearTimeout(recoveryTimer);recoveryTimer=null;}
+    at("daQualityResult").hidden=true;
     resetAI();
     setOptions(DEFAULT_LAYOUT);
     setPublication(DEFAULT_PUBLICATION);
@@ -520,6 +557,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       const data=await api("/api/documents/open?path="+encodeURIComponent(path));
       if(sequence!==openSequence||!root.isConnected)return;
       current=data;previewPage=1;dirty=false;
+      if(recoveryTimer){clearTimeout(recoveryTimer);recoveryTimer=null;}
+      at("daQualityResult").hidden=true;
       if(researchCandidates([{path:data.path}]).length&&researchSelection.size<MAX_RESEARCH_SOURCES){
         researchSelection.add(data.path);renderResearchSources();
       }
@@ -551,6 +590,155 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       libraryRender();refreshAIContext();
     }catch(error){status("Could not open document: "+error.message,true);}
   }
+  function recoveryStatus(message,error=false){
+    at("daRecoveryStatus").textContent=message;
+    at("daRecoveryStatus").classList.toggle("da-error",Boolean(error));
+  }
+  function scheduleRecoveryCheckpoint(){
+    if(recoveryTimer){clearTimeout(recoveryTimer);recoveryTimer=null;}
+    if(!at("daRecoveryAuto").checked||at("daEditBody").hidden)return;
+    recoveryTimer=setTimeout(()=>{
+      recoveryTimer=null;
+      if(root.isConnected&&at("daRecoveryAuto").checked&&!at("daEditBody").hidden)
+        saveRecoveryCheckpoint(true);
+    },15000);
+  }
+  async function saveRecoveryCheckpoint(automatic=false){
+    if(recoveryBusy||at("daEditBody").hidden)return;
+    let data,fingerprint;
+    try{data=editorData();fingerprint=JSON.stringify(data);}
+    catch(error){recoveryStatus("Cannot checkpoint document: "+error.message,true);return;}
+    if(automatic&&fingerprint===lastRecoveryFingerprint)return;
+    recoveryBusy=true;at("daRecoverySave").disabled=true;
+    recoveryStatus(automatic?"Creating an automatic private recovery point…":
+      "Saving a private recovery point…");
+    try{
+      const result=await api("/api/documents/recovery/save",data);
+      lastRecoveryFingerprint=fingerprint;
+      if(root.isConnected){
+        recoveryStatus("Recovery point saved at "+result.created+
+          ". Imported originals and existing drafts were not changed.");
+        await refreshRecoveryList();
+      }
+    }catch(error){
+      if(root.isConnected)recoveryStatus("Could not save recovery point: "+error.message,true);
+    }finally{
+      recoveryBusy=false;
+      if(root.isConnected)at("daRecoverySave").disabled=at("daEditBody").hidden;
+    }
+  }
+  async function refreshRecoveryList(){
+    try{
+      const response=await api("/api/documents/recovery/list");
+      if(!root.isConnected)return;
+      const list=at("daRecoveryList");
+      const checkpoints=Array.isArray(response.checkpoints)?response.checkpoints:[];
+      list.replaceChildren();
+      if(!checkpoints.length){
+        const empty=document.createElement("p");
+        empty.className="muted small";empty.textContent="No private recovery checkpoints saved yet.";
+        list.append(empty);return;
+      }
+      for(const checkpoint of checkpoints){
+        const item=document.createElement("article");
+        item.className="da-recovery-entry";
+        const text=document.createElement("span");
+        text.textContent=checkpoint.name+" · "+(checkpoint.created||"Unreadable checkpoint");
+        item.append(text);
+        if(checkpoint.valid){
+          const restore=document.createElement("button");
+          restore.type="button";restore.className="btn";restore.textContent="Restore into editor";
+          restore.dataset.recoveryLoad=checkpoint.id;
+          item.append(restore);
+        }
+        const remove=document.createElement("button");
+        remove.type="button";remove.className="btn";remove.textContent="Delete checkpoint";
+        remove.dataset.recoveryDelete=checkpoint.id;
+        item.append(remove);
+        list.append(item);
+      }
+    }catch(error){if(root.isConnected)recoveryStatus("Recovery list unavailable: "+error.message,true);}
+  }
+  async function restoreRecoveryCheckpoint(id){
+    if(!window.confirm("Restore this checkpoint into the editor? Unsaved content may change, but the original Word and saved drafts will never be overwritten. You can Undo."))return;
+    try{
+      const result=await api("/api/documents/recovery/load?id="+encodeURIComponent(id));
+      if(result.applied!==false||result.read_only!==true||!result.source)
+        throw Error("The selected recovery point could not be verified.");
+      const recovered=result.source;
+      if(recoveryTimer){clearTimeout(recoveryTimer);recoveryTimer=null;}
+      if(current&&!current.editable)current=null;
+      at("daName").value=recovered.name;
+      source.value=recovered.markdown;
+      setOptions(recovered.options||DEFAULT_LAYOUT);
+      setPublication(recovered.publication||DEFAULT_PUBLICATION);
+      showEditor(true);
+      commitEditor("recovery",false);
+      recoveryStatus("Recovery text restored to the editor. Review it and Save draft to preserve a new version.");
+      source.focus();
+    }catch(error){recoveryStatus("Could not restore recovery point: "+error.message,true);}
+  }
+  at("daRecoveryAuto").onchange=()=>{
+    if(at("daRecoveryAuto").checked){
+      recoveryStatus("Automatic recovery enabled for this editing session. Snapshots are saved privately after 15 seconds without edits.");
+      scheduleRecoveryCheckpoint();
+    }else{
+      if(recoveryTimer){clearTimeout(recoveryTimer);recoveryTimer=null;}
+      recoveryStatus("Automatic recovery is off. Existing recovery points remain available.");
+    }
+  };
+  at("daRecoverySave").onclick=()=>saveRecoveryCheckpoint(false);
+  at("daRecoveryRefresh").onclick=refreshRecoveryList;
+  at("daRecoveryList").onclick=async event=>{
+    const load=event.target.closest("[data-recovery-load]");
+    const remove=event.target.closest("[data-recovery-delete]");
+    if(load)await restoreRecoveryCheckpoint(load.dataset.recoveryLoad);
+    else if(remove){
+      if(!window.confirm("Permanently delete this private recovery point? Your saved documents will not change."))return;
+      try{
+        await api("/api/documents/recovery/"+encodeURIComponent(remove.dataset.recoveryDelete),
+          null,"DELETE");
+        await refreshRecoveryList();
+        recoveryStatus("Selected private checkpoint deleted.");
+      }catch(error){recoveryStatus("Could not delete checkpoint: "+error.message,true);}
+    }
+  };
+  at("daQualityRun").onclick=async()=>{
+    if(qualityBusy||at("daEditBody").hidden)return;
+    qualityBusy=true;at("daQualityRun").disabled=true;
+    at("daQualityStatus").textContent="Building and validating a temporary Word publication…";
+    at("daQualityResult").hidden=true;
+    try{
+      const report=await api("/api/documents/quality/audit",editorData());
+      const list=at("daQualityResult");
+      list.replaceChildren();
+      const summary=document.createElement("p");
+      summary.textContent="Word structure built: "+report.heading_count+" headings, "+
+        report.tables_detected+" tables, "+report.references+" entered references; "+
+        report.warning_count+" editorial warning(s). Human review is still required.";
+      list.append(summary);
+      for(const issue of report.issues||[]){
+        const item=document.createElement("article");
+        item.className="da-quality-issue";
+        const title=document.createElement("strong");
+        title.textContent=issue.title+" · "+issue.severity;
+        const description=document.createElement("p");
+        description.textContent=issue.detail;
+        item.append(title,description);
+        list.append(item);
+      }
+      const caution=document.createElement("p");
+      caution.textContent=report.limitations;
+      caution.className="muted small";
+      list.append(caution);
+      list.hidden=false;
+      at("daQualityStatus").textContent="Structural audit completed. Check the listed issues and review your exported pages.";
+    }catch(error){at("daQualityStatus").textContent="Acceptance audit failed: "+error.message;}
+    finally{
+      qualityBusy=false;
+      if(root.isConnected)at("daQualityRun").disabled=at("daEditBody").hidden;
+    }
+  };
   function researchStatus(message,error=false){
     at("daResearchStatus").textContent=message;
     at("daResearchStatus").classList.toggle("da-error",Boolean(error));
@@ -1066,6 +1254,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   });
   await refreshLibrary();
   await loadTemplates();
+  await refreshRecoveryList();
   refreshAIContext();
   const openPath=sessionStorage.getItem("automoto_document_open_path");
   sessionStorage.removeItem("automoto_document_open_path");
