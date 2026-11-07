@@ -233,7 +233,7 @@ let browser;
   assert.equal(await page.locator('#daEditBody').isVisible(),false);
   assert.equal(await page.locator('#daReplace').isVisible(),true);
   // v5: real DOCX structure inspection and explicit create-only copy editing.
-  await page.locator('#daRichParagraph option').first().waitFor();
+  await page.locator('#daRichParagraph option').first().waitFor({state:'attached'});
   assert.equal(await page.locator('#daRich').isVisible(),true);
   await page.locator('#daRich summary').click();
   await page.locator('#daRichAction').selectOption('set_style');
