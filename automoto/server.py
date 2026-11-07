@@ -121,6 +121,8 @@ from automoto import visual_brand_kits
 app.include_router(visual_brand_kits.router)  # private validated reusable design brand kits
 from automoto import document_workspace
 app.include_router(document_workspace.router)  # private document library and Office-backed drafts
+from automoto import document_ai
+app.include_router(document_ai.router)  # explicitly requested, local-only AI document suggestions
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
@@ -130,7 +132,8 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/visual/studio/repair", "/api/visual/studio/ai-review",
              "/api/visual/studio/animation-preview",
              "/api/visual/studio/document/export",
-             "/api/documents/open", "/api/documents/export", "/api/documents/replace-copy")
+             "/api/documents/open", "/api/documents/export", "/api/documents/replace-copy",
+             "/api/documents/ai/review")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
 

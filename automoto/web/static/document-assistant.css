@@ -98,3 +98,35 @@
 .da-paper hr {border:0;border-top:1px solid #cbd5e1;margin:18px 0;}
 @media(max-width:1240px){.da-settings{grid-template-columns:repeat(3,minmax(100px,1fr));}}
 @media(max-width:760px){.da-settings{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+/* Document Assistant v3: explicitly reviewed local-model suggestions. */
+.da-ai {display:grid;gap:10px;min-width:0;padding:15px;border:1px solid var(--line);
+  border-radius:14px;background:var(--panel);}
+.da-ai[hidden],.da-ai [hidden] {display:none!important;}
+.da-ai-head {display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:8px;}
+.da-ai-head strong {font-size:14px;}
+.da-ai-privacy {font-size:11px;color:var(--dim);border:1px solid var(--line);
+  background:var(--bg2);padding:5px 9px;border-radius:30px;}
+.da-ai p {margin:0;}
+.da-ai-controls {display:flex;flex-wrap:wrap;align-items:end;gap:9px;}
+.da-ai-controls label {display:grid;gap:5px;flex:1 1 200px;font-size:12px;color:var(--dim);}
+.da-ai-controls label select {width:100%;}
+.da-ai-controls .btn {min-height:36px;}
+.da-ai-status {font-size:12px;line-height:1.5;color:var(--dim);background:var(--bg2);
+  border-radius:8px;border:1px solid var(--line);padding:9px 11px;}
+.da-ai-status.da-error {border-color:var(--bad);color:var(--bad);}
+.da-ai-result {display:grid;gap:11px;min-width:0;}
+.da-ai-meta {font-size:12px;color:var(--dim);}
+.da-ai-proposal-label {display:grid;gap:7px;font-size:12px;color:var(--dim);}
+.da-ai-proposal-label textarea {min-height:165px;width:100%;resize:vertical;
+  border-radius:10px;padding:12px 14px;background:var(--bg2);color:var(--text);
+  border:1px solid var(--line2);font:13px/1.65 var(--mono);white-space:pre-wrap;}
+.da-ai-evidence ol {margin:0;padding-left:24px;display:grid;gap:10px;}
+.da-ai-evidence li {font-size:13px;color:var(--text);line-height:1.5;}
+.da-ai-evidence blockquote {margin:6px 0;border-left:3px solid var(--accent);
+  padding:9px 13px;background:var(--bg2);white-space:pre-wrap;overflow-wrap:anywhere;
+  font-size:12px;color:var(--dim);border-radius:0 8px 8px 0;}
+.da-ai-evidence button {min-height:32px;}
+.da-ai-result .btn {justify-self:start;min-height:36px;}
+@media(max-width:650px){.da-ai {padding:12px;}.da-ai-controls .btn {flex:1 1 auto;}
+  .da-ai-result .btn {justify-self:stretch;}}
