@@ -125,7 +125,7 @@ let browser;
   // Reopen the native Markdown draft to verify its source was not flattened.
   await page.locator('#daSource').fill('Temporary unsaved text');
   page.once('dialog',dialog=>dialog.accept());
-  await page.locator('#daLibrary [data-da-open]').filter({has:page.locator('.da-file-type', {hasText:'DRAFT'})}).first().click();
+  await page.locator('#daLibrary [data-da-open="'+savedDraft+'"]').click();
   await page.waitForFunction(()=>document.querySelector('#daSource')?.value.includes('Original body wording for review.'));
   assert.equal(await page.locator('#daName').inputValue(),'Document smoke report');
   await page.locator('#daImportFile').setInputFiles({
