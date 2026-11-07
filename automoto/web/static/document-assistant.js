@@ -1,6 +1,8 @@
 /* Document Assistant v2 — structured native-source editor; no untrusted execution. */
 import {DEFAULT_LAYOUT,layoutOptions,createDocumentHistory,documentOutline,
   formatHeading,createTable,appendTableRow,renderDocumentPreview} from "./document-editor-model.js";
+import {editableReviewRequest,applyReviewedProposal,supportedEvidence,sourceDigest}
+  from "./document-ai-review.js";
 export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   const html = `
     <div class="da-shell">
@@ -99,6 +101,31 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
             </div>
           </section>
         </section>
+        <section class="da-ai" aria-label="Offline AI document review">
+          <div class="da-ai-head"><strong>Offline AI review</strong>
+            <span class="da-ai-privacy">Local Ollama only · no automatic changes</span></div>
+          <p class="muted small">Select source text for a focused review, or use the whole document (up to 12,000 characters). Imported Office documents support evidence-based summaries only. AI can make mistakes.</p>
+          <div class="da-ai-controls">
+            <label>Review action<select id="daAIAction" class="input">
+              <option value="proofread">Proofread</option>
+              <option value="rewrite">Rewrite for clarity</option>
+              <option value="summary">Source-grounded summary</option>
+            </select></label>
+            <button type="button" class="btn primary" id="daAIRun">Review with local AI</button>
+            <button type="button" class="btn" id="daAIClear">Clear suggestions</button>
+          </div>
+          <p id="daAIStatus" class="da-ai-status" role="status" aria-live="polite">Ready. A downloaded local model is required in Settings → Offline AI.</p>
+          <div id="daAIResult" class="da-ai-result" hidden>
+            <p class="da-ai-meta" id="daAIMeta"></p>
+            <label class="da-ai-proposal-label" id="daAIProposalLabel" hidden>
+              Suggested text (review before applying)
+              <textarea id="daAIProposal" rows="9" readonly spellcheck="false"></textarea>
+            </label>
+            <div id="daAIEvidence" class="da-ai-evidence" aria-label="Verified source excerpts"></div>
+            <p id="daAIExplanation" class="muted small"></p>
+            <button type="button" id="daAIApply" class="btn primary" hidden>Apply to editable source (Undo available)</button>
+          </div>
+        </section>
         <div id="daDownloads" class="da-downloads" aria-live="polite"></div>
       </section>
     </div>`;
@@ -107,6 +134,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   root.classList.add("da-page");
   const at=id=>root.querySelector("#"+id);
   let current=null,documentList=[],dirty=false,openSequence=0,previewPage=1,libreoffice=false;
+  let pendingAI=null,aiRequestId=0,aiRunning=false;
   const source=at("daSource");
   const settingIds={
     page_size:"daPageSize",orientation:"daOrientation",margins_cm:"daMargins",
@@ -185,6 +213,129 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     at("daSettings").hidden=!isEditable;
     renderWriting();historyButtons();
   }
+  function aiStatus(message,error=false){
+    at("daAIStatus").textContent=message;
+    at("daAIStatus").classList.toggle("da-error",Boolean(error));
+  }
+  function resetAI(){
+    ++aiRequestId;
+    pendingAI=null;
+    at("daAIResult").hidden=true;
+    at("daAIEvidence").replaceChildren();
+    at("daAIProposal").value="";
+    at("daAIApply").hidden=true;
+    at("daAIProposalLabel").hidden=true;
+    aiStatus("Ready. Nothing has been applied.");
+  }
+  function refreshAIContext(){
+    if(current && !current.editable){
+      at("daAIAction").value="summary";
+      for(const option of at("daAIAction").options)
+        option.disabled=option.value!=="summary";
+    }else{
+      for(const option of at("daAIAction").options)option.disabled=false;
+    }
+    at("daAIRun").disabled=aiRunning;
+  }
+  async function runAIReview(){
+    if(aiRunning)return;
+    const mode=at("daAIAction").value;
+    resetAI();
+    const requestId=++aiRequestId;
+    let snapshot=null,body=null,verifiedSource="";
+    try{
+      if(current&&!current.editable){
+        if(mode!=="summary")throw Error("Imported Office files support source-grounded summaries only.");
+        if(!current.path||!current.sha256)throw Error("Reopen the original imported document.");
+        body={mode,source_path:current.path,source_sha256:current.sha256};
+        snapshot={path:current.path,sha256:current.sha256};
+        verifiedSource=current.extracted_text||"";
+      }else{
+        const edit=editableReviewRequest(mode,source.value,source.selectionStart,source.selectionEnd);
+        const digest=await sourceDigest(edit.markdown);
+        if(requestId!==aiRequestId||!root.isConnected)return;
+        snapshot={markdown:edit.markdown,start:edit.start,end:edit.end};
+        verifiedSource=edit.text;
+        body={mode,markdown:edit.markdown,start:edit.start,end:edit.end,sha256:digest};
+      }
+      aiRunning=true;refreshAIContext();
+      aiStatus("Using the local model to prepare suggestions. Your document will not be changed.");
+      const result=await api("/api/documents/ai/review",body);
+      if(requestId!==aiRequestId||!root.isConnected)return;
+      if(snapshot.markdown!==undefined&&source.value!==snapshot.markdown){
+        throw Error("The document changed while the model was reviewing it. Review the latest version again.");
+      }
+      if(snapshot.path&&(!current||current.path!==snapshot.path||current.sha256!==snapshot.sha256)){
+        throw Error("A different imported document is open. Run the review again.");
+      }
+      if(result.mode!==mode||result.requires_approval!==true||result.applied!==false){
+        throw Error("The AI service did not return a reviewable result.");
+      }
+      pendingAI={result,snapshot,verifiedSource};
+      at("daAIResult").hidden=false;
+      at("daAIMeta").textContent="Source: "+result.source+" · Model: "+result.model+
+        " · No changes applied";
+      at("daAIExplanation").textContent=(result.explanation||"")+" "+
+        (result.limitations||"");
+      const rewrite=mode==="proofread"||mode==="rewrite";
+      at("daAIProposalLabel").hidden=!rewrite;
+      at("daAIApply").hidden=!rewrite||!result.changed;
+      if(rewrite)at("daAIProposal").value=result.proposal||"";
+      if(mode==="summary"){
+        const verified=supportedEvidence(result,verifiedSource);
+        if(!verified.length)throw Error("No evidence could be independently checked against the opened source.");
+        const list=document.createElement("ol");
+        for(const point of verified){
+          const li=document.createElement("li");
+          const claim=document.createElement("p");
+          claim.textContent=point.claim;
+          const quote=document.createElement("blockquote");
+          quote.textContent=point.quote;
+          li.append(claim,quote);
+          if(snapshot.markdown!==undefined){
+            const jump=document.createElement("button");
+            jump.type="button";jump.className="btn";jump.textContent="Find in source";
+            jump.onclick=()=>{
+              if(source.value!==snapshot.markdown){aiStatus("Source changed; reopen review.",true);return;}
+              const a=snapshot.start+point.offset;
+              source.focus();source.setSelectionRange(a,a+point.quote.length);
+            };
+            li.append(jump);
+          }
+          list.append(li);
+        }
+        at("daAIEvidence").replaceChildren(list);
+      }
+      aiStatus(rewrite?"Suggestion ready. Compare the proposed text before applying.":
+        "Summary ready. Quotes match the source, but check each interpretation.");
+    }catch(error){
+      if(requestId===aiRequestId&&root.isConnected){
+        pendingAI=null;at("daAIResult").hidden=true;
+        aiStatus("Local AI review unavailable: "+error.message,true);
+      }
+    }finally{
+      aiRunning=false;
+      if(root.isConnected)refreshAIContext();
+    }
+  }
+  function applyAIReview(){
+    if(!pendingAI||pendingAI.snapshot.markdown===undefined){
+      aiStatus("Only editable source suggestions may be applied.",true);return;
+    }
+    try{
+      const {result,snapshot}=pendingAI;
+      const replacement=applyReviewedProposal(source.value,snapshot,result);
+      if(replacement.markdown===source.value){aiStatus("No change is needed.");return;}
+      if(!window.confirm("Apply this local AI suggestion to your editable document? You can Undo it."))return;
+      // The result is inserted only after explicit approval, with a native
+      // history entry. Imported Office documents can never reach this path.
+      source.value=replacement.markdown;
+      source.focus();source.setSelectionRange(replacement.start,replacement.end);
+      commitEditor("ai",false);
+      resetAI();
+      aiStatus("AI text applied to the editor. Review and Save draft to preserve it.");
+    }catch(error){aiStatus(error.message,true);at("daAIApply").disabled=true;}
+  }
   function markDirty(){
     dirty=true;
     status("Unsaved changes. Save a new draft to preserve them.");
@@ -197,6 +348,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     current=null;previewPage=1;dirty=false;
     at("daName").value="Untitled document";
     source.value="# Untitled document\n\n";
+    resetAI();
     setOptions(DEFAULT_LAYOUT);
     history.reset(snapshot());
     showEditor(true);
@@ -241,6 +393,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       const data=await api("/api/documents/open?path="+encodeURIComponent(path));
       if(sequence!==openSequence||!root.isConnected)return;
       current=data;previewPage=1;dirty=false;
+      resetAI();
       at("daName").value=data.name;
       at("daDownloads").replaceChildren();
       if(data.editable){
@@ -261,7 +414,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
         updatePagePreview();
         status("Opened "+data.name+" for read-only inspection.");
       }
-      libraryRender();
+      libraryRender();refreshAIContext();
     }catch(error){status("Could not open document: "+error.message,true);}
   }
   function updatePagePreview(){
@@ -322,6 +475,10 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     }catch(error){status("Could not revise copy: "+error.message,true);}
     finally{button.disabled=false;}
   }
+  at("daAIRun").onclick=runAIReview;
+  at("daAIClear").onclick=resetAI;
+  at("daAIApply").onclick=applyAIReview;
+  at("daAIAction").onchange=resetAI;
   at("daNew").onclick=newDocument;
   at("daImport").onclick=()=>at("daImportFile").click();
   at("daImportFile").onchange=async e=>{
@@ -347,7 +504,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     if(item)openDocument(item.dataset.daOpen);
   };
   at("daName").oninput=()=>commitEditor("title",true);
-  source.oninput=()=>commitEditor("source",true);
+  source.oninput=()=>{commitEditor("source",true);if(pendingAI)aiStatus("Source changed; review again before applying.",true);};
   for(const id of Object.values(settingIds)){
     at(id).onchange=()=>{
       if(at(id).type==="number"&&!at(id).checkValidity()){
@@ -407,6 +564,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     }
   });
   await refreshLibrary();
+  refreshAIContext();
   const openPath=sessionStorage.getItem("automoto_document_open_path");
   sessionStorage.removeItem("automoto_document_open_path");
   if(openPath)await openDocument(openPath);
