@@ -131,6 +131,8 @@ from automoto import document_recovery
 app.include_router(document_recovery.router)  # private, source-preserving recovery points
 from automoto import document_quality
 app.include_router(document_quality.router)  # local no-write publication/structure acceptance checks
+from automoto import spreadsheet_workspace
+app.include_router(spreadsheet_workspace.router)  # offline private spreadsheet/invoice workspace
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
@@ -142,7 +144,8 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/visual/studio/document/export",
              "/api/documents/open", "/api/documents/export", "/api/documents/preflight", "/api/documents/replace-copy",
              "/api/documents/ai/review", "/api/documents/docx/structure", "/api/documents/docx/revise",
-             "/api/documents/research/query", "/api/documents/recovery/save", "/api/documents/recovery/load",
+             "/api/documents/research/query",
+             "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/invoice/export", "/api/documents/recovery/save", "/api/documents/recovery/load",
              "/api/documents/quality/audit")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
