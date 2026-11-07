@@ -1294,6 +1294,8 @@ PAGES.files = async () => {
           <button class="btn" data-ask="${esc(it.path)}">${icon("chat")} Ask agent</button>
           ${/\.(png|jpe?g|webp|bmp|gif)$/i.test(it.name) ? `<button class="btn" data-studio-image="${esc(it.path)}">${icon("edit")} Edit layers</button>` : ""}
           ${/\.design\.json$/i.test(it.name) ? `<button class="btn" data-studio-draft="${esc(it.path)}">${icon("edit")} Open layers</button>` : ""}
+          ${/\.(docx|pdf|pptx|xlsx|md|txt)$/i.test(it.name) || /\.document\.json$/i.test(it.name)
+             ? `<button class="btn" data-open-document="${esc(it.path)}">${icon("file")} Open in Documents</button>` : ""}
           ${it.view ? `<button class="btn" data-view="${esc(it.path)}">${icon("eye")} View</button>` : ""}
           ${it.view === "archive" ? `<button class="btn" data-extract="${esc(it.path)}">${icon("folder")} Extract</button><button class="btn" data-repack="${esc(it.path)}" title="Re-pack as a clean zip (drops __MACOSX, .DS_Store, .git, .env…)">${icon("archive")} Clean zip</button>` : ""}</div></div>`).join("")
       : '<div class="card muted">Empty folder. Upload a file or ask the agent to create a document.</div>';
@@ -1308,6 +1310,11 @@ PAGES.files = async () => {
       history.pushState(null, "", "#/visual");
       Promise.resolve(renderRoute()).catch(err => toast("Could not open Visual Studio: " + err.message, "bad"));
     };
+    document.querySelectorAll("[data-open-document]").forEach((b) => b.onclick = () => {
+      sessionStorage.setItem("automoto_document_open_path", b.dataset.openDocument);
+      history.pushState(null, "", "#/documents");
+      Promise.resolve(renderRoute()).catch(err => toast("Could not open Document Assistant: " + err.message, "bad"));
+    });
     document.querySelectorAll("[data-studio-image]").forEach((b) => b.onclick = () =>
       openInVisual("automoto_visual_open_image", b.dataset.studioImage));
     document.querySelectorAll("[data-studio-draft]").forEach((b) => b.onclick = () =>
@@ -1685,6 +1692,7 @@ const COMMANDS = [
   { t: "Switch to Chat mode", i: "chat", run: () => setMode("chat") },
   { t: "Tasks", i: "activity", run: () => (location.hash = "#/tasks") },
   { t: "Memory", i: "brain", run: () => (location.hash = "#/memory") },
+  { t: "Document Assistant", i: "file", run: () => (location.hash = "#/documents") },
   { t: "Routines", i: "clock", run: () => (location.hash = "#/routines") },
   { t: "Skills", i: "book", run: () => (location.hash = "#/skills") },
   { t: "Tools", i: "wrench", run: () => (location.hash = "#/tools") },
@@ -1767,6 +1775,11 @@ document.addEventListener("keydown", (e) => {
     if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
   }
 });
+
+PAGES.documents = async () => {
+  const { mountDocuments } = await import("./document-assistant.js?v=" + encodeURIComponent(VERSION));
+  return mountDocuments({ api, page, toast, esc, icon, uploadFile });
+};
 
 PAGES.visual = async () => {
   const { mountVisualStudio } = await import("./visual-studio.js?v=" + encodeURIComponent(VERSION));

@@ -119,6 +119,8 @@ from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
 app.include_router(visual_brand_kits.router)  # private validated reusable design brand kits
+from automoto import document_workspace
+app.include_router(document_workspace.router)  # private document library and Office-backed drafts
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
@@ -127,7 +129,8 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/visual/studio/preview", "/api/visual/studio/export",
              "/api/visual/studio/repair", "/api/visual/studio/ai-review",
              "/api/visual/studio/animation-preview",
-             "/api/visual/studio/document/export")
+             "/api/visual/studio/document/export",
+             "/api/documents/open", "/api/documents/export", "/api/documents/replace-copy")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
 
