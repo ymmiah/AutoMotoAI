@@ -104,13 +104,21 @@ def test_v4_saved_draft_v3_schema_persists_publication_and_legacy_remains(client
     saved=client.post(BASE+"/save",headers=AUTH,json=data)
     assert saved.status_code==200,saved.text
     path=sandbox.default_root()/saved.json()["path"]
-    obj=json.loads(path.read_text())
+    obj=json.loads(path.read_text(encoding="utf-8"))
     assert obj["schema"]==3
     assert obj["publication"]["references"][0]["id"]=="doe2025"
+    from automoto.document_workspace import _draft
+    direct=_draft(path)
+    assert direct["publication"]==obj["publication"], (
+        "direct Pydantic validation changes Unicode: "+repr(direct["publication"]["footer"]))
     opened=client.get(BASE+"/open",headers=AUTH,
                       params={"path":saved.json()["path"]})
     assert opened.status_code==200
-    assert opened.json()["publication"]==obj["publication"]
+    assert opened.json()["publication"]==obj["publication"], (
+        "HTTP Unicode mismatch: file="+repr(obj["publication"]["footer"])+
+        " direct="+repr(direct["publication"]["footer"])+
+        " HTTP="+repr(opened.json()["publication"]["footer"])+
+        " raw="+repr(opened.content[:400]))
     assert opened.json()["markdown"]==data["markdown"]
     older=client.post(BASE+"/save",headers=AUTH,
                       json={"name":"Older draft","markdown":"# Unchanged"})
