@@ -175,6 +175,8 @@ def _context(sheet: dict[str, Any], mode: str, target: str) -> dict[str, str]:
                 continue
             selected[f"{chr(65+c)}{r+1}"] = _text(value)[:MAX_CELL]
     if target not in selected:
+        if len(selected) >= MAX_CONTEXT:
+            selected.pop(next(reversed(selected)))
         selected[target] = _text(_cell(sheet, target))[:MAX_CELL]
     return selected
 
@@ -194,7 +196,7 @@ def _evidence(source: dict[str, str], submitted: Any) -> list[dict[str, str]]:
 
 def _proposal_valid(book: dict[str, Any], sheet_id: int, cell: str, value: str,
                     mode: str) -> None:
-    if not value or len(value) > MAX_SUGGESTION or "\x00" in value:
+    if not value or len(value) > MAX_SUGGESTION or any(ord(ch) < 32 for ch in value):
         raise HTTPException(422, "Suggested value is empty or exceeds limits.")
     r, c = _coords(cell)
     sheet = _sheet(book, sheet_id)
