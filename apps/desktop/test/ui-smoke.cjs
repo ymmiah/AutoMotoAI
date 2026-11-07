@@ -178,6 +178,51 @@ let browser;
   assert.equal(v2Data.options.page_numbers,false);
   assert.match(v2Data.markdown,/\| Column A \| Column B \|/);
   await page.screenshot({path:path.join(output,'document-assistant-v2-editor.png')});
+  // v4 professional publishing uses only human-entered source details and a
+  // server-side real DOCX preflight, without altering imported originals.
+  await page.locator('#daPublication summary').click();
+  await page.locator('#daTemplate').selectOption('academic-report');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#daApplyTemplate').click();
+  assert.match(await page.locator('#daSource').inputValue(),/## Methodology/);
+  await page.locator('#daUndo').click();
+  assert.match(await page.locator('#daSource').inputValue(),/\| Column A \| Column B \|/);
+  await page.locator('#daRefStyle').selectOption('ieee');
+  await page.locator('#daPubAuthor').fill('Example Author');
+  await page.locator('#daPubAuthor').press('Tab');
+  await page.locator('#daPubHeader').fill('Academic review');
+  await page.locator('#daPubHeader').press('Tab');
+  await page.locator('#daCover').check();
+  await page.locator('#daRefId').fill('author2025');
+  await page.locator('#daRefAuthors').fill('Author, A.');
+  await page.locator('#daRefYear').fill('2025');
+  await page.locator('#daRefTitle').fill('Verified source title');
+  await page.locator('#daRefType').selectOption('book');
+  await page.locator('#daRefPublisher').fill('User-supplied publisher');
+  await page.locator('#daAddReference').click();
+  assert.equal(await page.locator('#daReferenceList .da-ref-card').count(),1);
+  await page.locator('#daSource').evaluate(el=>{
+    el.focus();el.setSelectionRange(el.value.length,el.value.length);
+  });
+  await page.locator('[data-da-cite="author2025"]').click();
+  assert.match(await page.locator('#daSource').inputValue(),/\[@author2025\]$/);
+  const checkingWord=page.waitForResponse(r=>r.url().includes('/api/documents/preflight')&&r.request().method()==='POST');
+  await page.locator('#daPreflight').click();
+  const preflight=await checkingWord;
+  assert.equal(preflight.status(),200,await preflight.text());
+  assert.equal((await preflight.json()).reference_count,1);
+  const savingV4=page.waitForResponse(r=>r.url().includes('/api/documents/save')&&r.request().method()==='POST');
+  await page.locator('#daSave').click();
+  const v4Saved=await savingV4;
+  assert.equal(v4Saved.status(),200,await v4Saved.text());
+  const v4File=(await v4Saved.json()).path;
+  const v4Opened=await page.request.get(base+'/api/documents/open?path='+encodeURIComponent(v4File));
+  assert.equal(v4Opened.status(),200);
+  const v4Draft=await v4Opened.json();
+  assert.equal(v4Draft.publication.reference_style,'ieee');
+  assert.equal(v4Draft.publication.references[0].title,'Verified source title');
+  assert.match(v4Draft.markdown,/\[@author2025\]/);
+  await page.screenshot({path:path.join(output,'document-assistant-v4-publication.png')});
   await page.locator('#daImportFile').setInputFiles({
     name:'review-import.docx',
     mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

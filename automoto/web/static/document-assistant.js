@@ -3,6 +3,8 @@ import {DEFAULT_LAYOUT,layoutOptions,createDocumentHistory,documentOutline,
   formatHeading,createTable,appendTableRow,renderDocumentPreview} from "./document-editor-model.js";
 import {editableReviewRequest,applyReviewedProposal,supportedEvidence,sourceDigest}
   from "./document-ai-review.js";
+import {publicationOptions,DEFAULT_PUBLICATION,addReference,removeReference,insertCitation,templateById}
+  from "./document-publishing.js";
 export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   const html = `
     <div class="da-shell">
@@ -49,6 +51,49 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
           <label>Heading colour<input class="input da-colour" type="color" id="daHeadingColour" value="#1F3864"></label>
           <label class="da-check"><input type="checkbox" id="daPageNumbers" checked> Page numbers</label>
         </fieldset>
+
+        <details class="da-publication" id="daPublication">
+          <summary>Professional publishing · Templates, references, cover and contents</summary>
+          <div class="da-pub-content">
+            <div class="da-pub-row">
+              <label>Document template<select class="input" id="daTemplate"><option value="">Choose a template…</option></select></label>
+              <button type="button" class="btn" id="daApplyTemplate">Use template</button>
+              <label>Reference style<select id="daRefStyle" class="input"><option value="harvard">Harvard</option><option value="ieee">IEEE</option></select></label>
+              <label class="da-pub-check"><input type="checkbox" id="daCover"> Cover page</label>
+              <label class="da-pub-check"><input type="checkbox" id="daContents"> Contents</label>
+            </div>
+            <div class="da-pub-row">
+              <label>Document author<input class="input" id="daPubAuthor" maxlength="150" placeholder="Author (user-entered)"></label>
+              <label>Organisation/institution<input class="input" id="daPubInstitution" maxlength="150"></label>
+              <label>Document date<input class="input" id="daPubDate" maxlength="70" placeholder="Enter actual date"></label>
+              <label>Page header<input class="input" id="daPubHeader" maxlength="150"></label>
+              <label>Page footer<input class="input" id="daPubFooter" maxlength="150"></label>
+            </div>
+            <section class="da-ref-library" aria-label="Reference library">
+              <div class="da-section-head"><strong>Author-provided references</strong>
+                <span class="muted small">No invented sources or automatic research</span></div>
+              <div id="daReferenceList" class="da-reference-list" aria-live="polite"></div>
+              <div class="da-ref-add">
+                <label>Source ID<input id="daRefId" class="input" maxlength="32" placeholder="e.g. smith2024"></label>
+                <label>Author(s)<input id="daRefAuthors" class="input" maxlength="200" placeholder="Exact author(s)"></label>
+                <label>Year<input id="daRefYear" class="input" maxlength="6" placeholder="2024 or n.d."></label>
+                <label>Work title<input id="daRefTitle" class="input" maxlength="320" placeholder="Actual title"></label>
+                <label>Type<select class="input" id="daRefType">
+                  <option value="web">Website</option><option value="journal">Journal</option>
+                  <option value="book">Book</option><option value="report">Report</option></select></label>
+                <label>Publisher / journal<input id="daRefPublisher" class="input" maxlength="200"></label>
+                <label>HTTPS URL (optional)<input id="daRefUrl" class="input" maxlength="600" placeholder="https://…"></label>
+                <label>DOI (optional)<input id="daRefDoi" class="input" maxlength="120" placeholder="10.…"></label>
+                <button type="button" class="btn" id="daAddReference">Add verified source details</button>
+              </div>
+              <p class="muted small">Use “Insert citation” beside a source to place an <code>[@source-id]</code> marker at the editor cursor. Harvard/IEEE formatting is applied on export. Confirm the original bibliographic details yourself.</p>
+            </section>
+            <div class="da-pub-check">
+              <button type="button" class="btn primary" id="daPreflight">Check Word publication</button>
+              <p id="daPreflightResult" class="muted small" role="status" aria-live="polite">Preflight creates a temporary Word document for inspection; it never saves your draft.</p>
+            </div>
+          </div>
+        </details>
         <div id="daEditBody" class="da-edit-layout">
           <section class="da-compose" aria-label="Editable document source">
             <div class="da-section-head"><strong>Source editor</strong><span class="muted small">Markdown · A4 Word output</span></div>
@@ -135,6 +180,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   const at=id=>root.querySelector("#"+id);
   let current=null,documentList=[],dirty=false,openSequence=0,previewPage=1,libreoffice=false;
   let pendingAI=null,aiRequestId=0,aiRunning=false;
+  let publication=publicationOptions(),templates=[];
   const source=at("daSource");
   const settingIds={
     page_size:"daPageSize",orientation:"daOrientation",margins_cm:"daMargins",
@@ -155,7 +201,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       else at(id).value=normalized[key];
     }
   }
-  const snapshot=()=>({name:cleanName(),markdown:source.value,options:readOptions()});
+  const snapshot=()=>({name:cleanName(),markdown:source.value,options:readOptions(),
+    publication:publicationOptions(publication)});
   const history=createDocumentHistory({name:"Untitled document",
     markdown:"# Untitled document\\n\\n",options:{...DEFAULT_LAYOUT}});
   const historyButtons=()=>{
@@ -172,6 +219,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     at("daName").value=state.name;
     source.value=state.markdown;
     setOptions(state.options);
+    setPublication(state.publication);
     dirty=true;status("Change restored. Save as a new draft to preserve this version.");
     renderWriting();historyButtons();
   }
@@ -211,6 +259,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     at("daMode").textContent=isEditable?"Editable Markdown source":"Read-only Office/PDF extraction";
     at("daName").readOnly=!isEditable;
     at("daSettings").hidden=!isEditable;
+    at("daPublication").hidden=!isEditable;
     renderWriting();historyButtons();
   }
   function aiStatus(message,error=false){
@@ -350,6 +399,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     source.value="# Untitled document\n\n";
     resetAI();
     setOptions(DEFAULT_LAYOUT);
+    setPublication(DEFAULT_PUBLICATION);
     history.reset(snapshot());
     showEditor(true);
     refreshAIContext();
@@ -400,12 +450,14 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       if(data.editable){
         source.value=data.markdown;
         setOptions(data.options||DEFAULT_LAYOUT);
+        setPublication(data.publication||DEFAULT_PUBLICATION);
         history.reset(snapshot());
         showEditor(true);
         status(data.notice);
       }else{
         source.value="";
         setOptions(DEFAULT_LAYOUT);
+        setPublication(DEFAULT_PUBLICATION);
         history.reset(snapshot());
         showEditor(false);
         at("daExtracted").textContent=data.extracted_text||"No extractable text found. A scanned PDF may require OCR.";
@@ -435,7 +487,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
   function editorData(){
     const markdown=source.value;
     if(markdown.length>120000)throw Error("Document limit is 120,000 characters.");
-    return {name:cleanName(),markdown,options:readOptions()};
+    return {name:cleanName(),markdown,options:readOptions(),
+      publication:publicationOptions(publication)};
   }
   async function saveDraft(){
     const button=at("daSave");button.disabled=true;
@@ -454,7 +507,8 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     button.disabled=true;status("Preparing "+fmt.toUpperCase()+" from editable source…");
     try{
       const data=await api("/api/documents/export",{...editorData(),format:fmt});
-      status("Exported "+data.path+". This is a new file, not an overwrite.");
+      status("Exported "+data.path+". This is a new file, not an overwrite."+
+        (data.warnings?.length?" Review warnings: "+data.warnings.join(" "):""));
       linkTo(data.path,"Download "+fmt.toUpperCase());
       await refreshLibrary();
       toast("Document published as "+fmt.toUpperCase());
@@ -475,6 +529,116 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
       await refreshLibrary();
     }catch(error){status("Could not revise copy: "+error.message,true);}
     finally{button.disabled=false;}
+  }
+
+  function renderReferenceList(){
+    const list=at("daReferenceList");
+    if(!publication.references.length){
+      list.innerHTML='<p class="muted small">No sources entered. Bibliographies are never invented.</p>';return;
+    }
+    list.innerHTML=publication.references.map(ref=>
+      '<article class="da-ref-card"><span class="da-ref-id">'+esc(ref.id)+'</span>'+
+      '<span class="da-ref-name">'+esc(ref.authors)+' ('+esc(ref.year)+') · '+esc(ref.title)+'</span>'+
+      '<button class="btn" type="button" data-da-cite="'+esc(ref.id)+'">Insert citation</button>'+
+      '<button class="btn" type="button" data-da-delete-ref="'+esc(ref.id)+'">Remove</button></article>'
+    ).join("");
+  }
+  function setPublication(value){
+    publication=publicationOptions(value);
+    at("daRefStyle").value=publication.reference_style;
+    at("daCover").checked=publication.cover_page;
+    at("daContents").checked=publication.contents_page;
+    at("daTemplate").value=publication.template;
+    at("daPubAuthor").value=publication.author||"";
+    at("daPubInstitution").value=publication.institution||"";
+    at("daPubDate").value=publication.document_date||"";
+    at("daPubHeader").value=publication.header||"";
+    at("daPubFooter").value=publication.footer||"";
+    renderReferenceList();
+  }
+  const pubFields={
+    daRefStyle:"reference_style",daCover:"cover_page",daContents:"contents_page",
+    daPubAuthor:"author",daPubInstitution:"institution",daPubDate:"document_date",
+    daPubHeader:"header",daPubFooter:"footer"
+  };
+  for(const [id,key] of Object.entries(pubFields)){
+    at(id).onchange=()=>{
+      publication[key]=at(id).type==="checkbox"?at(id).checked:at(id).value;
+      commitEditor("publication",false);
+    };
+  }
+  at("daAddReference").onclick=()=>{
+    const record={
+      id:at("daRefId").value.trim(),authors:at("daRefAuthors").value.trim(),
+      title:at("daRefTitle").value.trim(),year:at("daRefYear").value.trim(),
+      type:at("daRefType").value,
+    };
+    const publisher=at("daRefPublisher").value.trim(),url=at("daRefUrl").value.trim(),
+          doi=at("daRefDoi").value.trim();
+    if(publisher)record[record.type==="journal"?"journal":"publisher"]=publisher;
+    if(url)record.url=url;
+    if(doi)record.doi=doi;
+    try{
+      const next=addReference(publication,record);
+      publication=next;renderReferenceList();
+      for(const id of ("daRefId","daRefAuthors","daRefTitle","daRefYear","daRefPublisher","daRefUrl","daRefDoi"))
+        at(id).value="";
+      commitEditor("reference",false);
+      status("Reference added from the details you entered. Insert it into the document when needed.");
+    }catch(error){status("Reference not added: "+error.message,true);}
+  };
+  at("daReferenceList").onclick=e=>{
+    const cite=e.target.closest("[data-da-cite]");
+    const remove=e.target.closest("[data-da-delete-ref]");
+    if(cite){
+      const ref=publication.references.find(r=>r.id===cite.dataset.daCite);
+      if(!ref)return;
+      try{
+        const insertion=insertCitation(source.value,source.selectionStart,source.selectionEnd,ref);
+        source.value=insertion.markdown;
+        source.focus();source.setSelectionRange(insertion.start,insertion.end);
+        commitEditor("citation",false);
+        status("Inserted source reference marker. Publication resolves it to the selected citation style.");
+      }catch(error){status(error.message,true);}
+    }else if(remove){
+      const id=remove.dataset.daDeleteRef;
+      if(source.value.includes("[@"+id+"]") &&
+         !window.confirm("This reference is cited in your document. Removing it will leave unresolved citations until you fix them. Continue?"))return;
+      publication=removeReference(publication,id);renderReferenceList();
+      commitEditor("reference",false);
+    }
+  };
+  at("daApplyTemplate").onclick=()=>{
+    const id=at("daTemplate").value,item=templateById(templates,id);
+    if(!item){status("Choose an available document template first.",true);return;}
+    if(!window.confirm("Replace your current editable document with this template? Unsaved edits may be lost; you can Undo."))return;
+    publication.template=id;
+    at("daName").value=item.name;
+    source.value=item.markdown;
+    commitEditor("template",false);
+    status("Template inserted. All square-bracket placeholders must be replaced with your own verified details.");
+  };
+  at("daPreflight").onclick=async()=>{
+    const button=at("daPreflight");button.disabled=true;
+    at("daPreflightResult").textContent="Verifying the complete Word document locally…";
+    try{
+      const result=await api("/api/documents/preflight",editorData());
+      at("daPreflightResult").textContent="Word preflight passed: "+result.headings+
+        " headings, "+result.tables+" tables, "+result.reference_count+" references. "+
+        (result.warnings?.length?result.warnings.join(" "):
+          "No structural warnings. Check wording, source authenticity and visual pagination yourself.");
+    }catch(error){
+      at("daPreflightResult").textContent="Word preflight failed: "+error.message;
+    }finally{button.disabled=false;}
+  };
+  async function loadTemplates(){
+    try{
+      const result=await api("/api/documents/templates");
+      templates=Array.isArray(result.templates)?result.templates:[];
+      at("daTemplate").innerHTML='<option value="">Choose a template…</option>'+
+        templates.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>').join("");
+      at("daTemplate").value=publication.template;
+    }catch(error){at("daPreflightResult").textContent="Templates unavailable: "+error.message;}
   }
   at("daAIRun").onclick=runAIReview;
   at("daAIClear").onclick=resetAI;
@@ -565,6 +729,7 @@ export async function mountDocuments({api,page,toast,esc,icon,uploadFile}) {
     }
   });
   await refreshLibrary();
+  await loadTemplates();
   refreshAIContext();
   const openPath=sessionStorage.getItem("automoto_document_open_path");
   sessionStorage.removeItem("automoto_document_open_path");

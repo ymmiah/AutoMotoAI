@@ -8,7 +8,7 @@
     "build": "tauri build",
     "build:win": "tauri build --bundles nsis,msi",
     "build:mac": "tauri build --target universal-apple-darwin",
-    "test:ui": "node test/document-ai-review.cjs && node test/document-editor-model.cjs && node test/visual-motion.cjs && node test/visual-brand-kits.cjs && node test/visual-layer-geometry.cjs && node --check dist/app.js && node --check dist/chrome.js && node --check ../../automoto/web/static/chrome.js && node --check ../../automoto/web/static/app.js && node test/ui-smoke.cjs"
+    "test:ui": "node test/document-publishing.cjs && node test/document-ai-review.cjs && node test/document-editor-model.cjs && node test/visual-motion.cjs && node test/visual-brand-kits.cjs && node test/visual-layer-geometry.cjs && node --check dist/app.js && node --check dist/chrome.js && node --check ../../automoto/web/static/chrome.js && node --check ../../automoto/web/static/app.js && node test/ui-smoke.cjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0",

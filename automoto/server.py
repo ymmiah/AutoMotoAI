@@ -132,7 +132,7 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/visual/studio/repair", "/api/visual/studio/ai-review",
              "/api/visual/studio/animation-preview",
              "/api/visual/studio/document/export",
-             "/api/documents/open", "/api/documents/export", "/api/documents/replace-copy",
+             "/api/documents/open", "/api/documents/export", "/api/documents/preflight", "/api/documents/replace-copy",
              "/api/documents/ai/review")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()

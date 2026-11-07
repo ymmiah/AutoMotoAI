@@ -114,8 +114,12 @@ def _inline(paragraph, text: str, *, size=None):
             r.italic = True
         elif part.startswith("["):
             m = re.match(r"\[([^\]]+)\]\(([^)]+)\)", part)
-            _hyperlink(paragraph, m.group(2), m.group(1))
-            continue
+            if m:
+                _hyperlink(paragraph, m.group(2), m.group(1))
+                continue
+            # Literal numbered references such as IEEE [1] are plain text,
+            # not Markdown links. Never dereference a missing link match.
+            r = paragraph.add_run(part)
         else:
             r = paragraph.add_run(part)
         if size:
