@@ -184,8 +184,8 @@ def _find_evidence(query: str, sources: list[PinnedSource],
             continue
         if per_source[p.source_index] >= 4:
             continue
-        match_positions = [m.start() for m in _TERMS.finditer(p.text.casefold())
-                           if m.group() in tokens]
+        match_positions = [m.start() for m in _TERMS.finditer(p.text)
+                           if m.group().casefold() in tokens]
         first = min(match_positions) if match_positions else 0
         from_index = min(max(0, first - 90), max(0, len(p.text) - 450))
         quote = p.text[from_index:from_index + 450].strip()
@@ -226,8 +226,8 @@ def _outline(query: str, evidence: list[dict[str, Any]]) -> list[dict[str, str]]
 
 def _synthesise(query: str, evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Optional Ollama-only aid; claims must cite exact server-generated IDs."""
-    model = _selected_model()
     url = _loopback_ollama() + "/api/chat"
+    model = _selected_model()
     payload = {
         "model": model, "stream": False, "format": "json",
         "options": {"temperature": 0, "num_predict": 900, "num_ctx": 4096},
