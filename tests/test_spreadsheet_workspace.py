@@ -113,7 +113,7 @@ def test_export_real_excel_with_literal_formulas_no_remote_links(client):
 
 
 def test_csv_export_prevents_formula_execution(client):
-    rows = [["a", "=WEBSERVICE(\"https://bad.example\")", "+A1", "-3", "@SUM(2,2)"]]
+    rows = [["a", "=WEBSERVICE(\"https://bad.example\")", "+A1", "-3", "@SUM(2,2)", -12.5]]
     result = client.post(API + "/export", headers=AUTH, json={
         "name": "formula-literals", "sheets": [{"name": "S", "rows": rows}], "format": "csv",
     })
@@ -124,6 +124,7 @@ def test_csv_export_prevents_formula_execution(client):
     assert actual[2].startswith("'+")
     assert actual[3].startswith("'-")
     assert actual[4].startswith("'@")
+    assert actual[5] == "-12.5"  # a true negative numeric value stays numeric-looking
 
 
 def test_import_xlsx_is_read_only_and_warns_of_formula_conversion(client):
