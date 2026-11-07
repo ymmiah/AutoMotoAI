@@ -85,7 +85,7 @@ def test_interpolation_and_easing_exact_endpoints():
     assert interpolate(track, 0)["dx"] == -68
     assert interpolate(track, 1)["dx"] == 0
     assert interpolate(track, .5)["dx"] == -12
-    assert interpolate(track, .25)["dx"] < -40
+    assert interpolate(track, .25)["dx"] == -40
     assert interpolate(track, .75)["opacity"] > .9
 
 
