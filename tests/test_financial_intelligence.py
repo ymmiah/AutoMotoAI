@@ -59,7 +59,8 @@ def test_unauthenticated_and_hosted_allowlist(client):
     assert path_allowed("GET", API + "/load")
     for action in ("analyse", "save", "export"):
         assert path_allowed("POST", API + "/" + action)
-        assert client.post(API + "/" + action, json={}).status_code == 403
+        valid = {**book(), "format": "csv"} if action == "export" else book()
+        assert client.post(API + "/" + action, json=valid).status_code == 403
     assert client.get(API + "/list").status_code == 403
     assert client.get(API + "/load", params={"path": "artifacts/spreadsheets/f-abcdefabcdef.finance.json"}).status_code == 403
     for action in ("transfer", "pay", "post-invoice", "delete", "connect-bank"):
