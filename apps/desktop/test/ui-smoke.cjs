@@ -1147,6 +1147,48 @@ let browser;
     r.request().method()==='POST');
   await page.locator('#vsBrandDelete').click();
   assert.equal((await deletingKit).status(),200);
+
+  // Dedicated Research Studio V1: sources are existing private saved docs;
+  // evidence must be hash-pinned and saved as a new immutable project.
+  await page.locator('.nav [data-page="research"]').click();
+  await page.locator('#rsTitle').waitFor();
+  await page.locator('#rsTitle').fill('Browser verified research');
+  await page.locator('#rsQuestion').fill('What original body wording is in the document smoke report?');
+  await page.waitForFunction(source=>[...document.querySelectorAll('#rsSourceList input')]
+    .some(x=>x.value===source),savedDraft);
+  await page.locator('#rsSourceList input[value="'+savedDraft+'"]').check();
+  await page.waitForFunction(()=>document.querySelector('#rsSelected')?.textContent==='1 of 5 selected');
+  const findingResearch=page.waitForResponse(r=>
+    r.url().includes('/api/research/studio/query')&&r.request().method()==='POST');
+  await page.locator('#rsFind').click();
+  const researchResponse=await findingResearch;
+  assert.equal(researchResponse.status(),200,await researchResponse.text());
+  const researchReport=(await researchResponse.json()).result;
+  assert.equal(researchReport.read_only,true);
+  assert.equal(researchReport.source_count,1);
+  assert.ok(researchReport.evidence.length>=1,'V1 must show genuine local quote evidence');
+  assert.equal(researchReport.evidence[0].source,savedDraft);
+  assert.equal(researchReport.evidence[0].page,null);
+  assert.equal(researchReport.applied,false);
+  await page.waitForFunction(()=>document.querySelectorAll('#rsEvidence .rs-excerpt').length>0);
+  assert.equal(await page.locator('#rsCopy').isDisabled(),false);
+  const saveResearch=page.waitForResponse(r=>
+    r.url().includes('/api/research/studio/save')&&r.request().method()==='POST');
+  await page.locator('#rsSave').click();
+  const savedResearch=await saveResearch;
+  assert.equal(savedResearch.status(),200,await savedResearch.text());
+  const researchPath=(await savedResearch.json()).path;
+  assert.ok(researchPath.endsWith('.research.json'));
+  await page.waitForFunction(p=>document.querySelector('#rsProjects')?.value===p,researchPath);
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rsOpen').click();
+  await page.waitForFunction(()=>document.querySelector('#rsStatus')?.textContent?.includes('Historical project loaded'));
+  assert.equal(await page.locator('#rsSourceStates .rs-current').count(),1);
+  const historical=await page.request.get(base+'/api/research/studio/open?path='+encodeURIComponent(researchPath));
+  assert.equal(historical.status(),200);
+  assert.equal((await historical.json()).source_status[0].status,'current');
+  await page.screenshot({path:path.join(output,'research-studio-v1-evidence-workspace.png')});
+
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
