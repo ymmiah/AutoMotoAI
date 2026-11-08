@@ -102,7 +102,10 @@ def add_judgements(data, draft):
 def test_authentication_hosted_allowlisting_and_no_destructive_routes(client):
     for action in ("list", "open"):
         assert path_allowed("GET", BASE + "/" + action)
-        assert client.get(BASE + "/" + action).status_code == 403
+        params = {"path": "artifacts/research/comparisons/comparison-" +
+                  "a"*24 + ".comparison.json"} if action == "open" else {}
+        # Pass a syntactically valid path so auth is checked before endpoint logic.
+        assert client.get(BASE + "/" + action, params=params).status_code == 403
     for action in ("prepare", "preview", "save"):
         assert path_allowed("POST", BASE + "/" + action)
     for action in ("ai", "auto-classify", "delete", "change-source", "publish", "score-true"):
