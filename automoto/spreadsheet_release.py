@@ -14,6 +14,7 @@ import secrets
 import sqlite3
 import tempfile
 import zipfile
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -147,10 +148,14 @@ def _snapshot_workflow() -> bytes | None:
         raise HTTPException(413, "Workflow audit is too large for a V8 archive.")
     with tempfile.TemporaryDirectory(prefix="automoto-v8-sqlite-") as temporary:
         target = Path(temporary) / "workflow.sqlite3"
-        with sqlite3.connect(source) as live, sqlite3.connect(target) as copy:
+        # sqlite3.Connection's context manager commits/rolls back; it does
+        # NOT close the handle. Windows cannot remove a temporary DB until
+        # every SQLite connection has been explicitly closed.
+        with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)) as live:
             live.row_factory = sqlite3.Row
             business_workflows._verify(live)
-            live.backup(copy)
+            with closing(sqlite3.connect(target)) as copy:
+                live.backup(copy)
         data = target.read_bytes()
         if len(data) > MAX_WORKFLOW:
             raise HTTPException(413, "Workflow snapshot exceeds the backup limit.")
@@ -165,14 +170,14 @@ def _verify_workflow_bytes(data: bytes) -> None:
         path = Path(temporary) / "audit.sqlite3"
         path.write_bytes(data)
         # SQLite opens an isolated private temporary copy. It never becomes the live audit log.
-        with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as db:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
             db.row_factory = sqlite3.Row
             try:
                 checked = db.execute("PRAGMA quick_check").fetchone()
                 if not checked or checked[0] != "ok":
                     raise ValueError("SQLite integrity failure")
                 business_workflows._verify(db)
-            except (sqlite3.DatabaseError, ValueError, KeyError, IndexError):
+            except (sqlite3.DatabaseError, ValueError, KeyError, IndexError, HTTPException):
                 raise HTTPException(422, "Archived workflow history is invalid.") from None
 
 
@@ -292,7 +297,7 @@ def readiness(request: Request):
     audit_state = "not_created"
     if audit.is_file() and not audit.is_symlink():
         try:
-            with sqlite3.connect(f"file:{audit.as_posix()}?mode=ro", uri=True) as db:
+            with closing(sqlite3.connect(audit.as_uri() + "?mode=ro", uri=True)) as db:
                 db.row_factory = sqlite3.Row
                 business_workflows._verify(db)
             audit_state = "verified"
