@@ -744,6 +744,66 @@ let browser;
   assert.equal(await page.locator('#wfApprove').isDisabled(),true);
   await page.screenshot({path:path.join(output,'invoice-spreadsheet-v7-workflow-audit.png')});
 
+  // V8 real browser: keyboard-accessible release tab, private archive, SHA-256
+  // verification, consented copy-only restore, unchanged original documents.
+  await page.locator('#ssTabWorkflows').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#ssTabRelease').getAttribute('aria-selected'),'true');
+  assert.equal(await page.locator('#ssRelease').isVisible(),true);
+  await page.waitForFunction(()=>document.querySelector('#srReleaseStatus')?.textContent==='Release blocked');
+  const releaseReadiness=await page.request.get(base+'/api/spreadsheets/release/readiness');
+  assert.equal(releaseReadiness.status(),200);
+  assert.equal((await releaseReadiness.json()).release_ready,false);
+
+  page.once('dialog',d=>d.accept());
+  const creatingV8=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/release/create')&&r.request().method()==='POST');
+  await page.locator('#srCreate').click();
+  const v8Created=await creatingV8;
+  assert.equal(v8Created.status(),200,await v8Created.text());
+  const v8Backup=await v8Created.json();
+  assert.ok(v8Backup.path.endsWith('.zip'));
+  assert.ok(v8Backup.records>=3);
+  assert.equal(v8Backup.workflow_history_included,true);
+  assert.equal(v8Backup.source_files_changed,false);
+  assert.equal(v8Backup.encrypted,false);
+  const zipDownload=await page.request.get(base+'/api/files/download?path='+
+    encodeURIComponent(v8Backup.path));
+  assert.equal(zipDownload.status(),200);
+  assert.equal((await zipDownload.body()).subarray(0,2).toString(),'PK');
+  await page.waitForFunction(()=>document.querySelector('#srBackups')?.value?.endsWith('.zip'));
+
+  const verifyingV8=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/release/verify')&&r.request().method()==='POST');
+  await page.locator('#srVerify').click();
+  const v8Verified=await verifyingV8;
+  assert.equal(v8Verified.status(),200,await v8Verified.text());
+  assert.equal((await v8Verified.json()).valid,true);
+  await page.locator('#srRestore').click();
+  await page.waitForFunction(()=>document.querySelector('#srStatus')?.textContent?.includes('RESTORE COPIES'));
+  await page.locator('#srAcknowledgement').fill('RESTORE COPIES');
+  await page.locator('#srNoOverwrite').check();
+  page.once('dialog',d=>d.accept());
+  const restoringV8=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/release/restore')&&r.request().method()==='POST');
+  await page.locator('#srRestore').click();
+  const v8Restored=await restoringV8;
+  assert.equal(v8Restored.status(),200,await v8Restored.text());
+  const v8Result=await v8Restored.json();
+  assert.equal(v8Result.original_records_overwritten,false);
+  assert.equal(v8Result.live_workflow_history_replaced,false);
+  assert.equal(v8Result.financial_postings,0);
+  assert.equal(v8Result.records,v8Backup.records);
+  assert.ok(v8Result.archived_workflow_evidence.endsWith('.sqlite3'));
+  const v8Original=await page.request.get(base+'/api/spreadsheets/commercial/load?path='+
+    encodeURIComponent(v4Path));
+  assert.equal(v8Original.status(),200);
+  assert.equal((await v8Original.json()).document.review_state,'reviewed');
+  const v8Audit=await page.request.get(base+'/api/spreadsheets/workflows/verify');
+  assert.equal(v8Audit.status(),200);
+  assert.equal((await v8Audit.json()).event_count,2);
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v8-recovery-readiness.png')});
+
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
