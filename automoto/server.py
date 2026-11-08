@@ -131,6 +131,8 @@ from automoto import research_studio
 app.include_router(research_studio.router)  # private research projects, source fingerprints and grounded evidence
 from automoto import research_discovery
 app.include_router(research_discovery.router)  # V2 SSRF-guarded scholarly lookup, DOI provenance and approved webpage imports
+from automoto import research_comparison
+app.include_router(research_comparison.router)  # V3 source-audited manual evidence comparison
 from automoto import document_recovery
 app.include_router(document_recovery.router)  # private, source-preserving recovery points
 from automoto import document_quality
@@ -161,6 +163,8 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/documents/research/query", "/api/research/studio/query", "/api/research/studio/save",
              "/api/research/studio/discovery/search", "/api/research/studio/discovery/verify-doi",
              "/api/research/studio/discovery/save-doi", "/api/research/studio/discovery/capture-page",
+             "/api/research/studio/compare/prepare", "/api/research/studio/compare/preview",
+             "/api/research/studio/compare/save",
              "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/spreadsheets/finance/export", "/api/spreadsheets/ai/review", "/api/spreadsheets/release/create", "/api/spreadsheets/release/restore", "/api/documents/recovery/save", "/api/documents/recovery/load",
              "/api/documents/quality/audit")
 _HITS: dict[tuple[str, str], deque] = {}
