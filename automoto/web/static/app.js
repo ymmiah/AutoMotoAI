@@ -1693,6 +1693,7 @@ const COMMANDS = [
   { t: "Tasks", i: "activity", run: () => (location.hash = "#/tasks") },
   { t: "Memory", i: "brain", run: () => (location.hash = "#/memory") },
   { t: "Document Assistant", i: "file", run: () => (location.hash = "#/documents") },
+  { t: "Research Studio", i: "search", run: () => (location.hash = "#/research") },
   { t: "Invoices & Spreadsheets", i: "sheet", run: () => (location.hash = "#/spreadsheets") },
   { t: "Routines", i: "clock", run: () => (location.hash = "#/routines") },
   { t: "Skills", i: "book", run: () => (location.hash = "#/skills") },
@@ -1780,6 +1781,11 @@ document.addEventListener("keydown", (e) => {
 PAGES.documents = async () => {
   const { mountDocuments } = await import("./document-assistant.js?v=" + encodeURIComponent(VERSION));
   return mountDocuments({ api, page, toast, esc, icon, uploadFile });
+};
+
+PAGES.research = async () => {
+  const { mountResearchStudio } = await import("./research-studio.js?v=" + encodeURIComponent(VERSION));
+  return mountResearchStudio({ api, page, toast });
 };
 
 PAGES.spreadsheets = async () => {
