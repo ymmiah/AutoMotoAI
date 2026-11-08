@@ -3,6 +3,7 @@
 import {researchRequest,verifiedResearchView,researchNotes} from "./document-research-model.js";
 import {mountResearchDiscovery} from "./research-discovery.js";
 import {mountResearchComparison} from "./research-comparison.js";
+import {mountResearchPublishing} from "./research-publishing.js";
 
 export async function mountResearchStudio({api,page,toast}){
   const host=page("Research Studio",
@@ -37,6 +38,7 @@ export async function mountResearchStudio({api,page,toast}){
     '<p id="rsLimitations" class="rs-hint"></p></section>'+
     '<section id="rsDiscoveryRoot" aria-label="Scholarly source discovery"></section>'+
     '<section id="rsComparisonRoot" aria-label="Evidence comparison and contradiction mapping"></section>'+
+    '<section id="rsPublishingRoot" aria-label="Academic report publishing"></section>'+
     '<p class="rs-status" id="rsStatus" role="status" aria-live="polite">Choose a file and research question to begin.</p></div>');
   const el=id=>host.querySelector("#"+id);
   let catalog=[],selected=new Set(),pinned={},loaded=null,latest=null,latestRequest=null,sequence=0;
@@ -227,6 +229,7 @@ export async function mountResearchStudio({api,page,toast}){
   };
   mountResearchDiscovery({host:el("rsDiscoveryRoot"),api,refreshSources,toast});
   mountResearchComparison({host:el("rsComparisonRoot"),api,toast});
+  mountResearchPublishing({host:el("rsPublishingRoot"),api,toast});
   await Promise.all([refreshSources(),refreshProjects()]).catch(error=>{
     notice("Research workspace could not load: "+error.message,true);
   });
