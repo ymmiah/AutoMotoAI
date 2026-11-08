@@ -137,6 +137,8 @@ from automoto import commercial_documents
 app.include_router(commercial_documents.router)  # V4 private invoice, quotation and contact drafts
 from automoto import financial_intelligence
 app.include_router(financial_intelligence.router)  # V5 private manual cash ledger and reports
+from automoto import business_workflows
+app.include_router(business_workflows.router)  # V7 private review-only business workflow audit
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
