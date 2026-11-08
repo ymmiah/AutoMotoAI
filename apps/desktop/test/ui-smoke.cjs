@@ -502,6 +502,43 @@ let browser;
     'clearing filters restores every row');
   await page.screenshot({path:path.join(output,'invoice-spreadsheet-v3-professional-editing.png')});
 
+  // V6 model-free quality audit must run without Ollama and never change cell state.
+  const beforeAudit=await page.locator('#ssGrid input[data-row="1"][data-col="1"]').inputValue();
+  const auditingV6=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/ai/audit')&&r.request().method()==='POST');
+  await page.locator('#saiAudit').click();
+  const auditedV6=await auditingV6;
+  assert.equal(auditedV6.status(),200);
+  const qualityV6=await auditedV6.json();
+  assert.equal(qualityV6.applied,false);
+  assert.equal(typeof qualityV6.snapshot_sha256,'string');
+  assert.equal(qualityV6.snapshot_sha256.length,64);
+  assert.equal(await page.locator('#ssGrid input[data-row="1"][data-col="1"]').inputValue(),beforeAudit);
+  await page.locator('#saiMode').selectOption('formula');
+  await page.locator('#saiTarget').fill('D2');
+  await page.locator('#saiQuestion').fill('Calculate twice the value in B2');
+  await page.locator('#saiReview').click();
+  await page.waitForFunction(()=>document.querySelector('#saiStatus')?.textContent?.includes('Explicit consent'));
+  assert.equal(await page.locator('#saiProposal').isHidden(),true);
+
+  // V6 approval validation never writes. A malicious or stale digest cannot apply changes.
+  const validatingV6=await page.evaluate(async()=>{
+    const response=await fetch('/api/spreadsheets/ai/validate',{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        workbook:{name:'QA offline workbook',calculation_mode:'formulas',sheets:[{
+          name:'Sheet1',rows:[['Item','Value'],['',20,null]]
+        }]},
+        sheet:0,target_cell:'C2',original:null,proposal:'=B2*2',mode:'formula',
+        snapshot_sha256:'0'.repeat(64),approve:true
+      })
+    });
+    return response.status;
+  });
+  assert.equal(validatingV6,409);
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v6-offline-ai.png')});
+
   await page.locator('#ssTabInvoice').click();
   await page.locator('#ssInvoiceNumber').fill('QA-2026-1');
   await page.locator('#ssSeller').fill('Example business, Birmingham');
@@ -655,6 +692,58 @@ let browser;
   assert.equal(financePDFDownload.status(),200);
   assert.equal((await financePDFDownload.body()).subarray(0,5).toString(),'%PDF-');
   await page.screenshot({path:path.join(output,'invoice-spreadsheet-v5-financial-dashboard.png')});
+
+  // V7 real browser: private saved quotation + manually entered finance snapshot,
+  // review-only approval, audit chaining, and zero source/accounting mutation.
+  await page.locator('#ssTabWorkflows').click();
+  await page.locator('#wfRefresh').click();
+  await page.waitForFunction(()=>document.querySelector('#wfSource')?.options?.length>=4);
+  await page.locator('#wfSource').selectOption(v4Path);
+  await page.locator('#wfRelated').selectOption(financePath);
+  await page.locator('#wfPurpose').selectOption('cash_reconciliation_review');
+  await page.locator('#wfNote').fill('Check quotation totals against the separate manual cash ledger, without posting entries.');
+  await page.locator('#wfCreateConfirm').check();
+  page.once('dialog',d=>d.accept());
+  const creatingWorkflow=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/workflows/create')&&r.request().method()==='POST');
+  await page.locator('#wfCreate').click();
+  const createdWorkflow=await creatingWorkflow;
+  assert.equal(createdWorkflow.status(),200,await createdWorkflow.text());
+  const workflowRecord=await createdWorkflow.json();
+  assert.equal(workflowRecord.status,'pending');
+  assert.equal(workflowRecord.approved,false);
+  assert.equal(workflowRecord.source_path,v4Path);
+  assert.equal(workflowRecord.related_path,financePath);
+  assert.equal(workflowRecord.events.length,1);
+  await page.waitForFunction(()=>document.querySelector('#wfDetail')?.textContent?.includes('pending'));
+  assert.equal(await page.locator('#wfApprove').isDisabled(),false);
+  await page.locator('#wfReason').fill('I verified the saved evidence and acknowledge the review only.');
+  await page.locator('#wfDecisionConfirm').check();
+  page.once('dialog',d=>d.accept());
+  const approvingWorkflow=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/workflows/decide')&&r.request().method()==='POST');
+  await page.locator('#wfApprove').click();
+  const approvedWorkflow=await approvingWorkflow;
+  assert.equal(approvedWorkflow.status(),200,await approvedWorkflow.text());
+  const approval=await approvedWorkflow.json();
+  assert.equal(approval.status,'approved');
+  assert.equal(approval.sources_modified,false);
+  assert.equal(approval.financial_postings,0);
+  assert.equal(approval.issued,false);
+  const wfAudit=await page.request.get(base+'/api/spreadsheets/workflows/verify');
+  assert.equal(wfAudit.status(),200);
+  assert.equal((await wfAudit.json()).event_count,2);
+  const v7Original=await page.request.get(base+'/api/spreadsheets/commercial/load?path='+
+    encodeURIComponent(v4Path));
+  assert.equal(v7Original.status(),200);
+  assert.equal((await v7Original.json()).document.review_state,'reviewed');
+  const v7Finance=await page.request.get(base+'/api/spreadsheets/finance/load?path='+
+    encodeURIComponent(financePath));
+  assert.equal(v7Finance.status(),200);
+  assert.equal((await v7Finance.json()).book.entries.length,3);
+  assert.equal(await page.locator('#wfApprove').isDisabled(),true);
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v7-workflow-audit.png')});
+
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   // Visual Studio uses the genuine Python scene renderer, not a mock screenshot.
