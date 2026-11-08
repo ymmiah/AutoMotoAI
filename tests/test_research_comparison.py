@@ -110,7 +110,9 @@ def test_authentication_hosted_allowlisting_and_no_destructive_routes(client):
         assert path_allowed("POST", BASE + "/" + action)
     for action in ("ai", "auto-classify", "delete", "change-source", "publish", "score-true"):
         assert not path_allowed("POST", BASE + "/" + action)
-    assert client.post(BASE + "/prepare", json={"project_path": "anything"}).status_code == 403
+    assert client.post(BASE + "/prepare", json={
+        "project_path": "artifacts/research/research-" + "a"*24 + ".research.json",
+    }).status_code == 403
 
 
 def test_prepare_verifies_exact_extracted_quotes_and_no_network_or_model_calls(client, monkeypatch):
