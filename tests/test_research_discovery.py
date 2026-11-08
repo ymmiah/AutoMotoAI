@@ -312,7 +312,7 @@ def test_metadata_library_and_public_import_are_isolated_per_workspace(client,wi
     assert original.exists()
 
 
-def test_lookup_validation_and_no_server-side_client_metadata_override(client,wire):
+def test_lookup_validation_and_no_server_side_client_metadata_override(client,wire):
     response = client.post(BASE + "/save-doi", headers=AUTH, json={
         "doi": DOI, "confirm_metadata_only": True, "title": "Attacker invented title",
         "authors": ["Not a real author"]})
