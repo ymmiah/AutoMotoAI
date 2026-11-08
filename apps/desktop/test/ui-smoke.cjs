@@ -1249,6 +1249,93 @@ let browser;
   await page.screenshot({path:path.join(output,'research-studio-v2-scholar-source-discovery.png')});
   await page.unrouteAll();
 
+  // V3 end-to-end real source-pinned comparison (not mocked): a newly saved V1
+  // project referencing two existing documents, genuine extracted source quotes,
+  // human support/contradict labels, save and historical reopen.
+  const [v3InfoOne,v3InfoTwo]=await Promise.all([
+    page.request.get(base+'/api/documents/research/source-info?path='+encodeURIComponent(savedDraft)),
+    page.request.get(base+'/api/documents/research/source-info?path='+encodeURIComponent(savedV2)),
+  ]);
+  assert.equal(v3InfoOne.status(),200,await v3InfoOne.text());
+  assert.equal(v3InfoTwo.status(),200,await v3InfoTwo.text());
+  const v3ProjectPayload={
+    title:'V3 browser-evidence comparison',
+    question:'What original body wording is present in the document smoke report?',
+    notes:'Two original documents, human-assessed context only.',
+    mode:'evidence',
+    sources:[await v3InfoOne.json(),await v3InfoTwo.json()].map(x=>({
+      path:x.path,sha256:x.sha256,
+    })),
+  };
+  const v3ProjectResult=await page.request.post(base+'/api/research/studio/save',{
+    data:v3ProjectPayload,
+  });
+  assert.equal(v3ProjectResult.status(),200,await v3ProjectResult.text());
+  const v3ProjectPath=(await v3ProjectResult.json()).path;
+  await page.locator('#rcTitle').waitFor();
+  await page.locator('#rcRefreshProjects').click();
+  await page.waitForFunction(p=>[...document.querySelectorAll('#rcProject option')]
+    .some(x=>x.value===p),v3ProjectPath);
+  await page.locator('#rcProject').selectOption(v3ProjectPath);
+  const v3Preparing=page.waitForResponse(r=>
+    r.url().includes('/api/research/studio/compare/prepare')&&r.request().method()==='POST');
+  await page.locator('#rcPrepare').click();
+  const v3Prepared=await v3Preparing;
+  assert.equal(v3Prepared.status(),200,await v3Prepared.text());
+  const v3PreparedData=await v3Prepared.json();
+  assert.equal(v3PreparedData.no_model,true);
+  assert.equal(v3PreparedData.source_count,2);
+  assert.ok(v3PreparedData.evidence_count>=2);
+  await page.waitForFunction(()=>document.querySelectorAll('#rcSourceCards .rc-source').length===2);
+  const v3Sources=page.locator('#rcSourceCards .rc-source');
+  const sourceA=v3Sources.first(),sourceB=v3Sources.last();
+  assert.ok(await sourceA.locator('.rc-passage').count()>0);
+  assert.ok(await sourceB.locator('.rc-passage').count()>0);
+  await sourceA.locator('select[data-rc-stance]').first().selectOption('supports');
+  await sourceA.locator('textarea[data-rc-rationale]').first().fill(
+    'This original excerpt appears in the first source document.');
+  await sourceB.locator('select[data-rc-stance]').first().selectOption('contradicts');
+  await sourceB.locator('textarea[data-rc-rationale]').first().fill(
+    'This reviewer considers the second source to challenge the claim.');
+  await sourceA.locator('select[data-rc-method]').selectOption('observational');
+  await sourceB.locator('select[data-rc-quality]').selectOption('moderate');
+  await sourceB.locator('textarea[data-rc-limits]').fill(
+    'Only a constrained development test case; not a scientific validity finding.');
+  const v3PreviewPromise=page.waitForResponse(r=>
+    r.url().includes('/api/research/studio/compare/preview')&&r.request().method()==='POST');
+  await page.locator('#rcPreview').click();
+  const v3PreviewResponse=await v3PreviewPromise;
+  assert.equal(v3PreviewResponse.status(),200,await v3PreviewResponse.text());
+  const v3Report=(await v3PreviewResponse.json()).report;
+  assert.equal(v3Report.disagreement_flag,true);
+  assert.equal(v3Report.science_verified,false);
+  assert.equal(v3Report.counts.supports,1);
+  assert.equal(v3Report.counts.contradicts,1);
+  assert.equal(v3Report.source_count,2);
+  await page.waitForFunction(()=>document.querySelector('#rcSummary')?.textContent?.
+    includes('Reviewer-labelled disagreement'));
+  await page.locator('#rcSave').click();
+  assert.match(await page.locator('#rcStatus').innerText(),/Acknowledge/);
+  await page.locator('#rcConfirm').check();
+  page.once('dialog',d=>d.accept());
+  const v3Saving=page.waitForResponse(r=>
+    r.url().includes('/api/research/studio/compare/save')&&r.request().method()==='POST');
+  await page.locator('#rcSave').click();
+  const v3SavedResponse=await v3Saving;
+  assert.equal(v3SavedResponse.status(),200,await v3SavedResponse.text());
+  const v3SavedPath=(await v3SavedResponse.json()).path;
+  assert.ok(v3SavedPath.endsWith('.comparison.json'));
+  const v3Historical=await page.request.get(base+
+    '/api/research/studio/compare/open?path='+encodeURIComponent(v3SavedPath));
+  assert.equal(v3Historical.status(),200);
+  assert.equal((await v3Historical.json()).project_status,'current');
+  await page.waitForFunction(p=>document.querySelector('#rcReviews')?.value===p,v3SavedPath);
+  await page.locator('#rcOpen').click();
+  await page.waitForFunction(()=>document.querySelector('#rcStatus')?.textContent?.includes('Historical review loaded'));
+  assert.equal(await page.locator('#rcEditor').isVisible(),false);
+  assert.equal(await page.locator('#rcMatrix .rc-matrix-source').count(),2);
+  await page.screenshot({path:path.join(output,'research-studio-v3-comparison-review.png')});
+
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
