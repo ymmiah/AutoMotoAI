@@ -127,6 +127,8 @@ from automoto import document_rich
 app.include_router(document_rich.router)  # authenticated non-destructive DOCX editing
 from automoto import document_research
 app.include_router(document_research.router)  # source-verified, read-only local academic evidence
+from automoto import research_studio
+app.include_router(research_studio.router)  # private research projects, source fingerprints and grounded evidence
 from automoto import document_recovery
 app.include_router(document_recovery.router)  # private, source-preserving recovery points
 from automoto import document_quality
@@ -154,7 +156,7 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/visual/studio/document/export",
              "/api/documents/open", "/api/documents/export", "/api/documents/preflight", "/api/documents/replace-copy",
              "/api/documents/ai/review", "/api/documents/docx/structure", "/api/documents/docx/revise",
-             "/api/documents/research/query",
+             "/api/documents/research/query", "/api/research/studio/query", "/api/research/studio/save",
              "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/spreadsheets/finance/export", "/api/spreadsheets/ai/review", "/api/spreadsheets/release/create", "/api/spreadsheets/release/restore", "/api/documents/recovery/save", "/api/documents/recovery/load",
              "/api/documents/quality/audit")
 _HITS: dict[tuple[str, str], deque] = {}
