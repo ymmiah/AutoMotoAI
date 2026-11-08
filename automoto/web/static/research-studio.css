@@ -1,0 +1,62 @@
+/* AutoMoto AI Research Studio V1 — premium accessible private research workspace. */
+.rs-shell{display:grid;gap:16px;min-width:0;margin:0 0 24px}
+.rs-hero{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap;
+ padding:22px;border:1px solid var(--line);border-radius:16px;
+ background:linear-gradient(125deg,var(--panel),var(--panel2))}
+.rs-hero h3{margin:5px 0 8px;font-size:21px;letter-spacing:-.025em}
+.rs-hero p{margin:0;max-width:670px;color:var(--dim);font-size:12px;line-height:1.6}
+.rs-eyebrow{font-size:10px;font-weight:800;letter-spacing:.11em;color:var(--dim)}
+.rs-notice{font-size:12px;line-height:1.65;padding:13px 16px;margin:0;
+ border:1px solid var(--line);border-left:3px solid var(--accent);
+ border-radius:10px;background:var(--panel);color:var(--dim)}
+.rs-notice strong{color:var(--text)}
+.rs-layout{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:14px}
+.rs-panel{display:grid;align-content:start;gap:13px;min-width:0;
+ padding:20px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}
+.rs-panel h4{margin:0;font-size:14px}
+.rs-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.rs-head span{font-size:11px;color:var(--dim)}
+.rs-field{display:grid;gap:6px;color:var(--dim);font-size:12px;font-weight:650}
+.rs-field .input{width:100%;min-height:39px;color:var(--text);font-size:12px;
+ border:1px solid var(--line2);border-radius:9px;background:var(--bg2);padding:9px 11px}
+.rs-field textarea{resize:vertical;line-height:1.5}
+.rs-actions{display:flex;gap:8px;flex-wrap:wrap}
+.rs-actions .btn{min-height:39px}
+.rs-divider{border-top:1px solid var(--line);margin:5px 0}
+.rs-source-list{display:grid;gap:8px;overflow:auto;max-height:360px;min-height:98px}
+.rs-source{display:flex;gap:11px;align-items:flex-start;padding:11px 12px;
+ border:1px solid var(--line);background:var(--bg2);border-radius:9px;cursor:pointer}
+.rs-source:has(input:checked){border-color:var(--accent)}
+.rs-source input{margin:3px 0 0;flex:none}
+.rs-file-detail{display:grid;gap:5px;min-width:0}
+.rs-file-detail strong{font-size:12px;color:var(--text);overflow-wrap:anywhere}
+.rs-file-detail small{font-size:11px;color:var(--dim);overflow-wrap:anywhere}
+.rs-hint{margin:0;color:var(--dim);font-size:11px;line-height:1.65}
+.rs-summary{font-weight:650;font-size:12px;padding:12px 14px;
+ border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
+.rs-states{display:grid;gap:6px}
+.rs-states p{margin:0;font-size:11px;border-left:3px solid var(--line2);
+ padding:8px 10px;background:var(--bg2);overflow-wrap:anywhere}
+.rs-states .rs-current{border-color:var(--ok)}
+.rs-states .rs-stale{border-color:var(--bad)}
+.rs-evidence{display:grid;gap:10px}
+.rs-excerpt{min-width:0;background:var(--bg2);border:1px solid var(--line);
+ border-radius:10px;padding:14px;display:grid;gap:10px}
+.rs-excerpt-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.rs-excerpt-head strong{font-size:11px;background:var(--panel2);
+ border:1px solid var(--line2);border-radius:6px;padding:4px 6px;color:var(--text)}
+.rs-excerpt-head span{font-size:11px;color:var(--dim);line-height:1.6;overflow-wrap:anywhere}
+.rs-excerpt blockquote{margin:0;border-left:3px solid var(--accent);
+ padding:6px 12px;font-size:12px;line-height:1.7;color:var(--text);
+ white-space:pre-wrap;overflow-wrap:anywhere}
+.rs-excerpt small{font-size:10px;color:var(--dim);overflow-wrap:anywhere}
+.rs-outline{display:grid;gap:5px}
+.rs-outline h5{font-size:13px;margin:5px 0}
+.rs-outline p{font-size:12px;color:var(--dim);line-height:1.55;margin:3px 0}
+.rs-status{margin:0;padding:12px 14px;font-size:12px;color:var(--dim);
+ background:var(--bg2);border:1px solid var(--line);border-radius:9px}
+.rs-status.rs-error{color:var(--bad);border-color:var(--bad)}
+.rs-shell :is(input,textarea,select,button):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:900px){.rs-layout{grid-template-columns:1fr}.rs-panel{padding:16px}}
+@media(max-width:580px){.rs-hero,.rs-panel{padding:14px}
+ .rs-hero h3{font-size:18px}.rs-actions .btn{flex:1}}
