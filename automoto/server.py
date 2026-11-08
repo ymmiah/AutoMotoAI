@@ -141,6 +141,8 @@ from automoto import financial_intelligence
 app.include_router(financial_intelligence.router)  # V5 private manual cash ledger and reports
 from automoto import business_workflows
 app.include_router(business_workflows.router)  # V7 private review-only business workflow audit
+from automoto import spreadsheet_release
+app.include_router(spreadsheet_release.router)  # V8 private recovery, verification and readiness
 
 
 # -- request guard: Host / Origin checks, rate limits, security headers ------------------
@@ -153,7 +155,7 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/documents/open", "/api/documents/export", "/api/documents/preflight", "/api/documents/replace-copy",
              "/api/documents/ai/review", "/api/documents/docx/structure", "/api/documents/docx/revise",
              "/api/documents/research/query",
-             "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/spreadsheets/finance/export", "/api/spreadsheets/ai/review", "/api/documents/recovery/save", "/api/documents/recovery/load",
+             "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/spreadsheets/finance/export", "/api/spreadsheets/ai/review", "/api/spreadsheets/release/create", "/api/spreadsheets/release/restore", "/api/documents/recovery/save", "/api/documents/recovery/load",
              "/api/documents/quality/audit")
 _HITS: dict[tuple[str, str], deque] = {}
 _HITS_LOCK = threading.Lock()
