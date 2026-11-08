@@ -199,7 +199,9 @@ def test_sqlite_connections_release_temporary_files_on_every_platform(client, mo
     assert archive["workflow_history_included"] is True
     verified = client.post(API + "/verify", headers=AUTH, json=body(archive))
     assert verified.status_code == 200, verified.text
-    assert len(temporary_folders) >= 4
+    # Snapshot generation creates one temporary database; archive validation
+    # opens an isolated copy twice (once during create, once during verify).
+    assert len(temporary_folders) == 3
     assert all(not __import__("pathlib").Path(directory).exists()
                for directory in temporary_folders), (
                    "Every temporary workflow and verification DB must be fully deleted.")
