@@ -38,6 +38,7 @@ MAX_PAGE_BODY = 250_000
 _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
 _MIN_INTERVAL = 0.6
+CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class SearchIn(BaseModel):
@@ -45,6 +46,12 @@ class SearchIn(BaseModel):
     query: str = Field(..., min_length=3, max_length=180)
     provider: Literal["crossref", "openalex"] = "crossref"
     limit: int = Field(8, ge=1, le=10)
+
+    @model_validator(mode="after")
+    def validated_query(self):
+        if CONTROL.search(self.query) or len(self.query.strip()) < 3:
+            raise ValueError("Search terms must be printable, with at least three meaningful characters.")
+        return self
 
 
 class DoiIn(BaseModel):
@@ -371,6 +378,8 @@ def save_doi(body: SaveDoi, request: Request):
 
 
 def _safe_page_url(url: str) -> tuple[str, str]:
+    if CONTROL.search(url):
+        raise HTTPException(422, "Page URL contains unsupported control characters.")
     parts = urlsplit(url.strip())
     if parts.scheme != "https" or not parts.hostname or parts.username or parts.password \
             or parts.port not in (None, 443):
