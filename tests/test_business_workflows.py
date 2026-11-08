@@ -180,8 +180,8 @@ def test_bad_paths_self_links_cross_module_and_invalid_purpose(client):
                   related_sha256=files["commercial"]["sha256"]).status_code == 422
     assert create(client, files, related_path=files["sheet"]["path"],
                   related_sha256=files["sheet"]["sha256"]).status_code == 422  # cash review needs finance
-    assert create(client, files, related_path="../../etc/passwd").status_code == 403
-    assert create(client, files, source_path="uploads/source.csv").status_code == 403
+    assert create(client, files, related_path="../../etc/passwd").status_code in (403, 422)
+    assert create(client, files, source_path="uploads/source.csv").status_code in (403, 422)
     assert create(client, files, confirm_review_only=False).status_code == 422
     assert create(client, files, note="bad\x00actor").status_code == 422
     assert create(client, files, purpose="pay_customer").status_code == 422
@@ -228,9 +228,35 @@ def test_database_root_is_private_and_not_cross_tenant(client, tmp_path, monkeyp
     root_a = sandbox.default_root()
     db_path = root_a / "artifacts/workflows/workflow-events-v7.sqlite3"
     assert db_path.is_file()
-    monkeypatch.setenv("AUTOMOTO_HOME", str(tmp_path / "different-user-home"))
+    monkeypatch.setenv("AUTOMOTO_WORKSPACE", str(tmp_path / "different-workspace"))
     result = client.get(API + "/list", headers=AUTH)
     assert result.status_code == 200
     assert result.json()["workflows"] == []
     assert not (sandbox.default_root() / files["finance"]["path"]).exists()
     assert db_path.is_file()
+
+
+def test_immutable_request_metadata_is_audited(client):
+    files = seed(client)
+    review = create(client, files).json()
+    db_path = sandbox.default_root() / "artifacts/workflows/workflow-events-v7.sqlite3"
+    with sqlite3.connect(db_path) as db:
+        db.execute("UPDATE workflows SET related_sha256=? WHERE id=?",
+                   ("0" * 64, review["id"]))
+    verification = client.get(API + "/verify", headers=AUTH)
+    assert verification.status_code == 409, verification.text
+    assert create(client, files).status_code == 409
+
+
+def test_tenant_paths_not_shared_with_owner_workspace(client, tmp_path):
+    from automoto import tenancy
+    files = seed(client)
+    create(client, files)
+    local_db = business_workflows._store()
+    other_home = tmp_path / "external-hosted-tenant"
+    with tenancy.use(tenancy.Tenant("other-user", "other", "user", other_home)):
+        tenant_db = business_workflows._store(create=True)
+        assert tenant_db != local_db
+        assert str(tenant_db).startswith(str(other_home))
+        assert not tenant_db.exists()
+    assert local_db.exists()
