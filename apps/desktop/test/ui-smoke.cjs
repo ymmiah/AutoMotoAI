@@ -502,6 +502,43 @@ let browser;
     'clearing filters restores every row');
   await page.screenshot({path:path.join(output,'invoice-spreadsheet-v3-professional-editing.png')});
 
+  // V6 model-free quality audit must run without Ollama and never change cell state.
+  const beforeAudit=await page.locator('#ssGrid input[data-row="1"][data-col="1"]').inputValue();
+  const auditingV6=page.waitForResponse(r=>
+    r.url().includes('/api/spreadsheets/ai/audit')&&r.request().method()==='POST');
+  await page.locator('#saiAudit').click();
+  const auditedV6=await auditingV6;
+  assert.equal(auditedV6.status(),200);
+  const qualityV6=await auditedV6.json();
+  assert.equal(qualityV6.applied,false);
+  assert.equal(typeof qualityV6.snapshot_sha256,'string');
+  assert.equal(qualityV6.snapshot_sha256.length,64);
+  assert.equal(await page.locator('#ssGrid input[data-row="1"][data-col="1"]').inputValue(),beforeAudit);
+  await page.locator('#saiMode').selectOption('formula');
+  await page.locator('#saiTarget').fill('D2');
+  await page.locator('#saiQuestion').fill('Calculate twice the value in B2');
+  await page.locator('#saiReview').click();
+  await page.waitForFunction(()=>document.querySelector('#saiStatus')?.textContent?.includes('Explicit consent'));
+  assert.equal(await page.locator('#saiProposal').isHidden(),true);
+
+  // V6 approval validation never writes. A malicious or stale digest cannot apply changes.
+  const validatingV6=await page.evaluate(async()=>{
+    const response=await fetch('/api/spreadsheets/ai/validate',{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        workbook:{name:'QA offline workbook',calculation_mode:'formulas',sheets:[{
+          name:'Sheet1',rows:[['Item','Value'],['',20,null]]
+        }]},
+        sheet:0,target_cell:'C2',original:null,proposal:'=B2*2',mode:'formula',
+        snapshot_sha256:'0'.repeat(64),approve:true
+      })
+    });
+    return response.status;
+  });
+  assert.equal(validatingV6,409);
+  await page.screenshot({path:path.join(output,'invoice-spreadsheet-v6-offline-ai.png')});
+
   await page.locator('#ssTabInvoice').click();
   await page.locator('#ssInvoiceNumber').fill('QA-2026-1');
   await page.locator('#ssSeller').fill('Example business, Birmingham');
