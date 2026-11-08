@@ -136,7 +136,7 @@ def _normalise_doi(raw: str) -> str:
 
 
 def _date_parts(item: dict) -> str | None:
-    for key in ("published", "issued", "published-print", "published-online", "created"):
+    for key in ("published", "issued", "published-print", "published-online"):
         date = item.get(key)
         if not isinstance(date, dict):
             continue
@@ -421,14 +421,15 @@ def _fetch_page(url: str) -> dict:
     mime = page.content_type.lower().split(";", 1)[0]
     if mime not in ("text/html", "text/plain"):
         raise HTTPException(415, "Only public HTML and plain-text webpages are supported.")
-    text = html_to_text(page.text()) if mime == "text/html" else page.text()
-    text = text[:MAX_PAGE_TEXT].strip()
+    extracted = html_to_text(page.text()) if mime == "text/html" else page.text()
+    partial = len(extracted) > MAX_PAGE_TEXT
+    text = extracted[:MAX_PAGE_TEXT].strip()
     if len(text) < 40:
         raise HTTPException(422, "Webpage had insufficient accessible text for an evidence snapshot.")
     title = _title(page.text()) if mime == "text/html" else urlsplit(target).hostname
     return {
         "url": target, "title": _clean(title, 180), "retrieved_at": _now(),
-        "text": text, "chars": len(text), "truncated": len(page.text()) > MAX_PAGE_TEXT,
+        "text": text, "chars": len(text), "truncated": partial,
         "content_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "warning": "Captured webpage is untrusted extracted text, not independently verified scholarly evidence.",
     }
