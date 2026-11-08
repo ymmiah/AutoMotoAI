@@ -125,7 +125,7 @@ def _connect() -> sqlite3.Connection:
           workflow_id TEXT NOT NULL REFERENCES workflows(id),
           action TEXT NOT NULL, actor TEXT NOT NULL, actor_role TEXT NOT NULL,
           note TEXT NOT NULL, created_at TEXT NOT NULL,
-          previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL
+          previous_hash TEXT NOT NULL, request_digest TEXT NOT NULL, event_hash TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_events_workflow ON events(workflow_id, id);
     """)
@@ -163,11 +163,21 @@ def _source(raw: str) -> dict:
             "sha256": hashlib.sha256(content).hexdigest(), "name": name}
 
 
+def _request_digest(row: sqlite3.Row) -> str:
+    """Bind original evidence paths, fingerprints, reviewer and reason to every event."""
+    keys = ("id", "purpose", "source_path", "source_sha256", "related_path",
+            "related_sha256", "note", "requester", "requester_role", "created_at")
+    record = {key: row[key] for key in keys}
+    return hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":"),
+                                     ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
 def _chain_fields(workflow_id: str, action: str, actor: str, actor_role: str,
-                  note: str, created_at: str, previous_hash: str) -> dict:
+                  note: str, created_at: str, previous_hash: str,
+                  request_digest: str) -> dict:
     return {"workflow_id": workflow_id, "action": action, "actor": actor,
             "actor_role": actor_role, "note": note, "created_at": created_at,
-            "previous_hash": previous_hash}
+            "previous_hash": previous_hash, "request_digest": request_digest}
 
 
 def _hash_event(fields: dict) -> str:
@@ -178,11 +188,15 @@ def _hash_event(fields: dict) -> str:
 def _verify(db: sqlite3.Connection) -> dict:
     expected = ROOT_HASH
     count = 0
+    bindings = {row["id"]: _request_digest(row) for row in db.execute("SELECT * FROM workflows")}
     for record in db.execute("SELECT workflow_id,action,actor,actor_role,note,created_at,"
-                             "previous_hash,event_hash FROM events ORDER BY id"):
+                             "previous_hash,request_digest,event_hash FROM events ORDER BY id"):
         fields = _chain_fields(*[record[key] for key in
-            ("workflow_id", "action", "actor", "actor_role", "note", "created_at", "previous_hash")])
-        if record["previous_hash"] != expected or _hash_event(fields) != record["event_hash"]:
+            ("workflow_id", "action", "actor", "actor_role", "note",
+             "created_at", "previous_hash", "request_digest")])
+        if (record["request_digest"] != bindings.get(record["workflow_id"])
+                or record["previous_hash"] != expected
+                or _hash_event(fields) != record["event_hash"]):
             raise HTTPException(409, "Workflow audit history failed the integrity check.")
         expected = record["event_hash"]
         count += 1
@@ -205,11 +219,15 @@ def _append(db: sqlite3.Connection, wf_id: str, action: str, actor: str,
             role: str, note: str) -> str:
     last = db.execute("SELECT event_hash FROM events ORDER BY id DESC LIMIT 1").fetchone()
     previous = last["event_hash"] if last else ROOT_HASH
-    fields = _chain_fields(wf_id, action, actor, role, note, _now(), previous)
+    request = db.execute("SELECT * FROM workflows WHERE id=?", (wf_id,)).fetchone()
+    if request is None:
+        raise HTTPException(409, "Workflow request disappeared before audit entry.")
+    binding = _request_digest(request)
+    fields = _chain_fields(wf_id, action, actor, role, note, _now(), previous, binding)
     digest = _hash_event(fields)
-    db.execute("INSERT INTO events(workflow_id,action,actor,actor_role,note,created_at,previous_hash,event_hash)"
-               " VALUES(?,?,?,?,?,?,?,?)",
-               (wf_id, action, actor, role, note, fields["created_at"], previous, digest))
+    db.execute("INSERT INTO events(workflow_id,action,actor,actor_role,note,created_at,previous_hash,request_digest,event_hash)"
+               " VALUES(?,?,?,?,?,?,?,?,?)",
+               (wf_id, action, actor, role, note, fields["created_at"], previous, binding, digest))
     return digest
 
 
@@ -220,7 +238,7 @@ def _detail(db: sqlite3.Connection, wf_id: str) -> dict:
     if row is None:
         raise HTTPException(404, "Workflow not found.")
     events = [dict(e) for e in db.execute(
-        "SELECT action, actor, actor_role, note, created_at, previous_hash, event_hash "
+        "SELECT action, actor, actor_role, note, created_at, previous_hash, request_digest, event_hash "
         "FROM events WHERE workflow_id=? ORDER BY id", (wf_id,))]
     state = "pending" if len(events) == 1 else events[-1]["action"]
     return {**dict(row), "status": state, "events": events,
