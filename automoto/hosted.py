@@ -58,6 +58,7 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
     ("POST", r"/api/research/studio/discovery/(search|verify-doi|save-doi|capture-page)"),
     ("GET", r"/api/research/studio/compare/(list|open)"),
     ("POST", r"/api/research/studio/compare/(prepare|preview|save)"),
+    ("POST", r"/api/research/studio/publish/(prepare|preflight|export|save-draft)"),
     ("POST", r"/api/documents/recovery/save"), ("GET", r"/api/documents/recovery/(list|load)"),
     ("DELETE", r"/api/documents/recovery/[a-f0-9]{24}"),
     ("POST", r"/api/documents/quality/audit"),
