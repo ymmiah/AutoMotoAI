@@ -1189,6 +1189,66 @@ let browser;
   assert.equal((await historical.json()).source_status[0].status,'current');
   await page.screenshot({path:path.join(output,'research-studio-v1-evidence-workspace.png')});
 
+  // V2 public discovery: browser UI uses deterministic mock registry responses.
+  // Actual safe network, robots, checksum, DOI and offline behaviours run in Python tests.
+  let v2SavedMeta=false;
+  const v2Paper={
+    doi:'10.5555/research-security.2026',
+    title:'<img src=x onerror=alert(1)> Evidence and resilience in secure release automation',
+    authors:['Amina Test','Sam Researcher'],
+    venue:'Journal of Test Engineering', publication_date:'2026-11',
+    type:'journal-article',registry:'Crossref',
+    registry_url:'https://api.crossref.org/works/10.5555/research-security.2026',
+    doi_url:'https://doi.org/10.5555/research-security.2026',
+    retrieved_at:'2026-11-08T12:00:00+00:00',metadata_only:true
+  };
+  const v2Mock=body=>({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  await page.route('**/api/research/studio/discovery/search',route=>
+    route.fulfill(v2Mock({provider:'crossref',query:'secure release',results:[v2Paper],
+      retrieved_at:'2026-11-08T12:00:00+00:00',not_verified_claims:true})));
+  await page.route('**/api/research/studio/discovery/verify-doi',route=>
+    route.fulfill(v2Mock({metadata:v2Paper,verified_in:'Crossref',
+      registry_record_found:true,research_claims_verified:false,full_text_downloaded:false})));
+  await page.route('**/api/research/studio/discovery/save-doi',route=>{
+    v2SavedMeta=true;
+    return route.fulfill(v2Mock({path:'artifacts/research/sources/source-aaaaaaaaaaaaaaaaaaaaaaaa.source.json',
+      already_saved:false,metadata:v2Paper,citation_ready:false,source_files_modified:false}));
+  });
+  await page.route('**/api/research/studio/discovery/saved',route=>
+    route.fulfill(v2Mock({sources:v2SavedMeta?[v2Paper]:[],metadata_only:true})));
+  await page.route('**/api/research/studio/discovery/capture-page',route=>
+    route.fulfill(v2Mock({document:'artifacts/documents/web-source-bbbbbbbbbbbbbbbbbbbbbbbb.txt',
+      source_url:'https://example.org/public-study',sha256:'a'.repeat(64),
+      provenance:'artifacts/research/pages/web-bbbbbbbbbbbbbbbbbbbbbbbb.web.json',
+      user_confirmed:true,claim_verification:false})));
+  assert.equal(await page.locator('#rdTitle').isVisible(),true);
+  await page.locator('#rdQuery').fill('secure release');
+  await page.locator('#rdSearchForm button').click();
+  await page.waitForFunction(()=>document.querySelector('#rdResults .rd-record')?.textContent?.includes('Evidence and resilience'));
+  assert.equal(await page.locator('#rdResults img').count(),0,'untrusted publisher HTML must remain plain text');
+  assert.match(await page.locator('#rdResults').innerText(),/10\.5555\/research-security\.2026/);
+  assert.equal(await page.locator('#rdResults .rd-record').count(),1);
+  await page.locator('#rdResults').getByRole('button',{name:'Save verified metadata'}).click();
+  assert.match(await page.locator('#rdStatus').innerText(),/acknowledgement/);
+  await page.locator('#rdConfirmSave').check();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rdResults').getByRole('button',{name:'Save verified metadata'}).click();
+  await page.waitForFunction(()=>document.querySelector('#rdSaved .rd-record')?.textContent?.includes('Journal of Test Engineering'));
+  assert.equal(v2SavedMeta,true);
+  await page.locator('#rdDoi').fill('10.5555/research-security.2026');
+  await page.locator('#rdDoiForm button').click();
+  await page.waitForFunction(()=>document.querySelector('#rdCount')?.textContent?.includes('Verified Crossref DOI'));
+  assert.match(await page.locator('#rdStatus').innerText(),/does not establish peer review/);
+  await page.locator('#rdPageUrl').fill('https://example.org/public-study');
+  await page.locator('#rdCaptureForm button').click();
+  assert.match(await page.locator('#rdStatus').innerText(),/Explicitly authorise/);
+  await page.locator('#rdConfirmCapture').check();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rdCaptureForm button').click();
+  await page.waitForFunction(()=>document.querySelector('#rdStatus')?.textContent?.includes('Webpage text captured'));
+  await page.screenshot({path:path.join(output,'research-studio-v2-scholar-source-discovery.png')});
+  await page.unrouteAll();
+
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
