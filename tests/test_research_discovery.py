@@ -125,6 +125,10 @@ def test_crossref_search_deduplicates_doi_and_does_not_invent_dates(client, wire
     assert research_discovery._crossref(altered, "2026-11-08")["publication_date"] == "2025"
     altered["published"] = {"date-parts": [[2025, 4]]}
     assert research_discovery._crossref(altered, "2026-11-08")["publication_date"] == "2025-04"
+    # Registry deposit/creation dates are not publication dates.
+    altered.pop("published")
+    altered["created"] = {"date-parts": [[2026, 11, 8]]}
+    assert research_discovery._crossref(altered, "2026-11-08")["publication_date"] is None
 
 
 def test_openalex_query_is_optional_and_keyless_and_retraction_flag_propagates(client, wire):
@@ -223,6 +227,7 @@ def test_public_capture_requires_explicit_consent_and_preserves_provenance(clien
     data = result.json()
     assert data["user_confirmed"] is True
     assert data["claim_verification"] is False
+    assert data["truncated"] is False
     assert data["document"].startswith("artifacts/documents/web-source-")
     assert data["provenance"].startswith("artifacts/research/pages/web-")
     root = sandbox.default_root()
