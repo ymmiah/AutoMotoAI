@@ -1,0 +1,75 @@
+/* AutoMoto Research Studio V4: readable academic publisher and DOI provenance. */
+.rp-shell{display:grid;gap:15px;min-width:0}
+.rp-hero{display:flex;justify-content:space-between;align-items:center;gap:20px;
+ flex-wrap:wrap;padding:21px;border-radius:15px;border:1px solid var(--line);
+ background:linear-gradient(130deg,var(--panel),var(--panel2))}
+.rp-eyebrow{font-size:10px;letter-spacing:.11em;font-weight:800;color:var(--dim)}
+.rp-hero h3{font-size:20px;letter-spacing:-.02em;margin:6px 0 8px}
+.rp-hero p{font-size:12px;line-height:1.65;color:var(--dim);margin:0;max-width:700px}
+.rp-tag{background:var(--bg2);border:1px solid var(--line);border-radius:20px;
+ color:var(--dim);padding:7px 11px;font-size:11px}
+.rp-disclosure{border:1px solid var(--line);border-left:3px solid var(--accent);
+ padding:13px 15px;border-radius:9px;background:var(--panel);font-size:12px;
+ line-height:1.6;color:var(--dim);margin:0}
+.rp-disclosure strong{color:var(--text)}
+.rp-panel{background:var(--panel);border:1px solid var(--line);padding:19px;
+ border-radius:13px;display:grid;align-content:start;gap:13px;min-width:0}
+.rp-heading{display:flex;flex-wrap:wrap;justify-content:space-between;
+ align-items:center;gap:10px}
+.rp-heading h4{font-size:14px;margin:0}
+.rp-heading span{font-size:11px;color:var(--dim)}
+.rp-selectrow{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+.rp-selectrow .rp-field{flex:1 1 300px}
+.rp-selectrow .btn{min-height:40px}
+.rp-field{display:grid;gap:7px;color:var(--dim);font-size:12px;
+ line-height:1.55;font-weight:650;min-width:0}
+.rp-panel .input{background:var(--bg2);color:var(--text);
+ border:1px solid var(--line2);border-radius:9px;min-height:40px;
+ padding:9px 11px;font-size:12px;width:100%}
+.rp-panel textarea.input{line-height:1.65;resize:vertical}
+.rp-note{font-size:11px;line-height:1.65;color:var(--dim);margin:0;overflow-wrap:anywhere}
+.rp-source-states{display:grid;gap:5px}
+.rp-source-states p{margin:0;padding:9px 11px;font-size:11px;
+ background:var(--bg2);border-left:3px solid var(--line2);overflow-wrap:anywhere}
+.rp-source-states .rp-current{border-color:var(--ok)}
+.rp-source-states .rp-stale{border-color:var(--bad)}
+.rp-bindings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.rp-link-card{display:grid;align-content:start;gap:12px;background:var(--bg2);
+ border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.rp-link-card strong{font-size:12px;overflow-wrap:anywhere}
+.rp-link-card small{font-size:10px;color:var(--dim);overflow-wrap:anywhere}
+.rp-divider{border-top:1px solid var(--line);margin:4px 0}
+.rp-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.rp-actions{display:flex;gap:9px;flex-wrap:wrap}
+.rp-actions .btn{min-height:40px}
+.rp-confirm{display:flex;gap:10px;align-items:flex-start;color:var(--dim);
+ font-size:12px;line-height:1.65;font-weight:500}
+.rp-confirm input{flex:none;margin-top:4px}
+.rp-summary{background:var(--bg2);border:1px solid var(--line);border-radius:9px;
+ font-size:12px;line-height:1.65;font-weight:650;padding:11px 13px}
+.rp-references{display:grid;gap:8px;min-width:0}
+.rp-references h5{font-size:13px;margin:0}
+.rp-references ol{margin:0;padding-left:24px;display:grid;gap:9px}
+.rp-references li{font-size:12px;line-height:1.75;color:var(--text);overflow-wrap:anywhere}
+.rp-warnings{display:grid;gap:6px}
+.rp-warning{font-size:11px;color:var(--dim);line-height:1.65;
+ background:var(--bg2);border-left:3px solid var(--line2);padding:9px 12px;margin:0}
+.rp-panel details{min-width:0}
+.rp-panel summary{font-size:12px;font-weight:650;cursor:pointer}
+.rp-markdown{max-height:460px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+ background:var(--bg2);color:var(--text);border:1px solid var(--line);padding:14px;
+ border-radius:9px;font:11px/1.65 var(--mono)}
+.rp-output{display:flex;gap:12px;align-items:center;flex-wrap:wrap;min-width:0}
+.rp-result{font-size:12px;overflow-wrap:anywhere}
+.rp-status{font-size:12px;color:var(--dim);background:var(--bg2);
+ border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin:0}
+.rp-status.rp-error{border-color:var(--bad);color:var(--bad)}
+.rp-shell :is(input,select,textarea,button,a,summary):focus-visible{
+ outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:990px){.rp-bindings{grid-template-columns:1fr}}
+@media(max-width:720px){.rp-two{grid-template-columns:1fr}
+ .rp-panel{padding:15px}}
+@media(max-width:520px){.rp-hero,.rp-panel{padding:13px}
+ .rp-hero h3{font-size:17px}
+ .rp-actions .btn,.rp-selectrow>.btn{flex:1}
+ .rp-tag{width:fit-content}}
