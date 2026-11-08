@@ -169,6 +169,49 @@ def test_backup_verification_restores_new_copies_only_with_workflow_evidence(cli
     assert client.get(API + "/readiness", headers=AUTH).json()["release_ready"] is False
 
 
+def test_sqlite_connections_release_temporary_files_on_every_platform(client, monkeypatch):
+    """Regression: Windows refuses to delete temporary SQLite files left open.
+
+    A sqlite3.Connection context manager does not close the connection.
+    Both snapshot creation and independent verification must close handles
+    before their TemporaryDirectory context removes the database.
+    """
+    files = seed(client)
+    make_workflow(client, files)
+    temporary_folders = []
+    original = spreadsheet_release.tempfile.TemporaryDirectory
+
+    class RecordingTemporaryDirectory:
+        def __init__(self, *args, **kwargs):
+            self.backing = original(*args, **kwargs)
+
+        def __enter__(self):
+            directory = self.backing.__enter__()
+            temporary_folders.append(directory)
+            return directory
+
+        def __exit__(self, *args):
+            return self.backing.__exit__(*args)
+
+    monkeypatch.setattr(spreadsheet_release.tempfile, "TemporaryDirectory",
+                        RecordingTemporaryDirectory)
+    archive = create(client)
+    assert archive["workflow_history_included"] is True
+    verified = client.post(API + "/verify", headers=AUTH, json=body(archive))
+    assert verified.status_code == 200, verified.text
+    assert len(temporary_folders) >= 4
+    assert all(not __import__("pathlib").Path(directory).exists()
+               for directory in temporary_folders), (
+                   "Every temporary workflow and verification DB must be fully deleted.")
+
+    # The readiness endpoint must not keep another read-only connection open.
+    readiness = client.get(API + "/readiness", headers=AUTH)
+    assert readiness.status_code == 200, readiness.text
+    assert readiness.json()["checks"]["workflow_audit"] == "verified"
+    assert all(not __import__("pathlib").Path(directory).exists()
+               for directory in temporary_folders)
+
+
 def test_archive_creation_and_inspection_make_no_unapproved_network_calls(client, monkeypatch):
     import urllib.request
     seed(client)
@@ -250,9 +293,12 @@ def test_corrupt_active_workflow_audit_blocks_backup(client):
     files = seed(client)
     review = make_workflow(client, files)
     database = sandbox.default_root() / "artifacts/workflows/workflow-events-v7.sqlite3"
-    with sqlite3.connect(database) as conn:
-        conn.execute("UPDATE events SET note=? WHERE workflow_id=?",
-                     ("Changed audit event", review["id"]))
+    # Context-manager commit is not connection close: keep the test portable.
+    from contextlib import closing
+    with closing(sqlite3.connect(database)) as conn:
+        with conn:
+            conn.execute("UPDATE events SET note=? WHERE workflow_id=?",
+                         ("Changed audit event", review["id"]))
     response = client.post(API + "/create", headers=AUTH, json={})
     assert response.status_code == 409, response.text
     readiness = client.get(API + "/readiness", headers=AUTH)
