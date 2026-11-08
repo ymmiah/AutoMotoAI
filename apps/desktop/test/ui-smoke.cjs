@@ -1345,6 +1345,108 @@ let browser;
   assert.equal(await page.locator('#rcMatrix .rc-matrix-source').count(),2);
   await page.screenshot({path:path.join(output,'research-studio-v3-comparison-review.png')});
 
+  // V4 browser contract: V3 review selection is REAL; DOI data and publication
+  // responses are deterministic, mocked external-provider-independent fixtures.
+  // Python tests separately exercise actual Word build and source verification.
+  const v4Metadata=[
+    {path:'artifacts/research/sources/source-aaaaaaaaaaaaaaaaaaaaaaaa.source.json',
+      sha256:'1'.repeat(64),doi:'10.5555/browser-source-a.2026',
+      title:'<img src=x onerror=alert(1)> Source A test record',
+      authors:['A. Example'],publication_date:'2026',
+      retrieved_at:'2026-11-08T12:00:00+00:00',venue:'Fixture Journal'},
+    {path:'artifacts/research/sources/source-bbbbbbbbbbbbbbbbbbbbbbbb.source.json',
+      sha256:'2'.repeat(64),doi:'10.5555/browser-source-b.2025',
+      title:'Second source test record',authors:['B. Example'],
+      publication_date:'2025',retrieved_at:'2026-11-08T12:00:00+00:00',
+      venue:'Fixture Journal'}
+  ];
+  const v4Sources=v3PreparedData.project.sources;
+  const v4PrepareData={
+    comparison_path:v3SavedPath,comparison_sha256:'c'.repeat(64),
+    sources:v4Sources,source_status:v3PreparedData.source_status,
+    claim:'Local reviewer comparison of original document text.',
+    review_complete:true,metadata_records:v4Metadata,
+    no_network_requests:true,source_files_modified:false,
+  };
+  const v4Mock=body=>({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  let v4PreflightRequests=0,v4DraftRequests=0;
+  await page.route('**/api/research/studio/publish/prepare',route=>
+    route.fulfill(v4Mock(v4PrepareData)));
+  await page.route('**/api/research/studio/publish/preflight',async route=>{
+    const input=route.request().postDataJSON();
+    v4PreflightRequests++;
+    assert.equal(input.bindings.length,2);
+    assert.ok(input.bindings.every(x=>x.confirm_same_publication===true));
+    assert.equal(input.style,'ieee');
+    return route.fulfill(v4Mock({
+      ready:true,word_build_valid:true,word_bytes:3607,
+      reference_count:2,citation_style:'ieee',
+      formatted_references:[
+        '[1] A. Example, "Source A test record," 2026. doi: 10.5555/browser-source-a.2026.',
+        '[2] B. Example, "Second source test record," 2025. doi: 10.5555/browser-source-b.2025.'
+      ],
+      report_markdown:'# Human-reviewed evidence report\n\nVerified reviewer evidence with [@r1] and [@r2].',
+      warnings:['The author must check original publication metadata.'],
+      source_bindings:input.bindings,no_files_saved:true,
+      no_network_requests:true,science_verified:false,
+      manual_reference_check_required:true,
+    }));
+  });
+  await page.route('**/api/research/studio/publish/save-draft',route=>{
+    v4DraftRequests++;
+    const data=route.request().postDataJSON();
+    assert.equal(data.acknowledgement,'SAVE DRAFT');
+    assert.equal(data.confirm_checked_references,true);
+    return route.fulfill(v4Mock({
+      path:'artifacts/documents/fixture-report.document.json',
+      editable_in:'Document Assistant',create_only:true,
+      reference_count:2,citation_style:'ieee',source_files_modified:false,
+    }));
+  });
+  await page.waitForFunction(()=>document.querySelector('#rpComparison')!==null);
+  await page.locator('#rpRefresh').click();
+  await page.waitForFunction(p=>[...document.querySelectorAll('#rpComparison option')]
+    .some(x=>x.value===p),v3SavedPath);
+  await page.locator('#rpComparison').selectOption(v3SavedPath);
+  await page.locator('#rpPrepare').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#rpBindings .rp-link-card').length===2);
+  assert.equal(await page.locator('#rpBindings img').count(),0,
+    'DOI registry titles must render as safe text');
+  const v4BindingCards=page.locator('#rpBindings .rp-link-card');
+  await v4BindingCards.nth(0).locator('select[data-rp-record]').selectOption(v4Metadata[0].path);
+  await v4BindingCards.nth(1).locator('select[data-rp-record]').selectOption(v4Metadata[1].path);
+  await page.locator('#rpReportTitle').fill('Browser-tested academic evidence report');
+  await page.locator('#rpAuthor').fill('Author Example');
+  await page.locator('#rpIntroduction').fill('This bounded test checks evidence citations and report structure.');
+  await page.locator('#rpLimitations').fill('These citations are mock records for UI testing, not real scholarly publications.');
+  await page.locator('#rpConclusion').fill('The final interpretation requires the reviewer to check the original context.');
+  await page.locator('#rpStyle').selectOption('ieee');
+  await page.locator('#rpPreflight').click();
+  assert.match(await page.locator('#rpStatus').innerText(),/genuine matching DOI/);
+  await v4BindingCards.nth(0).locator('input[data-rp-match]').check();
+  await v4BindingCards.nth(1).locator('input[data-rp-match]').check();
+  const v4Preflighting=page.waitForResponse(r=>
+    r.url().includes('/api/research/studio/publish/preflight')&&r.request().method()==='POST');
+  await page.locator('#rpPreflight').click();
+  const v4Preflight=await v4Preflighting;
+  assert.equal(v4Preflight.status(),200,await v4Preflight.text());
+  assert.equal(v4PreflightRequests,1);
+  await page.waitForFunction(()=>document.querySelector('#rpReviewStatus')?.textContent?.
+    includes('Word build passed'));
+  assert.equal(await page.locator('#rpReferences li').count(),2);
+  assert.equal(await page.locator('#rpSaveDraft').isDisabled(),false);
+  await page.locator('#rpSaveDraft').click();
+  assert.match(await page.locator('#rpStatus').innerText(),/Confirm source-to-DOI/);
+  await page.locator('#rpConfirm').check();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rpSaveDraft').click();
+  await page.waitForFunction(()=>document.querySelector('#rpOutput')?.textContent?.
+    includes('fixture-report.document.json'));
+  assert.equal(v4DraftRequests,1);
+  assert.equal(await page.locator('#rpOutput a').count(),1);
+  await page.screenshot({path:path.join(output,'research-studio-v4-academic-report.png')});
+  await page.unrouteAll();
+
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
