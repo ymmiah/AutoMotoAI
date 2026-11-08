@@ -6,6 +6,7 @@ import {styleAt,applyCellStyle,setColumnRule,validateEntry,filterIndices,sortShe
   from "./spreadsheet-editing.js";
 import {mountCommercialStudio} from "./commercial-studio.js";
 import {mountFinancialStudio} from "./financial-studio.js";
+import {mountSpreadsheetAI} from "./spreadsheet-ai-studio.js";
 
 export async function mountSpreadsheetStudio({api,page,uploadFile}){
   const html='<div class="ss-shell">'+
@@ -74,6 +75,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
         '<p class="ss-hint">Sort keeps the header and matching cell formatting together. Sorting is disabled when a worksheet contains formulas to protect references. Filtering changes only the visible view; exports still contain every row.</p>'+
       '</section>'+
       '<div class="ss-grid-wrap" tabindex="0" aria-label="Editable workbook grid"><table class="ss-grid" id="ssGrid"></table></div>'+
+      '<section class="ss-panel ss-ai-panel" aria-label="Offline AI spreadsheet assistant"><div id="ssAI"></div></section>'+
       '<section class="ss-panel ss-formula-panel" aria-label="Formula results"><strong>Calculated values</strong>'+
         '<p id="ssCalcSummary" role="status" aria-live="polite">No formulas calculated.</p>'+
         '<div id="ssCalcResults" class="ss-formula-results"></div></section>'+
@@ -675,6 +677,26 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   openBook(book);renderInvoiceLines();
   mountCommercialStudio({host:el("ssCommercialRoot"),api,status,showDownload});
   mountFinancialStudio({host:el("ssFinanceRoot"),api,status,showDownload});
+  mountSpreadsheetAI({
+    host:el("ssAI"),api,status,
+    getBook:()=>workbookPayload(book),
+    getSheet:()=>activeSheet,
+    getSelected:()=>selectedCell,
+    applyCell:(index,address,value)=>{
+      if(index!==activeSheet)return false;
+      const result=/^([A-P])(100|[1-9][0-9]?)$/.exec(address);
+      if(!result)return false;
+      const r=Number(result[2])-1,c=result[1].charCodeAt(0)-65;
+      const issue=validateEntry(book.sheets[index],r,c,value);
+      if(issue){status(issue,true);return false;}
+      setGridCell(book,index,r,c,value);
+      gridRows=Math.max(gridRows,r+1);
+      gridCols=Math.max(gridCols,c+1);
+      recordWorkbookChange();renderGrid();recalculate();
+      status("Approved local AI edit applied to "+address+". Use Undo or save a private copy.");
+      return true;
+    }
+  });
   try{await refreshLibrary();}catch(error){status("Could not load workspace files: "+error.message,true);}
   return root;
 }
