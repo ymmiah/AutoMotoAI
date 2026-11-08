@@ -115,7 +115,7 @@ def test_crossref_search_deduplicates_doi_and_does_not_invent_dates(client, wire
     assert record["publication_date"] == "2026-11"
     assert record["authors"] == ["Amina Test", "Sam Researcher"]
     assert record["metadata_only"] is True
-    assert "research" in record["title"].lower() or "security" in record["title"].lower()
+    assert "release" in record["title"].lower()
     assert record["doi_url"] == "https://doi.org/" + DOI
     assert wire[0][0].startswith("https://api.crossref.org/works?")
     assert "rows=8" in wire[0][0]
