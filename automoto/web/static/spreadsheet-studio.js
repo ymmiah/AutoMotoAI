@@ -7,6 +7,7 @@ import {styleAt,applyCellStyle,setColumnRule,validateEntry,filterIndices,sortShe
 import {mountCommercialStudio} from "./commercial-studio.js";
 import {mountFinancialStudio} from "./financial-studio.js";
 import {mountBusinessWorkflows} from "./business-workflows.js";
+import {mountSpreadsheetRelease} from "./spreadsheet-release.js";
 import {mountSpreadsheetAI} from "./spreadsheet-ai-studio.js";
 
 export async function mountSpreadsheetStudio({api,page,uploadFile}){
@@ -17,6 +18,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
       '<button type="button" role="tab" id="ssTabCommercial" aria-selected="false" aria-controls="ssCommercial">Business documents</button>'+
       '<button type="button" role="tab" id="ssTabFinance" aria-selected="false" aria-controls="ssFinance">Financial dashboard</button>'+
       '<button type="button" role="tab" id="ssTabWorkflows" aria-selected="false" aria-controls="ssWorkflows">Workflows & audit</button>'+
+      '<button type="button" role="tab" id="ssTabRelease" aria-selected="false" aria-controls="ssRelease">Recovery & readiness</button>'+
     '</div>'+
     '<section id="ssBook" role="tabpanel" aria-labelledby="ssTabBook">'+
       '<div class="ss-panel ss-tools"><div><h3>Workbook editor</h3><p>Safe offline formulas, dependencies, validation and private workbook drafts.</p></div>'+
@@ -108,6 +110,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     '<section id="ssCommercial" role="tabpanel" aria-labelledby="ssTabCommercial" hidden><div id="ssCommercialRoot"></div></section>'+
     '<section id="ssFinance" role="tabpanel" aria-labelledby="ssTabFinance" hidden><div id="ssFinanceRoot"></div></section>'+
     '<section id="ssWorkflows" role="tabpanel" aria-labelledby="ssTabWorkflows" hidden><div id="ssWorkflowsRoot"></div></section>'+
+    '<section id="ssRelease" role="tabpanel" aria-labelledby="ssTabRelease" hidden><div id="ssReleaseRoot"></div></section>'+
     '<p id="ssStatus" class="ss-status" role="status" aria-live="polite">Ready. Changes are kept in this session until you save or export.</p>'+
     '<div id="ssDownload" class="ss-download" aria-live="polite"></div></div>';
   const root=page("Invoice & Spreadsheet Intelligence",
@@ -139,7 +142,8 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
     el("ssCommercial").hidden=tab!=="commercial";
     el("ssFinance").hidden=tab!=="finance";
     el("ssWorkflows").hidden=tab!=="workflows";
-    for(const [name,id] of [["book","ssTabBook"],["invoice","ssTabInvoice"],["commercial","ssTabCommercial"],["finance","ssTabFinance"],["workflows","ssTabWorkflows"]]){
+    el("ssRelease").hidden=tab!=="release";
+    for(const [name,id] of [["book","ssTabBook"],["invoice","ssTabInvoice"],["commercial","ssTabCommercial"],["finance","ssTabFinance"],["workflows","ssTabWorkflows"],["release","ssTabRelease"]]){
       el(id).setAttribute("aria-selected",String(tab===name));
     }
   };
@@ -148,14 +152,15 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   el("ssTabCommercial").onclick=()=>setTab("commercial");
   el("ssTabFinance").onclick=()=>setTab("finance");
   el("ssTabWorkflows").onclick=()=>setTab("workflows");
+  el("ssTabRelease").onclick=()=>setTab("release");
   root.querySelector(".ss-tabs").onkeydown=e=>{
     if(!["ArrowLeft","ArrowRight"].includes(e.key))return;
     e.preventDefault();
-    const tabs=["book","invoice","commercial","finance","workflows"];
-    const current=e.target===el("ssTabWorkflows")?4:e.target===el("ssTabFinance")?3:e.target===el("ssTabCommercial")?2:e.target===el("ssTabInvoice")?1:0;
+    const tabs=["book","invoice","commercial","finance","workflows","release"];
+    const current=e.target===el("ssTabRelease")?5:e.target===el("ssTabWorkflows")?4:e.target===el("ssTabFinance")?3:e.target===el("ssTabCommercial")?2:e.target===el("ssTabInvoice")?1:0;
     const next=tabs[(current+(e.key==="ArrowRight"?1:tabs.length-1))%tabs.length];
     setTab(next);
-    el(next==="book"?"ssTabBook":next==="invoice"?"ssTabInvoice":next==="commercial"?"ssTabCommercial":next==="finance"?"ssTabFinance":"ssTabWorkflows").focus();
+    el(next==="book"?"ssTabBook":next==="invoice"?"ssTabInvoice":next==="commercial"?"ssTabCommercial":next==="finance"?"ssTabFinance":next==="workflows"?"ssTabWorkflows":"ssTabRelease").focus();
   };
   const heading=col=>String.fromCharCode(65+col);
   const syncName=()=>{book.name=el("ssBookName").value;};
@@ -683,6 +688,7 @@ export async function mountSpreadsheetStudio({api,page,uploadFile}){
   mountCommercialStudio({host:el("ssCommercialRoot"),api,status,showDownload});
   mountFinancialStudio({host:el("ssFinanceRoot"),api,status,showDownload});
   mountBusinessWorkflows({host:el("ssWorkflowsRoot"),api,status});
+  mountSpreadsheetRelease({host:el("ssReleaseRoot"),api,status});
   mountSpreadsheetAI({
     host:el("ssAI"),api,status,
     getBook:()=>workbookPayload(book),
