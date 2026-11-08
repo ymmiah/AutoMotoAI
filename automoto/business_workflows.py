@@ -249,10 +249,13 @@ def sources(request: Request):
 @router.get("/list")
 def list_workflows(request: Request):
     _auth(request)
+    actor, role = _actor(request)
     with closing(_connect()) as db:
         _verify(db)
         rows = db.execute("SELECT id FROM workflows ORDER BY created_at DESC,id DESC LIMIT 100").fetchall()
         return {"workflows": [_detail(db, row["id"]) for row in rows],
+                "permissions": {"actor": actor, "role": role,
+                                "can_approve": role == "admin"},
                 "approval_changes_source": False, "bank_connected": False}
 
 
