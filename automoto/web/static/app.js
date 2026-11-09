@@ -1785,7 +1785,31 @@ PAGES.documents = async () => {
 
 PAGES.research = async () => {
   const { mountResearchStudio } = await import("./research-studio.js?v=" + encodeURIComponent(VERSION));
-  return mountResearchStudio({ api, page, toast });
+  // Multipart uploads must omit Content-Type so the browser supplies its random boundary.
+  // Auth/CSRF headers stay in the app shell; recovery modules never read them.
+  const authHeaders=() => ({...(TOKEN ? { "X-AutoMoto-Token": TOKEN } : {}),
+                           ...(CSRF ? { "X-CSRF-Token": CSRF } : {})});
+  const uploadCapsule = async (path,form) => {
+    const response=await fetch(path,{method:"POST",body:form,credentials:"same-origin",headers:authHeaders()});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(typeof data.detail==="string"?data.detail:response.statusText);
+    return data;
+  };
+  const downloadCapsule = async (path,sha) => {
+    const endpoint="/api/research/studio/portable/download?path="+encodeURIComponent(path)+
+      "&sha256="+encodeURIComponent(sha);
+    const response=await fetch(endpoint,{method:"GET",credentials:"same-origin",headers:authHeaders()});
+    if(!response.ok){
+      const data=await response.json().catch(()=>({}));
+      throw new Error(typeof data.detail==="string"?data.detail:response.statusText);
+    }
+    const blob=await response.blob(),url=URL.createObjectURL(blob);
+    const name=path.split("/").pop();
+    const link=document.createElement("a");link.href=url;link.download=name;
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  };
+  return mountResearchStudio({ api, page, toast, uploadCapsule, downloadCapsule });
 };
 
 PAGES.spreadsheets = async () => {
