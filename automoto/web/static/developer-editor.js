@@ -1,7 +1,7 @@
 /* Developer Studio V2: source tabs, Unicode editor, inert highlight preview and safe saves.
  * No CDN, compiler, shell or AI invocation. Auto-save is opt-in for this session.
  */
-export function mountDeveloperEditor({api,host,project,status}) {
+export function mountDeveloperEditor({api,host,project,status,onFileOpened=()=>{}}) {
   const BASE="/api/developer/studio";
   const root=host.querySelector("#dsEditorRoot");
   root.innerHTML=
@@ -54,11 +54,16 @@ export function mountDeveloperEditor({api,host,project,status}) {
     tex:"latex",bib:"latex",r:"r",dart:"dart",lua:"lua"
   };
   const current=()=>active?tabs.get(active):null;
+  const syntaxFor=tab=>tab?.language||languageMap[extension(tab.path)]||"plaintext";
   const canSave=tab=>!!(tab && tab.dirty && !tab.saving && project()?.trusted);
   const savedKey=(tab)=>JSON.stringify([tab.path,tab.sha256,tab.text,tab.encoding,tab.newline]);
   function clearTimer(){if(timer!==null){clearTimeout(timer);timer=null;}}
   function clearRecoveryTimer(){if(recoveryTimer!==null){clearTimeout(recoveryTimer);recoveryTimer=null;}}
-  function currentFile(){const tab=current();return tab?{path:tab.path,sha256:tab.sha256,dirty:tab.dirty}:null;}
+  function currentFile(){
+    const tab=current();
+    return tab?{path:tab.path,sha256:tab.sha256,encoding:tab.encoding,
+      newline:tab.newline,dirty:tab.dirty}:null;
+  }
   async function storeRecovery(silent=false){
     const tab=current(),where=project();
     if(!tab||!where?.trusted||!tab.dirty||recoveryBusy)return;
@@ -106,7 +111,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
       tab.newline=data.newline;
       tab.dirty=tab.text!==tab.originalText||tab.newline!==tab.originalNewline;
       el("dsSourceText").value=tab.text;
-      monacoAdapter?.activate(tab.path,tab.text,languageMap[extension(tab.path)]||"plaintext");
+      monacoAdapter?.activate(tab.path,tab.text,syntaxFor(tab));
       el("dsLineEnding").value=tab.newline;
       modeSwitch("edit");
       update();
@@ -173,7 +178,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     el("dsRecoveryAuto").disabled=!project()?.trusted;
     el("dsEditorState").textContent=!tab?"No source selected":
       tab.saving?"Saving…":tab.dirty?"Unsaved changes":tab.sha256?"Saved · SHA-256 "+tab.sha256.slice(0,12):"Read-only";
-    el("dsEditorLang").textContent=tab?languageMap[extension(tab.path)]||"Plain text":"Text";
+    el("dsEditorLang").textContent=tab?syntaxFor(tab):"Text";
     el("dsEditorSize").textContent=tab?tab.encoding+" · "+tab.text.length+" characters":"";
     el("dsSaveHint").textContent=project()?.trusted
       ?"Ctrl/Cmd+S saves after hash verification. The original file is not silently overwritten."
@@ -186,7 +191,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     active=path;const tab=current();if(!tab)return;
     clearTimer();clearRecoveryTimer();
     el("dsSourceText").value=tab.text.replace(/\r\n?/g,"\n");
-    monacoAdapter?.activate(tab.path,el("dsSourceText").value,languageMap[extension(tab.path)]||"plaintext");
+    monacoAdapter?.activate(tab.path,el("dsSourceText").value,syntaxFor(tab));
     el("dsEncoding").value=tab.encoding==="cp1252"?"cp1252":"auto";
     el("dsLineEnding").value=tab.newline;
     el("dsFilename").textContent=tab.path.split("/").pop();
@@ -202,6 +207,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     update();
     if(tab.dirty && auto)schedule();
     if(tab.dirty && recoveryAuto)scheduleRecovery();
+    onFileOpened(tab.path);
   }
   async function openFile(path,requested=null,force=false){
     const encoding=requested||el("dsEncoding").value||"auto";
@@ -422,7 +428,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     monacoAdapter=adapter;
     const tab=current();
     if(tab)monacoAdapter.activate(tab.path,el("dsSourceText").value,
-      languageMap[extension(tab.path)]||"plaintext");
+      syntaxFor(tab));
     monacoAdapter.setReadOnly(!project()?.trusted);
     monacoAdapter.setVisible(mode==="edit");
     el("dsSplit").disabled=false;
@@ -431,8 +437,65 @@ export function mountDeveloperEditor({api,host,project,status}) {
     if(host.isConnected)status("Monaco assets unavailable; using plain text editor. "+
       (error?.message||"Check local asset installation."),true);
   });
+  function applyProposal(proposal){
+    const tab=current(),where=project();
+    if(!where?.trusted||!tab||tab.dirty||tab.saving||
+       tab.path!==proposal.path||tab.sha256!==proposal.base_sha256||
+       tab.encoding!==proposal.encoding||tab.newline!==proposal.newline){
+      status("Replacement preview is stale or editor has unsaved changes. Reload and review.",true);
+      return false;
+    }
+    tab.text=proposal.text.replace(/\r\n?/g,"\n");
+    tab.dirty=tab.text!==tab.originalText;
+    el("dsSourceText").value=tab.text;
+    monacoAdapter?.activate(tab.path,tab.text,syntaxFor(tab));
+    modeSwitch("edit");
+    update();
+    status("Proposed replacement loaded as unsaved text. Review diff and confirm Save before changing disk.");
+    return true;
+  }
+  function revealLocation(path,line,column){
+    if(current()?.path!==path||!Number.isInteger(line)||line<1)return false;
+    if(monacoAdapter){monacoAdapter.reveal(line,column);return true;}
+    const field=el("dsSourceText");
+    const lines=field.value.split("\n");
+    let index=0;
+    for(let i=0;i<Math.min(line-1,lines.length);i++)index+=lines[i].length+1;
+    index+=Math.min(Math.max((column||1)-1,0),(lines[line-1]||"").length);
+    field.focus();field.setSelectionRange(index,index);
+    return true;
+  }
+  function setLanguageMode(path,language){
+    const tab=tabs.get(path);
+    if(!tab||typeof language!=="string"||language.length>64)return false;
+    tab.language=language;
+    if(active===path){
+      monacoAdapter?.activate(tab.path,el("dsSourceText").value,syntaxFor(tab));
+      update();
+    }
+    return true;
+  }
+  function lspContext() {
+    const tab=current();
+    if(!tab)return null;
+    const text=el("dsSourceText").value;
+    const pos=monacoAdapter?.position();
+    let line,column;
+    if(pos){line=pos.line-1;column=pos.column-1;}
+    else{
+      const prefix=text.slice(0,el("dsSourceText").selectionStart||0).split("\n");
+      line=prefix.length-1;column=prefix[prefix.length-1].length;
+    }
+    return {path:tab.path,text,position:{line:Math.max(0,line),character:Math.max(0,column)}};
+  }
   return {
     openFile,
+    lspContext,
+    setLanguageMode,
+    currentFile,
+    openPaths:()=>[...tabs.keys()].slice(0,10),
+    revealLocation,
+    applyProposal,
     reset(){
       if([...tabs.values()].some(t=>t.dirty) &&
          !window.confirm("Discard all unsaved source edits when changing project?"))return false;
@@ -452,7 +515,6 @@ export function mountDeveloperEditor({api,host,project,status}) {
       }
       update();
     },
-    currentFile,
     hasUnsaved(){return [...tabs.values()].some(t=>t.dirty);}
   };
 }

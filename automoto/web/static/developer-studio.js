@@ -1,25 +1,38 @@
 /* Developer Studio V2: trusted source explorer plus conflict-safe file editor. */
 import {mountDeveloperEditor} from "./developer-editor.js";
+import {mountDeveloperNavigation} from "./developer-navigation.js";
+import {mountDeveloperLanguageIntelligence} from "./developer-language.js";
+import {mountDeveloperLSP} from "./developer-lsp.js";
+import {mountDeveloperIndex} from "./developer-index.js";
+import {mountDeveloperAdapters} from "./developer-adapters.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V3 · Safe Editing Lifecycle. Trusted file operations, multi-cursor, split editing, reviewable diffs and local crash recovery. No shell, build or AI execution.",
+    "V8 · External toolchain and debugger adapter SDK. Register SHA-256-pinned local tools and run only with separate approval.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
         '<label for="dsPath">Project folder</label><input id="dsPath" class="input" type="text" maxlength="1024" placeholder="A folder inside your AutoMoto workspace or allowed roots">'+
         '<button class="btn primary" type="button" id="dsOpen">Open project</button>'+
         '<button class="btn" type="button" id="dsReload">Refresh locations</button></section>'+
+      '<div class="ds-v4-roots" id="dsRootStrip" role="group" aria-label="Open and approved project roots" hidden></div>'+
       '<section class="ds-summary" aria-label="Workspace trust">'+
         '<div><span class="ds-eyebrow">CURRENT WORKSPACE</span><strong id="dsProject">No project open</strong>'+
         '<span id="dsTrustState">Select a local folder to begin.</span></div>'+
         '<button class="btn" id="dsTrust" type="button" hidden>Trust this project</button></section>'+
-      '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. No source execution or automatic cloud processing is enabled.</p>'+
-      '<div class="ds-columns">'+
+      '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. Language servers and external toolchain adapters run only after separate approval; these programs are not OS-sandboxed and may modify project files. No automatic cloud processing is enabled.</p>'+
+      '<div id="dsLanguageRoot" aria-label="Project language and framework intelligence"></div>'+
+      '<div id="dsLspRoot" aria-label="Approved local language server controls"></div>'+ 
+      '<div id="dsIndexRoot" aria-label="Source symbol index and file outline"></div>'+ 
+      '<div id="dsAdaptersRoot" aria-label="Explicitly approved local toolchain and debugger adapters"></div>'+ 
+      '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
+      '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
+      '<div class="ds-columns" id="dsColumns">'+
         '<section class="ds-panel" aria-label="Project files"><div class="ds-panel-header"><h3>Explorer</h3><div class="ds-explorer-actions"><button class="btn sm" type="button" id="dsCreate" disabled>New</button><button class="btn sm" type="button" id="dsRename" disabled>Rename</button><button class="btn sm" type="button" id="dsTrash" disabled>Archive</button><button class="btn sm" type="button" id="dsRestore" disabled>Restore</button><button class="btn sm" type="button" id="dsParent" disabled>Up</button></div></div>'+
           '<p class="ds-breadcrumb" id="dsBreadcrumb">No folder selected</p>'+
           '<div id="dsFiles" class="ds-files" role="list"></div>'+
           '<p id="dsLimit" class="ds-footnote"></p></section>'+
+        '<div id="dsPanelHandle" class="ds-panel-handle" role="separator" tabindex="0" aria-label="Resize project explorer" aria-orientation="vertical" aria-valuemin="24" aria-valuemax="60" aria-valuenow="32"></div>'+
         '<section class="ds-panel" aria-label="Source editor"><div class="ds-panel-header"><h3 id="dsFilename">Source editor</h3><span class="ds-readonly">NO EXECUTION</span></div>'+
           '<p class="ds-footnote" id="dsFileInfo">Select a source file. V2 supports UTF-8, UTF-16 BOM and explicit Windows-1252.</p>'+
           '<div id="dsEditorRoot"></div></section>'+
@@ -28,7 +41,18 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  const editor=mountDeveloperEditor({api,host,project:()=>project,status});
+  let languageIntelligence,lsp,index,adapters;
+  const editor=mountDeveloperEditor({api,host,project:()=>project,status,
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);}});
+  languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
+    getProject:()=>project,editor,status});
+  lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
+  index=mountDeveloperIndex({api,host,getProject:()=>project,editor,status});
+  adapters=mountDeveloperAdapters({api,host,getProject:()=>project,status});
+  const navigation=mountDeveloperNavigation({
+    api,host,editor,getProject:()=>project,getDirectory:()=>directory,
+    openProject,list,status
+  });
 
   function status(message,bad=false) {
     const element=byId("dsStatus");
@@ -51,6 +75,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       included.add(item.project);
       option(select,item.project,(item.trusted?"Trusted: ":"Folder: ")+item.project);
     }
+    navigation.updateRoots([...response.roots,...response.recent,
+      ...(project?[project]:[])]);
     if(project && included.has(project.project))select.value=project.project;
     else if(!project && response.roots.length && !byId("dsPath").value) {
       select.value=response.roots[0].project;
@@ -60,7 +86,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   function showTrust() {
     byId("dsProject").textContent=project?project.project:"No project open";
     byId("dsTrustState").textContent=project
-      ? project.trusted?"Trusted project · source editing and guarded file operations enabled. Code execution disabled.":"Restricted workspace · source browsing only."
+      ? project.trusted?"Trusted project · guarded editing enabled; language servers require separate approval.":"Restricted workspace · source browsing only."
       :"Select a local folder to begin.";
     byId("dsTrust").hidden=!project;
     byId("dsTrust").textContent=project?.trusted?"Revoke trust":"Trust this project";
@@ -74,8 +100,12 @@ export async function mountDeveloperStudio({api,page,toast}) {
   async function openProject(path) {
     try {
       const data=await api(BASE+"/open",{project:path});
-      if(project?.project!==data.project && !editor.reset())return;
+      if(project?.project!==data.project && !editor.reset())return false;
       project=data;
+      await lsp.projectChanged();
+      languageIntelligence.reset();
+      await index.projectChanged();
+      await adapters.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
@@ -83,8 +113,11 @@ export async function mountDeveloperStudio({api,page,toast}) {
       await locations();
       await list(".");
       status(data.trusted?"Trusted project opened; source editing is enabled.":"Restricted project opened in read-only mode.");
+      navigation.remember();
+      return true;
     } catch(error) {
       status("Unable to open project: "+error.message,true);
+      return false;
     }
   }
   async function list(dir) {
@@ -95,6 +128,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       const result=await api(BASE+"/tree?"+params);
       if(expected!==sequence||!host.isConnected)return;
       directory=result.directory;
+      navigation.remember();
       byId("dsBreadcrumb").textContent=directory==="."?project.name:project.name+" / "+directory;
       byId("dsParent").disabled=directory===".";
       const area=byId("dsFiles");area.replaceChildren();
@@ -125,7 +159,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
   }
   async function preview(path) {
     if(!project)return;
-    return editor.openFile(path);
+    await editor.openFile(path);
+    if(window.matchMedia("(max-width: 720px)").matches)byId("dsShowEditor").click();
+    navigation.remember();
   }
   byId("dsRoots").addEventListener("change",event=>{
     if(event.target.value)byId("dsPath").value=event.target.value;
@@ -216,10 +252,16 @@ export async function mountDeveloperStudio({api,page,toast}) {
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();editor.trustChanged();await locations();
+      showTrust();editor.trustChanged();await lsp.trustChanged();await adapters.trustChanged();await locations();
       status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });
+  const lspCleanup=()=>{
+    if(host.isConnected)return;
+    window.removeEventListener("hashchange",lspCleanup);
+    void lsp.stop();
+  };
+  window.addEventListener("hashchange",lspCleanup);
   try {
     await locations();
   }catch(error) {
