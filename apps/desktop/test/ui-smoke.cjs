@@ -1789,6 +1789,16 @@ let browser;
   await page.screenshot({path:path.join(output,'research-studio-v8-encrypted-portable-recovery.png')});
   await page.unrouteAll();
 
+  // Developer Studio V2.1: the *actual* locally bundled Monaco must be active.
+  const replaceDeveloperSource = async (text) => {
+    const input=page.locator('#dsMonaco .monaco-editor textarea.inputarea');
+    await input.focus();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText(text);
+    await page.waitForFunction(value=>
+      document.querySelector('#dsSourceText')?.value===value,text);
+  };
+
   // Developer Studio V2: verified source editing, UTF-8 and trust-based saves.
   const devProject=path.join(data,'workspace','projects','developer-studio-v2');
   mkdirSync(devProject,{recursive:true});
@@ -1798,6 +1808,8 @@ let browser;
   const devBefore=readFileSync(path.join(devProject,'main.ts'));
   await page.locator('.nav [data-page="developer"]').click();
   await page.locator('#dsPath').waitFor();
+  await page.locator('#dsMonaco .monaco-editor').waitFor({state:'visible'});
+  assert.equal(await page.locator('#dsMonaco').isVisible(),true,'Must load Monaco locally');
   await page.locator('#dsPath').fill(devProject);
   await page.locator('#dsOpen').click();
   await page.waitForFunction(() => document.querySelector('#dsProject')?.textContent?.includes('developer-studio-v2'));
@@ -1812,7 +1824,7 @@ let browser;
   await page.locator('#dsTrust').click();
   await page.waitForFunction(() => document.querySelector('#dsTrustState')?.textContent?.includes('Trusted'));
   assert.equal(await page.locator('#dsSourceText').getAttribute('readonly'),null);
-  await page.locator('#dsSourceText').fill('export const title = "edited";\n');
+  await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
   await page.locator('#newChat').click();
@@ -1835,7 +1847,7 @@ let browser;
   await page.locator('.ds-entry', {hasText:'other.py'}).click();
   await page.waitForFunction(() => document.querySelectorAll('.ds-tab').length===2);
   await page.locator('.ds-tab-select', {hasText:'main.ts'}).click();
-  await page.locator('#dsSourceText').fill('export const title = "unsaved";\n');
+  await replaceDeveloperSource('export const title = "unsaved";\n');
   writeFileSync(path.join(devProject,'main.ts'),'export const title = "externally edited";\n');
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#dsSaveFile').click();
