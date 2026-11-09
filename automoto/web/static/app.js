@@ -913,7 +913,7 @@ function drawMeter() {
 async function logout() { try { await api("/api/auth/logout", {}); } catch { /* ignore */ } location.replace("/"); }
 function setupHosted() {
   document.body.classList.add("hosted");
-  ["routines", "settings"].forEach((p) => { const a = $(`.nav a[data-page="${p}"]`); if (a) a.remove(); });
+  ["routines", "settings", "developer"].forEach((p) => { const a = $(`.nav a[data-page="${p}"]`); if (a) a.remove(); });
   const nav = $(".nav");
   const navHtml = `<a href="#/account" data-page="account"><span data-icon="user"></span>Account</a>` +
     (state.me?.role === "admin" ? `<a href="#/admin" data-page="admin"><span data-icon="shield"></span>Admin</a>` : "");
@@ -1820,6 +1820,11 @@ PAGES.spreadsheets = async () => {
 PAGES.visual = async () => {
   const { mountVisualStudio } = await import("./visual-studio.js?v=" + encodeURIComponent(VERSION));
   return mountVisualStudio({ api, page, toast, esc, icon });
+};
+
+PAGES.developer = async () => {
+  const { mountDeveloperStudio } = await import("./developer-studio.js?v=" + encodeURIComponent(VERSION));
+  return mountDeveloperStudio({ api, page, toast });
 };
 
 // ---------------------------------------------------------------- background
