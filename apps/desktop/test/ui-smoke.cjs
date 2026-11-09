@@ -1968,6 +1968,27 @@ let browser;
   if(initialViewport)await page.setViewportSize(initialViewport);
   await page.screenshot({path:path.join(output,'developer-studio-v4-project-navigation.png')});
 
+  // Reload the app to prove opt-in session recovery revalidates the project and
+  // reloads sources from disk instead of caching source bytes in localStorage.
+  await page.reload();
+  await page.locator('#dsRestoreSession').waitFor();
+  assert.equal(await page.locator('#dsRemember').isChecked(),true);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsRestoreSession').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsStatus')?.textContent?.includes('Session navigation restored'));
+  assert.match(await page.locator('#dsSourceText').inputValue(),/reviewed/);
+  assert.equal(await page.locator('#dsSaveFile').isDisabled(),true,
+    'Resuming navigation must not create or save unsaved source');
+  assert.equal(await page.locator('#dsRootStrip .ds-root-chip').count()>=2,true,
+    'Multi-root navigator must retain the workspace and selected project');
+  await page.locator('#dsSearchQuery').fill('reviewed');
+  await page.locator('#dsSearchAcross').selectOption('all');
+  await page.locator('#dsSearchGo').click();
+  await page.waitForFunction(()=>
+    document.querySelectorAll('#dsSearchResults .ds-search-hit').length>=2);
+  assert.equal(await page.locator('#dsSearchResults .ds-search-hit').count()>=2,true,
+    'Explicit all-roots search must include matching files from approved roots');
   await page.locator('#dsClearSession').click();
   assert.equal(await page.evaluate(()=>
     localStorage.getItem('automoto.developer.navigation.v4')),null);
