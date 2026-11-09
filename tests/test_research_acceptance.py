@@ -31,7 +31,15 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("AUTOMOTO_WORKSPACE", str(tmp_path / "v7-workspace"))
     monkeypatch.setenv("AUTOMOTO_RATE_LIMIT", "10000")
     monkeypatch.delenv("AUTOMOTO_MODE", raising=False)
-    return TestClient(server.app)
+    # The app's rate limiter is process-global. Prevent this module's large
+    # integration matrix from exhausting limits in unrelated later test files.
+    with server._HITS_LOCK:
+        server._HITS.clear()
+    try:
+        yield TestClient(server.app)
+    finally:
+        with server._HITS_LOCK:
+            server._HITS.clear()
 
 
 def approved_comparison(client):
