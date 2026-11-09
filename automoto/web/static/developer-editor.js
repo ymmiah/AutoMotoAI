@@ -456,7 +456,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     if(current()?.path!==path||!Number.isInteger(line)||line<1)return false;
     if(monacoAdapter){monacoAdapter.reveal(line,column);return true;}
     const field=el("dsSourceText");
-    const lines=field.value.split("\\n");
+    const lines=field.value.split("\n");
     let index=0;
     for(let i=0;i<Math.min(line-1,lines.length);i++)index+=lines[i].length+1;
     index+=Math.min(Math.max((column||1)-1,0),(lines[line-1]||"").length);
