@@ -71,7 +71,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
   }
   function update(){
     const tab=current(),field=el("dsSourceText");
-    field.disabled=!tab||!project()?.trusted;
+    field.disabled=!tab;
     field.readOnly=!project()?.trusted;
     el("dsSaveFile").disabled=!canSave(tab);
     el("dsReloadFile").disabled=!tab;
@@ -113,8 +113,9 @@ export function mountDeveloperEditor({api,host,project,status}) {
       const params=new URLSearchParams({project:project().project,path,encoding});
       const data=await api(BASE+"/file?"+params);
       if(!host.isConnected||request!==seq)return;
-      tabs.set(data.path,{path:data.path,text:data.text.replace(/\r\n?/g,"\n"),sha256:data.sha256,size:data.size,
-        newline:data.newline,encoding:data.encoding,dirty:false,saving:false});
+      const initial=data.text.replace(/\r\n?/g,"\n");
+      tabs.set(data.path,{path:data.path,text:initial,originalText:initial,originalNewline:data.newline,
+        sha256:data.sha256,size:data.size,newline:data.newline,encoding:data.encoding,dirty:false,saving:false});
       activate(data.path);
       status("Loaded "+data.path+" · "+data.encoding+" · "+data.newline+" line endings.");
     }catch(error){
@@ -124,7 +125,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
   function changed(){
     const tab=current();if(!tab)return;
     tab.text=el("dsSourceText").value;
-    tab.dirty=true;update();
+    tab.dirty=tab.text!==tab.originalText||tab.newline!==tab.originalNewline;
+    update();
     if(auto)schedule();
   }
   function schedule(){
@@ -148,7 +150,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
         expected_sha256:oldSha,confirmed:true
       });
       tab.sha256=result.sha256;tab.size=result.size;
-      tab.dirty=(tab.text!==text);
+      tab.originalText=text;tab.originalNewline=tab.newline;
+      tab.dirty=tab.text!==text;
       if(!tab.dirty)tab.text=text;
       status((result.changed?"Saved":"No disk changes needed")+": "+tab.path);
       if(auto && tab.dirty)schedule();
@@ -158,13 +161,13 @@ export function mountDeveloperEditor({api,host,project,status}) {
       status((error.status===409?"Save blocked: the source changed on disk. Review and reload manually. ":"Save failed: ")+error.message,true);
     }finally{tab.saving=false;update();}
   }
-  async function reload(){
+  async function reload(requested=null){
     const tab=current(),where=project();
     if(!tab||!where)return;
     if(tab.dirty && !window.confirm("Discard unsaved changes to "+tab.path+" and reload from disk?"))return;
-    const path=tab.path,encoding=tab.encoding;
+    const path=tab.path,encoding=requested||(tab.encoding==="cp1252"?"cp1252":"auto");
     tabs.delete(path);active=null;showTabs();
-    await openFile(path,encoding==="cp1252"?"cp1252":"auto");
+    await openFile(path,encoding);
   }
   function closeTab(path){
     const tab=tabs.get(path);if(!tab)return;
@@ -219,17 +222,19 @@ export function mountDeveloperEditor({api,host,project,status}) {
     }
   });
   el("dsSaveFile").onclick=()=>save(true);
-  el("dsReloadFile").onclick=reload;
+  el("dsReloadFile").onclick=()=>reload();
   el("dsLineEnding").onchange=event=>{
     const tab=current();if(!tab)return;
-    tab.newline=event.target.value;tab.dirty=true;update();
+    tab.newline=event.target.value;
+    tab.dirty=tab.text!==tab.originalText||tab.newline!==tab.originalNewline;
+    update();
   };
   el("dsModeEdit").onclick=()=>modeSwitch("edit");
   el("dsModePreview").onclick=()=>modeSwitch("preview");
   el("dsEncoding").onchange=event=>{
     const tab=current();if(!tab)return;
     if(tab.dirty){status("Save or discard unsaved edits before changing file encoding.",true);return;}
-    reload();
+    reload(event.target.value);
   };
   el("dsAutosave").onchange=event=>{
     if(event.target.checked){
@@ -258,7 +263,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
     reset(){
       if([...tabs.values()].some(t=>t.dirty) &&
          !window.confirm("Discard all unsaved source edits when changing project?"))return false;
-      clearTimer();tabs.clear();active=null;el("dsSourceText").value="";
+      clearTimer();auto=false;el("dsAutosave").checked=false;
+      tabs.clear();active=null;el("dsSourceText").value="";
       el("dsFilename").textContent="Source editor";el("dsFileInfo").textContent="Open a source file from Explorer to begin.";
       update();return true;
     },
