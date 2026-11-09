@@ -58,7 +58,11 @@ export function mountDeveloperEditor({api,host,project,status}) {
   const savedKey=(tab)=>JSON.stringify([tab.path,tab.sha256,tab.text,tab.encoding,tab.newline]);
   function clearTimer(){if(timer!==null){clearTimeout(timer);timer=null;}}
   function clearRecoveryTimer(){if(recoveryTimer!==null){clearTimeout(recoveryTimer);recoveryTimer=null;}}
-  function currentFile(){const tab=current();return tab?{path:tab.path,sha256:tab.sha256,dirty:tab.dirty}:null;}
+  function currentFile(){
+    const tab=current();
+    return tab?{path:tab.path,sha256:tab.sha256,encoding:tab.encoding,
+      newline:tab.newline,dirty:tab.dirty}:null;
+  }
   async function storeRecovery(silent=false){
     const tab=current(),where=project();
     if(!tab||!where?.trusted||!tab.dirty||recoveryBusy)return;
@@ -431,8 +435,28 @@ export function mountDeveloperEditor({api,host,project,status}) {
     if(host.isConnected)status("Monaco assets unavailable; using plain text editor. "+
       (error?.message||"Check local asset installation."),true);
   });
+  function applyProposal(proposal){
+    const tab=current(),where=project();
+    if(!where?.trusted||!tab||tab.dirty||tab.saving||
+       tab.path!==proposal.path||tab.sha256!==proposal.base_sha256||
+       tab.encoding!==proposal.encoding||tab.newline!==proposal.newline){
+      status("Replacement preview is stale or editor has unsaved changes. Reload and review.",true);
+      return false;
+    }
+    tab.text=proposal.text.replace(/\\r\\n?/g,"\\n");
+    tab.dirty=tab.text!==tab.originalText;
+    el("dsSourceText").value=tab.text;
+    monacoAdapter?.activate(tab.path,tab.text,languageMap[extension(tab.path)]||"plaintext");
+    modeSwitch("edit");
+    update();
+    status("Proposed replacement loaded as unsaved text. Review diff and confirm Save before changing disk.");
+    return true;
+  }
   return {
     openFile,
+    currentFile,
+    openPaths:()=>[...tabs.keys()].slice(0,10),
+    applyProposal,
     reset(){
       if([...tabs.values()].some(t=>t.dirty) &&
          !window.confirm("Discard all unsaved source edits when changing project?"))return false;
@@ -452,7 +476,6 @@ export function mountDeveloperEditor({api,host,project,status}) {
       }
       update();
     },
-    currentFile,
     hasUnsaved(){return [...tabs.values()].some(t=>t.dirty);}
   };
 }
