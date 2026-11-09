@@ -1,0 +1,14 @@
+{
+  "name": "automoto-offline-monaco-vendor",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Reproducible local-only Monaco assets for Developer Studio",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "monaco-editor": "0.57.0"
+  }
+}
