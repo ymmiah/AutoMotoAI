@@ -329,7 +329,7 @@ def _refresh(root: Path) -> dict:
                 break
             seen_bytes += size
             old = previous["files"].get(relative)
-            if old and old["sha256"] == sha:
+            if old and old["sha256"] == sha and not old.get("budget_truncated"):
                 entry = old
                 reused += 1
             else:
@@ -340,7 +340,8 @@ def _refresh(root: Path) -> dict:
             if len(entry["symbols"]) > remaining_symbols or len(entry["references"]) > remaining_tokens:
                 truncated = True
                 entry = {**entry, "symbols": entry["symbols"][:remaining_symbols],
-                         "references": entry["references"][:remaining_tokens]}
+                         "references": entry["references"][:remaining_tokens],
+                         "budget_truncated": True}
             files[relative] = entry
             symbol_total += len(entry["symbols"])
             token_total += len(entry["references"])
