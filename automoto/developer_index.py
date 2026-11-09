@@ -33,6 +33,8 @@ MAX_TOTAL_BYTES = 6 * 1024 * 1024
 MAX_FILE_BYTES = 96 * 1024
 MAX_SYMBOLS = 4000
 MAX_TOKENS = 8000
+MAX_GLOBAL_SYMBOLS = 5000
+MAX_GLOBAL_TOKENS = 20000
 MAX_RESULTS = 100
 MAX_CACHES = 3
 EXCLUDED_DIRS = frozenset({
@@ -293,6 +295,7 @@ def _refresh(root: Path) -> dict:
         files = {}
         seen_bytes = 0
         updated = reused = skipped = 0
+        symbol_total = token_total = 0
         truncated = False
         for relative, warning in _walk(root):
             if warning:
@@ -312,11 +315,20 @@ def _refresh(root: Path) -> dict:
             seen_bytes += size
             old = previous["files"].get(relative)
             if old and old["sha256"] == sha:
-                files[relative] = old
+                entry = old
                 reused += 1
             else:
-                files[relative] = _parse(relative, text, sha)
+                entry = _parse(relative, text, sha)
                 updated += 1
+            remaining_symbols = max(0, MAX_GLOBAL_SYMBOLS - symbol_total)
+            remaining_tokens = max(0, MAX_GLOBAL_TOKENS - token_total)
+            if len(entry["symbols"]) > remaining_symbols or len(entry["references"]) > remaining_tokens:
+                truncated = True
+                entry = {**entry, "symbols": entry["symbols"][:remaining_symbols],
+                         "references": entry["references"][:remaining_tokens]}
+            files[relative] = entry
+            symbol_total += len(entry["symbols"])
+            token_total += len(entry["references"])
         # Never present an incomplete scan as a full, authoritative index.
         removed = len(set(previous["files"]) - set(files))
         generation = previous["generation"] + int(bool(updated or removed or truncated != previous.get("truncated")))
@@ -330,7 +342,7 @@ def _refresh(root: Path) -> dict:
                 "indexed_files": len(files), "reparsed_files": updated,
                 "reused_files": reused, "removed_files": removed, "skipped_files": skipped,
                 "inspected_bytes": seen_bytes, "truncated": truncated,
-                "symbol_count": sum(len(item["symbols"]) for item in files.values()),
+                "symbol_count": symbol_total, "token_count": token_total,
                 "source_modified": False, "source_executed": False,
                 "index_persisted": False}
 
