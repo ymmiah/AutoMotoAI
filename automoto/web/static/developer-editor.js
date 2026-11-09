@@ -299,14 +299,16 @@ export function mountDeveloperEditor({api,host,project,status}) {
   function modeSwitch(next){
     if(!current())return;
     mode=next;
-    const preview=mode==="preview";
+    const preview=mode==="preview",diff=mode==="diff",editorView=!preview&&!diff;
     if(preview)showHighlighted();
     const source=el("dsSourceText"),highlight=el("dsHighlighted");
-    source.hidden=preview||!!monacoAdapter;highlight.hidden=!preview;
-    source.style.display=(preview||monacoAdapter)?"none":"block";
+    source.hidden=!editorView||!!monacoAdapter;
+    highlight.hidden=!preview;
+    el("dsDiffPreview").hidden=!diff;
+    source.style.display=(editorView&&!monacoAdapter)?"block":"none";
     highlight.style.display=preview?"block":"none";
-    monacoAdapter?.setVisible(!preview);
-    el("dsModeEdit").setAttribute("aria-pressed",String(!preview));
+    monacoAdapter?.setVisible(editorView);
+    el("dsModeEdit").setAttribute("aria-pressed",String(editorView));
     el("dsModePreview").setAttribute("aria-pressed",String(preview));
   }
   el("dsSourceText").addEventListener("input",changed);
@@ -332,6 +334,35 @@ export function mountDeveloperEditor({api,host,project,status}) {
   });
   el("dsSaveFile").onclick=()=>save(true);
   el("dsReloadFile").onclick=()=>reload();
+  el("dsUndo").onclick=()=>{
+    if(!project()?.trusted)return;
+    if(monacoAdapter)monacoAdapter.undo();
+    else {el("dsSourceText").focus();document.execCommand("undo");changed();}
+  };
+  el("dsRedo").onclick=()=>{
+    if(!project()?.trusted)return;
+    if(monacoAdapter)monacoAdapter.redo();
+    else {el("dsSourceText").focus();document.execCommand("redo");changed();}
+  };
+  el("dsSplit").onclick=()=>{
+    if(!monacoAdapter||!current())return;
+    const enabled=monacoAdapter.split(el("dsSplit").getAttribute("aria-pressed")!=="true");
+    el("dsSplit").setAttribute("aria-pressed",String(enabled));
+    status(enabled?"Split editor enabled; both panes share one source model. Alt+Click adds cursors.":
+      "Split editor closed.");
+  };
+  el("dsDiff").onclick=()=>showDiff();
+  el("dsSnapshot").onclick=()=>storeRecovery();
+  el("dsRecover").onclick=()=>recoverCopy();
+  el("dsRecoveryAuto").onchange=event=>{
+    if(event.target.checked&&!window.confirm("Enable private local recovery snapshots every 8 seconds while a source file has unsaved edits? Copies remain on this computer until discarded.")){
+      event.target.checked=false;return;
+    }
+    if(event.target.checked&&!project()?.trusted){event.target.checked=false;return;}
+    recoveryAuto=event.target.checked;
+    if(recoveryAuto)scheduleRecovery();else clearRecoveryTimer();
+    status(recoveryAuto?"Local recovery enabled for this session.":"Automatic recovery disabled.");
+  };
   el("dsLineEnding").onchange=event=>{
     const tab=current();if(!tab)return;
     tab.newline=event.target.value;
@@ -372,7 +403,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     window.removeEventListener("beforeunload",onBeforeUnload);
     window.removeEventListener("hashchange",cleanup);
     if(window.__automotoDevConfirmLeave===leaveGate)delete window.__automotoDevConfirmLeave;
-    clearTimer();
+    clearTimer();clearRecoveryTimer();
     monacoAdapter?.dispose();
     monacoAdapter=null;
   };
@@ -394,6 +425,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
       languageMap[extension(tab.path)]||"plaintext");
     monacoAdapter.setReadOnly(!project()?.trusted);
     monacoAdapter.setVisible(mode==="edit");
+    el("dsSplit").disabled=false;
     update();
   }).catch(error=>{
     if(host.isConnected)status("Monaco assets unavailable; using plain text editor. "+
@@ -405,13 +437,22 @@ export function mountDeveloperEditor({api,host,project,status}) {
       if([...tabs.values()].some(t=>t.dirty) &&
          !window.confirm("Discard all unsaved source edits when changing project?"))return false;
       seq++; // Invalidate source fetches started for the previously open project.
-      clearTimer();auto=false;el("dsAutosave").checked=false;el("dsEncoding").value="auto";
+      clearTimer();clearRecoveryTimer();
+      auto=false;recoveryAuto=false;lastRecoveryKey="";
+      el("dsAutosave").checked=false;el("dsRecoveryAuto").checked=false;el("dsEncoding").value="auto";
       tabs.clear();active=null;el("dsSourceText").value="";
       monacoAdapter?.reset();
       el("dsFilename").textContent="Source editor";el("dsFileInfo").textContent="Open a source file from Explorer to begin.";
       update();return true;
     },
-    trustChanged(){if(!project()?.trusted){auto=false;el("dsAutosave").checked=false;clearTimer();}update();},
+    trustChanged(){
+      if(!project()?.trusted){
+        auto=false;recoveryAuto=false;el("dsAutosave").checked=false;el("dsRecoveryAuto").checked=false;
+        clearTimer();clearRecoveryTimer();
+      }
+      update();
+    },
+    currentFile,
     hasUnsaved(){return [...tabs.values()].some(t=>t.dirty);}
   };
 }
