@@ -9,6 +9,10 @@
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "monaco-editor": "0.57.0"
+    "monaco-editor": "0.57.0",
+    "dompurify": "3.4.17"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
   }
 }
