@@ -1791,8 +1791,10 @@ let browser;
 
   // Developer Studio V2.1: the *actual* locally bundled Monaco must be active.
   const replaceDeveloperSource = async (text) => {
-    const input=page.locator('#dsMonaco .monaco-editor textarea.inputarea');
-    await input.focus();
+    // Interact with Monaco's public, visible editing surface, not its
+    // version-specific hidden textarea/contenteditable implementation.
+    const surface=page.locator('#dsMonaco .monaco-editor');
+    await surface.click({position:{x:70,y:55}});
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.insertText(text);
     await page.waitForFunction(value=>
