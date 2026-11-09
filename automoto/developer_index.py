@@ -239,7 +239,7 @@ def _heuristic(text: str, lang: str, offset: int = 0):
     for row, original in enumerate(text.splitlines()[:4000]):
         line = original[:4096]
         stripped = line.lstrip()
-        if stripped.startswith(("//", "/*", "*", "# ", "-- ")):
+        if lang != "markdown" and stripped.startswith(("//", "/*", "*", "# ", "-- ")):
             continue
         if lang == "markdown":
             found = HEADING.match(line)
