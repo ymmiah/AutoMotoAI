@@ -60,7 +60,7 @@ automoto = "automoto.cli:main"
 include = ["automoto*"]
 
 [tool.setuptools.package-data]
-automoto = ["web/*.html", "web/static/*.js", "web/static/*.css", "web/static/vendor/*", "skills_bundled/*/SKILL.md"]
+automoto = ["web/*.html", "web/static/*.js", "web/static/*.css", "web/static/vendor/*", "web/static/vendor/monaco/*", "web/static/vendor/monaco/assets/*", "skills_bundled/*/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
