@@ -68,7 +68,7 @@ cd ../..
 python -m pytest -q tests/test_developer_monaco_assets.py
 ```
 
-The vendored files must be committed and verified before publishing any distribution; **end-user installation and startup do not download Monaco**. Review `npm audit` for both the desktop and Monaco build dependencies before any public release. Build output is relatively large because TypeScript language services and workers are included; review installed size and lazy-load behaviour on supported devices.
+The vendored files must be committed and verified before publishing any distribution; **end-user installation and startup do not download Monaco**. `.gitattributes` marks the vendored Monaco directory as byte-preserving (`-text`), preventing Windows CRLF checkout conversion of JS/CSS/worker assets and protecting SHA-256 manifest verification on every supported platform. Review `npm audit` for both the desktop and Monaco build dependencies before any public release. Build output is relatively large because TypeScript language services and workers are included; review installed size and lazy-load behaviour on supported devices.
 
 **Regression requirements:** Playwright must demonstrate an actual `.monaco-editor` mounted from the same origin, edit a trusted file through Monaco, preserve unsaved state and detect external-disk conflicts; a fake textarea/highlight-only substitute is not acceptable. Test dark/light theme changes, responsive fallback, Unicode/LaTeX input, per-tab state, keyboard save, and secure source handling.
 
