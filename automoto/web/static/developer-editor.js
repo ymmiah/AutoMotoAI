@@ -443,7 +443,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
       status("Replacement preview is stale or editor has unsaved changes. Reload and review.",true);
       return false;
     }
-    tab.text=proposal.text.replace(/\\r\\n?/g,"\\n");
+    tab.text=proposal.text.replace(/\r\n?/g,"\n");
     tab.dirty=tab.text!==tab.originalText;
     el("dsSourceText").value=tab.text;
     monacoAdapter?.activate(tab.path,tab.text,languageMap[extension(tab.path)]||"plaintext");
