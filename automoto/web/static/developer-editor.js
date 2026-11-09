@@ -14,6 +14,13 @@ export function mountDeveloperEditor({api,host,project,status}) {
         '<option value="lf">LF</option><option value="crlf">CRLF</option><option value="cr">CR</option>'+
         '<option value="none">None</option><option value="mixed">Mixed (choose to save)</option></select>'+
         '<label class="ds-auto-label"><input type="checkbox" id="dsAutosave"> Auto-save</label>'+
+        '<button type="button" class="btn sm" id="dsUndo" disabled title="Undo (Ctrl/Cmd+Z)">Undo</button>'+
+        '<button type="button" class="btn sm" id="dsRedo" disabled title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>'+
+        '<button type="button" class="btn sm" id="dsSplit" aria-pressed="false" disabled>Split</button>'+
+        '<button type="button" class="btn sm" id="dsDiff" disabled>Review diff</button>'+
+        '<button type="button" class="btn sm" id="dsSnapshot" disabled>Save recovery</button>'+
+        '<button type="button" class="btn sm" id="dsRecover" disabled>Recover</button>'+
+        '<label class="ds-auto-label"><input type="checkbox" id="dsRecoveryAuto"> Local recovery</label>'+
         '<button type="button" class="btn sm" id="dsReloadFile" disabled>Reload</button>'+
         '<button type="button" class="btn sm primary" id="dsSaveFile" disabled>Save</button>'+
       '</div></div>'+
@@ -25,14 +32,17 @@ export function mountDeveloperEditor({api,host,project,status}) {
     '</div>'+
     '<label class="sr" for="dsSourceText">Source code</label>'+
     '<textarea id="dsSourceText" class="ds-source" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Source code editor" disabled></textarea>'+
-    '<div id="dsMonaco" class="ds-monaco" aria-label="Source code editor" hidden></div>'+
+    '<div id="dsMonacoShell" class="ds-monaco-shell" hidden>'+
+      '<div id="dsMonaco" class="ds-monaco" aria-label="Source code editor" hidden></div>'+
+      '<div id="dsMonacoSplit" class="ds-monaco" aria-label="Secondary code editor" hidden></div></div>'+
     '<pre class="ds-preview ds-highlight" id="dsHighlighted" tabindex="0" hidden><code id="dsHighlightCode"></code></pre>'+
+    '<pre class="ds-diff" id="dsDiffPreview" role="region" aria-label="Unsaved changes compared with disk" tabindex="0" hidden></pre>'+
     '<div class="ds-editor-footer"><span id="dsCursor">Line 1 · Column 1</span>'+
     '<span id="dsSaveHint">Saves require a trusted project and explicit confirmation.</span></div>';
   // Header labels live in the containing studio panel, outside #dsEditorRoot.
   const el=id=>host.querySelector("#"+id);
   const tabs=new Map();
-  let active=null,seq=0,auto=false,timer=null,mode="edit",monacoAdapter=null;
+  let active=null,seq=0,auto=false,timer=null,mode="edit",monacoAdapter=null,recoveryTimer=null,recoveryAuto=false,recoveryBusy=false,lastRecoveryKey="";
   const languageMap={
     js:"javascript",jsx:"javascript",mjs:"javascript",cjs:"javascript",ts:"typescript",tsx:"typescript",
     py:"python",go:"go",rs:"rust",java:"java",kt:"kotlin",kts:"kotlin",
@@ -47,6 +57,79 @@ export function mountDeveloperEditor({api,host,project,status}) {
   const canSave=tab=>!!(tab && tab.dirty && !tab.saving && project()?.trusted);
   const savedKey=(tab)=>JSON.stringify([tab.path,tab.sha256,tab.text,tab.encoding,tab.newline]);
   function clearTimer(){if(timer!==null){clearTimeout(timer);timer=null;}}
+  function clearRecoveryTimer(){if(recoveryTimer!==null){clearTimeout(recoveryTimer);recoveryTimer=null;}}
+  function currentFile(){const tab=current();return tab?{path:tab.path,sha256:tab.sha256,dirty:tab.dirty}:null;}
+  async function storeRecovery(silent=false){
+    const tab=current(),where=project();
+    if(!tab||!where?.trusted||!tab.dirty||recoveryBusy)return;
+    const key=JSON.stringify([where.project,tab.path,tab.sha256,tab.text,tab.newline]);
+    if(key===lastRecoveryKey&&silent)return;
+    recoveryBusy=true;
+    try{
+      const result=await api(BASE+"/snapshot",{
+        project:where.project,path:tab.path,text:tab.text,
+        encoding:tab.encoding,newline:tab.newline,
+        expected_sha256:tab.sha256,confirmed:true
+      });
+      lastRecoveryKey=key;
+      if(!silent)status("Private recovery snapshot recorded. Source file unchanged.");
+      return result;
+    }catch(error){
+      status("Recovery snapshot not stored: "+error.message,true);
+      if(error.status===409){recoveryAuto=false;el("dsRecoveryAuto").checked=false;clearRecoveryTimer();}
+    }finally{recoveryBusy=false;}
+  }
+  function scheduleRecovery(){
+    clearRecoveryTimer();
+    if(recoveryAuto&&project()?.trusted&&current()?.dirty){
+      const selected=active;
+      recoveryTimer=setTimeout(()=>{
+        if(active===selected&&current()?.dirty&&host.isConnected)void storeRecovery(true);
+      },8000);
+    }
+  }
+  async function recoverCopy(){
+    const tab=current(),where=project();
+    if(!tab||!where?.trusted)return;
+    if(tab.dirty&&!window.confirm("Discard current unsaved changes to load a recovery copy?"))return;
+    try{
+      const params=new URLSearchParams({project:where.project,path:tab.path});
+      const result=await api(BASE+"/snapshots?"+params);
+      const latest=result.items?.[0];
+      if(!latest){status("No private recovery snapshots found for this file.");return;}
+      if(!window.confirm("Load the latest private recovery snapshot as an unsaved working copy? The disk file will not be overwritten."))return;
+      const data=await api(BASE+"/recovery?"+new URLSearchParams({
+        project:where.project,path:tab.path,snapshot_id:latest.snapshot_id
+      }));
+      if(current()!==tab)return;
+      tab.text=data.text.replace(/\r\n?/g,"\n");
+      tab.newline=data.newline;
+      tab.dirty=tab.text!==tab.originalText||tab.newline!==tab.originalNewline;
+      el("dsSourceText").value=tab.text;
+      monacoAdapter?.activate(tab.path,tab.text,languageMap[extension(tab.path)]||"plaintext");
+      el("dsLineEnding").value=tab.newline;
+      modeSwitch("edit");
+      update();
+      status(data.base_sha256===tab.sha256?
+        "Recovered an unsaved working copy. Review diff before saving.":
+        "Recovery loaded with an older disk checksum. Refresh and reconcile before saving.",data.base_sha256!==tab.sha256);
+    }catch(error){status("Recovery could not be loaded: "+error.message,true);}
+  }
+  async function showDiff(){
+    const tab=current(),where=project();
+    if(!tab||!where?.trusted)return;
+    try{
+      const result=await api(BASE+"/diff",{
+        project:where.project,path:tab.path,text:tab.text,
+        encoding:tab.encoding,newline:tab.newline,
+        expected_sha256:tab.sha256,confirmed:true
+      });
+      modeSwitch("diff");
+      el("dsDiffPreview").textContent=result.changed?result.diff:"No unsaved differences against the saved file.";
+      if(result.truncated)status("Diff truncated to the first 700 lines; disk unchanged.");
+      else status("Read-only diff against the saved file; no disk changes.");
+    }catch(error){status("Cannot generate diff: "+error.message,true);}
+  }
   function extension(path){return(path.split(".").pop()||"").toLowerCase();}
   function cursor(){
     const pos=monacoAdapter?.position();
@@ -84,6 +167,10 @@ export function mountDeveloperEditor({api,host,project,status}) {
     el("dsEncoding").disabled=false;
     el("dsModeEdit").disabled=!tab;
     el("dsModePreview").disabled=!tab;
+    for(const name of ["dsUndo","dsRedo","dsDiff","dsSnapshot","dsRecover"])
+      el(name).disabled=!tab||!project()?.trusted;
+    el("dsSplit").disabled=!tab||!monacoAdapter;
+    el("dsRecoveryAuto").disabled=!project()?.trusted;
     el("dsEditorState").textContent=!tab?"No source selected":
       tab.saving?"Saving…":tab.dirty?"Unsaved changes":tab.sha256?"Saved · SHA-256 "+tab.sha256.slice(0,12):"Read-only";
     el("dsEditorLang").textContent=tab?languageMap[extension(tab.path)]||"Plain text":"Text";
@@ -97,7 +184,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     const old=current();
     if(old){old.text=el("dsSourceText").value;}
     active=path;const tab=current();if(!tab)return;
-    clearTimer();
+    clearTimer();clearRecoveryTimer();
     el("dsSourceText").value=tab.text.replace(/\r\n?/g,"\n");
     monacoAdapter?.activate(tab.path,el("dsSourceText").value,languageMap[extension(tab.path)]||"plaintext");
     el("dsEncoding").value=tab.encoding==="cp1252"?"cp1252":"auto";
@@ -105,6 +192,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     el("dsFilename").textContent=tab.path.split("/").pop();
     el("dsFileInfo").textContent=tab.path+" · "+tab.size+" bytes · original SHA-256 "+tab.sha256;
     el("dsHighlighted").hidden=true;el("dsHighlighted").style.display="none";
+    el("dsDiffPreview").hidden=true;
     el("dsSourceText").hidden=!!monacoAdapter;
     el("dsSourceText").style.display=monacoAdapter?"none":"block";
     monacoAdapter?.setVisible(true);
@@ -113,6 +201,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     el("dsModePreview").setAttribute("aria-pressed","false");
     update();
     if(tab.dirty && auto)schedule();
+    if(tab.dirty && recoveryAuto)scheduleRecovery();
   }
   async function openFile(path,requested=null,force=false){
     const encoding=requested||el("dsEncoding").value||"auto";
@@ -142,6 +231,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     tab.dirty=tab.text!==tab.originalText||tab.newline!==tab.originalNewline;
     update();
     if(auto)schedule();
+    if(recoveryAuto)scheduleRecovery();
   }
   function schedule(){
     clearTimer();
@@ -171,7 +261,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
       if(auto && tab.dirty)schedule();
     }catch(error){
       if(error.status===409)auto=false;
-      if(error.status===409){el("dsAutosave").checked=false;clearTimer();}
+      if(error.status===409){el("dsAutosave").checked=false;clearTimer();clearRecoveryTimer();}
       status((error.status===409?"Save blocked: the source changed on disk. Review and reload manually. ":"Save failed: ")+error.message,true);
     }finally{tab.saving=false;update();}
   }
