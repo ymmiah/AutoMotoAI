@@ -112,7 +112,7 @@ def test_soft_delete_is_recoverable_and_never_clobbers(context):
     assert archived.status_code == 200, archived.text
     assert not source.exists()
     uid = archived.json()["archive_id"]
-    target = {"project": str(project), "path": "src/main.py", "snapshot_id": uid}
+    target = {"project": str(project), "path": "src/main.py", "snapshot_id": uid, "confirmed": True}
     source.write_bytes(b"occupied\n")
     conflict = client.post(BASE + "/restore-trash", headers=AUTH, json=target)
     assert conflict.status_code == 409 and source.read_bytes() == b"occupied\n"
@@ -169,7 +169,8 @@ def test_recovery_retention_and_discard(context):
     assert len(listed.json()["items"]) == 3
     assert snapshots[0] not in [x["snapshot_id"] for x in listed.json()["items"]]
     discard = client.post(BASE + "/discard-snapshot", headers=AUTH, json={
-        "project": str(project), "path": "src/main.py", "snapshot_id": snapshots[-1]
+        "project": str(project), "path": "src/main.py", "snapshot_id": snapshots[-1],
+        "confirmed": True
     })
     assert discard.status_code == 200
     assert client.get(BASE + "/recovery", headers=AUTH, params={
