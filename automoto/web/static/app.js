@@ -267,6 +267,14 @@ $("#modeSeg").addEventListener("keydown", (e) => {
 window.addEventListener("hashchange", renderRoute);
 window.addEventListener("popstate", renderRoute);
 async function renderRoute() {
+  // A source editor with unsaved changes must explicitly approve navigation.
+  const destination=location.hash||"#/new";
+  if(state.route.startsWith("#/developer") && !destination.startsWith("#/developer")
+     && typeof window.__automotoDevConfirmLeave==="function"
+     && !window.__automotoDevConfirmLeave()){
+    history.replaceState(null,"",state.route||"#/developer");
+    return;
+  }
   rememberDraft();
   clearInterval(state.pageTimer);
   const h = location.hash || "#/new";
