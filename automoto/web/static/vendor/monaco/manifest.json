@@ -1,0 +1,51 @@
+{
+  "name": "automoto-offline-monaco",
+  "version": "0.57.0",
+  "format": "esm",
+  "files": {
+    "assets/codicon-LTRFOK3N.ttf": {
+      "size": 153228,
+      "sha256": "77f902557231f95c4c71ae517d09a1a842753656f5f665086b3e5ad8095538da"
+    },
+    "css.worker.js": {
+      "size": 1084531,
+      "sha256": "4214cff331678300c1a0723a43e7732077d205e292312fdbc81aeaf545d59ac8"
+    },
+    "editor.worker.js": {
+      "size": 307278,
+      "sha256": "cc2ea84b1e41de7d5a8036486a1e32043b6c2b2ac33a33e305b7ca981bdaf678"
+    },
+    "html.worker.js": {
+      "size": 755369,
+      "sha256": "2b855863de766f8d7746474a776a7eefc8d49ff3a4b2ca1182a00c99c4a75b41"
+    },
+    "json.worker.js": {
+      "size": 437319,
+      "sha256": "19722931440fa6d9c2fa4913ee5f4b73dfa8e03c7b175367911c044ccc55c076"
+    },
+    "MONACO-LICENSE.txt": {
+      "size": 1098,
+      "sha256": "33e4ff1a06ef62ba21788ea162564ee8165269a24a9ce6ef301837447eab0ac6"
+    },
+    "monaco.css": {
+      "size": 175378,
+      "sha256": "29df1f6c949ecd5626a1229fa624e59812e93e70127f04a526c69ade569be03d"
+    },
+    "monaco.js": {
+      "size": 4594197,
+      "sha256": "79ff40bb0382ec46d988ebeee7b48057e7a459cb640f0c4c2c8025e3f098fdad"
+    },
+    "monaco.js.LEGAL.txt": {
+      "size": 606,
+      "sha256": "eb9baa5499dcadb06cb438e8640c379d505eec3099368898eaf7cc813619b292"
+    },
+    "ts.worker.js": {
+      "size": 7037397,
+      "sha256": "d6d23f3c6d773c0a9fac47cceadfc32743ce78c48dcc0f93d175be4217f493be"
+    },
+    "ts.worker.js.LEGAL.txt": {
+      "size": 947,
+      "sha256": "8627cd033e7d2435b71b7aa912439a93c7a79a69a4951b4f6423a3409fedc331"
+    }
+  }
+}
