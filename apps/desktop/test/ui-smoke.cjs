@@ -1819,7 +1819,14 @@ let browser;
   assert.equal(await page.evaluate(() => location.hash), '#/developer', 'dirty edits must not be discarded on navigation');
   assert.match(await page.locator('#dsSourceText').inputValue(),/edited/);
   await page.locator('#dsModePreview').click();
-  assert.equal(await page.locator('#dsHighlighted').isVisible(),true);
+  const previewState=await page.locator('#dsHighlighted').evaluate(node=>({
+    hidden:node.hidden,display:getComputedStyle(node).display,
+    rect:node.getBoundingClientRect().toJSON(),
+    editorHidden:document.querySelector('#dsSourceText')?.hidden,
+    pressed:document.querySelector('#dsModePreview')?.getAttribute('aria-pressed'),
+    status:document.querySelector('#dsStatus')?.textContent,
+  }));
+  assert.equal(await page.locator('#dsHighlighted').isVisible(),true,JSON.stringify(previewState));
   await page.locator('#dsModeEdit').click();
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#dsSaveFile').click();
