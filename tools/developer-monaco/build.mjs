@@ -28,9 +28,9 @@ const embedded=input("base/browser/dompurify/dompurify.js");
 if(!existsSync(embedded))throw new Error("Monaco embedded sanitizer shim moved");
 const original=readFileSync(embedded,"utf8");
 if(!original.toLowerCase().includes("dompurify"))throw new Error("Unrecognised Monaco sanitizer shim");
-writeFileSync(embedded,
-  '// AutoMoto build-time security patch: use audited npm DOMPurify 3.4.17\\n' +
-  'export { default } from "dompurify";\\n');
+writeFileSync(embedded, `// AutoMoto build-time patch: use audited npm DOMPurify 3.4.17
+export { default } from "dompurify";
+`);
 const entries=[
   {in:path.join(dir,"entry.mjs"),out:"monaco"},
   {in:input("editor/editor.worker.js"),out:"editor.worker"},
