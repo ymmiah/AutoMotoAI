@@ -1844,6 +1844,55 @@ let browser;
   await page.locator('#dsTrust').click();
   await page.waitForFunction(() => document.querySelector('#dsTrustState')?.textContent?.includes('Trusted'));
   assert.equal(await page.locator('#dsSourceText').getAttribute('readonly'),null);
+  // V6 browser: explicit local LSP consent, source-grounded safe presentation.
+  assert.equal(await page.locator('#dsLspStart').isDisabled(),true,
+    'No language server may start before the operator chooses an installed tool');
+  let v6Started=0,v6Queried=0,v6Stopped=0;
+  await page.route('**/api/developer/studio/lsp/*',async route=>{
+    const url=new URL(route.request().url());
+    const endpoint=url.pathname.split('/').at(-1);
+    const payload=route.request().postDataJSON?.()||{};
+    let body={};
+    if(endpoint==='servers'){
+      body={servers:[{language:'typescript',binary:'typescript-language-server',
+        status:'available',requires_trust:true,requires_explicit_start:true}],
+        automatic_start:false,platform_sandbox:false};
+    }else if(endpoint==='start'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.language,'typescript');
+      v6Started++;
+      body={session_id:'v'.repeat(48),language:'typescript',capabilities:{
+        hoverProvider:true,completionProvider:true,definitionProvider:true,
+        referencesProvider:true,renameProvider:true},source_modified:false};
+    }else if(endpoint==='query'){
+      v6Queried++;
+      assert.equal(payload.path,'main.ts');
+      assert.equal(payload.method,'textDocument/hover');
+      body={method:payload.method,result:{text:'fixture hover · trusted local source'},
+        source_modified:false};
+    }else if(endpoint==='stop'){
+      v6Stopped++;
+      body={stopped:true,source_modified:false};
+    }else if(endpoint==='document')body={source_modified:false};
+    else if(endpoint==='diagnostics')body={files:[],source_modified:false};
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  });
+  await page.locator('#dsLspRefresh').click();
+  await page.locator('#dsLspSelect').selectOption('typescript');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsLspStart').click();
+  await page.waitForFunction(() => document.querySelector('#dsLspStatus')?.textContent?.includes('server ready'));
+  await page.locator('[data-lsp="textDocument/hover"]').click();
+  await page.waitForFunction(() => document.querySelector('#dsLspResult')?.textContent?.includes('fixture hover'));
+  assert.equal(v6Started,1);
+  assert.equal(v6Queried,1);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,
+    'LSP hover cannot modify source');
+  await page.locator('#dsLspStop').click();
+  await page.waitForFunction(() => document.querySelector('#dsLspStatus')?.textContent?.includes('server stopped'));
+  assert.equal(v6Stopped,1);
+  await page.unrouteAll();
+  await page.screenshot({path:path.join(output,'developer-studio-v6-lsp-consent.png')});
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
