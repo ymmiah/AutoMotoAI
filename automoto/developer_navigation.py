@@ -7,6 +7,7 @@ trusted save endpoint remains the sole way to commit any edit.
 from __future__ import annotations
 
 import difflib
+from itertools import islice
 import hashlib
 import os
 import re
@@ -63,7 +64,9 @@ def _walk(root: Path, folder: Path):
         dirs += 1
         try:
             with os.scandir(current) as iterator:
-                entries = sorted(list(iterator), key=lambda p: p.name.casefold())
+                entries = list(islice(iterator, MAX_FILES + 1))
+                overflow = len(entries) > MAX_FILES
+                entries = sorted(entries[:MAX_FILES], key=lambda p: p.name.casefold())
         except OSError:
             continue
         for entry in entries:
@@ -80,10 +83,14 @@ def _walk(root: Path, folder: Path):
                 if entry.is_dir(follow_symlinks=False):
                     if len(pending) < MAX_FILES:
                         pending.append(candidate)
+                    else:
+                        yield None, None  # queue limit; the result is incomplete
                 elif entry.is_file(follow_symlinks=False):
                     yield rel, candidate
             except (HTTPException, OSError, ValueError):
                 continue
+        if overflow:
+            yield None, None  # bounded scan of a very large directory
 
 
 @router.post("/search")
@@ -96,6 +103,9 @@ def search(request: Request, body: SearchIn):
     pattern = _pattern(body.query, body.case_sensitive)
     hits, scanned, total_bytes, capped = [], 0, 0, False
     for rel, candidate in _walk(root, folder):
+        if rel is None:
+            capped = True
+            continue
         if scanned >= MAX_FILES or len(hits) >= MAX_HITS or total_bytes >= MAX_SCAN_BYTES:
             capped = True
             break
