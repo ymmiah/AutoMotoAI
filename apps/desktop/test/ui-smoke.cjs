@@ -1543,6 +1543,83 @@ let browser;
   await page.waitForFunction(()=>document.querySelector('#raiReviewState')?.textContent?.
     includes('Historical proposal'));
   await page.screenshot({path:path.join(output,'research-studio-v5-local-ai-review.png')});
+
+  // V6 — original evidence and human review must cross studios only on approval.
+  const v6ReviewPath='artifacts/research/ai/reviews/review-'+'b'.repeat(24)+'.ai-review.json';
+  const v6ReviewSha='c'.repeat(64);
+  const v6Audit='artifacts/research/handoffs/handoff-'+'d'.repeat(24)+'.handoff.json';
+  const v6DevFile='artifacts/research/handoffs/developer-'+'e'.repeat(24)+'.md';
+  let v6Saved=0;
+  await page.route('**/api/research/studio/handoff/sources',route=>
+    route.fulfill(v4Mock({
+      comparisons:[{path:v3SavedPath,sha256:v4PrepareData.comparison_sha256,
+        claim:v4PrepareData.claim}],
+      human_reviews:[{path:v6ReviewPath,sha256:v6ReviewSha,
+        comparison_path:v3SavedPath,count:1}]
+    })));
+  await page.route('**/api/research/studio/handoff/preview',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.target,'developer');
+    assert.equal(input.comparison_path,v3SavedPath);
+    assert.equal(input.review_path,v6ReviewPath);
+    return route.fulfill(v4Mock({
+      target:'developer',preview:'Untrusted source data: <img src=x onerror=alert(1)>\nSHA-256 checked.',
+      evidence_count:2,retained_unverified_count:1,
+      sources:[],publication_ready:false
+    }));
+  });
+  await page.route('**/api/research/studio/handoff/save',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.acknowledgement,'CREATE REVIEW-ONLY HANDOFF');
+    assert.equal(input.confirm_sources_checked,true);
+    assert.equal(input.confirm_no_publication,true);
+    assert.equal(input.review_sha256,v6ReviewSha);
+    v6Saved++;
+    return route.fulfill(v4Mock({
+      path:v6Audit,sha256:'a'.repeat(64),target:'developer',
+      target_path:v6DevFile,target_sha256:'f'.repeat(64),
+      evidence_count:2,human_review_required:true,publication_ready:false,
+      source_files_modified:false,model_invoked:false,external_action_performed:false
+    }));
+  });
+  await page.route('**/api/research/studio/handoff/list',route=>
+    route.fulfill(v4Mock({handoffs:v6Saved?[{
+      path:v6Audit,sha256:'a'.repeat(64),target:'developer',
+      target_path:v6DevFile,research_question:v4PrepareData.claim,
+      created_at:'2026-11-09T06:00:00Z'
+    }]:[]})));
+  await page.route('**/api/research/studio/handoff/open?*',route=>
+    route.fulfill(v4Mock({
+      path:v6Audit,target:'developer',target_path:v6DevFile,
+      source_status:'current',target_status:'current',
+      evidence:[{id:'S1-01'}],retained_unverified_observations:[{id:'P1'}],
+      publication_ready:false,audit_is_cryptographically_signed:false
+    })));
+  await page.locator('#rshTitle').waitFor();
+  await page.locator('#rshRefresh').click();
+  await page.waitForFunction(p=>[...document.querySelectorAll('#rshComparison option')]
+    .some(x=>x.value===p),v3SavedPath);
+  await page.locator('#rshComparison').selectOption(v3SavedPath);
+  await page.locator('#rshReview').selectOption(v6ReviewPath);
+  await page.locator('#rshTarget').selectOption('developer');
+  assert.equal(await page.locator('#rshSave').isDisabled(),true);
+  await page.locator('#rshPreview').click();
+  await page.waitForFunction(()=>document.querySelector('#rshPreviewSummary')?.
+    textContent?.includes('2 source excerpts'));
+  assert.match(await page.locator('#rshEvidence').innerText(),/Untrusted source data/);
+  assert.equal(await page.locator('#rshEvidence img').count(),0,
+    'Untrusted source HTML must never render as DOM markup');
+  await page.locator('#rshConsent').check();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rshSave').click();
+  await page.waitForFunction(()=>document.querySelector('#rshStatus')?.
+    textContent?.includes('Audited hand-off created'));
+  assert.equal(v6Saved,1);
+  await page.locator('#rshHistory').selectOption(v6Audit);
+  await page.locator('#rshOpen').click();
+  await page.waitForFunction(()=>document.querySelector('#rshDetails')?.
+    textContent?.includes('Original source evidence: current'));
+  await page.screenshot({path:path.join(output,'research-studio-v6-cross-studio-handoff.png')});
   await page.unrouteAll();
 
   await page.locator('#newChat').click();

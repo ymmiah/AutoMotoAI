@@ -1,0 +1,39 @@
+/* Research Studio V6 — cohesive, responsive evidence hand-off controls. */
+.rsh-shell{display:grid;gap:15px;min-width:0;margin-top:10px}
+.rsh-hero{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+ gap:18px;padding:22px;border:1px solid var(--line);border-radius:15px;
+ background:linear-gradient(125deg,var(--panel),var(--panel2))}
+.rsh-kicker{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--dim)}
+.rsh-hero h3{margin:6px 0 8px;font-size:21px;letter-spacing:-.02em}
+.rsh-hero p{margin:0;color:var(--dim);max-width:750px;line-height:1.65;font-size:12px}
+.rsh-tag{background:var(--bg2);border:1px solid var(--line);border-radius:30px;
+ color:var(--dim);padding:8px 12px;font-size:11px}
+.rsh-disclosure{border:1px solid var(--line);border-left:3px solid var(--accent);
+ border-radius:10px;padding:15px;background:var(--panel);color:var(--dim);
+ line-height:1.65;font-size:12px;margin:0}
+.rsh-disclosure strong{color:var(--text)}
+.rsh-panel{display:grid;gap:14px;min-width:0;padding:19px;background:var(--panel);
+ border:1px solid var(--line);border-radius:13px}
+.rsh-panel h4{margin:0;font-size:14px}
+.rsh-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.rsh-fields label,.rsh-full{display:grid;gap:7px;font-size:12px;font-weight:650;color:var(--dim)}
+.rsh-fields label:last-child{grid-column:1/-1}
+.rsh-panel .input{width:100%;min-height:42px;border:1px solid var(--line2);
+ background:var(--bg2);color:var(--text);border-radius:9px;
+ padding:10px 11px;font-size:12px}
+.rsh-controls,.rsh-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.rsh-controls{justify-content:flex-start}
+.rsh-heading span{font-size:11px;color:var(--dim)}
+.rsh-note{padding:11px 13px;background:var(--bg2);border:1px solid var(--line);
+ border-radius:9px;color:var(--dim);font-size:11px;line-height:1.65;overflow-wrap:anywhere;margin:0}
+.rsh-preview{white-space:pre-wrap;overflow:auto;overflow-wrap:anywhere;max-height:380px;
+ font-size:12px;line-height:1.7;padding:16px;margin:0;border:1px solid var(--line);
+ border-radius:11px;background:var(--bg2);color:var(--text)}
+.rsh-consent{display:flex;align-items:flex-start;gap:10px;color:var(--dim);font-size:12px;line-height:1.6}
+.rsh-consent input{margin-top:4px;flex-shrink:0}
+.rsh-status{margin:0;padding:13px 15px;border:1px solid var(--line);
+ border-radius:9px;background:var(--bg2);font-size:12px;color:var(--dim);line-height:1.6}
+.rsh-status.rsh-error{color:var(--bad);border-color:var(--bad)}
+.rsh-shell :is(button,input,select,pre):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:760px){.rsh-fields{grid-template-columns:1fr}.rsh-fields label:last-child{grid-column:auto}
+ .rsh-hero,.rsh-panel{padding:15px}.rsh-controls button{flex:1 1 180px}}
