@@ -117,6 +117,8 @@ from automoto import visual_studio
 app.include_router(visual_studio.router)  # authenticated, per-workspace visual editor
 from automoto import developer_studio
 app.include_router(developer_studio.router)  # V1 local-only read-only trusted source explorer
+from automoto import developer_editor
+app.include_router(developer_editor.router)  # V2 explicit, conflict-safe local source edits
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

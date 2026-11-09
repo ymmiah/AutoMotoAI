@@ -1,8 +1,9 @@
-/* Developer Studio V1: read-only local workspace browser; no source execution. */
+/* Developer Studio V2: trusted source explorer plus conflict-safe file editor. */
+import {mountDeveloperEditor} from "./developer-editor.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V1 · Trusted Workspace. Browse permitted projects safely. Editing, terminal execution and AI file changes are not enabled in this milestone.",
+    "V2 · Source Editor. Work with approved local projects, edit selected source files after explicit trust, and save with SHA-256 conflict checks. No shell, build or AI execution.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -13,20 +14,21 @@ export async function mountDeveloperStudio({api,page,toast}) {
         '<div><span class="ds-eyebrow">CURRENT WORKSPACE</span><strong id="dsProject">No project open</strong>'+
         '<span id="dsTrustState">Select a local folder to begin.</span></div>'+
         '<button class="btn" id="dsTrust" type="button" hidden>Trust this project</button></section>'+
-      '<p class="ds-warning" role="note">Project files are previewed as inert text. V1 never edits source files or runs scripts. Trust is an explicit future-use preference, not permission to execute anything.</p>'+
+      '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. No source execution or automatic cloud processing is enabled.</p>'+
       '<div class="ds-columns">'+
         '<section class="ds-panel" aria-label="Project files"><div class="ds-panel-header"><h3>Explorer</h3><button class="btn sm" type="button" id="dsParent" disabled>Up</button></div>'+
           '<p class="ds-breadcrumb" id="dsBreadcrumb">No folder selected</p>'+
           '<div id="dsFiles" class="ds-files" role="list"></div>'+
           '<p id="dsLimit" class="ds-footnote"></p></section>'+
-        '<section class="ds-panel" aria-label="Read-only source preview"><div class="ds-panel-header"><h3 id="dsFilename">Source preview</h3><span class="ds-readonly">READ ONLY</span></div>'+
-          '<p class="ds-footnote" id="dsFileInfo">Choose a source file. UTF-8 text files up to 128 KiB can be previewed.</p>'+
-          '<pre class="ds-preview" id="dsPreview" tabindex="0">No file selected.</pre></section>'+
+        '<section class="ds-panel" aria-label="Source editor"><div class="ds-panel-header"><h3 id="dsFilename">Source editor</h3><span class="ds-readonly">NO EXECUTION</span></div>'+
+          '<p class="ds-footnote" id="dsFileInfo">Select a source file. V2 supports UTF-8, UTF-16 BOM and explicit Windows-1252.</p>'+
+          '<div id="dsEditorRoot"></div></section>'+
       '</div>'+
       '<p class="ds-status" id="dsStatus" role="status" aria-live="polite">Developer Studio V1 is ready to open an approved local project.</p>'+
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
+  const editor=mountDeveloperEditor({api,host,project:()=>project,status});
 
   function status(message,bad=false) {
     const element=byId("dsStatus");
@@ -58,19 +60,19 @@ export async function mountDeveloperStudio({api,page,toast}) {
   function showTrust() {
     byId("dsProject").textContent=project?project.project:"No project open";
     byId("dsTrustState").textContent=project
-      ? project.trusted?"Trusted root · source files are still read-only.":"Restricted workspace · read-only browsing."
+      ? project.trusted?"Trusted project · source editing enabled; code execution disabled.":"Restricted workspace · source browsing only."
       :"Select a local folder to begin.";
     byId("dsTrust").hidden=!project;
     byId("dsTrust").textContent=project?.trusted?"Revoke trust":"Trust this project";
   }
   function clearPreview() {
-    byId("dsFilename").textContent="Source preview";
-    byId("dsFileInfo").textContent="Choose a source file. UTF-8 text files up to 128 KiB can be previewed.";
-    byId("dsPreview").textContent="No file selected.";
+    byId("dsFilename").textContent="Source editor";
+    byId("dsFileInfo").textContent="Choose a source file. Source editing requires trust.";
   }
   async function openProject(path) {
     try {
       const data=await api(BASE+"/open",{project:path});
+      if(project?.project!==data.project && !editor.reset())return;
       project=data;
       byId("dsPath").value=data.project;
       directory=".";
@@ -78,7 +80,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       clearPreview();
       await locations();
       await list(".");
-      status(data.trusted?"Trusted project opened in V1 read-only mode.":"Restricted project opened in V1 read-only mode.");
+      status(data.trusted?"Trusted project opened; source editing is enabled.":"Restricted project opened in read-only mode.");
     } catch(error) {
       status("Unable to open project: "+error.message,true);
     }
@@ -121,18 +123,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   }
   async function preview(path) {
     if(!project)return;
-    try {
-      const params=new URLSearchParams({project:project.project,path});
-      const result=await api(BASE+"/preview?"+params);
-      if(!host.isConnected)return;
-      byId("dsFilename").textContent=result.path.split("/").pop()||"Source";
-      byId("dsFileInfo").textContent=result.path+" · "+result.size+" bytes · SHA-256 "+result.sha256;
-      byId("dsPreview").textContent=result.text;
-      status("Opened inert, read-only preview: "+result.path);
-    }catch(error) {
-      clearPreview();
-      status("Unable to preview source: "+error.message,true);
-    }
+    return editor.openFile(path);
   }
   byId("dsRoots").addEventListener("change",event=>{
     if(event.target.value)byId("dsPath").value=event.target.value;
@@ -150,12 +141,12 @@ export async function mountDeveloperStudio({api,page,toast}) {
     if(!project)return;
     const next=!project.trusted;
     if(!window.confirm(next
-      ?"Trust this project for future development features? V1 remains read-only."
+      ?"Trust this project for source editing? Saves still require verification and approval. No code execution will occur."
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();await locations();
-      status(next?"Trust recorded; V1 remains read-only.":"Project trust revoked.");
+      showTrust();editor.trustChanged();await locations();
+      status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });
   try {
