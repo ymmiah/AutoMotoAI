@@ -70,6 +70,9 @@ jobs:
       - name: Install engine and browser tests
         run: |
           python -m pip install .
+          # Check the installed wheel from outside the repository, so source
+          # checkout files cannot mask missing Monaco package-data assets.
+          (cd "$RUNNER_TEMP" && python -c "from importlib.resources import files; import json; root=files('automoto').joinpath('web/static/vendor/monaco'); m=json.loads(root.joinpath('manifest.json').read_text()); assert m['version']=='0.57.0'; assert all(root.joinpath(n).is_file() for n in ('monaco.js','monaco.css','editor.worker.js','ts.worker.js','json.worker.js','css.worker.js','html.worker.js','MONACO-LICENSE.txt','DOMPURIFY-LICENSE.txt'))")
           cd apps/desktop
           npm ci --no-fund --no-audit
           npx playwright install --with-deps chromium
@@ -147,6 +150,11 @@ jobs:
           node-version: "20"
       - name: npm audit (VS Code extension)
         working-directory: apps/vscode
+        run: |
+          npm ci --no-fund
+          npm audit --audit-level=moderate
+      - name: npm audit (pinned Monaco vendor build dependencies)
+        working-directory: tools/developer-monaco
         run: |
           npm ci --no-fund
           npm audit --audit-level=moderate

@@ -35,7 +35,7 @@ Source editing is deliberately not available on hosted tenants. The V1 explorer 
 
 ## Known limits (do not overstate capability)
 
-**Monaco is not yet bundled.** The working editor uses the native accessible textarea plus a separate syntax-highlighted preview, not Monaco's editing/completion/navigation engine. The original V2 Notion specification requires Monaco: **keep V2 in Review, not Verified, until offline Monaco bundling and real-device tests are complete.** Language servers, compiler/build/test runners, DAP debugging and AI code edits are later milestones.
+**Offline Monaco completion branch:** A pinned Monaco Editor 0.57.0 ESM bundle, CSS, worker scripts and font are now vendored under `automoto/web/static/vendor/monaco/` (with SHA-256 manifest, source lockfile, MIT licence and legal notices). Desktop/laptop sessions load the editor from the authenticated local server; no runtime CDN or external model is required. Each tab has a distinct Monaco model, while V2's existing authorised save, conflict checks and explicit approval remain the only write route. Textarea fallback remains available for narrow/touch or unsupported environments. **Keep V2 in Review until exact-head CI and real-device/accessibility checks pass.** Language servers, compiler/build/test runners, DAP debugging and AI code edits remain later milestones.
 
 Only existing regular source files up to 128 KiB are editable. UTF-8/UTF-16 BOM and explicit Windows-1252 are covered; unmarked UTF-16 or other encodings are not. Mixed line endings require selecting one style before saving. Editing a file can change its last-modified time and inode; do not promise preservation of all ACLs or extended attributes. External filesystem tools that race a save at the exact replacement instant may still need further OS-specific hardening; the digest and inode preconditions are best-effort and not an OS-wide compare-and-swap primitive. Hosted or shared-workspace source editing remains disabled.
 
@@ -53,3 +53,23 @@ No background cloud sync, automatic Git commit, package installation, shell exec
 - Review release licensing of all editor dependencies.
 
 **Release:** No publication, Store submission, deployment or production-readiness claim without explicit approval.
+
+## Offline Monaco reproducibility and integrity
+
+**Development source:** `tools/developer-monaco/package.json` pins Monaco `0.57.0`, patched DOMPurify `3.4.17` and esbuild `0.28.2` with a committed npm integrity lockfile. **Security note:** Monaco 0.57.0 distributes an embedded vulnerable DOMPurify 3.4.15 shim; `build.mjs` replaces that precise ESM shim with an import of the audited 3.4.17 npm package **before bundling**. Simply overriding the npm dependency would be insufficient. The manifest records the sanitizer pin and `npm audit` is a blocking CI check. Prefer an official patched Monaco release when one is available and verified. `tools/developer-monaco/build.mjs` bundles the ESM editor, TypeScript/JavaScript, CSS, HTML, JSON and core workers locally, and records per-file SHA-256 hashes in `manifest.json`. All runtime assets—including codicon fonts, stylesheets, workers, licence and notices—ship inside the Python package via `pyproject.toml` package-data rules.
+
+To rebuild as a developer with internet access to the npm registry:
+
+```sh
+cd tools/developer-monaco
+npm ci --no-audit --no-fund
+npm run build
+cd ../..
+python -m pytest -q tests/test_developer_monaco_assets.py
+```
+
+The vendored files must be committed and verified before publishing any distribution; **end-user installation and startup do not download Monaco**. `.gitattributes` marks the vendored Monaco directory as byte-preserving (`-text`), preventing Windows CRLF checkout conversion of JS/CSS/worker assets and protecting SHA-256 manifest verification on every supported platform. Review `npm audit` for both the desktop and Monaco build dependencies before any public release. Build output is relatively large because TypeScript language services and workers are included; review installed size and lazy-load behaviour on supported devices.
+
+**Regression requirements:** Playwright must demonstrate an actual `.monaco-editor` mounted from the same origin, edit a trusted file through Monaco, preserve unsaved state and detect external-disk conflicts; a fake textarea/highlight-only substitute is not acceptable. Test dark/light theme changes, responsive fallback, Unicode/LaTeX input, per-tab state, keyboard save, and secure source handling.
+
+**Outstanding quality gates:** accessible installed Windows/macOS/Linux usage, offline startup with network disabled, worker/CSP compatibility, clipboard/IME, screen-reader fallback, large-file performance and packaging checks. A merged PR or a passing headless test alone is not production certification.

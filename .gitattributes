@@ -1,0 +1,4 @@
+# Vendored executable assets are checksummed byte-for-byte in manifest.json.
+# Never translate line endings on Windows checkout or the integrity manifest fails.
+# This rule applies to the bundled JS workers, CSS, fonts, licences and manifest.
+automoto/web/static/vendor/monaco/** -text
