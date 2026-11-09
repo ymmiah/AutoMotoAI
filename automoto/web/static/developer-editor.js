@@ -99,7 +99,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
     el("dsLineEnding").value=tab.newline;
     el("dsFilename").textContent=tab.path.split("/").pop();
     el("dsFileInfo").textContent=tab.path+" · "+tab.size+" bytes · original SHA-256 "+tab.sha256;
-    el("dsHighlighted").hidden=true;el("dsSourceText").hidden=false;mode="edit";
+    el("dsHighlighted").hidden=true;el("dsHighlighted").style.display="none";
+    el("dsSourceText").hidden=false;el("dsSourceText").style.display="block";mode="edit";
     el("dsModeEdit").setAttribute("aria-pressed","true");
     el("dsModePreview").setAttribute("aria-pressed","false");
     update();
@@ -198,7 +199,10 @@ export function mountDeveloperEditor({api,host,project,status}) {
     mode=next;
     const preview=mode==="preview";
     if(preview)showHighlighted();
-    el("dsSourceText").hidden=preview;el("dsHighlighted").hidden=!preview;
+    const source=el("dsSourceText"),highlight=el("dsHighlighted");
+    source.hidden=preview;highlight.hidden=!preview;
+    source.style.display=preview?"none":"block";
+    highlight.style.display=preview?"block":"none";
     el("dsModeEdit").setAttribute("aria-pressed",String(!preview));
     el("dsModePreview").setAttribute("aria-pressed",String(preview));
   }
