@@ -1,0 +1,36 @@
+/* Research Studio V8 encrypted portability and quarantine controls */
+.rsp-shell{display:grid;gap:15px;min-width:0;margin-top:10px}
+.rsp-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:15px;
+ border:1px solid var(--line);border-radius:15px;padding:22px;
+ background:linear-gradient(135deg,var(--panel),var(--panel2))}
+.rsp-heading h3{font-size:20px;letter-spacing:-.025em;margin:7px 0}
+.rsp-heading p{margin:0;font-size:12px;color:var(--dim);max-width:750px;line-height:1.6}
+.rsp-eyebrow{font-size:10px;font-weight:800;letter-spacing:.09em;color:var(--dim)}
+.rsp-chip{border:1px solid var(--line);border-radius:20px;padding:8px 12px;
+ font-size:11px;color:var(--dim);background:var(--bg2)}
+.rsp-warning{margin:0;border-left:3px solid var(--accent);border-top:1px solid var(--line);
+ border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+ border-radius:9px;padding:12px 15px;background:var(--panel);
+ line-height:1.75;font-size:12px;color:var(--dim)}
+.rsp-warning strong{color:var(--text)}
+.rsp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.rsp-panel{display:flex;flex-direction:column;gap:13px;min-width:0;border:1px solid var(--line);
+ border-radius:13px;padding:19px;background:var(--panel)}
+.rsp-panel h4{margin:0;font-size:14px}
+.rsp-panel h5{margin:0;font-size:12px}
+.rsp-field{display:grid;gap:7px;font-size:12px;font-weight:600;color:var(--dim)}
+.rsp-field .input{min-height:42px;width:100%;border-radius:8px;border:1px solid var(--line2);
+ background:var(--bg2);color:var(--text);padding:9px 11px;font-size:12px;min-width:0}
+.rsp-check{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:var(--dim);line-height:1.6}
+.rsp-check input{margin-top:5px;flex:0 0 auto}
+.rsp-actions{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.rsp-divider{border-top:1px solid var(--line);margin-top:3px}
+.rsp-hint{margin:0;font-size:11px;line-height:1.65;color:var(--dim)}
+.rsp-result{border:1px solid var(--line);border-radius:9px;padding:11px 13px;
+ background:var(--bg2);font-size:12px;line-height:1.65;color:var(--dim);overflow-wrap:anywhere}
+.rsp-result.rsp-error{border-color:var(--bad);color:var(--bad)}
+.rsp-list{max-height:180px;overflow:auto;display:grid;gap:5px}
+.rsp-list p{margin:0;font-size:11px;line-height:1.45;padding:7px 8px;border:1px solid var(--line);
+ border-radius:7px;overflow-wrap:anywhere;color:var(--dim)}
+.rsp-shell :is(input,select,button):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:800px){.rsp-grid{grid-template-columns:1fr}.rsp-heading,.rsp-panel{padding:15px}}

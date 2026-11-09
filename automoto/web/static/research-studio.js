@@ -7,8 +7,9 @@ import {mountResearchPublishing} from "./research-publishing.js";
 import {mountResearchAI} from "./research-ai.js";
 import {mountResearchHandoffs} from "./research-handoffs.js";
 import {mountResearchAcceptance} from "./research-acceptance.js";
+import {mountResearchPortable} from "./research-portable.js";
 
-export async function mountResearchStudio({api,page,toast}){
+export async function mountResearchStudio({api,page,toast,uploadCapsule,downloadCapsule}){
   const host=page("Research Studio",
     "Evidence-first research using private saved documents. No invented citations, cloud model or background crawling.",
     '<div class="rs-shell">'+
@@ -45,6 +46,7 @@ export async function mountResearchStudio({api,page,toast}){
     '<section id="rsAIRoot" aria-label="Opt-in local AI research analysis"></section>'+
     '<section id="rsHandoffsRoot" aria-label="Reviewed cross-studio evidence hand-offs"></section>'+
     '<section id="rsAcceptanceRoot" aria-label="Research release readiness and private recovery"></section>'+
+    '<section id="rsPortableRoot" aria-label="Encrypted research recovery and safe off-device portability"></section>'+
     '<p class="rs-status" id="rsStatus" role="status" aria-live="polite">Choose a file and research question to begin.</p></div>');
   const el=id=>host.querySelector("#"+id);
   let catalog=[],selected=new Set(),pinned={},loaded=null,latest=null,latestRequest=null,sequence=0;
@@ -239,6 +241,7 @@ export async function mountResearchStudio({api,page,toast}){
   mountResearchAI({host:el("rsAIRoot"),api,toast});
   mountResearchHandoffs({host:el("rsHandoffsRoot"),api,toast});
   mountResearchAcceptance({host:el("rsAcceptanceRoot"),api,toast});
+  mountResearchPortable({host:el("rsPortableRoot"),api,uploadCapsule,downloadCapsule,toast});
   await Promise.all([refreshSources(),refreshProjects()]).catch(error=>{
     notice("Research workspace could not load: "+error.message,true);
   });
