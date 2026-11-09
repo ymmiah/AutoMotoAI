@@ -60,7 +60,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   function showTrust() {
     byId("dsProject").textContent=project?project.project:"No project open";
     byId("dsTrustState").textContent=project
-      ? project.trusted?"Trusted root · source files are still read-only.":"Restricted workspace · read-only browsing."
+      ? project.trusted?"Trusted project · source editing enabled; code execution disabled.":"Restricted workspace · source browsing only."
       :"Select a local folder to begin.";
     byId("dsTrust").hidden=!project;
     byId("dsTrust").textContent=project?.trusted?"Revoke trust":"Trust this project";
@@ -80,7 +80,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       clearPreview();
       await locations();
       await list(".");
-      status(data.trusted?"Trusted project opened in V1 read-only mode.":"Restricted project opened in V1 read-only mode.");
+      status(data.trusted?"Trusted project opened; source editing is enabled.":"Restricted project opened in read-only mode.");
     } catch(error) {
       status("Unable to open project: "+error.message,true);
     }
@@ -141,12 +141,12 @@ export async function mountDeveloperStudio({api,page,toast}) {
     if(!project)return;
     const next=!project.trusted;
     if(!window.confirm(next
-      ?"Trust this project for future development features? V1 remains read-only."
+      ?"Trust this project for source editing? Saves still require verification and approval. No code execution will occur."
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
       showTrust();editor.trustChanged();await locations();
-      status(next?"Trust recorded; V1 remains read-only.":"Project trust revoked.");
+      status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });
   try {
