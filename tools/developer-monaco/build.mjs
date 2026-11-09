@@ -50,8 +50,9 @@ await build({
   logLevel:"warning"
 });
 cpSync(path.join(packageRoot,"LICENSE"),path.join(target,"MONACO-LICENSE.txt"));
+cpSync(path.join(dir,"node_modules/dompurify/LICENSE"),path.join(target,"DOMPURIFY-LICENSE.txt"));
 const required=["monaco.js","monaco.css","editor.worker.js","ts.worker.js",
-"json.worker.js","css.worker.js","html.worker.js","MONACO-LICENSE.txt"];
+"json.worker.js","css.worker.js","html.worker.js","MONACO-LICENSE.txt","DOMPURIFY-LICENSE.txt"];
 for(const name of required)if(!existsSync(path.join(target,name)))throw new Error("Bundled asset missing: "+name);
 const files={};
 function scan(folder,prefix=""){
