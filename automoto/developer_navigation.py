@@ -6,6 +6,7 @@ trusted save endpoint remains the sole way to commit any edit.
 """
 from __future__ import annotations
 
+import difflib
 import hashlib
 import os
 import re
@@ -154,6 +155,9 @@ def replace_preview(request: Request, body: ReplacePreviewIn):
     if newline == "mixed":
         raise HTTPException(422, "Choose a line-ending style in the editor before replacing.")
     editor._encode(replacement, body.encoding, newline)
+    diff = list(difflib.unified_diff(old.splitlines(keepends=True), replacement.splitlines(keepends=True),
+                                     fromfile="Saved file", tofile="Proposed changes", n=3))
     return {"path": body.path, "text": replacement, "count": actual,
+            "diff": "".join(diff[:350]), "diff_truncated": len(diff) > 350,
             "base_sha256": body.expected_sha256, "encoding": encoding,
             "newline": newline, "source_modified": False, "requires_review": True}
