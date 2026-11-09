@@ -436,10 +436,14 @@ def outline(request: Request, body: OutlineIn):
     if candidate == root or _excluded(candidate.name) or not candidate.is_file():
         raise HTTPException(404, "Choose an existing non-restricted source file.")
     if body.text is not None:
-        if len(body.text.encode("utf-8")) > MAX_FILE_BYTES:
+        try:
+            raw = body.text.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise HTTPException(422, "Invalid Unicode in editor source.") from exc
+        if len(raw) > MAX_FILE_BYTES:
             raise HTTPException(413, "Editor source exceeds indexing limit.")
         # Unsaved editor content is private, in memory only, never saved by V7.
-        parsed = _parse(body.path, body.text, hashlib.sha256(body.text.encode()).hexdigest())
+        parsed = _parse(body.path, body.text, hashlib.sha256(raw).hexdigest())
         return {"path": body.path, "parser": parsed["parser"],
                 "parse_error": parsed["parse_error"], "symbols": parsed["symbols"][:MAX_RESULTS],
                 "embedded_regions": parsed["embedded_regions"],
