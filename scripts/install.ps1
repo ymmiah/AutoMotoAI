@@ -174,7 +174,25 @@ if ($FromSource) {
             $Url = "https://github.com/$Repo/releases/download/$Tag/$Name"
             Say "Downloading $Url"
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri $Url -OutFile $File -UseBasicParsing
+            # Release asset downloads can briefly return 429/5xx from GitHub's CDN.
+            # Retry only transient HTTP failures; preserve the pinned SHA-256 check below.
+            for ($Attempt = 1; $Attempt -le 3; $Attempt++) {
+                try {
+                    Invoke-WebRequest -Uri $Url -OutFile $File -UseBasicParsing -ErrorAction Stop
+                    break
+                } catch {
+                    $StatusCode = 0
+                    if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+                        $StatusCode = [int]$_.Exception.Response.StatusCode
+                    }
+                    if ($StatusCode -notin @(408, 429, 500, 502, 503, 504) -or $Attempt -eq 3) {
+                        throw
+                    }
+                    Remove-Item $File -Force -ErrorAction SilentlyContinue
+                    Warn "Temporary download failure (HTTP $StatusCode), retry $($Attempt + 1) of 3."
+                    Start-Sleep -Seconds (2 * $Attempt)
+                }
+            }
         }
         $Got = (Get-FileHash -Algorithm SHA256 -Path $File).Hash.ToLowerInvariant()
         if ($Got -ne $Sha256.ToLowerInvariant()) { throw "Checksum mismatch for $Name (got $Got, expected $Sha256) - not installing" }
