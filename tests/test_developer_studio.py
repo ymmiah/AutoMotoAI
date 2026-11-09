@@ -22,7 +22,7 @@ def client(tmp_path, monkeypatch):
     root = sandbox.default_root()
     repo = root / "projects" / "example"
     (repo / "src").mkdir(parents=True)
-    (repo / "src" / "main.py").write_bytes(b"print(\'safe\')\\n")
+    (repo / "src" / "main.py").write_bytes(b"print('safe')\n")
     (repo / ".env").write_text("SECRET=should-not-leak", encoding="utf-8")
     (repo / ".git").mkdir()
     (repo / ".git" / "config").write_text("[remote]\n", encoding="utf-8")
