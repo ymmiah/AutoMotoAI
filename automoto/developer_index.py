@@ -76,6 +76,17 @@ HTML_REGION = re.compile(r"<(?P<tag>script|style)\b(?P<attrs>[^>]{0,512})>(?P<bo
 HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.{1,140}?)\s*#*\s*$")
 
 
+def _utf16_column(line: str, characters: int) -> int:
+    """LSP/Monaco columns are UTF-16 code units, not Python codepoints."""
+    return len(line[:characters].encode("utf-16-le")) // 2
+
+
+def _ast_column(line: str, utf8_bytes: int) -> int:
+    """Python AST offsets are UTF-8 bytes; convert to Monaco UTF-16."""
+    prefix = line.encode("utf-8")[:utf8_bytes].decode("utf-8", errors="ignore")
+    return len(prefix.encode("utf-16-le")) // 2
+
+
 class RootIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     project: str = Field(min_length=1, max_length=1024)
@@ -191,6 +202,7 @@ def _python(text: str):
         tree = ast.parse(text)
     except (SyntaxError, RecursionError, ValueError, MemoryError) as exc:
         return [], [], "invalid_syntax", type(exc).__name__
+    source_lines = text.splitlines()
     def visit(node, scope=""):
         if len(symbols) >= MAX_SYMBOLS:
             return
@@ -199,7 +211,8 @@ def _python(text: str):
             label = node.name
             symbols.append({"name": label, "qualified_name": scope + label,
                             "kind": kind, "line": node.lineno - 1,
-                            "character": node.col_offset, "confidence": "syntax"})
+                            "character": _ast_column(source_lines[node.lineno - 1], node.col_offset),
+                            "confidence": "syntax"})
             scope += label + "."
         for item in ast.iter_child_nodes(node):
             visit(item, scope)
@@ -211,7 +224,7 @@ def _python(text: str):
         for token in tokenize.generate_tokens(io.StringIO(text).readline):
             if token.type == tokenize.NAME:
                 tokens.append({"name": token.string, "line": token.start[0] - 1,
-                               "character": token.start[1]})
+                               "character": _utf16_column(source_lines[token.start[0] - 1], token.start[1])})
                 if len(tokens) >= MAX_TOKENS:
                     break
     except (tokenize.TokenError, IndentationError):
@@ -233,17 +246,19 @@ def _heuristic(text: str, lang: str, offset: int = 0):
             if found:
                 symbols.append({"name": found.group(2), "qualified_name": found.group(2),
                                 "kind": "heading", "line": offset + row,
-                                "character": line.index("#"), "confidence": "heuristic"})
+                                "character": _utf16_column(line, line.index("#")),
+                                "confidence": "heuristic"})
         elif regex:
             found = regex.match(line)
             if found:
                 name = found.group(1)
                 symbols.append({"name": name, "qualified_name": name, "kind": "declaration",
-                                "line": offset + row, "character": found.start(1),
+                                "line": offset + row,
+                                "character": _utf16_column(line, found.start(1)),
                                 "confidence": "heuristic"})
         for match in TOKEN.finditer(line):
             tokens.append({"name": match.group(1), "line": offset + row,
-                           "character": match.start(1)})
+                           "character": _utf16_column(line, match.start(1))})
             if len(tokens) >= MAX_TOKENS:
                 break
         if len(symbols) >= MAX_SYMBOLS or len(tokens) >= MAX_TOKENS:
