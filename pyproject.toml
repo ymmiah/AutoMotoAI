@@ -34,6 +34,8 @@ dependencies = [
   "pypdf>=5,<7",
   "reportlab>=4.2,<5",
   "defusedxml>=0.7,<1",
+  "cryptography>=42,<49",  # authenticated AES-256-GCM portable research archives
+  "python-multipart>=0.0.20,<1",  # bounded local encrypted-capsule uploads
   "Pillow>=10",
   # Data files (v5.4)
   "PyYAML>=6,<7",
