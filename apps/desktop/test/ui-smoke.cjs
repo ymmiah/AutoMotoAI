@@ -3,7 +3,7 @@
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
-const { mkdtempSync, readFileSync, mkdirSync, rmSync } = require('node:fs');
+const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
@@ -1788,6 +1788,29 @@ let browser;
     'Import password must clear after successful isolated staging');
   await page.screenshot({path:path.join(output,'research-studio-v8-encrypted-portable-recovery.png')});
   await page.unrouteAll();
+
+  // Developer Studio V1: real project browsing, source preview and trust control.
+  const devProject=path.join(data,'workspace','projects','developer-studio-v1');
+  mkdirSync(devProject,{recursive:true});
+  writeFileSync(path.join(devProject,'main.ts'),'export const title = "read-only";\n');
+  writeFileSync(path.join(devProject,'.env'),'PRIVATE_KEY=never-disclose');
+  const devBefore=readFileSync(path.join(devProject,'main.ts'));
+  await page.locator('.nav [data-page="developer"]').click();
+  await page.locator('#dsPath').waitFor();
+  await page.locator('#dsPath').fill(devProject);
+  await page.locator('#dsOpen').click();
+  await page.waitForFunction(() => document.querySelector('#dsProject')?.textContent?.includes('developer-studio-v1'));
+  assert.match(await page.locator('#dsTrustState').innerText(), /Restricted|Trusted/);
+  assert.equal(await page.locator('.ds-files').getByText('.env').count(),0);
+  await page.locator('.ds-entry', {hasText:'main.ts'}).click();
+  await page.waitForFunction(() => document.querySelector('#dsPreview')?.textContent?.includes('read-only'));
+  assert.match(await page.locator('#dsFileInfo').innerText(), /SHA-256/);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsTrust').click();
+  await page.waitForFunction(() => document.querySelector('#dsTrustState')?.textContent?.includes('Trusted'));
+  assert.match(await page.locator('#dsStatus').innerText(), /Trust recorded/);
+  await page.screenshot({path:path.join(output,'developer-studio-v1-trusted-workspace.png')});
 
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
