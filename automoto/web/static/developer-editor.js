@@ -272,6 +272,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     reset(){
       if([...tabs.values()].some(t=>t.dirty) &&
          !window.confirm("Discard all unsaved source edits when changing project?"))return false;
+      seq++; // Invalidate source fetches started for the previously open project.
       clearTimer();auto=false;el("dsAutosave").checked=false;el("dsEncoding").value="auto";
       tabs.clear();active=null;el("dsSourceText").value="";
       el("dsFilename").textContent="Source editor";el("dsFileInfo").textContent="Open a source file from Explorer to begin.";
