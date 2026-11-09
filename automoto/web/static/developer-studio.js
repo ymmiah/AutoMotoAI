@@ -5,10 +5,11 @@ import {mountDeveloperLanguageIntelligence} from "./developer-language.js";
 import {mountDeveloperLSP} from "./developer-lsp.js";
 import {mountDeveloperIndex} from "./developer-index.js";
 import {mountDeveloperAdapters} from "./developer-adapters.js";
+import {mountDeveloperLatex} from "./developer-latex.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V8 · External toolchain and debugger adapter SDK. Register SHA-256-pinned local tools and run only with separate approval.",
+    "V9 · LaTeX academic authoring. Work with multi-file theses, static cross-reference checks, maths and citation completion, plus optional approved texlab LSP diagnostics.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -25,6 +26,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsLspRoot" aria-label="Approved local language server controls"></div>'+ 
       '<div id="dsIndexRoot" aria-label="Source symbol index and file outline"></div>'+ 
       '<div id="dsAdaptersRoot" aria-label="Explicitly approved local toolchain and debugger adapters"></div>'+ 
+      '<div id="dsLatexRoot" aria-label="LaTeX multi-file thesis authoring"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -41,14 +43,15 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters;
+  let languageIntelligence,lsp,index,adapters,latex;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
   index=mountDeveloperIndex({api,host,getProject:()=>project,editor,status});
   adapters=mountDeveloperAdapters({api,host,getProject:()=>project,status});
+  latex=mountDeveloperLatex({api,host,getProject:()=>project,editor,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -106,6 +109,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       languageIntelligence.reset();
       await index.projectChanged();
       await adapters.projectChanged();
+      latex.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
