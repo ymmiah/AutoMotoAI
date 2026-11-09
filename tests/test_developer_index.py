@@ -232,3 +232,17 @@ def test_utf16_editor_columns_after_astral_unicode_character(workspace):
     assert len(matches) == 1
     # Python sees one code point; Monaco/LSP sees two UTF-16 code units.
     assert matches[0]["character"] == len('value = "🙂"; '.encode("utf-16-le")) // 2
+
+
+def test_budget_truncated_file_is_reparsed_when_capacity_frees(workspace, monkeypatch):
+    client, root = workspace
+    monkeypatch.setattr(index, "MAX_GLOBAL_SYMBOLS", 1)
+    (root / "a.py").write_text("def first():\n    pass\n")
+    (root / "b.py").write_text("def second():\n    pass\n")
+    initial = request(client, "refresh", root).json()
+    assert initial["truncated"] is True
+    assert {s["name"] for s in request(client, "symbols", root).json()["items"]} == {"first"}
+    (root / "a.py").unlink()
+    later = request(client, "refresh", root).json()
+    assert later["removed_files"] == 1
+    assert {s["name"] for s in request(client, "symbols", root).json()["items"]} == {"second"}
