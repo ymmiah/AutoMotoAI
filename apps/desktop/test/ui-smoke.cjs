@@ -2048,6 +2048,12 @@ let browser;
   assert.deepEqual(readFileSync(path.join(texDir,'main.tex')),texBefore,
     'V9 analysis never executes TeX or modifies source');
   await page.screenshot({path:path.join(output,'developer-studio-v9-latex-authoring.png')});
+  await page.locator('.ds-tex-row').getByRole('button',
+    {name:'Go to definition of author2026'}).first().click();
+  await page.waitForFunction(()=>document.querySelector('#dsFilename')?.textContent?.includes('references.bib'));
+  await page.locator('.ds-tab-select',{hasText:'main.ts'}).click();
+  await page.waitForFunction(()=>document.querySelector('#dsSourceText')?.value?.includes('read-only'));
+
 
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
