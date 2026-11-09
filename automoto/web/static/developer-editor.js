@@ -110,7 +110,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     const encoding=requested||el("dsEncoding").value||"auto";
     if(!project())return;
     if(tabs.has(path)&&!force){activate(path);return;}
-    if(tabs.size>=10){status("Limit: close a tab before opening more than 10 source files.",true);return;}
+    if(tabs.size>=10&&!tabs.has(path)){status("Limit: close a tab before opening more than 10 source files.",true);return;}
     const request=++seq;
     try{
       const params=new URLSearchParams({project:project().project,path,encoding});
@@ -119,6 +119,9 @@ export function mountDeveloperEditor({api,host,project,status}) {
       const initial=data.text.replace(/\r\n?/g,"\n");
       tabs.set(data.path,{path:data.path,text:initial,originalText:initial,originalNewline:data.newline,
         sha256:data.sha256,size:data.size,newline:data.newline,encoding:data.encoding,dirty:false,saving:false});
+      // Forced reload replaces the active tab. Do not let activate() copy the
+      // previous textarea value back over the fresh bytes just retrieved.
+      if(force && active===data.path)active=null;
       activate(data.path);
       status("Loaded "+data.path+" · "+data.encoding+" · "+data.newline+" line endings.");
     }catch(error){
