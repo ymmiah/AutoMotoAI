@@ -1445,6 +1445,104 @@ let browser;
   assert.equal(v4DraftRequests,1);
   assert.equal(await page.locator('#rpOutput a').count(),1);
   await page.screenshot({path:path.join(output,'research-studio-v4-academic-report.png')});
+
+  // V5 browser: real V3 comparison selection; deterministic local-model response
+  // fixture. Python contract tests separately exercise the server's strict
+  // source revalidation and actual loopback-only HTTP transport.
+  const v5Evidence=[{
+    id:'S1-01',source:v4Sources[0].path,sha256:v4Sources[0].sha256,
+    page:null,section:'Original saved text',offset:0,
+    quote:'<img src=x onerror=alert(1)> Signed release checks were associated with lower deployment risk.',
+    reviewer_stance:'supports'
+  }];
+  const v5Points=[{
+    id:'P1',claim:'Signed release checks were associated with lower deployment risk in the reported case study.',
+    evidence_ids:['S1-01'],uncertainty:'Limited, reviewer-described evidence is not a verified causal finding.',
+    review_required:true,scientifically_verified:false
+  }];
+  const v5Draft='artifacts/research/ai/proposals/proposal-'+'a'.repeat(24)+'.ai.json';
+  const v5Digest='f'.repeat(64);
+  let v5Generated=false,v5Reviewed=0;
+  await page.route('**/api/research/studio/ai/prepare',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.comparison_path,v3SavedPath);
+    assert.equal(input.comparison_sha256,v4PrepareData.comparison_sha256);
+    return route.fulfill(v4Mock({
+      comparison_path:v3SavedPath,comparison_sha256:v4PrepareData.comparison_sha256,
+      claim:v4PrepareData.claim,evidence:v5Evidence,source_count:2,
+      human_review_complete:true,model_invoked:false,no_network_requests:true
+    }));
+  });
+  await page.route('**/api/research/studio/ai/generate',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.acknowledgement,'ANALYSE LOCALLY');
+    assert.equal(input.confirm_local_model,true);
+    v5Generated=true;
+    return route.fulfill(v4Mock({
+      path:v5Draft,sha256:v5Digest,points:v5Points,evidence:v5Evidence,
+      model:'fixture-local-ollama',provider:'ollama-loopback',
+      human_review_required:true,scientifically_verified:false,no_cloud_fallback:true,
+      published:false
+    }));
+  });
+  await page.route('**/api/research/studio/ai/list',route=>
+    route.fulfill(v4Mock({drafts:v5Generated?[{
+      path:v5Draft,sha256:v5Digest,claim:v4PrepareData.claim,
+      point_count:1,review_state:'unreviewed'
+    }]:[],review_required:true})));
+  await page.route('**/api/research/studio/ai/open?*',route=>
+    route.fulfill(v4Mock({
+      path:v5Draft,sha256:v5Digest,points:v5Points,evidence:v5Evidence,
+      comparison_status:'current',historical_snapshot:true,
+      human_review_required:true,science_verified:false
+    })));
+  await page.route('**/api/research/studio/ai/save-review',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.acknowledgement,'SAVE HUMAN REVIEW');
+    assert.equal(input.confirm_unverified,true);
+    assert.equal(input.draft_path,v5Draft);
+    assert.equal(input.decisions.length,1);
+    assert.equal(input.decisions[0].decision,'retain_for_review');
+    v5Reviewed++;
+    return route.fulfill(v4Mock({
+      path:'artifacts/research/ai/reviews/review-'+'b'.repeat(24)+'.ai-review.json',
+      reviewed:1,retained_for_review:1,published:false,source_files_modified:false
+    }));
+  });
+  await page.locator('#raiTitle').waitFor();
+  await page.locator('#raiRefresh').click();
+  await page.waitForFunction(p=>[...document.querySelectorAll('#raiComparison option')]
+    .some(x=>x.value===p),v3SavedPath);
+  await page.locator('#raiComparison').selectOption(v3SavedPath);
+  await page.locator('#raiPrepare').click();
+  await page.waitForFunction(()=>document.querySelector('#raiGenerate')?.disabled===false);
+  await page.locator('#raiGenerate').click();
+  assert.match(await page.locator('#raiStatus').innerText(),/Explicitly consent/);
+  await page.locator('#raiConsent').check();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#raiGenerate').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#raiPoints .rai-point').length===1);
+  assert.equal(v5Generated,true);
+  assert.equal(await page.locator('#raiPoints img').count(),0,
+    'AI and cited source HTML are untrusted plain text');
+  assert.match(await page.locator('#raiPoints').innerText(),/Limited, reviewer-described evidence/);
+  await page.locator('#raiSaveReview').click();
+  assert.match(await page.locator('#raiStatus').innerText(),/Confirm your individual review/);
+  await page.locator('#raiHumanConfirm').check();
+  await page.locator('[data-rai-decision="P1"]').selectOption('retain_for_review');
+  await page.locator('[data-rai-note="P1"]').fill(
+    'This claim is retained only for further manual examination of the original study.');
+  page.once('dialog',d=>d.accept());
+  await page.locator('#raiSaveReview').click();
+  await page.waitForFunction(()=>document.querySelector('#raiStatus')?.textContent?.
+    includes('Saved 1 human review'));
+  assert.equal(v5Reviewed,1);
+  await page.locator('#raiReloadDrafts').click();
+  await page.locator('#raiDrafts').selectOption(v5Draft);
+  await page.locator('#raiOpen').click();
+  await page.waitForFunction(()=>document.querySelector('#raiReviewState')?.textContent?.
+    includes('Historical proposal'));
+  await page.screenshot({path:path.join(output,'research-studio-v5-local-ai-review.png')});
   await page.unrouteAll();
 
   await page.locator('#newChat').click();
