@@ -217,9 +217,12 @@ def _inspect(body: Selection, copy_bytes: bool) -> tuple[dict, list[tuple[dict, 
     }, copied
 
 
-def _load_record(file: Path) -> dict:
+def _decode_record(raw: bytes) -> dict:
+    """Validate the V7 metadata shape even when supplied by a portable import."""
+    if len(raw) > MAX_RECORD_BYTES:
+        raise HTTPException(413, "Recovery metadata is too large.")
     try:
-        record = json.loads(file.read_text(encoding="utf-8"))
+        record = json.loads(raw.decode("utf-8"))
         if (not isinstance(record, dict) or record.get("schema") != SCHEMA
                 or not isinstance(record.get("files"), list)
                 or not 3 <= len(record["files"]) <= MAX_MEMBERS
@@ -243,6 +246,12 @@ def _load_record(file: Path) -> dict:
         raise HTTPException(422, "Private recovery metadata is corrupt.") from None
 
 
+def _load_record(file: Path) -> dict:
+    if file.is_symlink() or not file.is_file() or file.stat().st_size > MAX_RECORD_BYTES:
+        raise HTTPException(422, "Recovery metadata is missing, symbolic or oversized.")
+    return _decode_record(file.read_bytes())
+
+
 def _verify(ref: BackupRef) -> tuple[dict, list[tuple[dict, bytes]]]:
     file = _record_path(ref.path)
     if document_workspace._sha(file) != ref.sha256:
@@ -256,6 +265,15 @@ def _verify(ref: BackupRef) -> tuple[dict, list[tuple[dict, bytes]]]:
             or archive.stat().st_size > MAX_BUNDLE_BYTES):
         raise HTTPException(422, "Private recovery archive is unavailable or oversized.")
     payload = archive.read_bytes()
+    if hashlib.sha256(payload).hexdigest() != record["archive_sha256"]:
+        raise HTTPException(409, "Recovery archive checksum mismatch.")
+    return _verify_archive_bytes(record, payload)
+
+
+def _verify_archive_bytes(record: dict, payload: bytes) -> tuple[dict, list[tuple[dict, bytes]]]:
+    """Verify the exact portable ZIP member roster before any extraction."""
+    if len(payload) > MAX_BUNDLE_BYTES:
+        raise HTTPException(413, "Recovery archive is oversized.")
     if hashlib.sha256(payload).hexdigest() != record["archive_sha256"]:
         raise HTTPException(409, "Recovery archive checksum mismatch.")
     members = []
