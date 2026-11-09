@@ -105,10 +105,10 @@ export function mountDeveloperEditor({api,host,project,status}) {
     update();
     if(tab.dirty && auto)schedule();
   }
-  async function openFile(path,requested=null){
+  async function openFile(path,requested=null,force=false){
     const encoding=requested||el("dsEncoding").value||"auto";
     if(!project())return;
-    if(tabs.has(path)){activate(path);return;}
+    if(tabs.has(path)&&!force){activate(path);return;}
     if(tabs.size>=10){status("Limit: close a tab before opening more than 10 source files.",true);return;}
     const request=++seq;
     try{
@@ -168,8 +168,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
     if(!tab||!where)return;
     if(tab.dirty && !window.confirm("Discard unsaved changes to "+tab.path+" and reload from disk?"))return;
     const path=tab.path,encoding=requested||(tab.encoding==="cp1252"?"cp1252":"auto");
-    tabs.delete(path);active=null;showTabs();
-    await openFile(path,encoding);
+    // Keep the current tab until the replacement is fully decoded and validated.
+    await openFile(path,encoding,true);
   }
   function closeTab(path){
     const tab=tabs.get(path);if(!tab)return;
