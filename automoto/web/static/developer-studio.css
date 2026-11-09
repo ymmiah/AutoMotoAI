@@ -192,3 +192,20 @@
 .ds-index-meta{font-size:11px;color:var(--dim)}
 #dsIndexState.ds-error{color:var(--bad)}
 @media(max-width:640px){.ds-index-head{align-items:flex-start;flex-direction:column}.ds-index-controls .input{width:100%;flex:1 1 100%}}
+
+
+/* V8 — adapter registry and consent-required external execution. */
+.ds-adapters-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ds-adapters-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ds-adapters-head h3{margin:0;font-size:14px}
+.ds-adapters-body{padding:14px 16px;display:grid;gap:12px;min-width:0}
+.ds-adapters-body .ds-footnote{padding:0}
+.ds-adapters-config{display:grid;grid-template-columns:minmax(130px,175px) minmax(0,1fr);gap:8px 12px;align-items:center}
+.ds-adapters-config label,.ds-adapters-run label{color:var(--dim);font-size:12px}
+.ds-adapters-config .input{width:100%;min-width:0;min-height:35px}
+.ds-adapters-config #dsAdapterSha{font:11px var(--mono)}
+.ds-adapters-controls,.ds-adapters-run{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ds-adapters-run .input{min-width:180px;max-width:360px;flex:1}
+.ds-adapters-output{margin:0;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;min-height:40px;overflow:auto;font:12px/1.6 var(--mono)}
+#dsAdapterStatus.ds-error{color:var(--bad)}
+@media(max-width:640px){.ds-adapters-head{align-items:flex-start;flex-direction:column}.ds-adapters-config{grid-template-columns:1fr}.ds-adapters-run .input{width:100%;flex:1 1 100%}}
