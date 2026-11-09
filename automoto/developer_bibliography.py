@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
+import stat
 import threading
 import time
 import urllib.error
@@ -38,7 +40,7 @@ ENTRY_START = re.compile(r"@\s*([A-Za-z]+)\s*([({])", re.I)
 FIELD_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,60}")
 ENTRY_KEY = re.compile(r"[A-Za-z0-9:_./+\-]{1,140}")
 UNKNOWN = frozenset({"string", "comment", "preamble"})
-REQUIRED = ("title", "author", "year")
+REQUIRED = ("title", "author")
 BOOKLIKE = frozenset({"book", "inbook", "incollection", "proceedings", "manual", "phdthesis", "mastersthesis"})
 PLACEHOLDER = re.compile(r"\b(?:placeholder|insert\s+(?:real|verified)|replace\s+with|author\s+name|unknown\s+author|example\s+source|sample\s+(?:journal|title))\b", re.I)
 EVIDENCE: "OrderedDict[tuple, dict]" = OrderedDict()
@@ -68,6 +70,17 @@ def _normalise_doi(value: str) -> Optional[str]:
 
 def _normalised_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
+
+def _year(fields: dict) -> Optional[str]:
+    """BibLaTeX date is valid year evidence; never infer absent dates."""
+    year = fields.get("year", "").strip()
+    if re.fullmatch(r"[12]\d{3}", year):
+        return year
+    date = fields.get("date", "").strip()
+    if re.fullmatch(r"[12]\d{3}(?:-\d{2}(?:-\d{2})?)?", date):
+        return date[:4]
+    return None
 
 
 def _location(text: str, offset: int, path: str) -> dict:
@@ -374,6 +387,8 @@ def _report(root: Path, body: ProjectIn) -> dict:
     for entry in entries:
         fields = entry["fields"]
         missing = [key for key in REQUIRED if not fields.get(key)]
+        if not _year(fields):
+            missing.append("year/date")
         if entry["type"] in BOOKLIKE and not (fields.get("publisher") or fields.get("institution") or fields.get("school")):
             missing.append("publisher/institution")
         doi = _normalise_doi(fields.get("doi", "")) if fields.get("doi") else None
@@ -394,7 +409,7 @@ def _report(root: Path, body: ProjectIn) -> dict:
             if title and authoritative:
                 matches["title"] = title == authoritative
             try:
-                bibyear = int(fields.get("year", ""))
+                bibyear = int(_year(fields) or "")
             except (TypeError, ValueError):
                 bibyear = None
             if bibyear and evidence["year"]:
@@ -417,6 +432,7 @@ def _report(root: Path, body: ProjectIn) -> dict:
     blocking = bool(missing_citations or duplicate_keys or any(e["issues"] for e in entries) or
                     warnings or graph["truncated"])
     return {"schema_version": SCHEMA_VERSION, "project": str(root), "main": body.main,
+            "bibliography_system": _bibliography_backend(root, body, graph),
             "entries": entries[:MAX_ENTRIES], "entry_count": len(entries),
             "bib_files": bibpaths, "cited_keys": sorted(cited)[:MAX_REPORT_ITEMS],
             "missing_citations": missing_citations, "duplicate_keys": duplicate_keys,
@@ -486,13 +502,15 @@ def _authors(value: str, ieee: bool) -> Optional[str]:
 def _format_entry(entry: dict, style: str, number: Optional[int]) -> dict:
     fields = entry["fields"]
     missing = [name for name in REQUIRED if not fields.get(name)]
+    if not _year(fields):
+        missing.append("year/date")
     if missing or entry["issues"]:
         raise HTTPException(409, "Citation preflight incomplete or mismatched. Resolve fields and warnings first.")
     authors = _authors(fields["author"], style == "ieee")
     if not authors:
         raise HTTPException(409, "Author field cannot be safely formatted with the supported literal name rules.")
     title = fields["title"].strip()
-    year = fields["year"].strip()
+    year = _year(fields)
     container = (fields.get("journal") or fields.get("journaltitle") or
                  fields.get("booktitle") or fields.get("publisher") or "").strip()
     doi = entry["doi_normalised"]
@@ -529,6 +547,55 @@ def _format_entry(entry: dict, style: str, number: Optional[int]) -> dict:
             "source": "local BibTeX/BibLaTeX fields; illustrative preview",
             "formal_style_guide_verified": False, "source_modified": False,
             "ready_for_publication": False}
+
+
+
+def _bibliography_backend(root: Path, body: ProjectIn, graph: dict) -> dict:
+    has_biblatex = False
+    has_bibliography = False
+    has_biber_option = False
+    has_print = False
+    for path in graph["files"]:
+        text = latex._read(root, path, body.active_path, body.active_text)
+        if text is None:
+            continue
+        safe = latex._mask(text)
+        has_biblatex |= bool(re.search(
+            r"\\usepackage(?:\s*\[[^\]\r\n]{0,160}\])?\s*\{biblatex\}", safe))
+        has_biber_option |= bool(re.search(
+            r"\\usepackage\s*\[[^\]\r\n]*backend\s*=\s*biber[^\]\r\n]*\]\s*\{biblatex\}", safe))
+        has_bibliography |= bool(re.search(r"\\bibliography\s*\{", safe))
+        has_print |= bool(re.search(r"\\printbibliography\b", safe))
+    if has_biblatex and (has_print or has_biber_option):
+        variant = "biblatex"  # biber common but not certain without actual config/build
+    elif has_bibliography and not has_biblatex:
+        variant = "bibtex"
+    else:
+        variant = "unknown_or_mixed"
+    return {"system": variant, "biber_requested": has_biber_option,
+            "compiler_or_biber_executed": False,
+            "static_detection_only": True}
+
+
+@router.get("/toolchains")
+def toolchains(request: Request, project: str):
+    studio._auth(request)
+    root = studio._project(project)
+    tools = []
+    for name in ("bibtex", "biber", "texlab", "latexmk", "tectonic"):
+        resolved = shutil.which(name)
+        status = "unavailable"
+        if resolved:
+            try:
+                path = Path(resolved).resolve(strict=True)
+                if (path.is_file() and stat.S_ISREG(path.stat().st_mode)
+                    and not path.is_relative_to(root)):
+                    status = "found_on_path_not_executed"
+            except (OSError, ValueError):
+                pass
+        tools.append({"name": name, "status": status})
+    return {"tools": tools, "versions_checked": False,
+            "tools_executed": False, "project_modified": False}
 
 
 @router.post("/format")
