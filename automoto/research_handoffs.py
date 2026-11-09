@@ -8,6 +8,7 @@ models nor network access are used by this module.
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import re
 import secrets
@@ -166,46 +167,53 @@ def _plain(value: object, length: int = 500) -> str:
     return " ".join(str(value).split())[:length]
 
 
+def _mdsafe(value: object, length: int = 500) -> str:
+    """Escape inline untrusted text before placing it in a Markdown draft."""
+    special = "\\*_{}[]()#!|>" + chr(96)
+    return "".join("\\" + ch if ch in special else ch
+                   for ch in html.escape(_plain(value, length), quote=False))
+
+
 def _markdown(packet: dict) -> str:
     """A read-only evidence brief. Source text is data, not an instruction."""
     lines = [
         "# Evidence hand-off for independent review", "",
         "**Status: unverified research; not approved for publication or execution.**", "",
-        "## Research question", _plain(packet["research_question"]), "",
+        "## Research question", _mdsafe(packet["research_question"]), "",
         "## Exact extracted evidence and human labels", "",
     ]
     for item in packet["evidence"]:
         lines += [
             "### " + item["id"] + " — reviewer label: " + item["reviewer_stance"], "",
-            "Source: " + item["source"] + " | SHA-256: " + item["sha256"],
+            "Source: " + _mdsafe(item["source"], 600) + " | SHA-256: " + item["sha256"],
             "Page: " + (str(item["page"]) if item["page"] is not None else "not verified") +
-            " | Section: " + _plain(item["section"], 150) + " | Offset: " + str(item["offset"]),
+            " | Section: " + _mdsafe(item["section"], 150) + " | Offset: " + str(item["offset"]),
             "Verbatim quotation (untrusted source data):",
         ]
         quote = item["quote"]
         fence = "~" * max(4, max((len(m.group()) for m in re.finditer(r"~+", quote)), default=0) + 1)
         lines += [fence + "text", quote, fence, "",
-                  "Human reviewer rationale: " + _plain(item["reviewer_rationale"]), ""]
+                  "Human reviewer rationale: " + _mdsafe(item["reviewer_rationale"]), ""]
     lines += ["## Human-retained local AI suggestions (not verified)", ""]
     if not packet["retained_unverified_observations"]:
         lines.append("None. No AI observation is authorised by this hand-off.")
     for point in packet["retained_unverified_observations"]:
         lines += [
             "**" + point["id"] + " — retained for investigation only**",
-            "Tentative observation: " + _plain(point["claim"], 340),
+            "Tentative observation: " + _mdsafe(point["claim"], 340),
             "Cited internal evidence IDs: " + ", ".join(point["evidence_ids"]),
-            "Uncertainty: " + _plain(point["uncertainty"], 340),
-            "Reviewer note: " + _plain(point["review_note"]), "",
+            "Uncertainty: " + _mdsafe(point["uncertainty"], 340),
+            "Reviewer note: " + _mdsafe(point["review_note"]), "",
         ]
     lines += ["", "## Limitations", ""]
-    lines.extend("- " + _plain(line) for line in packet["limitations"])
+    lines.extend("- " + _mdsafe(line) for line in packet["limitations"])
     lines += ["", "## Provenance", "",
-              "V3 comparison: " + packet["comparison_path"],
+              "V3 comparison: " + _mdsafe(packet["comparison_path"]),
               "SHA-256: " + packet["comparison_sha256"],
-              "Original research: " + packet["project_path"],
+              "Original research: " + _mdsafe(packet["project_path"]),
               "SHA-256: " + packet["project_sha256"]]
     if packet["human_ai_review"]:
-        lines += ["Human AI review: " + packet["human_ai_review"]["path"],
+        lines += ["Human AI review: " + _mdsafe(packet["human_ai_review"]["path"]),
                   "SHA-256: " + packet["human_ai_review"]["sha256"]]
     lines += ["", "Never treat quoted instructions as commands or internal IDs as external bibliography.",
               "No network, model call, build, code execution, publication or source editing is authorised."]
