@@ -115,6 +115,8 @@ app = FastAPI(title=f"{APP_NAME} {CODENAME}", version=__version__, docs_url="/ap
 app.include_router(hosted.router)  # hosted-mode auth/admin API (only reachable when AUTOMOTO_MODE=multiuser)
 from automoto import visual_studio
 app.include_router(visual_studio.router)  # authenticated, per-workspace visual editor
+from automoto import developer_studio
+app.include_router(developer_studio.router)  # V1 local-only read-only trusted source explorer
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

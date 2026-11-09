@@ -1,0 +1,34 @@
+/* Developer Studio V1 — scoped, responsive, accessible read-only project explorer. */
+.ds-shell{display:grid;gap:15px;max-width:1440px;margin:0 auto;padding:4px 0 28px;color:var(--text)}
+.ds-toolbar,.ds-summary,.ds-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.ds-toolbar{display:grid;grid-template-columns:minmax(160px,1fr) minmax(220px,2fr) auto auto;gap:10px;align-items:end;padding:15px}
+.ds-toolbar label{display:block;color:var(--dim);font-size:12px;font-weight:600;grid-row:1}
+.ds-toolbar #dsRoots{grid-column:1;grid-row:2}
+.ds-toolbar #dsPath{grid-column:2;grid-row:2}
+.ds-toolbar .btn{grid-row:2;white-space:nowrap}
+.ds-toolbar .input{min-width:0;width:100%;height:42px}
+.ds-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px}
+.ds-summary>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ds-summary strong{font:600 14px var(--mono);overflow-wrap:anywhere}
+.ds-summary #dsTrustState{color:var(--dim);font-size:13px}
+.ds-eyebrow{font-size:10px;letter-spacing:.12em;font-weight:800;color:var(--dim)}
+.ds-warning{margin:0;color:var(--dim);font-size:13px;border-left:3px solid var(--info);padding:6px 12px;background:var(--panel2);border-radius:5px}
+.ds-columns{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1.9fr);gap:14px;min-height:470px}
+.ds-panel{min-width:0;padding:0;display:flex;flex-direction:column;overflow:hidden}
+.ds-panel-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid var(--line)}
+.ds-panel-header h3{font-size:14px;font-weight:700;margin:0;overflow-wrap:anywhere}
+.ds-breadcrumb{font:12px var(--mono);color:var(--dim);margin:0;padding:12px 14px;overflow-wrap:anywhere}
+.ds-files{display:flex;flex-direction:column;gap:2px;overflow:auto;min-height:160px;max-height:540px;padding:0 10px 12px}
+.ds-entry{border:0;background:transparent;color:var(--text);text-align:left;width:100%;border-radius:7px;padding:9px 8px;display:flex;align-items:center;gap:9px}
+.ds-entry:hover{background:var(--hover)}
+.ds-entry:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.ds-file-icon{font-weight:700;color:var(--info);min-width:14px}
+.ds-file-name{overflow-wrap:anywhere;font:13px var(--mono)}
+.ds-preview{flex:1;overflow:auto;margin:0;padding:16px;background:var(--code);font:13px/1.6 var(--mono);white-space:pre;tab-size:4;max-height:540px}
+.ds-readonly{color:var(--ok);font-size:10px;font-weight:800;letter-spacing:.09em;white-space:nowrap}
+.ds-footnote{color:var(--dim);font-size:12px;margin:0;padding:9px 14px;overflow-wrap:anywhere}
+.ds-status{margin:0;min-height:24px;color:var(--dim);font-size:13px}
+.ds-status.ds-error{color:var(--bad)}
+@media(max-width:1040px){.ds-toolbar{grid-template-columns:1fr 1fr}.ds-toolbar label{grid-row:auto}.ds-toolbar #dsRoots,.ds-toolbar #dsPath,.ds-toolbar .btn{grid-row:auto;grid-column:auto}}
+@media(max-width:720px){.ds-toolbar{grid-template-columns:1fr}.ds-toolbar label,.ds-toolbar #dsRoots,.ds-toolbar #dsPath,.ds-toolbar .btn{grid-column:1}.ds-columns{grid-template-columns:1fr}.ds-summary{align-items:flex-start;flex-direction:column}.ds-panel{min-height:240px}.ds-preview{max-height:320px}}
+@media(prefers-reduced-motion:reduce){.ds-shell *{scroll-behavior:auto}}
