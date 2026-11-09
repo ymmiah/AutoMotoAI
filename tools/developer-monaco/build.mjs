@@ -17,6 +17,20 @@ if(meta.version!==pinned)throw new Error("Unexpected Monaco version: "+meta.vers
 if(!existsSync(path.join(packageRoot,"LICENSE")))throw new Error("Monaco licence absent");
 const vs=path.join(packageRoot,"esm/vs");
 const input=(part)=>path.join(vs,part);
+// Monaco 0.57.0 embeds DOMPurify 3.4.15 in its ESM source, independently
+// of the npm dependency graph. A dependency override alone is insufficient.
+// Replace only the vendor shim before compiling with audited DOMPurify 3.4.17,
+// and fail closed if the upstream file layout/contents change.
+const sanitizer="3.4.17";
+const sanitizerPackage=JSON.parse(readFileSync(path.join(dir,"node_modules/dompurify/package.json"),"utf8"));
+if(sanitizerPackage.version!==sanitizer)throw new Error("Unexpected DOMPurify version");
+const embedded=input("base/browser/dompurify/dompurify.js");
+if(!existsSync(embedded))throw new Error("Monaco embedded sanitizer shim moved");
+const original=readFileSync(embedded,"utf8");
+if(!original.toLowerCase().includes("dompurify"))throw new Error("Unrecognised Monaco sanitizer shim");
+writeFileSync(embedded,
+  '// AutoMoto build-time security patch: use audited npm DOMPurify 3.4.17\\n' +
+  'export { default } from "dompurify";\\n');
 const entries=[
   {in:path.join(dir,"entry.mjs"),out:"monaco"},
   {in:input("editor/editor.worker.js"),out:"editor.worker"},
@@ -52,7 +66,7 @@ function scan(folder,prefix=""){
 }
 scan(target);
 writeFileSync(path.join(target,"manifest.json"),JSON.stringify({
-  name:"automoto-offline-monaco",version:pinned,format:"esm",
+  name:"automoto-offline-monaco",version:pinned,format:"esm",sanitizer:"dompurify@"+sanitizer,
   files:Object.fromEntries(Object.entries(files).sort(([a],[b])=>a.localeCompare(b)))
 },null,2)+"\n");
 console.log("Vendored Monaco "+pinned+" ("+Object.keys(files).length+" assets), no runtime network dependency.");
