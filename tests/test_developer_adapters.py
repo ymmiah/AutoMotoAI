@@ -219,7 +219,8 @@ def test_revocation_prevents_execution_and_project_identity_isolated(workspace):
     assert run(client, other).status_code == 404
     trust(client, root, False)
     assert run(client, root).status_code == 403
-    assert register(client, root, identifier="another-probe").status_code == 403
+    pinned = hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()
+    assert register(client, root, identifier="another-probe", expected_sha256=pinned).status_code == 403
     trust(client, root, True)
     assert run(client, root).status_code == 200
     removed = request(client, "unregister", root, id="python-test", confirmed=True)
