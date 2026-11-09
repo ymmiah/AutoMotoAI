@@ -208,3 +208,18 @@ def test_oversized_source_is_skipped_not_truncated_silently(workspace):
     assert result["indexed_files"] == 0
     assert result["skipped_files"] == 1
     assert not request(client, "symbols", root).json()["items"]
+
+
+def test_global_index_memory_budgets_apply_across_files(workspace, monkeypatch):
+    client, root = workspace
+    monkeypatch.setattr(index, "MAX_GLOBAL_TOKENS", 3)
+    monkeypatch.setattr(index, "MAX_GLOBAL_SYMBOLS", 2)
+    (root / "a.py").write_text("def alpha():\n    return alpha\n")
+    (root / "b.py").write_text("def beta():\n    return beta\n")
+    (root / "c.py").write_text("def gamma():\n    return gamma\n")
+    response = request(client, "refresh", root).json()
+    assert response["indexed_files"] == 3
+    assert response["truncated"] is True
+    assert response["symbol_count"] <= 2
+    assert response["token_count"] <= 3
+    assert len(request(client, "symbols", root).json()["items"]) <= 2
