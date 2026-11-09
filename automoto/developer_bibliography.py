@@ -181,6 +181,21 @@ def _entry_block(text: str, start: int, delimiter: str) -> tuple[str, int]:
     raise ValueError("Unterminated bibliography entry.")
 
 
+def _next_entry(text: str, cursor: int):
+    """Skip percent comments before parsing the next literal entry marker."""
+    while cursor < len(text):
+        if text[cursor] == "%":
+            end = text.find("\n", cursor)
+            cursor = len(text) if end < 0 else end + 1
+            continue
+        if text[cursor] == "@":
+            match = ENTRY_START.match(text, cursor)
+            if match:
+                return match
+        cursor += 1
+    return None
+
+
 def _parse_bib(text: str, path: str) -> tuple[list[dict], list[dict]]:
     entries, errors = [], []
     if len(text.encode("utf-8")) > MAX_BIB_BYTES:
@@ -192,7 +207,7 @@ def _parse_bib(text: str, path: str) -> tuple[list[dict], list[dict]]:
             errors.append({"code": "bib-limit", "path": path, "line": 0, "character": 0,
                            "message": "Bibliography parser reached its bounded limit."})
             break
-        match = ENTRY_START.search(text, i)
+        match = _next_entry(text, i)
         if not match:
             break
         kind = match.group(1).casefold()
@@ -382,7 +397,8 @@ def _report(root: Path, body: ProjectIn) -> dict:
         found, parse_errors = _parse_bib(text, path)
         entries.extend(found[:max(0, MAX_ENTRIES - len(entries))])
         warnings.extend(parse_errors[:MAX_REPORT_ITEMS - len(warnings)])
-    cited = {item["value"] for item in graph["citations"]}
+    citation_order = list(dict.fromkeys(item["value"] for item in graph["citations"]))
+    cited = set(citation_order)
     keycounts = Counter(entry["key"] for entry in entries)
     for entry in entries:
         fields = entry["fields"]
@@ -434,7 +450,7 @@ def _report(root: Path, body: ProjectIn) -> dict:
     return {"schema_version": SCHEMA_VERSION, "project": str(root), "main": body.main,
             "bibliography_system": _bibliography_backend(root, body, graph),
             "entries": entries[:MAX_ENTRIES], "entry_count": len(entries),
-            "bib_files": bibpaths, "cited_keys": sorted(cited)[:MAX_REPORT_ITEMS],
+            "bib_files": bibpaths, "cited_keys": citation_order[:MAX_REPORT_ITEMS],
             "missing_citations": missing_citations, "duplicate_keys": duplicate_keys,
             "parser_warnings": warnings[:MAX_REPORT_ITEMS],
             "static_citation_diagnostics": graph["diagnostics"][:MAX_REPORT_ITEMS],
