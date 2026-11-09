@@ -2055,6 +2055,54 @@ let browser;
   await page.waitForFunction(()=>document.querySelector('#dsSourceText')?.value?.includes('read-only'));
 
 
+  // V10: actual local bibliography preflight + explicit consent for Crossref only.
+  // DOI endpoint is mocked; no real registry request in the browser smoke.
+  const bibSource=path.join(texDir,'references.bib');
+  writeFileSync(bibSource,
+    '@article{author2026,\n author={Doe, Jane},\n'+
+    ' title={A Registered Study},\n year={2026},\n'+
+    ' journal={Example Journal},\n doi={10.1234/automoto.2026}\n}\n');
+  const bibBefore=readFileSync(bibSource);
+  await page.locator('#dsBibMain').fill('thesis/main.tex');
+  let v10Lookups=0;
+  await page.route('**/api/developer/studio/bibliography/verify-doi',async route=>{
+    v10Lookups++;
+    const body=route.request().postDataJSON();
+    assert.equal(body.key,'author2026');
+    assert.equal(body.main,'thesis/main.tex');
+    const payload={
+      key:'author2026',doi:'10.1234/automoto.2026',
+      registry:{title:'Registry <img src=x onerror=alert(1)> title',
+        year:2026,publisher:'Example Publisher',peer_review_verified:false,
+        publication_authenticity_verified:false},
+      field_comparison:{title:false,year:true,first_author_family:true},
+      possible_mismatches:['possible Crossref bibliographic metadata mismatch'],
+      publication_authenticity_verified:false
+    };
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(payload)});
+  });
+  await page.locator('#dsBibPreflight').click();
+  await page.waitForFunction(()=>document.querySelector('#dsBibStatus')?.textContent?.includes('1 records'));
+  assert.equal(v10Lookups,0,'V10 preflight cannot initiate a Crossref request');
+  assert.match(await page.locator('#dsBibResults').innerText(),/author2026/);
+  await page.locator('#dsBibEntry').selectOption('author2026');
+  await page.locator('#dsBibStyle').selectOption('harvard');
+  await page.locator('#dsBibFormat').click();
+  await page.waitForFunction(()=>document.querySelector('.ds-bib-preview')?.value?.includes('Doe, J.'));
+  assert.equal(v10Lookups,0,'Local reference preview must not call Crossref');
+  page.once('dialog',d=>d.dismiss());
+  await page.locator('#dsBibVerify').click();
+  assert.equal(v10Lookups,0,'Cancelling the registry prompt cannot send a DOI');
+  page.once('dialog',d=>d.accept());
+  await page.locator('#dsBibVerify').click();
+  await page.waitForFunction(()=>document.querySelector('#dsBibResults')?.textContent?.includes('Registry <img'));
+  assert.equal(v10Lookups,1);
+  assert.equal(await page.locator('#dsBibResults img').count(),0,
+    'Registry metadata must be inert text, not executable markup');
+  assert.deepEqual(readFileSync(bibSource),bibBefore,'V10 never saves external metadata into the source');
+  await page.screenshot({path:path.join(output,'developer-studio-v10-citation-preflight.png')});
+  await page.unrouteAll();
+
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
