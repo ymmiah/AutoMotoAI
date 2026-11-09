@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import re
 import secrets
 import shutil
@@ -289,6 +290,24 @@ def _verify(ref: BackupRef) -> tuple[dict, list[tuple[dict, bytes]]]:
     return record, members
 
 
+
+def _write_archive(target: Path, payload: bytes) -> None:
+    """Own fixed-size archive writer; Document Assistant's 20 MB output cap is unrelated."""
+    if len(payload) > MAX_BUNDLE_BYTES:
+        raise HTTPException(413, "Recovery archive exceeds the 40 MB data limit.")
+    document_workspace._quota_check(len(payload))
+    temp = target.with_name(".working-" + secrets.token_hex(8) + ".part")
+    try:
+        with temp.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if target.exists() or target.is_symlink():
+            raise HTTPException(409, "Recovery archive destination already exists.")
+        temp.replace(target)
+    finally:
+        temp.unlink(missing_ok=True)
+
 @router.post("/audit")
 def audit(body: Selection, request: Request):
     _auth(request)
@@ -331,7 +350,7 @@ def snapshot(body: SnapshotIn, request: Request):
     archive = directory / f"backup-{token}.research.zip"
     file = directory / f"backup-{token}.recovery.json"
     try:
-        document_workspace._atomic_file(archive, payload)
+        _write_archive(archive, payload)
         try:
             document_workspace._atomic_file(file, raw_record)
         except Exception:
