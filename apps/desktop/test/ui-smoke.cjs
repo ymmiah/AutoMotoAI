@@ -1871,7 +1871,15 @@ let browser;
   await page.waitForFunction(() => document.querySelector('#dsStatus')?.textContent?.includes('recovery snapshot recorded'));
   assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),savedSource,'snapshot must never change disk source');
   await page.locator('#dsDiff').click();
-  assert.equal(await page.locator('#dsDiffPreview').isVisible(),true);
+  await page.waitForFunction(() =>
+    document.querySelector('#dsDiffPreview')?.hidden===false ||
+    document.querySelector('#dsStatus')?.textContent?.includes('Cannot generate diff:'));
+  const diffDebug=await page.locator('#dsDiffPreview').evaluate(node=>({
+    hidden:node.hidden,style:node.style.display,display:getComputedStyle(node).display,
+    status:document.querySelector('#dsStatus')?.textContent,
+    text:node.textContent?.slice(0,250),mode:document.querySelector('#dsModeEdit')?.getAttribute('aria-pressed')
+  }));
+  assert.equal(await page.locator('#dsDiffPreview').isVisible(),true,JSON.stringify(diffDebug));
   assert.match(await page.locator('#dsDiffPreview').innerText(),/Saved source/);
   assert.match(await page.locator('#dsDiffPreview').innerText(),/v3 recovery/);
   await page.locator('#dsModeEdit').click();
