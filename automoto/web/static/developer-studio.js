@@ -6,10 +6,11 @@ import {mountDeveloperLSP} from "./developer-lsp.js";
 import {mountDeveloperIndex} from "./developer-index.js";
 import {mountDeveloperAdapters} from "./developer-adapters.js";
 import {mountDeveloperLatex} from "./developer-latex.js";
+import {mountDeveloperBibliography} from "./developer-bibliography.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V9 · LaTeX academic authoring. Work with multi-file theses, static cross-reference checks, maths and citation completion, plus optional approved texlab LSP diagnostics.",
+    "V10 · Bibliography & Citations. Preflight local BibTeX/BibLaTeX, optionally verify DOI metadata with Crossref, and preview Harvard/IEEE references.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -27,6 +28,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsIndexRoot" aria-label="Source symbol index and file outline"></div>'+ 
       '<div id="dsAdaptersRoot" aria-label="Explicitly approved local toolchain and debugger adapters"></div>'+ 
       '<div id="dsLatexRoot" aria-label="LaTeX multi-file thesis authoring"></div>'+ 
+      '<div id="dsBibliographyRoot" aria-label="Citation evidence and bibliography preflight"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -43,15 +45,16 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
   index=mountDeveloperIndex({api,host,getProject:()=>project,editor,status});
   adapters=mountDeveloperAdapters({api,host,getProject:()=>project,status});
   latex=mountDeveloperLatex({api,host,getProject:()=>project,editor,status});
+  bibliography=mountDeveloperBibliography({api,host,getProject:()=>project,editor,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -110,6 +113,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       await index.projectChanged();
       await adapters.projectChanged();
       latex.projectChanged();
+      bibliography.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
