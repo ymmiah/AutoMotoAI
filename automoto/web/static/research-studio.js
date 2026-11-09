@@ -5,6 +5,7 @@ import {mountResearchDiscovery} from "./research-discovery.js";
 import {mountResearchComparison} from "./research-comparison.js";
 import {mountResearchPublishing} from "./research-publishing.js";
 import {mountResearchAI} from "./research-ai.js";
+import {mountResearchHandoffs} from "./research-handoffs.js";
 
 export async function mountResearchStudio({api,page,toast}){
   const host=page("Research Studio",
@@ -41,6 +42,7 @@ export async function mountResearchStudio({api,page,toast}){
     '<section id="rsComparisonRoot" aria-label="Evidence comparison and contradiction mapping"></section>'+
     '<section id="rsPublishingRoot" aria-label="Academic report publishing"></section>'+
     '<section id="rsAIRoot" aria-label="Opt-in local AI research analysis"></section>'+
+    '<section id="rsHandoffsRoot" aria-label="Reviewed cross-studio evidence hand-offs"></section>'+
     '<p class="rs-status" id="rsStatus" role="status" aria-live="polite">Choose a file and research question to begin.</p></div>');
   const el=id=>host.querySelector("#"+id);
   let catalog=[],selected=new Set(),pinned={},loaded=null,latest=null,latestRequest=null,sequence=0;
@@ -233,6 +235,7 @@ export async function mountResearchStudio({api,page,toast}){
   mountResearchComparison({host:el("rsComparisonRoot"),api,toast});
   mountResearchPublishing({host:el("rsPublishingRoot"),api,toast});
   mountResearchAI({host:el("rsAIRoot"),api,toast});
+  mountResearchHandoffs({host:el("rsHandoffsRoot"),api,toast});
   await Promise.all([refreshSources(),refreshProjects()]).catch(error=>{
     notice("Research workspace could not load: "+error.message,true);
   });
