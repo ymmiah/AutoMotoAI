@@ -25,13 +25,14 @@ export function mountDeveloperEditor({api,host,project,status}) {
     '</div>'+
     '<label class="sr" for="dsSourceText">Source code</label>'+
     '<textarea id="dsSourceText" class="ds-source" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Source code editor" disabled></textarea>'+
+    '<div id="dsMonaco" class="ds-monaco" aria-label="Source code editor" hidden></div>'+
     '<pre class="ds-preview ds-highlight" id="dsHighlighted" tabindex="0" hidden><code id="dsHighlightCode"></code></pre>'+
     '<div class="ds-editor-footer"><span id="dsCursor">Line 1 · Column 1</span>'+
     '<span id="dsSaveHint">Saves require a trusted project and explicit confirmation.</span></div>';
   // Header labels live in the containing studio panel, outside #dsEditorRoot.
   const el=id=>host.querySelector("#"+id);
   const tabs=new Map();
-  let active=null,seq=0,auto=false,timer=null,mode="edit";
+  let active=null,seq=0,auto=false,timer=null,mode="edit",monacoAdapter=null;
   const languageMap={
     js:"javascript",jsx:"javascript",mjs:"javascript",cjs:"javascript",ts:"typescript",tsx:"typescript",
     py:"python",go:"go",rs:"rust",java:"java",kt:"kotlin",kts:"kotlin",
@@ -48,6 +49,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
   function clearTimer(){if(timer!==null){clearTimeout(timer);timer=null;}}
   function extension(path){return(path.split(".").pop()||"").toLowerCase();}
   function cursor(){
+    const pos=monacoAdapter?.position();
+    if(pos){el("dsCursor").textContent="Line "+pos.line+" · Column "+pos.column;return;}
     const field=el("dsSourceText"),start=field.selectionStart||0;
     const prefix=field.value.slice(0,start).split("\n");
     el("dsCursor").textContent="Line "+prefix.length+" · Column "+(prefix[prefix.length-1].length+1);
@@ -74,6 +77,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     const tab=current(),field=el("dsSourceText");
     field.disabled=!tab;
     field.readOnly=!project()?.trusted;
+    monacoAdapter?.setReadOnly(!project()?.trusted);
     el("dsSaveFile").disabled=!canSave(tab);
     el("dsReloadFile").disabled=!tab;
     el("dsLineEnding").disabled=!tab;
@@ -95,12 +99,16 @@ export function mountDeveloperEditor({api,host,project,status}) {
     active=path;const tab=current();if(!tab)return;
     clearTimer();
     el("dsSourceText").value=tab.text.replace(/\r\n?/g,"\n");
+    monacoAdapter?.activate(tab.path,el("dsSourceText").value,languageMap[extension(tab.path)]||"plaintext");
     el("dsEncoding").value=tab.encoding==="cp1252"?"cp1252":"auto";
     el("dsLineEnding").value=tab.newline;
     el("dsFilename").textContent=tab.path.split("/").pop();
     el("dsFileInfo").textContent=tab.path+" · "+tab.size+" bytes · original SHA-256 "+tab.sha256;
     el("dsHighlighted").hidden=true;el("dsHighlighted").style.display="none";
-    el("dsSourceText").hidden=false;el("dsSourceText").style.display="block";mode="edit";
+    el("dsSourceText").hidden=!!monacoAdapter;
+    el("dsSourceText").style.display=monacoAdapter?"none":"block";
+    monacoAdapter?.setVisible(true);
+    mode="edit";
     el("dsModeEdit").setAttribute("aria-pressed","true");
     el("dsModePreview").setAttribute("aria-pressed","false");
     update();
@@ -178,6 +186,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
   function closeTab(path){
     const tab=tabs.get(path);if(!tab)return;
     if(tab.dirty && !window.confirm("Discard unsaved changes to "+path+"?"))return;
+    monacoAdapter?.remove(path);
     tabs.delete(path);
     if(active===path){active=null;activate([...tabs.keys()].at(-1)||null);}
     if(!active){el("dsSourceText").value="";el("dsFilename").textContent="Source editor";
@@ -203,9 +212,10 @@ export function mountDeveloperEditor({api,host,project,status}) {
     const preview=mode==="preview";
     if(preview)showHighlighted();
     const source=el("dsSourceText"),highlight=el("dsHighlighted");
-    source.hidden=preview;highlight.hidden=!preview;
-    source.style.display=preview?"none":"block";
+    source.hidden=preview||!!monacoAdapter;highlight.hidden=!preview;
+    source.style.display=(preview||monacoAdapter)?"none":"block";
     highlight.style.display=preview?"block":"none";
+    monacoAdapter?.setVisible(!preview);
     el("dsModeEdit").setAttribute("aria-pressed",String(!preview));
     el("dsModePreview").setAttribute("aria-pressed",String(preview));
   }
@@ -273,8 +283,32 @@ export function mountDeveloperEditor({api,host,project,status}) {
     window.removeEventListener("hashchange",cleanup);
     if(window.__automotoDevConfirmLeave===leaveGate)delete window.__automotoDevConfirmLeave;
     clearTimer();
+    monacoAdapter?.dispose();
+    monacoAdapter=null;
   };
   window.addEventListener("hashchange",cleanup);
+  // V2 completion: load the bundled Monaco engine from the same authenticated
+  // origin. Desktop requires the vendor files in the installed Python package.
+  // Mobile or unavailable worker environments retain the accessible textarea.
+  void import("./developer-monaco.js").then(({createOfflineMonaco})=>
+    createOfflineMonaco({
+      host,textarea:el("dsSourceText"),onChange:changed,onSave:()=>save(true),
+      onCursor:(line,column)=>{el("dsCursor").textContent="Line "+line+" · Column "+column;}
+    })
+  ).then(adapter=>{
+    if(!adapter)return;
+    if(!host.isConnected){adapter.dispose();return;}
+    monacoAdapter=adapter;
+    const tab=current();
+    if(tab)monacoAdapter.activate(tab.path,el("dsSourceText").value,
+      languageMap[extension(tab.path)]||"plaintext");
+    monacoAdapter.setReadOnly(!project()?.trusted);
+    monacoAdapter.setVisible(mode==="edit");
+    update();
+  }).catch(error=>{
+    if(host.isConnected)status("Monaco assets unavailable; using plain text editor. "+
+      (error?.message||"Check local asset installation."),true);
+  });
   return {
     openFile,
     reset(){
@@ -283,6 +317,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
       seq++; // Invalidate source fetches started for the previously open project.
       clearTimer();auto=false;el("dsAutosave").checked=false;el("dsEncoding").value="auto";
       tabs.clear();active=null;el("dsSourceText").value="";
+      monacoAdapter?.reset();
       el("dsFilename").textContent="Source editor";el("dsFileInfo").textContent="Open a source file from Explorer to begin.";
       update();return true;
     },
