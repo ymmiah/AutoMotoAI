@@ -162,27 +162,38 @@ def _position(text: str, offset: int) -> dict:
 
 
 def _safe_relative(root: Path, current: str, value: str, ext: str) -> Optional[str]:
-    val = value.strip().replace("\\", "/")
-    if not val or "\x00" in val or val.startswith(("/", "~")) or ":" in val:
+    """Resolve local relative includes lexically, then check every actual path segment."""
+    val = value.strip()
+    if (not val or "\x00" in val or "\\" in val or val.startswith(("/", "~"))
+            or ":" in val or len(val) > 1024):
         return None
     try:
-        base = PurePosixPath(current).parent
-        candidate = base / val
+        parts = list(PurePosixPath(current).parent.parts)
+        for token in val.split("/"):
+            if token in ("", "."):
+                continue
+            if token == "..":
+                if not parts:
+                    return None
+                parts.pop()
+            else:
+                parts.append(token)
+        if not parts:
+            return None
+        candidate = PurePosixPath(*parts)
         if not candidate.suffix:
             candidate = PurePosixPath(str(candidate) + ext)
-        # Normalise internal .. segments without permitting root escapes.
-        path = root.joinpath(*candidate.parts).resolve(strict=False)
-        relative = path.relative_to(root).as_posix()
-        if (not relative or len(relative) > 1024 or
-                Path(relative).suffix.casefold() != ext):
+        relative = str(candidate)
+        if (len(relative) > 1024 or candidate.suffix.casefold() != ext
+                or any(index._excluded(part, i < len(parts) - 1)
+                       for i, part in enumerate(candidate.parts))):
             return None
-        if any(index._excluded(part, i < len(Path(relative).parts) - 1)
-               for i, part in enumerate(Path(relative).parts)):
+        checked = studio._path(root, relative)  # rejects linked or junction segments
+        if checked == root or not checked.is_relative_to(root):
             return None
-        return relative if studio._path(root, relative) == path else None
+        return relative
     except (HTTPException, ValueError, OSError, UnicodeError):
         return None
-
 
 def _read(root: Path, path: str, active_path: Optional[str], active_text: Optional[str]) -> Optional[str]:
     if path == active_path and active_text is not None:
