@@ -3,7 +3,7 @@ import {mountDeveloperEditor} from "./developer-editor.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V2 · Source Editor. Work with approved local projects, edit selected source files after explicit trust, and save with SHA-256 conflict checks. No shell, build or AI execution.",
+    "V3 · Safe Editing Lifecycle. Trusted file operations, multi-cursor, split editing, reviewable diffs and local crash recovery. No shell, build or AI execution.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -16,7 +16,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
         '<button class="btn" id="dsTrust" type="button" hidden>Trust this project</button></section>'+
       '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. No source execution or automatic cloud processing is enabled.</p>'+
       '<div class="ds-columns">'+
-        '<section class="ds-panel" aria-label="Project files"><div class="ds-panel-header"><h3>Explorer</h3><button class="btn sm" type="button" id="dsParent" disabled>Up</button></div>'+
+        '<section class="ds-panel" aria-label="Project files"><div class="ds-panel-header"><h3>Explorer</h3><div class="ds-explorer-actions"><button class="btn sm" type="button" id="dsCreate" disabled>New</button><button class="btn sm" type="button" id="dsRename" disabled>Rename</button><button class="btn sm" type="button" id="dsTrash" disabled>Archive</button><button class="btn sm" type="button" id="dsRestore" disabled>Restore</button><button class="btn sm" type="button" id="dsParent" disabled>Up</button></div></div>'+
           '<p class="ds-breadcrumb" id="dsBreadcrumb">No folder selected</p>'+
           '<div id="dsFiles" class="ds-files" role="list"></div>'+
           '<p id="dsLimit" class="ds-footnote"></p></section>'+
@@ -60,10 +60,12 @@ export async function mountDeveloperStudio({api,page,toast}) {
   function showTrust() {
     byId("dsProject").textContent=project?project.project:"No project open";
     byId("dsTrustState").textContent=project
-      ? project.trusted?"Trusted project · source editing enabled; code execution disabled.":"Restricted workspace · source browsing only."
+      ? project.trusted?"Trusted project · source editing and guarded file operations enabled. Code execution disabled.":"Restricted workspace · source browsing only."
       :"Select a local folder to begin.";
     byId("dsTrust").hidden=!project;
     byId("dsTrust").textContent=project?.trusted?"Revoke trust":"Trust this project";
+    for(const name of ["dsCreate","dsRename","dsTrash","dsRestore"])
+      byId(name).disabled=!project?.trusted;
   }
   function clearPreview() {
     byId("dsFilename").textContent="Source editor";
@@ -137,6 +139,75 @@ export async function mountDeveloperStudio({api,page,toast}) {
     const parts=directory==="."?[]:directory.split("/");
     parts.pop();list(parts.join("/")||".");
   });
+  // V3 file actions are deliberately not coupled to source text editing.
+  // A dirty tab blocks file operations rather than silently discarding changes.
+  const safeForOperation=()=>{
+    if(!project?.trusted){status("Trust this project before changing files.",true);return false;}
+    if(editor.hasUnsaved()){status("Save or close all unsaved tabs before file operations.",true);return false;}
+    return true;
+  };
+  async function refreshAfterAction(message){
+    if(editor.hasUnsaved())return;
+    editor.reset();
+    await list(directory);
+    status(message);
+  }
+  byId("dsCreate").addEventListener("click",async()=>{
+    if(!safeForOperation())return;
+    const path=window.prompt("New source file path relative to the project (parent folder must exist):",
+      directory==="."?"new-file.txt":directory+"/new-file.txt");
+    if(!path)return;
+    if(!window.confirm("Create an empty file at "+path+"? Existing files cannot be overwritten."))return;
+    try{
+      const result=await api(BASE+"/operation",{project:project.project,action:"create",path,confirmed:true});
+      await refreshAfterAction("New source file created: "+result.path);
+    }catch(error){status("Create refused: "+error.message,true);}
+  });
+  byId("dsRename").addEventListener("click",async()=>{
+    if(!safeForOperation())return;
+    const file=editor.currentFile();
+    if(!file){status("Open an existing source file before renaming.",true);return;}
+    const dest=window.prompt("New project-relative path for "+file.path+":",file.path);
+    if(!dest||dest===file.path)return;
+    if(!window.confirm("Rename "+file.path+" to "+dest+" without replacing any existing file?"))return;
+    try{
+      const result=await api(BASE+"/operation",{
+        project:project.project,action:"rename",path:file.path,destination:dest,
+        expected_sha256:file.sha256,confirmed:true
+      });
+      await refreshAfterAction("Renamed "+result.old_path+" → "+result.path);
+    }catch(error){status("Rename refused: "+error.message,true);}
+  });
+  byId("dsTrash").addEventListener("click",async()=>{
+    if(!safeForOperation())return;
+    const file=editor.currentFile();
+    if(!file){status("Open an existing source file before archiving.",true);return;}
+    if(!window.confirm("Move "+file.path+" into private local recovery? The original is removed only after its bytes have been verified and archived."))return;
+    try{
+      const result=await api(BASE+"/operation",{
+        project:project.project,action:"trash",path:file.path,
+        expected_sha256:file.sha256,confirmed:true
+      });
+      await refreshAfterAction("Archived "+file.path+". Use Restore for recovery.");
+    }catch(error){status("Archive refused: "+error.message,true);}
+  });
+  byId("dsRestore").addEventListener("click",async()=>{
+    if(!safeForOperation())return;
+    const path=window.prompt("Project-relative path of the archived file to restore:");
+    if(!path)return;
+    try{
+      const lookup=new URLSearchParams({project:project.project,path});
+      const archives=await api(BASE+"/trash-archives?"+lookup);
+      if(!archives.items?.length){status("No local recovery archive found for "+path);return;}
+      const archive=archives.items[0];
+      if(!window.confirm("Restore the latest archive for "+path+" ("+archive.size+" bytes)? Existing files will never be overwritten."))return;
+      const restored=await api(BASE+"/restore-trash",{
+        project:project.project,path,snapshot_id:archive.archive_id,confirmed:true
+      });
+      await refreshAfterAction("Restored "+restored.path+" from local recovery.");
+    }catch(error){status("Restore refused: "+error.message,true);}
+  });
+
   byId("dsTrust").addEventListener("click",async()=>{
     if(!project)return;
     const next=!project.trusted;
