@@ -55,7 +55,12 @@ def test_v2_only_local_and_requires_auth(env):
     assert not path_allowed("GET", BASE + "/file")
     assert not path_allowed("POST", BASE + "/save-file")
     assert client.get(BASE + "/file", params={"project": str(project), "path": "main.ts"}).status_code == 403
-    assert client.post(BASE + "/save-file", json={}).status_code == 403
+    unauthorised = client.post(BASE + "/save-file", json={
+        "project": str(project), "path": "main.ts", "text": "no auth",
+        "expected_sha256": "0" * 64, "encoding": "utf-8",
+        "newline": "lf", "confirmed": True
+    })
+    assert unauthorised.status_code == 403
 
 
 def test_untrusted_workspace_cannot_save_and_confirmation_required(env):
