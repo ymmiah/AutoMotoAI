@@ -1,7 +1,7 @@
 /* Developer Studio V2: source tabs, Unicode editor, inert highlight preview and safe saves.
  * No CDN, compiler, shell or AI invocation. Auto-save is opt-in for this session.
  */
-export function mountDeveloperEditor({api,host,project,status}) {
+export function mountDeveloperEditor({api,host,project,status,onFileOpened=()=>{}}) {
   const BASE="/api/developer/studio";
   const root=host.querySelector("#dsEditorRoot");
   root.innerHTML=
@@ -54,6 +54,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     tex:"latex",bib:"latex",r:"r",dart:"dart",lua:"lua"
   };
   const current=()=>active?tabs.get(active):null;
+  const syntaxFor=tab=>tab?.language||languageMap[extension(tab.path)]||"plaintext";
   const canSave=tab=>!!(tab && tab.dirty && !tab.saving && project()?.trusted);
   const savedKey=(tab)=>JSON.stringify([tab.path,tab.sha256,tab.text,tab.encoding,tab.newline]);
   function clearTimer(){if(timer!==null){clearTimeout(timer);timer=null;}}
@@ -110,7 +111,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
       tab.newline=data.newline;
       tab.dirty=tab.text!==tab.originalText||tab.newline!==tab.originalNewline;
       el("dsSourceText").value=tab.text;
-      monacoAdapter?.activate(tab.path,tab.text,languageMap[extension(tab.path)]||"plaintext");
+      monacoAdapter?.activate(tab.path,tab.text,syntaxFor(tab));
       el("dsLineEnding").value=tab.newline;
       modeSwitch("edit");
       update();
@@ -177,7 +178,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     el("dsRecoveryAuto").disabled=!project()?.trusted;
     el("dsEditorState").textContent=!tab?"No source selected":
       tab.saving?"Saving…":tab.dirty?"Unsaved changes":tab.sha256?"Saved · SHA-256 "+tab.sha256.slice(0,12):"Read-only";
-    el("dsEditorLang").textContent=tab?languageMap[extension(tab.path)]||"Plain text":"Text";
+    el("dsEditorLang").textContent=tab?syntaxFor(tab):"Text";
     el("dsEditorSize").textContent=tab?tab.encoding+" · "+tab.text.length+" characters":"";
     el("dsSaveHint").textContent=project()?.trusted
       ?"Ctrl/Cmd+S saves after hash verification. The original file is not silently overwritten."
@@ -190,7 +191,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     active=path;const tab=current();if(!tab)return;
     clearTimer();clearRecoveryTimer();
     el("dsSourceText").value=tab.text.replace(/\r\n?/g,"\n");
-    monacoAdapter?.activate(tab.path,el("dsSourceText").value,languageMap[extension(tab.path)]||"plaintext");
+    monacoAdapter?.activate(tab.path,el("dsSourceText").value,syntaxFor(tab));
     el("dsEncoding").value=tab.encoding==="cp1252"?"cp1252":"auto";
     el("dsLineEnding").value=tab.newline;
     el("dsFilename").textContent=tab.path.split("/").pop();
@@ -206,6 +207,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     update();
     if(tab.dirty && auto)schedule();
     if(tab.dirty && recoveryAuto)scheduleRecovery();
+    onFileOpened(tab.path);
   }
   async function openFile(path,requested=null,force=false){
     const encoding=requested||el("dsEncoding").value||"auto";
@@ -426,7 +428,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     monacoAdapter=adapter;
     const tab=current();
     if(tab)monacoAdapter.activate(tab.path,el("dsSourceText").value,
-      languageMap[extension(tab.path)]||"plaintext");
+      syntaxFor(tab));
     monacoAdapter.setReadOnly(!project()?.trusted);
     monacoAdapter.setVisible(mode==="edit");
     el("dsSplit").disabled=false;
@@ -446,7 +448,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     tab.text=proposal.text.replace(/\r\n?/g,"\n");
     tab.dirty=tab.text!==tab.originalText;
     el("dsSourceText").value=tab.text;
-    monacoAdapter?.activate(tab.path,tab.text,languageMap[extension(tab.path)]||"plaintext");
+    monacoAdapter?.activate(tab.path,tab.text,syntaxFor(tab));
     modeSwitch("edit");
     update();
     status("Proposed replacement loaded as unsaved text. Review diff and confirm Save before changing disk.");
@@ -463,8 +465,19 @@ export function mountDeveloperEditor({api,host,project,status}) {
     field.focus();field.setSelectionRange(index,index);
     return true;
   }
+  function setLanguageMode(path,language){
+    const tab=tabs.get(path);
+    if(!tab||typeof language!=="string"||language.length>64)return false;
+    tab.language=language;
+    if(active===path){
+      monacoAdapter?.activate(tab.path,el("dsSourceText").value,syntaxFor(tab));
+      update();
+    }
+    return true;
+  }
   return {
     openFile,
+    setLanguageMode,
     currentFile,
     openPaths:()=>[...tabs.keys()].slice(0,10),
     revealLocation,
