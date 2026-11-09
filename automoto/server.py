@@ -141,6 +141,8 @@ from automoto import research_handoffs
 app.include_router(research_handoffs.router)  # V6 verified cross-studio transfers with separate audit
 from automoto import research_acceptance
 app.include_router(research_acceptance.router)  # V7 acceptance checks and private, non-destructive recovery
+from automoto import research_portable
+app.include_router(research_portable.router)  # V8 encrypted portable recovery with isolated import
 from automoto import document_recovery
 app.include_router(document_recovery.router)  # private, source-preserving recovery points
 from automoto import document_quality
@@ -179,6 +181,8 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/research/studio/handoff/preview", "/api/research/studio/handoff/save",
              "/api/research/studio/acceptance/audit", "/api/research/studio/acceptance/snapshot",
              "/api/research/studio/acceptance/verify", "/api/research/studio/acceptance/stage",
+             "/api/research/studio/portable/create", "/api/research/studio/portable/inspect",
+             "/api/research/studio/portable/stage", "/api/research/studio/portable/download",
              "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/spreadsheets/finance/export", "/api/spreadsheets/ai/review", "/api/spreadsheets/release/create", "/api/spreadsheets/release/restore", "/api/documents/recovery/save", "/api/documents/recovery/load",
              "/api/documents/quality/audit")
 _HITS: dict[tuple[str, str], deque] = {}
