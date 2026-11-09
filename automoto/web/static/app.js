@@ -248,7 +248,14 @@ $("#scrim").onclick = closeSidebarMobile;
 $("#toggleInfo").onclick = () => { $("#info").hidden = !$("#info").hidden; localStorage.setItem("automoto_info", $("#info").hidden ? "0" : "1"); };
 $("#closeInfo").onclick = () => { $("#info").hidden = true; localStorage.setItem("automoto_info", "0"); };
 $("#newChat").onclick = () => newChat();
-function newChat() { closeSidebarMobile(); if (location.hash === "#/new") renderRoute(); else location.hash = "#/new"; }
+function newChat() {
+  // Reject navigation before changing the URL. Reverting a hashchange after
+  // source edits can race another render and detach the live editor.
+  if (state.route.startsWith("#/developer") && typeof window.__automotoDevConfirmLeave === "function"
+      && !window.__automotoDevConfirmLeave()) return;
+  closeSidebarMobile();
+  if (location.hash === "#/new") renderRoute(); else location.hash = "#/new";
+}
 
 function setMode(m, persist = true) {
   state.mode = m;
