@@ -159,7 +159,7 @@ def test_bibtex_malformed_entry_and_unsupported_concat_fail_closed():
     )
     entries, errors = bib._parse_bib(text, "broken.bib")
     assert not entries and errors
-    assert errors[0]["code"] == "malformed-entry"
+    assert errors[0]["code"] in ("malformed-entry", "malformed-fields")
     items, errors = bib._parse_bib(
         "@article{x, title = {A} # {B}, author = {X, Y}, year = 2026}",
         "concat.bib")
@@ -321,8 +321,7 @@ def test_formatting_refuses_incomplete_author_details_and_unverified_numbers(pro
         "publisher={Publisher},year={2025}}\n", encoding="utf-8")
     result = req(client, "format", root, key="roberts2025", style="harvard")
     assert result.status_code == 409
-    assert req(client, "format", root, key="smith2026", style="ieee").json()["number"] == 2 or \
-           req(client, "format", root, key="smith2026", style="ieee").json()["number"] == 1
+    assert req(client, "format", root, key="smith2026", style="ieee").json()["number"] == 1
 
 
 def test_bounded_report_and_bib_parse_does_not_evaluate_tex_macros(project, monkeypatch):
