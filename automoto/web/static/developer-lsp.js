@@ -75,18 +75,19 @@ export function mountDeveloperLSP({api,host,getProject,editor,status}) {
     }catch(error){message("Unable to inspect language servers: "+error.message,true);}
     controls();
   }
-  async function projectChanged(previousProject){
+  async function projectChanged(){
     const prior=openedProject;
+    const oldSession=session;
     seq++;
     session=null;activeFile=null;busy=false;
-    if(prior) {
-      // Stop the previous session with the previous project identifier, not the new one.
-      try {
-        if(previousProject?.project===prior && previousProject?.trusted)await stop(prior);
-      } catch{}
-    }
     openedProject=getProject()?.project||null;
+    if(oldSession && prior) {
+      // The previous session must be closed under its original root identity.
+      try{await api(BASE+"/stop",{session_id:oldSession.session_id,project:prior});}
+      catch{/* Server-side idle/identity checks still guard retired sessions. */}
+    }
     text("No language-server request has been made.");
+    message("Language server not running.");
     await refresh();
   }
   async function trustChanged(){
