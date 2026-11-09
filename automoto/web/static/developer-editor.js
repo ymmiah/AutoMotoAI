@@ -452,10 +452,22 @@ export function mountDeveloperEditor({api,host,project,status}) {
     status("Proposed replacement loaded as unsaved text. Review diff and confirm Save before changing disk.");
     return true;
   }
+  function revealLocation(path,line,column){
+    if(current()?.path!==path||!Number.isInteger(line)||line<1)return false;
+    if(monacoAdapter){monacoAdapter.reveal(line,column);return true;}
+    const field=el("dsSourceText");
+    const lines=field.value.split("\\n");
+    let index=0;
+    for(let i=0;i<Math.min(line-1,lines.length);i++)index+=lines[i].length+1;
+    index+=Math.min(Math.max((column||1)-1,0),(lines[line-1]||"").length);
+    field.focus();field.setSelectionRange(index,index);
+    return true;
+  }
   return {
     openFile,
     currentFile,
     openPaths:()=>[...tabs.keys()].slice(0,10),
+    revealLocation,
     applyProposal,
     reset(){
       if([...tabs.values()].some(t=>t.dirty) &&
