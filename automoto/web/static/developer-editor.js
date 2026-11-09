@@ -475,8 +475,22 @@ export function mountDeveloperEditor({api,host,project,status,onFileOpened=()=>{
     }
     return true;
   }
+  function lspContext() {
+    const tab=current();
+    if(!tab)return null;
+    const text=el("dsSourceText").value;
+    const pos=monacoAdapter?.position();
+    let line,column;
+    if(pos){line=pos.line-1;column=pos.column-1;}
+    else{
+      const prefix=text.slice(0,el("dsSourceText").selectionStart||0).split("\n");
+      line=prefix.length-1;column=prefix[prefix.length-1].length;
+    }
+    return {path:tab.path,text,position:{line:Math.max(0,line),character:Math.max(0,column)}};
+  }
   return {
     openFile,
+    lspContext,
     setLanguageMode,
     currentFile,
     openPaths:()=>[...tabs.keys()].slice(0,10),
