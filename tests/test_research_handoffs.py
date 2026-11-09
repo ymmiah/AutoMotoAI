@@ -80,7 +80,9 @@ def save_body(ref, target, **kwargs):
 def test_endpoints_require_auth_and_are_intentionally_local_only(client):
     for action in ("sources", "list", "open"):
         assert not path_allowed("GET", BASE + "/" + action)
-        assert client.get(BASE + "/" + action).status_code == 403
+        params = ({"path": "artifacts/research/handoffs/handoff-" + "a" * 24 + ".handoff.json"}
+                  if action == "open" else {})
+        assert client.get(BASE + "/" + action, params=params).status_code == 403
     for action in ("preview", "save"):
         assert not path_allowed("POST", BASE + "/" + action)
         assert client.post(BASE + "/" + action, json={}).status_code == 403
