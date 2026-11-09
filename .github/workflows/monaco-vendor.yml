@@ -1,0 +1,56 @@
+name: Vendor offline Monaco — Developer Studio V2
+on:
+  push:
+    branches: [feature/developer-studio-v2-monaco-offline]
+    paths:
+      - ".github/workflows/monaco-vendor.yml"
+      - "tools/developer-monaco/**"
+permissions:
+  contents: write
+concurrency:
+  group: monaco-vendor-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  vendor:
+    if: github.repository == 'ymmiah/AutoMotoAI'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install pinned Monaco and esbuild with integrity lockfile
+        working-directory: tools/developer-monaco
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Verify all local worker bundles and package integrity
+        run: |
+          node --check automoto/web/static/vendor/monaco/monaco.js
+          node --check automoto/web/static/vendor/monaco/editor.worker.js
+          node --check automoto/web/static/vendor/monaco/ts.worker.js
+          python - <<'PY'
+          import hashlib,json,pathlib
+          p=pathlib.Path('automoto/web/static/vendor/monaco')
+          doc=json.loads((p/'manifest.json').read_text())
+          assert doc['version']=='0.57.0'
+          for name,meta in doc['files'].items():
+              content=(p/name).read_bytes()
+              assert hashlib.sha256(content).hexdigest()==meta['sha256'],name
+          assert len(doc['files'])>=8
+          print('Offline Monaco + worker digests verified')
+          PY
+      - name: Commit reproducible vendor assets to development branch
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git add tools/developer-monaco/package-lock.json automoto/web/static/vendor/monaco
+          if git diff --cached --quiet; then
+            echo "Vendor assets already identical"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "build(developer-studio): vendor Monaco 0.57.0 ESM editor and workers for offline installation"
+          git push origin "HEAD:$BRANCH"
