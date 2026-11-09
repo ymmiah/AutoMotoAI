@@ -223,3 +223,12 @@ def test_global_index_memory_budgets_apply_across_files(workspace, monkeypatch):
     assert response["symbol_count"] <= 2
     assert response["token_count"] <= 3
     assert len(request(client, "symbols", root).json()["items"]) <= 2
+
+
+def test_utf16_editor_columns_after_astral_unicode_character(workspace):
+    client, root = workspace
+    (root / "emoji.py").write_text('value = "🙂"; target = 1\n', encoding="utf-8")
+    matches = request(client, "references", root, identifier="target").json()["items"]
+    assert len(matches) == 1
+    # Python sees one code point; Monaco/LSP sees two UTF-16 code units.
+    assert matches[0]["character"] == len('value = "🙂"; '.encode("utf-16-le")) // 2
