@@ -25,6 +25,7 @@ def test_vendor_manifest_integrity():
     assert manifest_file.is_file(), "Offline Monaco not bundled in installed package"
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
     assert manifest["version"] == "0.57.0"
+    assert manifest["sanitizer"] == "dompurify@3.4.17", "Unpatched vulnerable DOMPurify must not ship"
     assert manifest["format"] == "esm"
     listed = manifest["files"]
     for name in REQUIRED:
