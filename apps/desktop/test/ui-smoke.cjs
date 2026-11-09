@@ -1911,6 +1911,66 @@ let browser;
   assert.equal(readFileSync(path.join(devProject,'generated.txt')).length,0);
   await page.screenshot({path:path.join(output,'developer-studio-v3-safe-lifecycle.png')});
 
+  // V4: literal search, guarded replacement proposal, keyboard navigation.
+  assert.equal(await page.locator('#dsRootStrip .ds-root-chip').count()>=1,true,
+    'Multi-root navigator must show approved locations');
+  await page.locator('#dsSearchQuery').fill('externally');
+  await page.locator('#dsSearchGo').click();
+  await page.locator('#dsSearchResults .ds-search-hit').first().waitFor();
+  assert.match(await page.locator('#dsResultSummary').innerText(),/matches/);
+  assert.equal(await page.locator('#dsSearchResults .ds-search-hit').count()>=1,true);
+  await page.locator('#dsSearchResults .ds-search-hit').first().click();
+  await page.waitForFunction(() => document.querySelector('#dsFilename')?.textContent==='main.ts');
+  const v4Before=readFileSync(path.join(devProject,'main.ts'));
+  await page.locator('#dsReplaceValue').fill('reviewed');
+  await page.locator('#dsReplaceReview').click();
+  await page.locator('#dsReplacePreview').waitFor({state:'visible'});
+  assert.match(await page.locator('#dsReplacePreview').innerText(),/reviewed/);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),v4Before,
+    'Search-and-replace preview must never write source');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsReplaceApply').click();
+  await page.waitForFunction(() => document.querySelector('#dsSourceText')?.value?.includes('reviewed'));
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),v4Before,
+    'Loading a proposed replacement must create unsaved text only');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsSaveFile').click();
+  await page.waitForFunction(() => document.querySelector('#dsStatus')?.textContent?.includes('Saved:'));
+  assert.match(readFileSync(path.join(devProject,'main.ts'),'utf8'),/reviewed/);
+
+  await page.keyboard.press('ControlOrMeta+Shift+P');
+  assert.equal(await page.locator('#dsCommandPalette').evaluate(node=>node.open),true);
+  await page.locator('#dsPaletteFilter').fill('Focus source search');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#dsCommandPalette').evaluate(node=>node.open),false);
+  assert.equal(await page.evaluate(() => document.activeElement?.id),'dsSearchQuery');
+  await page.locator('#dsPanelHandle').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#dsPanelHandle').getAttribute('aria-valuenow'),'37');
+
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsRemember').check();
+  const navSaved=await page.evaluate(()=>
+    JSON.parse(localStorage.getItem('automoto.developer.navigation.v4')||'null'));
+  assert.equal(navSaved?.project,devProject);
+  assert.equal(navSaved?.files?.includes('main.ts'),true);
+  assert.equal(JSON.stringify(navSaved).includes('reviewed'),false,
+    'Navigation persistence must not contain source text');
+
+  const initialViewport=page.viewportSize();
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#dsShowEditor').click();
+  assert.equal(await page.locator('section[aria-label="Project files"]').isVisible(),false);
+  assert.equal(await page.locator('section[aria-label="Source editor"]').isVisible(),true);
+  await page.locator('#dsShowExplorer').click();
+  assert.equal(await page.locator('section[aria-label="Project files"]').isVisible(),true);
+  assert.equal(await page.locator('section[aria-label="Source editor"]').isVisible(),false);
+  if(initialViewport)await page.setViewportSize(initialViewport);
+  await page.screenshot({path:path.join(output,'developer-studio-v4-project-navigation.png')});
+
+  await page.locator('#dsClearSession').click();
+  assert.equal(await page.evaluate(()=>
+    localStorage.getItem('automoto.developer.navigation.v4')),null);
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
