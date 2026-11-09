@@ -39,7 +39,7 @@ export function mountDeveloperNavigation({api,host,editor,getProject,getDirector
       '<div class="ds-palette-heading"><h3 id="dsPaletteTitle">Developer commands</h3><button type="button" class="btn sm" id="dsPaletteClose">Close</button></div>'+
       '<label for="dsPaletteFilter">Search commands</label>'+
       '<input class="input" id="dsPaletteFilter" autocomplete="off" placeholder="Type a command">'+
-      '<div id="dsPaletteItems" role="listbox" aria-label="Available commands"></div>'+
+      '<div id="dsPaletteItems" role="group" aria-label="Available commands"></div>'+
     '</dialog>';
   let roots=[],selected=null,proposal=null,requestSeq=0;
   let lastResultContext=null;
@@ -97,7 +97,7 @@ export function mountDeveloperNavigation({api,host,editor,getProject,getDirector
       (wasTruncated?" (results capped; narrow the search)":"")+". Select a result to open it.";
     for(const hit of items) {
       const button=document.createElement("button");
-      button.type="button";button.className="ds-search-hit";button.setAttribute("role","listitem");
+      button.type="button";button.className="ds-search-hit";
       const title=document.createElement("strong");
       const root=roots.find(x=>x.project===hit.project);
       title.textContent=(root?.name||"Project")+" / "+hit.path+
@@ -106,7 +106,8 @@ export function mountDeveloperNavigation({api,host,editor,getProject,getDirector
       snippet.textContent=hit.preview||hit.path;
       button.append(title,snippet);
       button.addEventListener("click",()=>selectHit(hit));
-      target.appendChild(button);
+      const item=document.createElement("div");item.setAttribute("role","listitem");
+      item.appendChild(button);target.appendChild(item);
     }
     if(!items.length)status("No matching source files found.");
   }
@@ -229,7 +230,7 @@ export function mountDeveloperNavigation({api,host,editor,getProject,getDirector
     const list=el("dsPaletteItems");list.replaceChildren();
     for(const [name,action] of actions.filter(x=>x[0].toLowerCase().includes(value))){
       const button=document.createElement("button");
-      button.type="button";button.className="ds-command";button.setAttribute("role","option");
+      button.type="button";button.className="ds-command";
       button.textContent=name;
       button.onclick=()=>{
         dialog.close();action();
