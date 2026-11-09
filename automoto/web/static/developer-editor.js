@@ -28,7 +28,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
     '<pre class="ds-preview ds-highlight" id="dsHighlighted" tabindex="0" hidden><code id="dsHighlightCode"></code></pre>'+
     '<div class="ds-editor-footer"><span id="dsCursor">Line 1 · Column 1</span>'+
     '<span id="dsSaveHint">Saves require a trusted project and explicit confirmation.</span></div>';
-  const el=id=>root.querySelector("#"+id);
+  // Header labels live in the containing studio panel, outside #dsEditorRoot.
+  const el=id=>host.querySelector("#"+id);
   const tabs=new Map();
   let active=null,seq=0,auto=false,timer=null,mode="edit";
   const languageMap={
