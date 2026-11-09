@@ -234,7 +234,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
   el("dsModePreview").onclick=()=>modeSwitch("preview");
   el("dsEncoding").onchange=event=>{
     const tab=current();if(!tab)return;
-    if(tab.dirty){status("Save or discard unsaved edits before changing file encoding.",true);return;}
+    if(tab.dirty){el("dsEncoding").value=tab.encoding==="cp1252"?"cp1252":"auto";
+      status("Save or discard unsaved edits before changing file encoding.",true);return;}
     reload(event.target.value);
   };
   el("dsAutosave").onchange=event=>{
@@ -255,10 +256,17 @@ export function mountDeveloperEditor({api,host,project,status}) {
     }
   };
   window.addEventListener("beforeunload",onBeforeUnload);
-  window.addEventListener("hashchange",()=>{
+  const leaveGate=()=>![...tabs.values()].some(tab=>tab.dirty) ||
+    window.confirm("You have unsaved source changes. Leave Developer Studio and discard them?");
+  window.__automotoDevConfirmLeave=leaveGate;
+  const cleanup=()=>{
+    if(host.isConnected)return;
     window.removeEventListener("beforeunload",onBeforeUnload);
+    window.removeEventListener("hashchange",cleanup);
+    if(window.__automotoDevConfirmLeave===leaveGate)delete window.__automotoDevConfirmLeave;
     clearTimer();
-  },{once:true});
+  };
+  window.addEventListener("hashchange",cleanup);
   return {
     openFile,
     reset(){
