@@ -85,7 +85,12 @@ def test_endpoints_require_auth_and_are_intentionally_local_only(client):
         assert client.get(BASE + "/" + action, params=params).status_code == 403
     for action in ("preview", "save"):
         assert not path_allowed("POST", BASE + "/" + action)
-        assert client.post(BASE + "/" + action, json={}).status_code == 403
+        ref = {
+            "comparison_path": "artifacts/research/comparisons/comparison-" + "a" * 24 + ".comparison.json",
+            "comparison_sha256": "b" * 64, "target": "document",
+        }
+        body = save_body(ref, "document") if action == "save" else ref
+        assert client.post(BASE + "/" + action, json=body).status_code == 403
 
 
 def test_document_preview_and_audited_native_draft(client, monkeypatch):
