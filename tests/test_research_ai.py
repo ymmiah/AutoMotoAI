@@ -106,7 +106,8 @@ def test_routes_require_auth_and_local_only_policy(client):
         assert client.post(BASE + "/" + action, json={}).status_code in (403, 422)
     for action in ("list", "open"):
         assert not path_allowed("GET", BASE + "/" + action)
-        assert client.get(BASE + "/" + action).status_code == 403
+        parameters = {"path": "artifacts/research/ai/proposals/proposal-" + "a"*24 + ".ai.json"} if action == "open" else {}
+        assert client.get(BASE + "/" + action, params=parameters).status_code == 403
     for action in ("delete", "publish", "accept-auto", "cloud", "sync", "replace"):
         assert not path_allowed("POST", BASE + "/" + action)
 
@@ -215,7 +216,9 @@ def test_prompt_is_data_only_and_no_model_tools(monkeypatch):
 
 
 def test_local_transport_loopback_no_redirect_no_proxy_and_bounded_reply(monkeypatch):
-    _mock_model(monkeypatch)
+    # Inspect the real transport function; do not replace _ask_local itself.
+    monkeypatch.setattr(document_ai, "_loopback_ollama", lambda: "http://127.0.0.1:11434")
+    monkeypatch.setattr(document_ai, "_selected_model", lambda: "existing-local-model")
     actions = []
     class FakeResponse:
         def __enter__(self): return self
