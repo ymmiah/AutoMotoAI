@@ -1,6 +1,7 @@
 # Developer Studio V5 — Language Registry & Intelligent Detection
 
 **Milestone:** Phase 2 · V5 of 64 · [Notion milestone](https://app.notion.com/p/4131cc3365d681c49a1cf40a8df7fc4c)
+**Development PR:** [#58](https://github.com/ymmiah/AutoMotoAI/pull/58) · **Status:** blocked at initial GitHub Actions startup checks (no jobs created); not production verified.
 **Dependency:** [V4 draft PR #57](https://github.com/ymmiah/AutoMotoAI/pull/57) based on [V3 draft PR #56](https://github.com/ymmiah/AutoMotoAI/pull/56). V5 is a dependent development change, not a production release.
 
 ## Implemented features
