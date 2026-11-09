@@ -123,6 +123,8 @@ from automoto import developer_lifecycle
 app.include_router(developer_lifecycle.router)  # V3 local-only file lifecycle and private recovery
 from automoto import developer_navigation
 app.include_router(developer_navigation.router)  # V4 bounded source search and review-only replacements
+from automoto import developer_languages
+app.include_router(developer_languages.router)  # V5 read-only language and framework intelligence
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
