@@ -56,7 +56,7 @@ No background cloud sync, automatic Git commit, package installation, shell exec
 
 ## Offline Monaco reproducibility and integrity
 
-**Development source:** `tools/developer-monaco/package.json` pins Monaco `0.57.0` and esbuild `0.28.2` with a committed npm integrity lockfile. `tools/developer-monaco/build.mjs` bundles the ESM editor, TypeScript/JavaScript, CSS, HTML, JSON and core workers locally, and records per-file SHA-256 hashes in `manifest.json`. All runtime assets—including codicon fonts, stylesheets, workers, licence and notices—ship inside the Python package via `pyproject.toml` package-data rules.
+**Development source:** `tools/developer-monaco/package.json` pins Monaco `0.57.0`, patched DOMPurify `3.4.17` and esbuild `0.28.2` with a committed npm integrity lockfile. **Security note:** Monaco 0.57.0 distributes an embedded vulnerable DOMPurify 3.4.15 shim; `build.mjs` replaces that precise ESM shim with an import of the audited 3.4.17 npm package **before bundling**. Simply overriding the npm dependency would be insufficient. The manifest records the sanitizer pin and `npm audit` is a blocking CI check. Prefer an official patched Monaco release when one is available and verified. `tools/developer-monaco/build.mjs` bundles the ESM editor, TypeScript/JavaScript, CSS, HTML, JSON and core workers locally, and records per-file SHA-256 hashes in `manifest.json`. All runtime assets—including codicon fonts, stylesheets, workers, licence and notices—ship inside the Python package via `pyproject.toml` package-data rules.
 
 To rebuild as a developer with internet access to the npm registry:
 
