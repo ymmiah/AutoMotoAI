@@ -62,13 +62,21 @@ export function mountDeveloperLatex({api,host,getProject,editor,status}) {
     await editor.openFile(item.path);
     editor.revealLocation(item.path,(item.line||0)+1,(item.character||0)+1);
   }
-  function line(item,name,detail){
+  function line(item,name,detail,target=null){
     const row=document.createElement("div");row.className="ds-tex-row";
     const label=document.createElement("button");label.className="ds-tex-location";
     label.type="button";label.textContent=name+" · "+item.path+":"+((item.line||0)+1);
     label.onclick=()=>void openLocation(item);
     const note=document.createElement("span");note.className="ds-tex-detail";note.textContent=detail||"";
-    row.append(label,note);results.appendChild(row);
+    row.append(label,note);
+    if(target){
+      const jump=document.createElement("button");jump.type="button";jump.className="btn sm";
+      jump.textContent="Go to definition";
+      jump.setAttribute("aria-label","Go to definition of "+name);
+      jump.onclick=()=>void openLocation(target);
+      row.append(jump);
+    }
+    results.appendChild(row);
   }
   function showGraph(data){
     clear();
@@ -83,13 +91,15 @@ export function mountDeveloperLatex({api,host,getProject,editor,status}) {
     heading("Labels ("+data.labels.length+")");
     for(const item of data.labels.slice(0,80))line(item,item.value,"definition");
     heading("References ("+data.references.length+")");
-    const defined=new Set(data.labels.map(x=>x.value));
+    const defined=new Map(data.labels.map(x=>[x.value,x]));
     for(const item of data.references.slice(0,80))
-      line(item,item.value,defined.has(item.value)?"resolved in scanned project":"unresolved");
+      line(item,item.value,defined.has(item.value)?"resolved in scanned project":"unresolved",
+        defined.get(item.value));
     heading("Citations ("+data.citations.length+")");
-    const bib=new Set(data.bibliography_keys.map(x=>x.value));
+    const bib=new Map(data.bibliography_keys.map(x=>[x.value,x]));
     for(const item of data.citations.slice(0,80))
-      line(item,item.value,bib.has(item.value)?"key found in local .bib":"not found");
+      line(item,item.value,bib.has(item.value)?"key found in local .bib":"not found",
+        bib.get(item.value));
   }
   function payload(){
     const project=getProject();
