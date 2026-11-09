@@ -2,6 +2,7 @@
   "name": "automoto-offline-monaco",
   "version": "0.57.0",
   "format": "esm",
+  "sanitizer": "dompurify@3.4.17",
   "files": {
     "assets/codicon-LTRFOK3N.ttf": {
       "size": 153228,
@@ -32,12 +33,12 @@
       "sha256": "29df1f6c949ecd5626a1229fa624e59812e93e70127f04a526c69ade569be03d"
     },
     "monaco.js": {
-      "size": 4594197,
-      "sha256": "79ff40bb0382ec46d988ebeee7b48057e7a459cb640f0c4c2c8025e3f098fdad"
+      "size": 4596554,
+      "sha256": "46f70063ab59d83dfc3f38b50e3751b2b589103f129be634ee7ccb662e96b60e"
     },
     "monaco.js.LEGAL.txt": {
-      "size": 606,
-      "sha256": "eb9baa5499dcadb06cb438e8640c379d505eec3099368898eaf7cc813619b292"
+      "size": 743,
+      "sha256": "756e8d2fdf9027fc21a8fb863128bb136c8a8fe102d77b513f2c07438b4a4f1b"
     },
     "ts.worker.js": {
       "size": 7037397,
