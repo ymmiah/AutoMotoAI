@@ -139,6 +139,8 @@ from automoto import research_ai
 app.include_router(research_ai.router)  # V5 opt-in loopback-only grounded research suggestions
 from automoto import research_handoffs
 app.include_router(research_handoffs.router)  # V6 verified cross-studio transfers with separate audit
+from automoto import research_acceptance
+app.include_router(research_acceptance.router)  # V7 acceptance checks and private, non-destructive recovery
 from automoto import document_recovery
 app.include_router(document_recovery.router)  # private, source-preserving recovery points
 from automoto import document_quality
@@ -175,6 +177,8 @@ EXPENSIVE = ("/api/agent", "/api/chat", "/api/conversations/chat", "/api/screen/
              "/api/research/studio/publish/save-draft",
              "/api/research/studio/ai/generate", "/api/research/studio/ai/save-review",
              "/api/research/studio/handoff/preview", "/api/research/studio/handoff/save",
+             "/api/research/studio/acceptance/audit", "/api/research/studio/acceptance/snapshot",
+             "/api/research/studio/acceptance/verify", "/api/research/studio/acceptance/stage",
              "/api/spreadsheets/import", "/api/spreadsheets/export", "/api/spreadsheets/calculate", "/api/spreadsheets/invoice/export", "/api/spreadsheets/commercial/export", "/api/spreadsheets/finance/export", "/api/spreadsheets/ai/review", "/api/spreadsheets/release/create", "/api/spreadsheets/release/restore", "/api/documents/recovery/save", "/api/documents/recovery/load",
              "/api/documents/quality/audit")
 _HITS: dict[tuple[str, str], deque] = {}

@@ -1620,6 +1620,101 @@ let browser;
   await page.waitForFunction(()=>document.querySelector('#rshDetails')?.
     textContent?.includes('Original source evidence: current'));
   await page.screenshot({path:path.join(output,'research-studio-v6-cross-studio-handoff.png')});
+
+  // V7 — inspect read-only integrity, explicit backup consent and isolated staging.
+  const v7Recovery='artifacts/research/recovery/snapshots/backup-'+'f'.repeat(24)+'.recovery.json';
+  const v7Archive='artifacts/research/recovery/snapshots/backup-'+'f'.repeat(24)+'.research.zip';
+  const v7Digest='e'.repeat(64);
+  let v7Saved=0,v7Staged=0;
+  await page.route('**/api/research/studio/acceptance/audit',route=>{
+    const chosen=route.request().postDataJSON();
+    assert.equal(chosen.comparison_path,v3SavedPath);
+    assert.equal(chosen.comparison_sha256,v4PrepareData.comparison_sha256);
+    assert.equal(chosen.review_path,v6ReviewPath);
+    assert.equal(chosen.handoff_path,v6Audit);
+    return route.fulfill(v4Mock({
+      comparison_path:v3SavedPath,comparison_sha256:chosen.comparison_sha256,
+      checked_artifacts:[{role:'original_source',path:'uploads/<img src=x onerror=alert(1)>.txt',
+        sha256:'f'.repeat(64),bytes:500}],
+      checked_source_count:2,checked_bytes:500,elapsed_ms:5.1,
+      integrity:'verified_against_selected_sha256',
+      manual_acceptance:[{item:'Verify all citations manually',
+        status:'not_certified_by_software'}],
+      science_verified:false,publication_ready:false,store_release_approved:false,
+      no_model_invocation:true,no_network_request:true,originals_modified:false
+    }));
+  });
+  await page.route('**/api/research/studio/acceptance/snapshot',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.acknowledgement,'SAVE PRIVATE RESEARCH RECOVERY');
+    assert.equal(input.confirm_no_publication,true);
+    assert.equal(input.handoff_path,v6Audit);
+    v7Saved++;
+    return route.fulfill(v4Mock({
+      path:v7Recovery,sha256:v7Digest,
+      archive_path:v7Archive,archive_sha256:'b'.repeat(64),
+      file_count:4,checked_bytes:500,
+      create_only:true,source_files_modified:false,published:false
+    }));
+  });
+  await page.route('**/api/research/studio/acceptance/list',route=>
+    route.fulfill(v4Mock({snapshots:v7Saved?[{
+      path:v7Recovery,sha256:v7Digest,
+      created_at:'2026-11-09T07:10:00Z',file_count:4
+    }]:[],limit:16})));
+  await page.route('**/api/research/studio/acceptance/verify',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.path,v7Recovery);
+    assert.equal(input.sha256,v7Digest);
+    return route.fulfill(v4Mock({
+      valid_against_recorded_hashes:true,file_count:4,
+      archive_sha256:'b'.repeat(64),restored:false,original_files_modified:false
+    }));
+  });
+  await page.route('**/api/research/studio/acceptance/stage',route=>{
+    const input=route.request().postDataJSON();
+    assert.equal(input.acknowledgement,'STAGE FILES WITHOUT OVERWRITING');
+    assert.equal(input.confirm_no_original_changes,true);
+    v7Staged++;
+    return route.fulfill(v4Mock({
+      staging_path:'artifacts/research/recovery/staging/stage-'+'c'.repeat(24),
+      file_count:4,original_files_modified:false,published:false,
+      requires_manual_review:true
+    }));
+  });
+  await page.locator('#rsaTitle').waitFor();
+  await page.locator('#rsaRefresh').click();
+  await page.waitForFunction(p=>[...document.querySelectorAll('#rsaComparison option')]
+    .some(x=>x.value===p),v3SavedPath);
+  await page.locator('#rsaComparison').selectOption(v3SavedPath);
+  await page.locator('#rsaReview').selectOption(v6ReviewPath);
+  await page.locator('#rsaHandoff').selectOption(v6Audit);
+  assert.equal(await page.locator('#rsaSnapshot').isDisabled(),true);
+  await page.locator('#rsaAudit').click();
+  await page.waitForFunction(()=>document.querySelector('#rsaIntegrity')?.textContent?.
+    includes('Source hash and excerpt checks passed'));
+  assert.equal(await page.locator('#rsaFiles img').count(),0,
+    'Untrusted filenames cannot become HTML elements');
+  assert.match(await page.locator('#rsaGates').innerText(),/Not independently verified/);
+  assert.match(await page.locator('#rsaNotice').count()+'',/0/,
+    'No untrusted source should produce a separate notice element');
+  await page.locator('#rsaConsent').check();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rsaSnapshot').click();
+  await page.waitForFunction(()=>document.querySelector('#rsaStatus')?.textContent?.
+    includes('Recovery copy created'));
+  assert.equal(v7Saved,1);
+  await page.locator('#rsaSaved').selectOption(v7Recovery);
+  assert.equal(await page.locator('#rsaStage').isDisabled(),true);
+  await page.locator('#rsaVerify').click();
+  await page.waitForFunction(()=>document.querySelector('#rsaStage')?.disabled===false);
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rsaStage').click();
+  await page.waitForFunction(()=>document.querySelector('#rsaStatus')?.textContent?.
+    includes('staged in isolation'));
+  assert.equal(v7Staged,1);
+  assert.match(await page.locator('#rsaRecoveryStatus').innerText(),/staging\/stage-/);
+  await page.screenshot({path:path.join(output,'research-studio-v7-quality-recovery.png')});
   await page.unrouteAll();
 
   await page.locator('#newChat').click();
