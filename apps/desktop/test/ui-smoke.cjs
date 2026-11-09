@@ -1719,9 +1719,9 @@ let browser;
   // V8 — passphrase-confirmed encrypted export and isolated clean-machine import.
   const v8Portable='artifacts/research/recovery/portable/capsule-'+'b'.repeat(24)+'.amrc8';
   const v8Digest='d'.repeat(64);
-  let v8Created=0,v8Inspected=0,v8Staged=0;
+  let v8PortableCreated=0,v8PortableInspected=0,v8PortableStaged=0;
   await page.route('**/api/research/studio/portable/list',route=>
-    route.fulfill(v4Mock({capsules:v8Created?[{
+    route.fulfill(v4Mock({capsules:v8PortableCreated?[{
       path:v8Portable,sha256:v8Digest,created_at:'2026-11-09T07:33:00Z',file_count:4
     }]:[],ciphertext_only:true})));
   await page.route('**/api/research/studio/portable/create',route=>{
@@ -1731,13 +1731,13 @@ let browser;
     assert.equal(form.passphrase,'v8-test-recovery-long-passphrase');
     assert.equal(form.acknowledgement,'ENCRYPT PORTABLE BACKUP');
     assert.equal(form.confirm_user_will_store_separately,true);
-    v8Created++;
+    v8PortableCreated++;
     return route.fulfill(v4Mock({path:v8Portable,sha256:v8Digest,file_count:4,
       encrypted:true,format:'amrc8-aes-256-gcm-scrypt',originals_modified:false}));
   });
   await page.route('**/api/research/studio/portable/inspect',route=>{
     assert.match(route.request().headers()['content-type'],/multipart\/form-data/);
-    v8Inspected++;
+    v8PortableInspected++;
     return route.fulfill(v4Mock({
       capsule_sha256:v8Digest,file_count:4,verified_against_encrypted_manifest:true,
       trust_status:'quarantined_not_reinstated',manual_review_required:true,
@@ -1748,7 +1748,7 @@ let browser;
   await page.route('**/api/research/studio/portable/stage',route=>{
     assert.match(route.request().postData(),/expected_sha256/);
     assert.match(route.request().postData(),/STAGE ENCRYPTED BACKUP/);
-    v8Staged++;
+    v8PortableStaged++;
     return route.fulfill(v4Mock({staging_path:'artifacts/research/recovery/staging/stage-'+
       'c'.repeat(24),file_count:4,original_files_modified:false,published:false,
       restored_into_trusted_locations:false,manual_review_required:true}));
@@ -1763,7 +1763,7 @@ let browser;
   await page.locator('#rspEncrypt').click();
   await page.waitForFunction(()=>document.querySelector('#rspStatus')?.textContent?.
     includes('Encrypted recovery created'));
-  assert.equal(v8Created,1);
+  assert.equal(v8PortableCreated,1);
   assert.equal(await page.locator('#rspPassword').inputValue(),'',
     'Recovery password must clear after successful export');
   await page.locator('#rspFile').setInputFiles({
@@ -1775,7 +1775,7 @@ let browser;
   await page.locator('#rspInspect').click();
   await page.waitForFunction(()=>document.querySelector('#rspStatus')?.textContent?.
     includes('Encrypted archive and original source digests verified'));
-  assert.equal(v8Inspected,1);
+  assert.equal(v8PortableInspected,1);
   assert.equal(await page.locator('#rspFileList img').count(),0,
     'Untrusted imported source paths must never become HTML markup');
   await page.locator('#rspStageConsent').check();
@@ -1783,7 +1783,7 @@ let browser;
   await page.locator('#rspStage').click();
   await page.waitForFunction(()=>document.querySelector('#rspStatus')?.textContent?.
     includes('safely staged in isolation'));
-  assert.equal(v8Staged,1);
+  assert.equal(v8PortableStaged,1);
   assert.equal(await page.locator('#rspImportPass').inputValue(),'',
     'Import password must clear after successful isolated staging');
   await page.screenshot({path:path.join(output,'research-studio-v8-encrypted-portable-recovery.png')});
