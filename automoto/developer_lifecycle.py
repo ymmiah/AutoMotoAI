@@ -178,7 +178,7 @@ def snapshot(request: Request, body: WorkingCopy):
     root = _allowed(body.project)
     with LOCK:
         _, disk = _source(root, body.path, body.expected_sha256)
-        if "\\x00" in body.text or len(body.text.encode("utf-8")) > edit.MAX_BYTES:
+        if chr(0) in body.text or len(body.text.encode("utf-8")) > edit.MAX_BYTES:
             raise HTTPException(413, "Snapshot exceeds safe text limits.")
         uid = _store_snapshot(root, body, disk)
     return {"snapshot_id": uid, "saved_locally": True, "source_modified": False}
@@ -229,7 +229,7 @@ def diff_preview(request: Request, body: WorkingCopy):
     source, encoding = edit._decode(disk, "auto" if body.encoding != "cp1252" else "cp1252")
     if encoding != body.encoding:
         raise HTTPException(409, "Encoding changed on disk.")
-    if "\\x00" in body.text or len(body.text.encode("utf-8")) > edit.MAX_BYTES:
+    if chr(0) in body.text or len(body.text.encode("utf-8")) > edit.MAX_BYTES:
         raise HTTPException(413, "Diff source exceeds safe text limits.")
     old = source.splitlines(keepends=True)
     new = body.text.splitlines(keepends=True)
