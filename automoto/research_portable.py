@@ -19,7 +19,8 @@ from typing import Literal
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, HTTPException, Request
+from starlette.datastructures import UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
@@ -135,6 +136,8 @@ def _path(value: str, *, kind: Literal["capsule", "record"]) -> Path:
 
 
 def _metadata(path: Path) -> dict:
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_RECORD_BYTES:
+        raise HTTPException(422, "Portable metadata is missing, symbolic or oversized.")
     raw = path.read_bytes()
     if len(raw) > MAX_RECORD_BYTES:
         raise HTTPException(413, "Portable recovery record is oversized.")
@@ -186,8 +189,7 @@ def create(body: CreateIn, request: Request):
     record, members = research_acceptance._verify(body)
     backup_meta = research_acceptance._record_path(body.path)
     raw_record = backup_meta.read_bytes()
-    archive = backup_meta.with_suffix(".research.zip")
-    # The archive name does NOT equal the metadata name with_suffix: derive from V7 ID.
+    # Derive the paired ZIP from V7’s strict backup ID, not an untrusted path.
     token = research_acceptance.NAME.fullmatch(backup_meta.name).group(1)
     archive = backup_meta.with_name("backup-" + token + ".research.zip")
     if archive.is_symlink() or not archive.is_file():
@@ -250,7 +252,7 @@ def download(request: Request, path: str, sha256: str):
     if not re.fullmatch(r"[a-f0-9]{64}", sha256):
         raise HTTPException(422, "Select an exact recovery digest.")
     file = _path(path, kind="capsule")
-    record = _metadata(_sidecar(file))
+    record = _metadata(_path(PREFIX + _sidecar(file).name, kind="record"))
     if record["sha256"] != sha256 or document_workspace._sha(file) != sha256:
         raise HTTPException(409, "Encrypted portable capsule changed since selection.")
     return FileResponse(file, filename=file.name, media_type="application/octet-stream",
