@@ -2,10 +2,13 @@
 import {mountDeveloperEditor} from "./developer-editor.js";
 import {mountDeveloperNavigation} from "./developer-navigation.js";
 import {mountDeveloperLanguageIntelligence} from "./developer-language.js";
+import {mountDeveloperLSP} from "./developer-lsp.js";
+import {mountDeveloperIndex} from "./developer-index.js";
+import {mountDeveloperAdapters} from "./developer-adapters.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V5 · Language intelligence. Evidence-backed language/framework detection, local tool checks and manual syntax mode selection. No source execution.",
+    "V8 · External toolchain and debugger adapter SDK. Register SHA-256-pinned local tools and run only with separate approval.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -17,8 +20,11 @@ export async function mountDeveloperStudio({api,page,toast}) {
         '<div><span class="ds-eyebrow">CURRENT WORKSPACE</span><strong id="dsProject">No project open</strong>'+
         '<span id="dsTrustState">Select a local folder to begin.</span></div>'+
         '<button class="btn" id="dsTrust" type="button" hidden>Trust this project</button></section>'+
-      '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. No source execution or automatic cloud processing is enabled.</p>'+
-      '<div id="dsLanguageRoot" aria-label="Project language and framework intelligence"></div>'+ 
+      '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. Language servers and external toolchain adapters run only after separate approval; these programs are not OS-sandboxed and may modify project files. No automatic cloud processing is enabled.</p>'+
+      '<div id="dsLanguageRoot" aria-label="Project language and framework intelligence"></div>'+
+      '<div id="dsLspRoot" aria-label="Approved local language server controls"></div>'+ 
+      '<div id="dsIndexRoot" aria-label="Source symbol index and file outline"></div>'+ 
+      '<div id="dsAdaptersRoot" aria-label="Explicitly approved local toolchain and debugger adapters"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -35,11 +41,14 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence;
+  let languageIntelligence,lsp,index,adapters;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
+  lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
+  index=mountDeveloperIndex({api,host,getProject:()=>project,editor,status});
+  adapters=mountDeveloperAdapters({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -77,7 +86,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   function showTrust() {
     byId("dsProject").textContent=project?project.project:"No project open";
     byId("dsTrustState").textContent=project
-      ? project.trusted?"Trusted project · source editing and guarded file operations enabled. Code execution disabled.":"Restricted workspace · source browsing only."
+      ? project.trusted?"Trusted project · guarded editing enabled; language servers require separate approval.":"Restricted workspace · source browsing only."
       :"Select a local folder to begin.";
     byId("dsTrust").hidden=!project;
     byId("dsTrust").textContent=project?.trusted?"Revoke trust":"Trust this project";
@@ -93,7 +102,10 @@ export async function mountDeveloperStudio({api,page,toast}) {
       const data=await api(BASE+"/open",{project:path});
       if(project?.project!==data.project && !editor.reset())return false;
       project=data;
+      await lsp.projectChanged();
       languageIntelligence.reset();
+      await index.projectChanged();
+      await adapters.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
@@ -240,10 +252,16 @@ export async function mountDeveloperStudio({api,page,toast}) {
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();editor.trustChanged();await locations();
+      showTrust();editor.trustChanged();await lsp.trustChanged();await adapters.trustChanged();await locations();
       status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });
+  const lspCleanup=()=>{
+    if(host.isConnected)return;
+    window.removeEventListener("hashchange",lspCleanup);
+    void lsp.stop();
+  };
+  window.addEventListener("hashchange",lspCleanup);
   try {
     await locations();
   }catch(error) {
