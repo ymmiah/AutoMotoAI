@@ -119,6 +119,18 @@ from automoto import developer_studio
 app.include_router(developer_studio.router)  # V1 local-only read-only trusted source explorer
 from automoto import developer_editor
 app.include_router(developer_editor.router)  # V2 explicit, conflict-safe local source edits
+from automoto import developer_lifecycle
+app.include_router(developer_lifecycle.router)  # V3 local-only file lifecycle and private recovery
+from automoto import developer_navigation
+app.include_router(developer_navigation.router)  # V4 bounded source search and review-only replacements
+from automoto import developer_languages
+app.include_router(developer_languages.router)  # V5 read-only language and framework intelligence
+from automoto import developer_lsp
+app.include_router(developer_lsp.router)  # V6 explicit trusted LSP lifecycle and read-only code intelligence
+from automoto import developer_index
+app.include_router(developer_index.router)  # V7 private bounded source symbol and lexical index
+from automoto import developer_adapters
+app.include_router(developer_adapters.router)  # V8 explicit permissioned external toolchain & DAP adapter SDK
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

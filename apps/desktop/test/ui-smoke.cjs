@@ -3,7 +3,7 @@
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
-const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } = require('node:fs');
+const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
@@ -1806,6 +1806,10 @@ let browser;
   mkdirSync(devProject,{recursive:true});
   writeFileSync(path.join(devProject,'main.ts'),'export const title = "read-only";\n');
   writeFileSync(path.join(devProject,'other.py'),'print("second tab")\n');
+  writeFileSync(path.join(devProject,'package.json'),JSON.stringify({
+    dependencies:{"next":"^16.0.0","react":"^19.0.0"},
+    scripts:{postinstall:"not-executed-during-v5-detection"}
+  }));
   writeFileSync(path.join(devProject,'.env'),'PRIVATE_KEY=never-disclose');
   const devBefore=readFileSync(path.join(devProject,'main.ts'));
   await page.locator('.nav [data-page="developer"]').click();
@@ -1822,10 +1826,187 @@ let browser;
   assert.equal(await page.locator('#dsSourceText').getAttribute('readonly'),'');
   assert.equal(await page.locator('#dsSaveFile').isDisabled(),true);
   assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore);
+  // V5: actual server detection, evidence, language-mode override and inert tool checks.
+  await page.waitForFunction(() => document.querySelector('#dsDetectedFile')?.textContent==='typescript');
+  assert.match(await page.locator('#dsDetectedFrameworks').innerText(),/Next\.js/);
+  assert.match(await page.locator('#dsDetectedEvidence').innerText(),/extension: \.ts/);
+  assert.equal(await page.locator('#dsLanguageOverride').isEnabled(),true);
+  await page.locator('#dsLanguageOverride').selectOption('python');
+  assert.equal(await page.locator('#dsEditorLang').innerText(),'python');
+  await page.locator('#dsLanguageOverride').selectOption('');
+  assert.equal(await page.locator('#dsEditorLang').innerText(),'typescript');
+  await page.locator('#dsLanguageTools').click();
+  await page.waitForFunction(() => document.querySelector('#dsDetectedTools')?.textContent?.includes('version not verified') ||
+    document.querySelector('#dsDetectedTools')?.textContent?.includes('Unavailable on the host PATH'));
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,'V5 inspection never writes files');
+  await page.screenshot({path:path.join(output,'developer-studio-v5-language-intelligence.png')});
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#dsTrust').click();
   await page.waitForFunction(() => document.querySelector('#dsTrustState')?.textContent?.includes('Trusted'));
   assert.equal(await page.locator('#dsSourceText').getAttribute('readonly'),null);
+  // V6 browser: explicit local LSP consent, source-grounded safe presentation.
+  assert.equal(await page.locator('#dsLspStart').isDisabled(),true,
+    'No language server may start before the operator chooses an installed tool');
+  let v6Started=0,v6Queried=0,v6Stopped=0;
+  await page.route('**/api/developer/studio/lsp/*',async route=>{
+    const url=new URL(route.request().url());
+    const endpoint=url.pathname.split('/').at(-1);
+    const payload=route.request().postDataJSON?.()||{};
+    let body={};
+    if(endpoint==='servers'){
+      body={servers:[{language:'typescript',binary:'typescript-language-server',
+        status:'available',requires_trust:true,requires_explicit_start:true}],
+        automatic_start:false,platform_sandbox:false};
+    }else if(endpoint==='start'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.language,'typescript');
+      v6Started++;
+      body={session_id:'v'.repeat(48),language:'typescript',capabilities:{
+        hoverProvider:true,completionProvider:true,definitionProvider:true,
+        referencesProvider:true,renameProvider:true},source_modified:false};
+    }else if(endpoint==='query'){
+      v6Queried++;
+      assert.equal(payload.path,'main.ts');
+      assert.equal(payload.method,'textDocument/hover');
+      body={method:payload.method,result:{text:'fixture hover · trusted local source'},
+        source_modified:false};
+    }else if(endpoint==='stop'){
+      v6Stopped++;
+      body={stopped:true,source_modified:false};
+    }else if(endpoint==='document')body={source_modified:false};
+    else if(endpoint==='diagnostics')body={files:[],source_modified:false};
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  });
+  await page.locator('#dsLspRefresh').click();
+  await page.locator('#dsLspSelect').selectOption('typescript');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsLspStart').click();
+  await page.waitForFunction(() => document.querySelector('#dsLspStatus')?.textContent?.includes('server ready'));
+  await page.locator('[data-lsp="textDocument/hover"]').click();
+  await page.waitForFunction(() => document.querySelector('#dsLspResult')?.textContent?.includes('fixture hover'));
+  assert.equal(v6Started,1);
+  assert.equal(v6Queried,1);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,
+    'LSP hover cannot modify source');
+  await page.locator('#dsLspStop').click();
+  await page.waitForFunction(() => document.querySelector('#dsLspStatus')?.textContent?.includes('server stopped'));
+  assert.equal(v6Stopped,1);
+  await page.unrouteAll();
+  await page.screenshot({path:path.join(output,'developer-studio-v6-lsp-consent.png')});
+  // V7: exercise real private index API and live on-disk incremental invalidation.
+  await page.locator('#dsIndexRefresh').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexState')?.textContent?.includes('files indexed'));
+  await page.locator('#dsIndexQuery').fill('title');
+  await page.locator('#dsIndexSearch').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexResults')?.textContent?.includes('title'));
+  assert.match(await page.locator('#dsIndexState').innerText(),/symbols found/);
+  await page.locator('#dsIndexResults').getByRole('button',{name:/Find lexical occurrences of title/}).first().click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexState')?.textContent?.includes('lexical occurrences'));
+  await page.locator('#dsIndexOutline').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexState')?.textContent?.includes('definitions'));
+  assert.match(await page.locator('#dsIndexResults').innerText(),/title/);
+  const v7NewSource=path.join(devProject,'new-indexed.py');
+  writeFileSync(v7NewSource,'def new_function():\n    return 1\n');
+  await page.locator('#dsIndexRefresh').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexState')?.textContent?.includes('changed'));
+  await page.locator('#dsIndexQuery').fill('new_function');
+  await page.locator('#dsIndexSearch').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexResults')?.textContent?.includes('new_function'));
+  writeFileSync(v7NewSource,'def updated_function():\n    return 2\n');
+  await page.locator('#dsIndexQuery').fill('updated_function');
+  await page.locator('#dsIndexSearch').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexResults')?.textContent?.includes('updated_function'));
+  await page.locator('#dsIndexQuery').fill('new_function');
+  await page.locator('#dsIndexSearch').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexState')?.textContent?.startsWith('0 symbols'));
+  assert.doesNotMatch(await page.locator('#dsIndexResults').innerText(),/new-indexed\.py/);
+  rmSync(v7NewSource);
+  await page.locator('#dsIndexQuery').fill('updated_function');
+  await page.locator('#dsIndexSearch').click();
+  await page.waitForFunction(() => document.querySelector('#dsIndexState')?.textContent?.startsWith('0 symbols'));
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,
+    'V7 never changed source or saved an index file into the project');
+  await page.screenshot({path:path.join(output,'developer-studio-v7-source-index.png')});
+  // V8: register an independently installed adapter without executing it;
+  // run only after separate confirmation. The real process/DAP layer is covered
+  // by tests/test_developer_adapters.py on Windows, macOS and Linux.
+  let v8Adapters=[],v8Runs=0,v8DAP=0,v8Registrations=0;
+  await page.route('**/api/developer/studio/adapters/**',async route=>{
+    const endpoint=new URL(route.request().url()).pathname.split('/').at(-1);
+    const payload=route.request().postDataJSON?.()||{};
+    let body={};
+    if(endpoint==='catalog')body={registered:v8Adapters,roles:[
+      'compiler','test','formatter','linter','package','debugger'],
+      auto_install:false,auto_execute:false,platform_sandbox:false};
+    else if(endpoint==='inspect')body={
+      executable:payload.executable,sha256:'a'.repeat(64),
+      size_bytes:123456,verification:'file bytes only; not a security audit'};
+    else if(endpoint==='register'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.expected_sha256,'a'.repeat(64));
+      assert.deepEqual(payload.args,['--version']);
+      if(v8Registrations===0)assert.equal(v8Runs,0,'Registering must never launch any executable');
+      const item={id:payload.id,label:payload.label,language:payload.language,
+        category:payload.category,protocol:payload.protocol,executable:payload.executable,
+        sha256:payload.expected_sha256,args:payload.args};
+      v8Adapters.push(item);v8Registrations++;
+      body={registered:true,adapter:item,executable_started:false,
+        installed_binary:false,project_files_modified:false};
+    }else if(endpoint==='run'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.accept_execution_and_write_risk,true);
+      v8Runs++;
+      body={adapter_id:payload.id,status:'completed',exit_code:0,
+        output:'<img src=x onerror=alert(1)> trusted fixture output',
+        elapsed_ms:5,platform_sandbox:false,source_files_unchanged:'not_verified'};
+    }else if(endpoint==='initialize'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.accept_execution_and_write_risk,true);
+      v8DAP++;
+      body={adapter_id:payload.id,status:'initialized_only',
+        launch_sent:false,attach_sent:false,configuration_sent:false,
+        capabilities:{supportsConfigurationDoneRequest:true},process_terminated:true};
+    }else if(endpoint==='unregister'){
+      v8Adapters=v8Adapters.filter(item=>item.id!==payload.id);
+      body={unregistered:true,binary_uninstalled:false,project_files_modified:false};
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  });
+  await page.locator('#dsAdapterId').fill('external-python-test');
+  await page.locator('#dsAdapterLabel').fill('External test runner');
+  await page.locator('#dsAdapterExecutable').fill('/usr/local/bin/installed-tool');
+  await page.locator('#dsAdapterArgs').fill('["--version"]');
+  await page.locator('#dsAdapterInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterSha')?.value?.length===64);
+  assert.equal(await page.locator('#dsAdapterRegister').isEnabled(),true);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRegister').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterSelected')?.options?.length===2);
+  assert.equal(v8Registrations,1);
+  assert.equal(v8Runs,0,'Installed adapter registration does not launch a process');
+  await page.locator('#dsAdapterSelected').selectOption('external-python-test');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterOutput')?.textContent?.includes('trusted fixture output'));
+  assert.equal(v8Runs,1);
+  assert.equal(await page.locator('#dsAdapterOutput img').count(),0,
+    'Untrusted tool output must be inert text, not HTML');
+  await page.locator('#dsAdapterId').fill('external-dap-probe');
+  await page.locator('#dsAdapterLabel').fill('External debug adapter');
+  await page.locator('#dsAdapterCategory').selectOption('debugger');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRegister').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterSelected')?.options?.length===3);
+  await page.locator('#dsAdapterSelected').selectOption('external-dap-probe');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterOutput')?.textContent?.includes('initialized_only'));
+  assert.equal(v8DAP,1);
+  assert.equal(await page.locator('#dsAdapterOutput').innerText().then(s=>s.includes('"launch_sent": false')),true);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,
+    'Mocked V8 SDK controls must not change project files');
+  await page.screenshot({path:path.join(output,'developer-studio-v8-toolchain-adapters.png')});
+  await page.unrouteAll();
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
@@ -1861,6 +2042,137 @@ let browser;
   await page.waitForFunction(() => document.querySelector('#dsSourceText')?.value?.includes('externally edited'));
   await page.screenshot({path:path.join(output,'developer-studio-v2-safe-editor.png')});
 
+  // V3: real Monaco split, disk diff, private recovery and reversible file ops.
+  await page.locator('#dsSplit').click();
+  await page.locator('#dsMonacoSplit .monaco-editor').waitFor({state:'visible'});
+  assert.equal(await page.locator('#dsSplit').getAttribute('aria-pressed'),'true');
+  await replaceDeveloperSource('export const title = "v3 recovery";\n');
+  const savedSource=readFileSync(path.join(devProject,'main.ts'));
+  await page.locator('#dsSnapshot').click();
+  await page.waitForFunction(() => document.querySelector('#dsStatus')?.textContent?.includes('recovery snapshot recorded'));
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),savedSource,'snapshot must never change disk source');
+  await page.locator('#dsDiff').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsDiffPreview')?.hidden===false ||
+    document.querySelector('#dsStatus')?.textContent?.includes('Cannot generate diff:'));
+  const diffDebug=await page.locator('#dsDiffPreview').evaluate(node=>({
+    hidden:node.hidden,style:node.style.display,display:getComputedStyle(node).display,
+    status:document.querySelector('#dsStatus')?.textContent,
+    text:node.textContent?.slice(0,250),mode:document.querySelector('#dsModeEdit')?.getAttribute('aria-pressed')
+  }));
+  assert.equal(await page.locator('#dsDiffPreview').isVisible(),true,JSON.stringify(diffDebug));
+  assert.match(await page.locator('#dsDiffPreview').innerText(),/Saved source/);
+  assert.match(await page.locator('#dsDiffPreview').innerText(),/v3 recovery/);
+  await page.locator('#dsModeEdit').click();
+  const acceptRecovery=dialog=>dialog.accept();
+  page.on('dialog',acceptRecovery);
+  await page.locator('#dsRecover').click();
+  await page.waitForFunction(() => document.querySelector('#dsStatus')?.textContent?.includes('Recovered an unsaved working copy'));
+  page.off('dialog',acceptRecovery);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),savedSource);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsReloadFile').click();
+  await page.waitForFunction(() => document.querySelector('#dsSaveFile')?.disabled===true);
+  const withFilename=dialog=>dialog.type()==='prompt'?dialog.accept('generated.txt'):dialog.accept();
+  page.on('dialog',withFilename);
+  await page.locator('#dsCreate').click();
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('.ds-file-name')).some(n=>n.textContent==='generated.txt'));
+  assert.equal(readFileSync(path.join(devProject,'generated.txt')).length,0);
+  page.off('dialog',withFilename);
+  await page.locator('.ds-entry',{hasText:'generated.txt'}).click();
+  await page.waitForFunction(() => document.querySelector('#dsFilename')?.textContent==='generated.txt');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsTrash').click();
+  await page.waitForFunction(() => !Array.from(document.querySelectorAll('.ds-file-name')).some(n=>n.textContent==='generated.txt'));
+  assert.equal(existsSync(path.join(devProject,'generated.txt')),false);
+  page.on('dialog',withFilename);
+  await page.locator('#dsRestore').click();
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('.ds-file-name')).some(n=>n.textContent==='generated.txt'));
+  page.off('dialog',withFilename);
+  assert.equal(readFileSync(path.join(devProject,'generated.txt')).length,0);
+  await page.screenshot({path:path.join(output,'developer-studio-v3-safe-lifecycle.png')});
+
+  // V4: literal search, guarded replacement proposal, keyboard navigation.
+  assert.equal(await page.locator('#dsRootStrip .ds-root-chip').count()>=1,true,
+    'Multi-root navigator must show approved locations');
+  await page.locator('#dsSearchQuery').fill('externally');
+  await page.locator('#dsSearchGo').click();
+  await page.locator('#dsSearchResults .ds-search-hit').first().waitFor();
+  assert.match(await page.locator('#dsResultSummary').innerText(),/matches/);
+  assert.equal(await page.locator('#dsSearchResults .ds-search-hit').count()>=1,true);
+  await page.locator('#dsSearchResults .ds-search-hit').first().click();
+  await page.waitForFunction(() => document.querySelector('#dsFilename')?.textContent==='main.ts');
+  const v4Before=readFileSync(path.join(devProject,'main.ts'));
+  await page.locator('#dsReplaceValue').fill('reviewed');
+  await page.locator('#dsReplaceReview').click();
+  await page.locator('#dsReplacePreview').waitFor({state:'visible'});
+  assert.match(await page.locator('#dsReplacePreview').innerText(),/reviewed/);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),v4Before,
+    'Search-and-replace preview must never write source');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsReplaceApply').click();
+  await page.waitForFunction(() => document.querySelector('#dsSourceText')?.value?.includes('reviewed'));
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),v4Before,
+    'Loading a proposed replacement must create unsaved text only');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsSaveFile').click();
+  await page.waitForFunction(() => document.querySelector('#dsStatus')?.textContent?.includes('Saved:'));
+  assert.match(readFileSync(path.join(devProject,'main.ts'),'utf8'),/reviewed/);
+
+  await page.keyboard.press('ControlOrMeta+Shift+P');
+  assert.equal(await page.locator('#dsCommandPalette').evaluate(node=>node.open),true);
+  await page.locator('#dsPaletteFilter').fill('Focus source search');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#dsCommandPalette').evaluate(node=>node.open),false);
+  assert.equal(await page.evaluate(() => document.activeElement?.id),'dsSearchQuery');
+  await page.locator('#dsPanelHandle').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#dsPanelHandle').getAttribute('aria-valuenow'),'37');
+
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsRemember').check();
+  const navSaved=await page.evaluate(()=>
+    JSON.parse(localStorage.getItem('automoto.developer.navigation.v4')||'null'));
+  assert.equal(navSaved?.project,devProject);
+  assert.equal(navSaved?.files?.includes('main.ts'),true);
+  assert.equal(JSON.stringify(navSaved).includes('reviewed'),false,
+    'Navigation persistence must not contain source text');
+
+  const initialViewport=page.viewportSize();
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#dsShowEditor').click();
+  assert.equal(await page.locator('section[aria-label="Project files"]').isVisible(),false);
+  assert.equal(await page.locator('section[aria-label="Source editor"]').isVisible(),true);
+  await page.locator('#dsShowExplorer').click();
+  assert.equal(await page.locator('section[aria-label="Project files"]').isVisible(),true);
+  assert.equal(await page.locator('section[aria-label="Source editor"]').isVisible(),false);
+  if(initialViewport)await page.setViewportSize(initialViewport);
+  await page.screenshot({path:path.join(output,'developer-studio-v4-project-navigation.png')});
+
+  // Reload the app to prove opt-in session recovery revalidates the project and
+  // reloads sources from disk instead of caching source bytes in localStorage.
+  await page.reload();
+  await page.locator('#dsRestoreSession').waitFor();
+  assert.equal(await page.locator('#dsRemember').isChecked(),true);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsRestoreSession').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsStatus')?.textContent?.includes('Session navigation restored'));
+  assert.match(await page.locator('#dsSourceText').inputValue(),/reviewed/);
+  assert.equal(await page.locator('#dsSaveFile').isDisabled(),true,
+    'Resuming navigation must not create or save unsaved source');
+  assert.equal(await page.locator('#dsRootStrip .ds-root-chip').count()>=2,true,
+    'Multi-root navigator must retain the workspace and selected project');
+  await page.locator('#dsSearchQuery').fill('reviewed');
+  await page.locator('#dsSearchAcross').selectOption('all');
+  await page.locator('#dsSearchGo').click();
+  await page.waitForFunction(()=>
+    document.querySelectorAll('#dsSearchResults .ds-search-hit').length>=2);
+  assert.equal(await page.locator('#dsSearchResults .ds-search-hit').count()>=2,true,
+    'Explicit all-roots search must include matching files from approved roots');
+  await page.locator('#dsClearSession').click();
+  assert.equal(await page.evaluate(()=>
+    localStorage.getItem('automoto.developer.navigation.v4')),null);
   await page.locator('#newChat').click();
   await page.locator('.hero h2').waitFor();
   await page.locator('#quickTheme').click();
