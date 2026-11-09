@@ -103,7 +103,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
         const button=document.createElement("button");
         button.className="ds-entry";
         button.type="button";
-        button.setAttribute("role","listitem");
+        // Keep native button semantics for keyboard and screen-reader users.
         const mark=document.createElement("span");
         mark.className="ds-file-icon";
         mark.textContent=entry.directory?"▸":"•";
