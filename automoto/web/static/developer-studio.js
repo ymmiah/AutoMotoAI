@@ -3,10 +3,11 @@ import {mountDeveloperEditor} from "./developer-editor.js";
 import {mountDeveloperNavigation} from "./developer-navigation.js";
 import {mountDeveloperLanguageIntelligence} from "./developer-language.js";
 import {mountDeveloperLSP} from "./developer-lsp.js";
+import {mountDeveloperIndex} from "./developer-index.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V6 · Language Server Protocol. Start an installed language server only with explicit consent and a trusted workspace; inspect read-only code intelligence.",
+    "V7 · Parsing & source indexing. Explore private, bounded AST and heuristic symbols, incremental indexing and lexical occurrences. No project execution.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -21,6 +22,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. Language servers run only after your separate approval; no automatic cloud processing is enabled.</p>'+
       '<div id="dsLanguageRoot" aria-label="Project language and framework intelligence"></div>'+
       '<div id="dsLspRoot" aria-label="Approved local language server controls"></div>'+ 
+      '<div id="dsIndexRoot" aria-label="Source symbol index and file outline"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -37,12 +39,13 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp;
+  let languageIntelligence,lsp,index;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
+  index=mountDeveloperIndex({api,host,getProject:()=>project,editor,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -98,6 +101,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       project=data;
       await lsp.projectChanged();
       languageIntelligence.reset();
+      await index.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
