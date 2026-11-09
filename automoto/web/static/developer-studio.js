@@ -141,6 +141,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   async function preview(path) {
     if(!project)return;
     await editor.openFile(path);
+    if(window.matchMedia("(max-width: 720px)").matches)byId("dsShowEditor").click();
     navigation.remember();
   }
   byId("dsRoots").addEventListener("change",event=>{
