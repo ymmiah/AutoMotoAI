@@ -149,6 +149,7 @@ export function mountDeveloperNavigation({api,host,editor,getProject,getDirector
       if(!ok)return;
     }
     await editor.openFile(hit.path);
+    if(window.matchMedia("(max-width: 720px)").matches)el("dsShowEditor").click();
     selected=hit;
     proposal=null;
     el("dsReplaceReview").disabled=el("dsSearchScope").value!=="content"||!getProject()?.trusted;
