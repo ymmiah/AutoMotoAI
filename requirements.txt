@@ -16,7 +16,7 @@ pypdf>=5,<7
 reportlab>=4.2,<5
 defusedxml>=0.7,<1
 # V8 private authenticated portable recovery (encrypted, source-preserving)
-cryptography>=42,<49
+cryptography>=50.0.2,<51
 python-multipart>=0.0.20,<1
 Pillow>=10
 pandas>=2
