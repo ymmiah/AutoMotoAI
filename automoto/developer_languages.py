@@ -32,7 +32,9 @@ def _entry(identifier, extensions=(), filenames=(), shebangs=(), monaco=None, to
     return {"id": identifier, "name": identifier.replace("-", " ").title(),
             "extensions": list(extensions), "filenames": list(filenames),
             "shebangs": list(shebangs), "monaco": monaco or identifier,
-            "tools": list(tools), "capabilities": ["detection", "syntax-mapping"],
+            "tools": list(tools), "capabilities": ["detection", "editor-mode-mapping"],
+            "compatibility": {"schema_version": REGISTRY_VERSION, "windows": "unverified",
+                              "linux": "unverified", "macos": "unverified"},
             "registry_version": REGISTRY_VERSION}
 
 
@@ -117,24 +119,19 @@ def _read(root: Path, relative: str, cap: int = MAX_MANIFEST) -> Optional[str]:
 
 
 def _file_language(name: str, text: Optional[str] = None) -> dict:
+    """Return deterministic evidence and preserve conflicting interpretations."""
     filename = Path(name).name
     suffix = Path(filename).suffix.casefold()
-    matches = []
-    evidence = []
-    for item in LANGUAGES:
-        if filename in item["filenames"]:
-            matches.append(item["id"])
-            evidence.append("filename: " + filename)
-    if not matches:
-        for item in LANGUAGES:
-            if suffix and suffix in item["extensions"]:
-                matches.append(item["id"])
-        if matches:
-            evidence.append("extension: " + suffix)
+    exact = [item["id"] for item in LANGUAGES if filename in item["filenames"]]
+    candidates = exact or [item["id"] for item in LANGUAGES
+                           if suffix and suffix in item["extensions"]]
+    candidates = list(dict.fromkeys(candidates))
+    evidence = (["filename: " + filename] if exact else
+                ["extension: " + suffix] if candidates else [])
+    shebang_matches = []
     if text:
         first = text.split("\n", 1)[0][:256].strip()
         if first.startswith("#!"):
-            # Interpret only the interpreter basename: never execute the shebang.
             tokens = first[2:].split()
             interpreter = Path(tokens[0]).name if tokens else ""
             if interpreter == "env" and len(tokens) > 1:
@@ -143,15 +140,21 @@ def _file_language(name: str, text: Optional[str] = None) -> dict:
             shebang_matches = [item["id"] for item in LANGUAGES
                                if interpreter in item["shebangs"]]
             if shebang_matches:
-                matches = shebang_matches
                 evidence.append("shebang interpreter: " + interpreter)
-    matches = list(dict.fromkeys(matches))
-    primary = matches[0] if len(matches) == 1 else None
-    return {"language": primary, "candidates": matches,
+    if shebang_matches:
+        if not candidates:
+            candidates = shebang_matches
+        elif set(candidates).isdisjoint(shebang_matches):
+            candidates = list(dict.fromkeys(candidates + shebang_matches))
+            evidence.append("conflict: extension/filename and shebang disagree")
+        else:
+            candidates = [c for c in candidates if c in shebang_matches]
+    primary = candidates[0] if len(candidates) == 1 else None
+    confidence = ("high" if primary and (exact or shebang_matches) else
+                  "medium" if primary else "ambiguous" if candidates else "unknown")
+    return {"language": primary, "candidates": candidates,
             "monaco": IDS[primary]["monaco"] if primary else "plaintext",
-            "confidence": "high" if primary and evidence and evidence[-1].startswith(("filename", "shebang"))
-            else "medium" if primary else "ambiguous" if matches else "unknown",
-            "evidence": evidence}
+            "confidence": confidence, "evidence": evidence}
 
 
 def _walk(root: Path):
@@ -162,8 +165,15 @@ def _walk(root: Path):
     while queue and seen < MAX_INSPECT:
         folder, depth = queue.pop(0)
         try:
+            # Never materialise an entire attacker-controlled directory listing.
             with os.scandir(folder) as scan:
-                entries = sorted(list(scan), key=lambda item: item.name.casefold())
+                entries = []
+                for item in scan:
+                    if len(entries) >= MAX_INSPECT + 1:
+                        truncated = True
+                        break
+                    entries.append(item)
+            entries.sort(key=lambda item: item.name.casefold())
         except OSError:
             continue
         for entry in entries:
@@ -304,7 +314,7 @@ def detect(request: Request, body: DetectIn):
             [{"id": item, "files": count} for item, count in counts.most_common(16)],
             "file": file_result, "frameworks": frameworks,
             "toolchains": _tool_status(required, body.probe_tools, root),
-            "files_inspected": sum(counts.values()), "scan_truncated": capped,
+            "files_inspected": len(filenames), "scan_truncated": capped,
             "read_only": True, "source_executed": False,
             "limitations": ["Framework inference uses bounded project evidence.",
                             "Tool availability is path-based, not version or functionality certification.",
