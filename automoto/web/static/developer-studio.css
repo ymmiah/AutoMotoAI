@@ -229,3 +229,27 @@
 .ds-tex-preview{font:12px/1.5 var(--mono);width:100%;min-height:82px;white-space:pre;resize:vertical}
 #dsTexStatus.ds-error{color:var(--bad)}
 @media(max-width:640px){.ds-tex-head{align-items:flex-start;flex-direction:column}.ds-tex-controls .input,.ds-tex-tools .input{min-width:0;flex:1 1 100%}}
+
+
+/* V10 — bibliography evidence, source-verified citation preflight and format previews. */
+.ds-bib-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ds-bib-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ds-bib-head h3{margin:0;font-size:14px;font-weight:700}
+.ds-bib-body{padding:14px 16px;display:grid;gap:12px;min-width:0}
+.ds-bib-body .ds-footnote{padding:0}
+.ds-bib-controls,.ds-bib-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ds-bib-controls label,.ds-bib-actions label{font-size:12px;color:var(--dim)}
+.ds-bib-controls .input{min-width:170px;max-width:300px;flex:1}
+.ds-bib-actions .input{min-width:150px;max-width:320px}
+.ds-bib-results{min-height:45px;max-height:360px;overflow:auto;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:8px}
+.ds-bib-results h4{margin:10px 0 0;font-size:13px;font-weight:700}
+.ds-bib-line,.ds-bib-record p{margin:0;font-size:12px;overflow-wrap:anywhere}
+.ds-bib-line[data-severity=warning],.ds-bib-issue{color:var(--bad)}
+.ds-bib-line[data-severity=error]{color:var(--bad);font-weight:700}
+.ds-bib-record{display:grid;gap:5px;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:8px}
+.ds-bib-record strong{font-size:12px;overflow-wrap:anywhere}
+.ds-bib-record .ds-bib-title{font-size:12px}
+.ds-bib-record .ds-bib-meta{font-size:11px;color:var(--dim)}
+.ds-bib-preview{width:100%;font:12px/1.6 var(--mono);min-height:100px;resize:vertical}
+#dsBibStatus.ds-error{color:var(--bad)}
+@media(max-width:640px){.ds-bib-head{align-items:flex-start;flex-direction:column}.ds-bib-controls .input,.ds-bib-actions .input{min-width:0;flex:1 1 100%}}
