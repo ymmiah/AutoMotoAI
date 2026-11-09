@@ -131,6 +131,8 @@ from automoto import developer_index
 app.include_router(developer_index.router)  # V7 private bounded source symbol and lexical index
 from automoto import developer_adapters
 app.include_router(developer_adapters.router)  # V8 explicit permissioned external toolchain & DAP adapter SDK
+from automoto import developer_latex
+app.include_router(developer_latex.router)  # V9 read-only LaTeX thesis graph, completions and templates
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
