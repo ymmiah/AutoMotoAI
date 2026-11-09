@@ -76,7 +76,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     el("dsSaveFile").disabled=!canSave(tab);
     el("dsReloadFile").disabled=!tab;
     el("dsLineEnding").disabled=!tab;
-    el("dsEncoding").disabled=!tab;
+    el("dsEncoding").disabled=false;
     el("dsModeEdit").disabled=!tab;
     el("dsModePreview").disabled=!tab;
     el("dsEditorState").textContent=!tab?"No source selected":
@@ -104,7 +104,8 @@ export function mountDeveloperEditor({api,host,project,status}) {
     update();
     if(tab.dirty && auto)schedule();
   }
-  async function openFile(path,encoding="auto"){
+  async function openFile(path,requested=null){
+    const encoding=requested||el("dsEncoding").value||"auto";
     if(!project())return;
     if(tabs.has(path)){activate(path);return;}
     if(tabs.size>=10){status("Limit: close a tab before opening more than 10 source files.",true);return;}
@@ -263,7 +264,7 @@ export function mountDeveloperEditor({api,host,project,status}) {
     reset(){
       if([...tabs.values()].some(t=>t.dirty) &&
          !window.confirm("Discard all unsaved source edits when changing project?"))return false;
-      clearTimer();auto=false;el("dsAutosave").checked=false;
+      clearTimer();auto=false;el("dsAutosave").checked=false;el("dsEncoding").value="auto";
       tabs.clear();active=null;el("dsSourceText").value="";
       el("dsFilename").textContent="Source editor";el("dsFileInfo").textContent="Open a source file from Explorer to begin.";
       update();return true;
