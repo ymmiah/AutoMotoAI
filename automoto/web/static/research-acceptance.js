@@ -204,7 +204,7 @@ export function mountResearchAcceptance({host,api,toast}){
         ' files at '+result.staging_path+'. Inspect the staging manifest before manually deciding what to use. Originals unchanged.';
       status('Verified research material staged in isolation. No publication or automatic restoration.');
     }catch(e){status('Staging blocked: '+e.message,true);}
-    finally{clearVerification();}
+    finally{verified=null;el('rsaStage').disabled=true;}
   };
   Promise.all([refresh(),refreshBackups()]).catch(e=>status('V7 acceptance workspace unavailable: '+e.message,true));
 }
