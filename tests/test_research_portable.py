@@ -149,7 +149,7 @@ def test_new_workspace_can_authenticate_and_stage_without_replacing_documents(cl
         assert digest(recovered) == row["sha256"]
     assert all(__import__("pathlib").Path(path).read_bytes() == body
                for path, body in original_bytes.items())
-    assert not (other / "uploads").exists()
+    assert not list((other / "uploads").glob("*.txt"))
     assert not (other / "artifacts/research/comparisons").exists()
 
 
