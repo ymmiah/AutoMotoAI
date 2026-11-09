@@ -1927,6 +1927,86 @@ let browser;
   assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,
     'V7 never changed source or saved an index file into the project');
   await page.screenshot({path:path.join(output,'developer-studio-v7-source-index.png')});
+  // V8: register an independently installed adapter without executing it;
+  // run only after separate confirmation. The real process/DAP layer is covered
+  // by tests/test_developer_adapters.py on Windows, macOS and Linux.
+  let v8Adapters=[],v8Runs=0,v8DAP=0,v8Registrations=0;
+  await page.route('**/api/developer/studio/adapters/**',async route=>{
+    const endpoint=new URL(route.request().url()).pathname.split('/').at(-1);
+    const payload=route.request().postDataJSON?.()||{};
+    let body={};
+    if(endpoint==='catalog')body={registered:v8Adapters,roles:[
+      'compiler','test','formatter','linter','package','debugger'],
+      auto_install:false,auto_execute:false,platform_sandbox:false};
+    else if(endpoint==='inspect')body={
+      executable:payload.executable,sha256:'a'.repeat(64),
+      size_bytes:123456,verification:'file bytes only; not a security audit'};
+    else if(endpoint==='register'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.expected_sha256,'a'.repeat(64));
+      assert.deepEqual(payload.args,['--version']);
+      assert.equal(v8Runs,0,'Registering must never launch any executable');
+      const item={id:payload.id,label:payload.label,language:payload.language,
+        category:payload.category,protocol:payload.protocol,executable:payload.executable,
+        sha256:payload.expected_sha256,args:payload.args};
+      v8Adapters.push(item);v8Registrations++;
+      body={registered:true,adapter:item,executable_started:false,
+        installed_binary:false,project_files_modified:false};
+    }else if(endpoint==='run'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.accept_execution_and_write_risk,true);
+      v8Runs++;
+      body={adapter_id:payload.id,status:'completed',exit_code:0,
+        output:'<img src=x onerror=alert(1)> trusted fixture output',
+        elapsed_ms:5,platform_sandbox:false,source_files_unchanged:'not_verified'};
+    }else if(endpoint==='initialize'){
+      assert.equal(payload.confirmed,true);
+      assert.equal(payload.accept_execution_and_write_risk,true);
+      v8DAP++;
+      body={adapter_id:payload.id,status:'initialized_only',
+        launch_sent:false,attach_sent:false,configuration_sent:false,
+        capabilities:{supportsConfigurationDoneRequest:true},process_terminated:true};
+    }else if(endpoint==='unregister'){
+      v8Adapters=v8Adapters.filter(item=>item.id!==payload.id);
+      body={unregistered:true,binary_uninstalled:false,project_files_modified:false};
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  });
+  await page.locator('#dsAdapterId').fill('external-python-test');
+  await page.locator('#dsAdapterLabel').fill('External test runner');
+  await page.locator('#dsAdapterExecutable').fill('/usr/local/bin/installed-tool');
+  await page.locator('#dsAdapterArgs').fill('["--version"]');
+  await page.locator('#dsAdapterInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterSha')?.value?.length===64);
+  assert.equal(await page.locator('#dsAdapterRegister').isEnabled(),true);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRegister').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterSelected')?.options?.length===2);
+  assert.equal(v8Registrations,1);
+  assert.equal(v8Runs,0,'Installed adapter registration does not launch a process');
+  await page.locator('#dsAdapterSelected').selectOption('external-python-test');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterOutput')?.textContent?.includes('trusted fixture output'));
+  assert.equal(v8Runs,1);
+  assert.equal(await page.locator('#dsAdapterOutput img').count(),0,
+    'Untrusted tool output must be inert text, not HTML');
+  await page.locator('#dsAdapterId').fill('external-dap-probe');
+  await page.locator('#dsAdapterLabel').fill('External debug adapter');
+  await page.locator('#dsAdapterCategory').selectOption('debugger');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRegister').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterSelected')?.options?.length===3);
+  await page.locator('#dsAdapterSelected').selectOption('external-dap-probe');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsAdapterRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAdapterOutput')?.textContent?.includes('initialized_only'));
+  assert.equal(v8DAP,1);
+  assert.equal(await page.locator('#dsAdapterOutput').innerText().then(s=>s.includes('"launch_sent": false')),true);
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,
+    'Mocked V8 SDK controls must not change project files');
+  await page.screenshot({path:path.join(output,'developer-studio-v8-toolchain-adapters.png')});
+  await page.unrouteAll();
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
