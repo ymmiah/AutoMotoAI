@@ -61,4 +61,8 @@
 .ds-highlight code{font:inherit;background:transparent}
 .ds-editor-footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
 .ds-source[hidden],.ds-highlight[hidden]{display:none}
-@media(max-width:840px){.ds-editor-actions{align-items:flex-start}.ds-editor-meta{align-items:flex-start}.ds-source,.ds-highlight{min-height:260px}}
+.ds-monaco{position:relative;width:100%;height:460px;min-height:300px;overflow:hidden;background:var(--code);border-top:1px solid var(--line)}
+.ds-monaco[hidden]{display:none!important}
+.ds-monaco .monaco-editor{min-height:100%}
+@media(max-width:840px){.ds-editor-actions{align-items:flex-start}.ds-editor-meta{align-items:flex-start}.ds-source,.ds-highlight{min-height:260px}.ds-monaco{height:360px}}
+@media(max-width:720px){.ds-monaco{display:none!important}}
