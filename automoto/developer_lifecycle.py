@@ -54,6 +54,7 @@ class WorkingCopy(ProjectIn):
 class SnapshotLookup(ProjectIn):
     path: str = Field(min_length=1, max_length=1024)
     snapshot_id: str = Field(min_length=32, max_length=32)
+    confirmed: Literal[True]
 
 
 def _allowed(project: str) -> Path:
@@ -177,7 +178,8 @@ def snapshot(request: Request, body: WorkingCopy):
     root = _allowed(body.project)
     with LOCK:
         _, disk = _source(root, body.path, body.expected_sha256)
-        edit._encode(body.text, body.encoding, body.newline)
+        if "\\x00" in body.text or len(body.text.encode("utf-8")) > edit.MAX_BYTES:
+            raise HTTPException(413, "Snapshot exceeds safe text limits.")
         uid = _store_snapshot(root, body, disk)
     return {"snapshot_id": uid, "saved_locally": True, "source_modified": False}
 
@@ -227,7 +229,8 @@ def diff_preview(request: Request, body: WorkingCopy):
     source, encoding = edit._decode(disk, "auto" if body.encoding != "cp1252" else "cp1252")
     if encoding != body.encoding:
         raise HTTPException(409, "Encoding changed on disk.")
-    edit._encode(body.text, body.encoding, body.newline)
+    if "\\x00" in body.text or len(body.text.encode("utf-8")) > edit.MAX_BYTES:
+        raise HTTPException(413, "Diff source exceeds safe text limits.")
     old = source.splitlines(keepends=True)
     new = body.text.splitlines(keepends=True)
     parts = list(difflib.unified_diff(old, new, fromfile="Saved source", tofile="Unsaved working copy", n=3))
@@ -296,6 +299,19 @@ def file_operation(request: Request, body: FileOperation):
         return {"action": "trash", "archive_id": uid, "source_modified": True, "reversible": True}
 
 
+@router.get("/trash-archives")
+def trash_archives(request: Request, project: str, path: str):
+    studio._auth(request)
+    root = _allowed(project)
+    studio._path(root, path)  # restricted relative paths are still forbidden
+    folder = _private_dir(root, path, "trash")
+    found = []
+    for file in sorted(folder.glob("*.bin"), key=lambda p: p.stat().st_mtime_ns, reverse=True)[:20]:
+        if not file.is_symlink() and UUID_PATTERN.fullmatch(file.stem) and file.stat().st_size <= edit.MAX_BYTES:
+            found.append({"archive_id": file.stem, "size": file.stat().st_size})
+    return {"items": found, "local_only": True}
+
+
 @router.post("/restore-trash")
 def restore_trash(request: Request, body: SnapshotLookup):
     studio._auth(request)
@@ -311,16 +327,25 @@ def restore_trash(request: Request, body: SnapshotLookup):
             raise HTTPException(413, "Recovery archive is too large.")
         target = _destination(root, body.path)
         data = archived.read_bytes()
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        # Stage and fsync first; exclusive hard-link commit makes the restore
+        # appear whole or not at all, including after an interrupted write.
+        temporary = None
         try:
-            with os.fdopen(os.open(target, flags, 0o600), "wb") as stream:
+            with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".automoto-restore-", delete=False) as stream:
+                temporary = Path(stream.name)
+                if os.name != "nt":
+                    os.chmod(temporary, 0o600)
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
+            os.link(temporary, target, follow_symlinks=False)
         except FileExistsError:
             raise HTTPException(409, "Restore destination already exists.") from None
         except OSError:
-            raise HTTPException(403, "Cannot restore archive.") from None
+            raise HTTPException(403, "Cannot atomically restore on this filesystem.") from None
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
         if target.read_bytes() != data:
             raise HTTPException(409, "Restore integrity check failed.")
         archived.unlink()
