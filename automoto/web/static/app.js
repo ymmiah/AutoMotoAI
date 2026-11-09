@@ -248,11 +248,15 @@ $("#scrim").onclick = closeSidebarMobile;
 $("#toggleInfo").onclick = () => { $("#info").hidden = !$("#info").hidden; localStorage.setItem("automoto_info", $("#info").hidden ? "0" : "1"); };
 $("#closeInfo").onclick = () => { $("#info").hidden = true; localStorage.setItem("automoto_info", "0"); };
 $("#newChat").onclick = () => newChat();
+let developerLeaveApproved = false;
 function newChat() {
   // Reject navigation before changing the URL. Reverting a hashchange after
   // source edits can race another render and detach the live editor.
-  if (state.route.startsWith("#/developer") && typeof window.__automotoDevConfirmLeave === "function"
-      && !window.__automotoDevConfirmLeave()) return;
+  if (state.route.startsWith("#/developer") && typeof window.__automotoDevConfirmLeave === "function") {
+    if (!window.__automotoDevConfirmLeave()) return;
+    // Avoid showing the same confirmation a second time in renderRoute.
+    developerLeaveApproved = true;
+  }
   closeSidebarMobile();
   if (location.hash === "#/new") renderRoute(); else location.hash = "#/new";
 }
@@ -278,10 +282,11 @@ async function renderRoute() {
   const destination=location.hash||"#/new";
   if(state.route.startsWith("#/developer") && !destination.startsWith("#/developer")
      && typeof window.__automotoDevConfirmLeave==="function"
-     && !window.__automotoDevConfirmLeave()){
+     && !developerLeaveApproved && !window.__automotoDevConfirmLeave()){
     history.replaceState(null,"",state.route||"#/developer");
     return;
   }
+  developerLeaveApproved = false;
   rememberDraft();
   clearInterval(state.pageTimer);
   const h = location.hash || "#/new";
