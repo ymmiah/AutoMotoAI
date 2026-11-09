@@ -12,6 +12,10 @@
       "size": 1084531,
       "sha256": "4214cff331678300c1a0723a43e7732077d205e292312fdbc81aeaf545d59ac8"
     },
+    "DOMPURIFY-LICENSE.txt": {
+      "size": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
     "editor.worker.js": {
       "size": 307278,
       "sha256": "cc2ea84b1e41de7d5a8036486a1e32043b6c2b2ac33a33e305b7ca981bdaf678"
