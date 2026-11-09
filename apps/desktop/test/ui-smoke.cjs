@@ -2007,6 +2007,48 @@ let browser;
     'Mocked V8 SDK controls must not change project files');
   await page.screenshot({path:path.join(output,'developer-studio-v8-toolchain-adapters.png')});
   await page.unrouteAll();
+
+  // V9: real multi-file .tex and .bib traversal through the authenticated backend.
+  const texDir=path.join(devProject,'thesis');
+  mkdirSync(path.join(texDir,'chapters'),{recursive:true});
+  writeFileSync(path.join(texDir,'main.tex'),
+    '\\documentclass{report}\n\\begin{document}\n'+
+    '\\chapter{Purpose}\\label{chap:purpose}\n'+
+    'Read \\ref{sec:method} and \\cite{author2026}.\n'+
+    '\\input{chapters/method}\n\\bibliography{references}\n\\end{document}\n');
+  writeFileSync(path.join(texDir,'chapters','method.tex'),
+    '\\section{Method}\\label{sec:method}\n');
+  writeFileSync(path.join(texDir,'references.bib'),
+    '@article{author2026,\n title={Unverified illustrative bibliography},\n year={2026}\n}\n');
+  const texBefore=readFileSync(path.join(texDir,'main.tex'));
+  await page.locator('#dsTexMain').fill('thesis/main.tex');
+  await page.locator('#dsTexAnalyse').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexStatus')?.textContent?.includes('2 .tex files'));
+  assert.match(await page.locator('#dsTexStatus').innerText(),/0 static diagnostics/);
+  assert.match(await page.locator('#dsTexResults').innerText(),/sec:method/);
+  assert.match(await page.locator('#dsTexResults').innerText(),/author2026/);
+  await page.locator('#dsTexCompletionKind').selectOption('citation');
+  await page.locator('#dsTexCompletionPrefix').fill('author');
+  await page.locator('#dsTexComplete').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexResults')?.textContent?.includes('author2026'));
+  await page.locator('#dsTexSnippet').selectOption('equation');
+  await page.locator('#dsTexSnippetCopy').click();
+  assert.match(await page.locator('.ds-tex-preview').first().inputValue(),/\\begin\{equation\}/);
+  await page.locator('#dsTexTemplate').selectOption('thesis');
+  await page.locator('#dsTexTemplatePreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexResults')?.textContent?.includes('chapters/introduction.tex'));
+  assert.equal(await page.locator('.ds-tex-preview').count(),3);
+  assert.deepEqual(readFileSync(path.join(texDir,'main.tex')),texBefore,
+    'LaTeX template previews never overwrite source');
+  writeFileSync(path.join(texDir,'chapters','method.tex'),
+    '\\section{Method}\\label{sec:changed}\n');
+  await page.locator('#dsTexAnalyse').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexStatus')?.textContent?.includes('1 static diagnostics'));
+  assert.match(await page.locator('#dsTexResults').innerText(),/unresolved-ref/);
+  assert.deepEqual(readFileSync(path.join(texDir,'main.tex')),texBefore,
+    'V9 analysis never executes TeX or modifies source');
+  await page.screenshot({path:path.join(output,'developer-studio-v9-latex-authoring.png')});
+
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
