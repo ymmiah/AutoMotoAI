@@ -61,6 +61,13 @@ export async function createOfflineMonaco({host,textarea,onChange,onSave,onCurso
       const pos=editor.getPosition();
       return pos?{line:pos.lineNumber,column:pos.column}:null;
     },
+    reveal(line,column){
+      if(!editor.getModel())return;
+      const pos={lineNumber:Math.max(1,Number(line)||1),column:Math.max(1,Number(column)||1)};
+      editor.setPosition(pos);
+      editor.revealPositionInCenter(pos);
+      editor.focus();
+    },
     setReadOnly(readOnly){
       editor.updateOptions({readOnly});
       secondary?.updateOptions({readOnly});
