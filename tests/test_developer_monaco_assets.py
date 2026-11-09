@@ -16,7 +16,7 @@ from automoto import developer_studio
 MONACO = files("automoto").joinpath("web/static/vendor/monaco")
 REQUIRED = (
     "monaco.js", "monaco.css", "editor.worker.js", "ts.worker.js",
-    "json.worker.js", "css.worker.js", "html.worker.js", "MONACO-LICENSE.txt",
+    "json.worker.js", "css.worker.js", "html.worker.js", "MONACO-LICENSE.txt", "DOMPURIFY-LICENSE.txt",
 )
 
 
@@ -38,6 +38,7 @@ def test_vendor_manifest_integrity():
         assert len(data) == record["size"]
         assert hashlib.sha256(data).hexdigest() == record["sha256"]
     assert "MIT" in MONACO.joinpath("MONACO-LICENSE.txt").read_text(encoding="utf-8")
+    assert "Apache License" in MONACO.joinpath("DOMPURIFY-LICENSE.txt").read_text(encoding="utf-8")
     assert len(MONACO.joinpath("monaco.js").read_bytes()) > 100_000
 
 
