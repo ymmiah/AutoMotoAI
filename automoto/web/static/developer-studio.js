@@ -1,10 +1,11 @@
 /* Developer Studio V2: trusted source explorer plus conflict-safe file editor. */
 import {mountDeveloperEditor} from "./developer-editor.js";
 import {mountDeveloperNavigation} from "./developer-navigation.js";
+import {mountDeveloperLanguageIntelligence} from "./developer-language.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V4 · Project Navigation & UX. Search approved roots, review replacements, use keyboard commands and opt in to local session recovery. No source execution.",
+    "V5 · Language intelligence. Evidence-backed language/framework detection, local tool checks and manual syntax mode selection. No source execution.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -17,6 +18,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
         '<span id="dsTrustState">Select a local folder to begin.</span></div>'+
         '<button class="btn" id="dsTrust" type="button" hidden>Trust this project</button></section>'+
       '<p class="ds-warning" role="note">Source editing is permitted only for expressly trusted local folders. Every save checks the original disk checksum. No source execution or automatic cloud processing is enabled.</p>'+
+      '<div id="dsLanguageRoot" aria-label="Project language and framework intelligence"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -33,7 +35,11 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  const editor=mountDeveloperEditor({api,host,project:()=>project,status});
+  let languageIntelligence;
+  const editor=mountDeveloperEditor({api,host,project:()=>project,status,
+    onFileOpened(path){languageIntelligence?.inspect(path);}});
+  languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
+    getProject:()=>project,editor,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -87,6 +93,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       const data=await api(BASE+"/open",{project:path});
       if(project?.project!==data.project && !editor.reset())return false;
       project=data;
+      languageIntelligence.reset();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();

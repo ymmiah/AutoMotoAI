@@ -136,3 +136,22 @@
  .ds-v4-replace .btn{flex:1 1 auto}
 }
 @media(max-width:370px){.ds-v4-search{display:flex;flex-direction:column;align-items:stretch}.ds-v4-search #dsSearchQuery{flex:auto}.ds-v4-search select{width:100%}}
+
+
+/* V5 — read-only language intelligence, accessible at mobile and desktop sizes. */
+.ds-language-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ds-language-head{display:flex;gap:12px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:12px 16px}
+.ds-language-head h3{font-size:14px;margin:0}
+.ds-language-body{padding:14px 16px;display:grid;gap:12px}
+.ds-language-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.ds-language-facts>div{display:flex;flex-direction:column;min-width:0;gap:4px;padding:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+.ds-language-facts strong{font:600 13px var(--mono);overflow-wrap:anywhere}
+.ds-language-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ds-language-controls label{font-size:12px;color:var(--dim)}
+.ds-language-controls select{max-width:300px;min-width:170px}
+.ds-language-panel .ds-footnote{padding:0}
+.ds-language-tools{display:flex;gap:8px;flex-wrap:wrap;color:var(--dim);font-size:12px}
+.ds-language-tool{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.ds-language-tool strong{font:600 12px var(--mono);color:var(--text)}
+@media(max-width:850px){.ds-language-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.ds-language-facts{grid-template-columns:1fr}.ds-language-head{align-items:flex-start;flex-direction:column}}

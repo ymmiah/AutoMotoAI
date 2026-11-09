@@ -1806,6 +1806,10 @@ let browser;
   mkdirSync(devProject,{recursive:true});
   writeFileSync(path.join(devProject,'main.ts'),'export const title = "read-only";\n');
   writeFileSync(path.join(devProject,'other.py'),'print("second tab")\n');
+  writeFileSync(path.join(devProject,'package.json'),JSON.stringify({
+    dependencies:{"next":"^16.0.0","react":"^19.0.0"},
+    scripts:{postinstall:"not-executed-during-v5-detection"}
+  }));
   writeFileSync(path.join(devProject,'.env'),'PRIVATE_KEY=never-disclose');
   const devBefore=readFileSync(path.join(devProject,'main.ts'));
   await page.locator('.nav [data-page="developer"]').click();
@@ -1822,6 +1826,20 @@ let browser;
   assert.equal(await page.locator('#dsSourceText').getAttribute('readonly'),'');
   assert.equal(await page.locator('#dsSaveFile').isDisabled(),true);
   assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore);
+  // V5: actual server detection, evidence, language-mode override and inert tool checks.
+  await page.waitForFunction(() => document.querySelector('#dsDetectedFile')?.textContent==='typescript');
+  assert.match(await page.locator('#dsDetectedFrameworks').innerText(),/Next\.js/);
+  assert.match(await page.locator('#dsDetectedEvidence').innerText(),/extension: \.ts/);
+  assert.equal(await page.locator('#dsLanguageOverride').isEnabled(),true);
+  await page.locator('#dsLanguageOverride').selectOption('python');
+  assert.equal(await page.locator('#dsEditorLang').innerText(),'python');
+  await page.locator('#dsLanguageOverride').selectOption('');
+  assert.equal(await page.locator('#dsEditorLang').innerText(),'typescript');
+  await page.locator('#dsLanguageTools').click();
+  await page.waitForFunction(() => document.querySelector('#dsDetectedTools')?.textContent?.includes('version not verified') ||
+    document.querySelector('#dsDetectedTools')?.textContent?.includes('Unavailable on the host PATH'));
+  assert.deepEqual(readFileSync(path.join(devProject,'main.ts')),devBefore,'V5 inspection never writes files');
+  await page.screenshot({path:path.join(output,'developer-studio-v5-language-intelligence.png')});
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#dsTrust').click();
   await page.waitForFunction(() => document.querySelector('#dsTrustState')?.textContent?.includes('Trusted'));
