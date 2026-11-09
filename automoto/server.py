@@ -133,6 +133,8 @@ from automoto import developer_adapters
 app.include_router(developer_adapters.router)  # V8 explicit permissioned external toolchain & DAP adapter SDK
 from automoto import developer_latex
 app.include_router(developer_latex.router)  # V9 read-only LaTeX thesis graph, completions and templates
+from automoto import developer_bibliography
+app.include_router(developer_bibliography.router)  # V10 local citation preflight and explicit DOI registry verification
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
