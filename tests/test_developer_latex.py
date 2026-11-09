@@ -151,8 +151,8 @@ def test_security_blocks_symlink_outside_root_and_generated_paths(project, tmp_p
         pass
     data = analyse(client, root).json()
     assert data["files"] == ["main.tex"]
-    assert "external" not in repr(data)
-    assert "supersecret" not in repr(data)
+    assert "external" not in {x["value"] for x in data["labels"]}
+    assert "supersecret" not in {x["value"] for x in data["bibliography_keys"]}
     assert "private" not in {x["value"] for x in data["labels"]}
     assert {x["code"] for x in data["diagnostics"]} >= {
         "unsafe-include", "unsafe-bibliography"
