@@ -119,6 +119,8 @@ from automoto import developer_studio
 app.include_router(developer_studio.router)  # V1 local-only read-only trusted source explorer
 from automoto import developer_editor
 app.include_router(developer_editor.router)  # V2 explicit, conflict-safe local source edits
+from automoto import developer_lifecycle
+app.include_router(developer_lifecycle.router)  # V3 local-only file lifecycle and private recovery
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
