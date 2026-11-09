@@ -9,7 +9,8 @@ export async function createOfflineMonaco({host,textarea,onChange,onSave,onCurso
   const {monaco}=await import("/static/vendor/monaco/monaco.js");
   if (!host.isConnected) return null;
   const models=new Map();
-  let activePath=null,muted=false,enabled=true;
+  const narrow=window.matchMedia("(max-width: 720px)");
+  let activePath=null,muted=false,enabled=true,wantedVisible=true;
   const editor=monaco.editor.create(panel,{
     value:"",language:"plaintext",readOnly:true,automaticLayout:true,
     scrollBeyondLastLine:false,minimap:{enabled:false},
@@ -59,9 +60,20 @@ export async function createOfflineMonaco({host,textarea,onChange,onSave,onCurso
     },
     setReadOnly(readOnly){editor.updateOptions({readOnly});},
     setVisible(visible){
-      panel.hidden=!visible;
-      panel.style.display=visible?"block":"none";
-      if(visible)editor.layout();
+      wantedVisible=visible;
+      const useMonaco=visible&&!narrow.matches;
+      panel.hidden=!useMonaco;
+      panel.style.display=useMonaco?"block":"none";
+      textarea.hidden=!visible||useMonaco;
+      textarea.style.display=visible&&!useMonaco?"block":"none";
+      if(useMonaco){
+        const model=editor.getModel();
+        if(model&&model.getValue()!==textarea.value){
+          muted=true;
+          try{model.setValue(textarea.value);}finally{muted=false;}
+        }
+        editor.layout();
+      }
     },
     setTheme(theme){monaco.editor.setTheme(theme==="light"?"vs":"vs-dark");},
     remove(path){
@@ -75,14 +87,19 @@ export async function createOfflineMonaco({host,textarea,onChange,onSave,onCurso
     },
     dispose(){
       enabled=false;
+      narrow.removeEventListener("change",responsive);
+      themeWatcher.disconnect();
       for(const event of events)event.dispose();
       editor.dispose();
       for(const model of models.values())model.dispose();
       models.clear();
     }
   };
-  panel.hidden=false;
-  textarea.hidden=true;
-  textarea.style.display="none";
+  const responsive=()=>adapter.setVisible(wantedVisible);
+  narrow.addEventListener("change",responsive);
+  const themeWatcher=new MutationObserver(()=>
+    adapter.setTheme(document.documentElement.dataset.theme||"dark"));
+  themeWatcher.observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+  adapter.setVisible(true);
   return adapter;
 }
