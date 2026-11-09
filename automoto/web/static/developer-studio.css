@@ -155,3 +155,21 @@
 .ds-language-tool strong{font:600 12px var(--mono);color:var(--text)}
 @media(max-width:850px){.ds-language-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.ds-language-facts{grid-template-columns:1fr}.ds-language-head{align-items:flex-start;flex-direction:column}}
+
+
+/* V6 — language servers are opt-in privileged processes, never automatic. */
+.ds-lsp-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ds-lsp-head{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ds-lsp-head h3{font-size:14px;margin:0}
+.ds-lsp-body{display:grid;gap:12px;padding:14px 16px}
+.ds-lsp-body .ds-footnote{padding:0}
+.ds-lsp-controls,.ds-lsp-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ds-lsp-controls label{font-size:12px;color:var(--dim)}
+.ds-lsp-controls select{min-width:190px;max-width:360px}
+.ds-lsp-results{min-height:46px;max-height:230px;overflow:auto;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px}
+.ds-lsp-results pre{font:12px/1.6 var(--mono);margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.ds-lsp-location{display:block;width:100%;text-align:left;background:none;border:0;border-radius:5px;padding:8px;color:var(--text);font:12px var(--mono)}
+.ds-lsp-location:hover,.ds-lsp-location:focus-visible{background:var(--hover);outline:2px solid var(--accent);outline-offset:-2px}
+#dsLspStatus{color:var(--dim)}
+#dsLspStatus.ds-error{color:var(--bad)}
+@media(max-width:540px){.ds-lsp-controls select{max-width:100%;width:100%}.ds-lsp-head{align-items:flex-start;flex-direction:column}}
