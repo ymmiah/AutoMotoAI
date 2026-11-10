@@ -100,11 +100,12 @@ def _bib_output(records: list[dict]) -> str:
     lines = ["% Crossref-to-source association was explicitly confirmed in Research Studio V4.",
              "% Crossref is not proof of publication authenticity, integrity or peer review."]
     for item in records:
+        kind = "article" if (item.get("type") == "journal-article" and item.get("venue")) else "misc"
         fields = [("title", item["title"]), ("author", " and ".join(item["authors"])),
                   ("year", item["year"]), ("doi", item["doi"])]
         if item.get("venue"):
-            fields.append(("journal", item["venue"]))
-        lines.append("@article{" + item["citation_key"] + ",")
+            fields.append(("journal" if kind == "article" else "howpublished", item["venue"]))
+        lines.append("@" + kind + "{" + item["citation_key"] + ",")
         lines.extend("  " + name + " = {" + value + "}," for name, value in fields)
         lines.append("}")
     return "\n".join(lines) + "\n"
