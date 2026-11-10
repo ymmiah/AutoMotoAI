@@ -356,8 +356,12 @@ def _authorise(request: Request, *, local_only: bool = False) -> None:
             if tenant is None:
                 raise HTTPException(403, "hosted studio tools need a signed-in session")
             request.state.user = tenant
+            account = accounts.get_user(tenant.id)
+            if account is not None:
+                hosted.block_until_password_changed(request, account)
             return
-        hosted.authenticate(request)
+        user = hosted.authenticate(request)
+        hosted.block_until_password_changed(request, user)
         return
     if _is_loopback(request):
         if _session_ok(request) or _bearer_ok(request):
@@ -514,6 +518,8 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
         if not got:
             html = (WEB_DIR / "login.html").read_text(encoding="utf-8").replace("__AUTOMOTO_VERSION__", __version__)
             return HTMLResponse(brand.fill(html), headers=base_headers)
+        if got[0].must_change_password:
+            return _auth_page("password.html", base_headers, csrf=got[1])
         html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
         meta = (f'<meta name="automoto-csrf" content="{got[1]}" />\n'
                 '<meta name="automoto-mode" content="multiuser" />\n')
@@ -548,11 +554,25 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
     return HTMLResponse(brand.fill(html), headers=base_headers)
 
 
+def _auth_page(name: str, headers: dict[str, str], *, csrf: str = "") -> HTMLResponse:
+    import html as html_mod
+
+    text = (WEB_DIR / name).read_text(encoding="utf-8").replace("__AUTOMOTO_VERSION__", __version__)
+    text = text.replace("__CSRF__", html_mod.escape(csrf, quote=True))
+    return HTMLResponse(brand.fill(text), headers=headers)
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     from fastapi.responses import RedirectResponse
 
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/setup", response_class=HTMLResponse)
+def setup_page(request: Request):
+    """First-admin page. The one-time code is in the server log, never on this page."""
+    return _auth_page("setup.html", {"Content-Security-Policy": CSP, "Cache-Control": "no-store"})
 
 
 @app.post("/api/session/launch")
@@ -1455,15 +1475,15 @@ def run_hosted(host: str, port: int) -> None:
     """Hosted mode: accounts and quotas, no launch link, no MCP servers, no routines, no desktop."""
     import uvicorn
 
-    made = accounts.bootstrap_admin_from_env()
     accounts.prune()
     hosts = sorted(_allowed_hosts() - LOCAL_HOSTS)
     print(f"{brand.name()} v{__version__} \"{CODENAME}\" - HOSTED (multi-user) mode on {host}:{port}", flush=True)
-    if made:
-        print(f"Created the first admin '{made}' from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD.", flush=True)
-    if accounts.admin_count() == 0:
-        print("No admin yet: run `python -m automoto admin create <name>` (or set AUTOMOTO_ADMIN_USER and "
-              "AUTOMOTO_ADMIN_PASSWORD) before inviting people.", flush=True)
+    shown = "/setup"
+    if host not in ("0.0.0.0", "::"):  # nosec B104 - choosing a log URL, not binding
+        shown_host = "127.0.0.1" if host == "localhost" else host
+        shown = f"http://{shown_host}:{port}/setup"
+    for line in accounts.startup_admin_access(shown):
+        print(line, flush=True)
     st = accounts.settings()
     print(f"Sign-up: {st['signup']}  ·  default quota: {st['default_quota_minutes']:g} min per "
           f"{'day' if st['period_days'] == 1 else str(st['period_days']) + ' days'}  ·  allowed hosts: "

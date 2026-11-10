@@ -34,10 +34,34 @@ class AccountError(ValueError):
     """A user-facing problem (bad password, taken name, …)."""
 
 
+class SetupRejected(AccountError):
+    """The one-time setup code was refused. ``status`` is the HTTP status to show."""
+
+    def __init__(self, message: str, status: int = 400):
+        super().__init__(message)
+        self.status = status
+
+
 USERNAME = re.compile(r"^[a-z0-9][a-z0-9_.-]{2,31}$")
 MIN_PASSWORD = 10
+STRONG_MIN_PASSWORD = 12  # a password the person chose for themselves (setup code, or a forced change)
 LOCK_AFTER = 5            # failed logins in a row
 LOCK_MINUTES = 15
+SETUP_TTL_S = 60 * 60
+SETUP_KV = "setup_code"
+# Stems of passwords that are still guessable once padded out to 12 characters.
+_COMMON_STEMS = frozenset({
+    "password", "passw0rd", "qwerty", "qwertyuiop", "letmein", "welcome", "admin", "administrator",
+    "changeme", "iloveyou", "secret", "login", "automoto", "automotoai", "abc123", "abcd",
+})
+_COMMON_PASSWORDS = _COMMON_STEMS | frozenset({
+    "password1", "password12", "password123", "password1234", "password12345",
+    "123456", "123456789", "1234567890", "123456789012", "1234567890123",
+    "qwerty123", "qwerty123456", "qwertyuiop12", "letmein123", "letmeinletmein",
+    "welcome1", "welcome123", "welcome12345", "admin123", "admin1234", "admin12345",
+    "adminadmin", "adminadminadmin", "changeme123", "changeme1234", "iloveyou1234",
+    "passw0rd123", "passw0rd1234", "abc123456789", "correcthorsebatterystaple",
+})
 _SCRYPT = {"n": 2 ** 14, "r": 8, "p": 1}
 _DUMMY = None             # a real hash to compare against when the user doesn't exist (same timing)
 _LOCK = threading.Lock()
@@ -48,7 +72,7 @@ CREATE TABLE IF NOT EXISTS users (
   status TEXT NOT NULL DEFAULT 'active', created REAL NOT NULL, last_login REAL,
   quota_minutes REAL, unlimited INTEGER NOT NULL DEFAULT 0, request_cap INTEGER, token_cap INTEGER,
   usage_reset REAL NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, locked_until REAL NOT NULL DEFAULT 0,
-  note TEXT NOT NULL DEFAULT '');
+  note TEXT NOT NULL DEFAULT '', must_change_password INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY, user_id TEXT NOT NULL, csrf TEXT NOT NULL, created REAL NOT NULL, expires REAL NOT NULL,
   ip TEXT NOT NULL DEFAULT '');
@@ -107,6 +131,9 @@ def _migrate(con: sqlite3.Connection, key: str) -> None:
     cols = {r["name"] for r in con.execute("PRAGMA table_info(sessions)")}
     if "device_id" not in cols:  # v5.6: browser sessions opened by a signed-in app belong to that device
         con.execute("ALTER TABLE sessions ADD COLUMN device_id TEXT")
+    users = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
+    if users and "must_change_password" not in users:
+        con.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
     _MIGRATED.add(key)
 
 
@@ -198,15 +225,27 @@ def verify_password(pw: str, stored: str) -> bool:
         return False
 
 
-def check_password_rules(pw: str, username: str = "") -> None:
-    if len(pw) < MIN_PASSWORD:
-        raise AccountError(f"password must be at least {MIN_PASSWORD} characters")
+def is_common_password(pw: str) -> bool:
+    """True for passwords people guess, including a common word with a few digits stuck on the end."""
+    low = (pw or "").lower().strip()
+    if low in _COMMON_PASSWORDS:
+        return True
+    stem = "".join(ch for ch in low if ch.isalpha())
+    return bool(stem in _COMMON_STEMS and len(stem) >= 4 and len(low) - len(stem) <= 8)
+
+
+def check_password_rules(pw: str, username: str = "", *, strong: bool = False) -> None:
+    minimum = STRONG_MIN_PASSWORD if strong else MIN_PASSWORD
+    if len(pw) < minimum:
+        raise AccountError(f"password must be at least {minimum} characters")
     if len(pw) > 256:
         raise AccountError("password is too long")
     if username and username.lower() in pw.lower():
         raise AccountError("password must not contain the username")
     if len(set(pw)) < 4:
         raise AccountError("password is too simple")
+    if strong and is_common_password(pw):
+        raise AccountError("that password is too common - pick something harder to guess")
 
 
 def _h(token: str) -> str:
@@ -228,6 +267,7 @@ class User:
     token_cap: int | None
     usage_reset: float
     note: str
+    must_change_password: bool = False
 
     @property
     def is_admin(self) -> bool:
@@ -237,7 +277,7 @@ class User:
         return {"id": self.id, "username": self.username, "role": self.role, "status": self.status,
                 "created": self.created, "last_login": self.last_login, "quota_minutes": self.quota_minutes,
                 "unlimited": self.unlimited, "request_cap": self.request_cap, "token_cap": self.token_cap,
-                "note": self.note}
+                "note": self.note, "must_change_password": self.must_change_password}
 
 
 def _user(row: sqlite3.Row | None) -> User | None:
@@ -245,7 +285,7 @@ def _user(row: sqlite3.Row | None) -> User | None:
         return None
     return User(row["id"], row["username"], row["role"], row["status"], row["created"], row["last_login"],
                 row["quota_minutes"], bool(row["unlimited"]), row["request_cap"], row["token_cap"],
-                row["usage_reset"], row["note"])
+                row["usage_reset"], row["note"], bool(row["must_change_password"]))
 
 
 def norm_username(name: str) -> str:
@@ -256,19 +296,20 @@ def norm_username(name: str) -> str:
 
 
 def create_user(username: str, password: str, *, role: str = "user", actor: str = "system",
-                note: str = "") -> User:
+                note: str = "", must_change: bool = False, strong: bool = False) -> User:
     name = norm_username(username)
-    check_password_rules(password, name)
+    check_password_rules(password, name, strong=strong)
     if role not in ("user", "admin"):
         raise AccountError("role must be user or admin")
     uid = secrets.token_hex(8)
     with _db() as con:
         try:
-            con.execute("INSERT INTO users(id, username, pw, role, created, note) VALUES(?,?,?,?,?,?)",
-                        (uid, name, hash_password(password), role, time.time(), note[:200]))
+            con.execute(
+                "INSERT INTO users(id, username, pw, role, created, note, must_change_password) VALUES(?,?,?,?,?,?,?)",
+                (uid, name, hash_password(password), role, time.time(), note[:200], 1 if must_change else 0))
         except sqlite3.IntegrityError:
             raise AccountError("that username is taken") from None
-    audit(actor, "create_user", name, json.dumps({"role": role}))
+    audit(actor, "create_user", name, json.dumps({"role": role, "must_change_password": bool(must_change)}))
     return get_user(uid)  # type: ignore[return-value]
 
 
@@ -334,16 +375,42 @@ def update_user(uid: str, actor: str, **fields: Any) -> User:
     return get_user(uid)  # type: ignore[return-value]
 
 
-def set_password(uid: str, password: str, actor: str) -> None:
+def _stored_password(uid: str) -> str:
+    with _db() as con:
+        row = con.execute("SELECT pw FROM users WHERE id=?", (uid,)).fetchone()
+    if not row:
+        raise AccountError("no such user")
+    return row["pw"]
+
+
+def set_password(uid: str, password: str, actor: str, *, must_change: bool = False, strong: bool = False) -> None:
+    """Replace a password. ``must_change`` marks it temporary (env, admin, or CLI).
+
+    Clearing that flag (the person chose the new password) signs out every other session and app.
+    Any password change does that too: the caller opens one fresh session afterwards.
+    """
     u = get_user(uid)
     if not u:
         raise AccountError("no such user")
-    check_password_rules(password, u.username)
+    check_password_rules(password, u.username, strong=strong)
     with _db() as con:
-        con.execute("UPDATE users SET pw=?, failed=0, locked_until=0 WHERE id=?", (hash_password(password), uid))
+        con.execute("UPDATE users SET pw=?, failed=0, locked_until=0, must_change_password=? WHERE id=?",
+                    (hash_password(password), 1 if must_change else 0, uid))
         con.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
         con.execute("DELETE FROM devices WHERE user_id=?", (uid,))  # a new password signs every app out too
-    audit(actor, "set_password", u.username)
+    audit(actor, "set_password", u.username, json.dumps({"must_change_password": bool(must_change)}))
+
+
+def change_password(uid: str, current: str, new: str, actor: str) -> User:
+    """The signed-in person picks their own password. It must differ and be strong, and the flag clears."""
+    u = get_user(uid)
+    if not u:
+        raise AccountError("no such user")
+    authenticate(u.username, current)  # lockout counts, and the message stays vague
+    if verify_password(new, _stored_password(uid)):
+        raise AccountError("new password must be different from the current one")
+    set_password(uid, new, actor, must_change=False, strong=True)
+    return get_user(uid)  # type: ignore[return-value]
 
 
 def delete_user(uid: str, actor: str) -> User:
@@ -784,14 +851,281 @@ def audit_log(limit: int = 200) -> list[dict[str, Any]]:
 
 
 def bootstrap_admin_from_env() -> str | None:
-    """Create the first admin from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD (hosts without a shell)."""
+    """Create the first admin from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD (hosts without a shell).
+
+    The env password is temporary: the admin must choose a new one at first sign-in.
+    If that username or any admin already exists, this does nothing and does not change the password.
+    The password is never written to a log.
+    """
     name, pw = config.env("AUTOMOTO_ADMIN_USER"), config.env("AUTOMOTO_ADMIN_PASSWORD")
     if not name or not pw:
         return None
     existing = find_user(name)
     if existing:
-        return None
+        return None  # do not overwrite an account that already survived a restart
     if admin_count() > 0:
         return None
-    create_user(name, pw, role="admin", actor="env-bootstrap", note="bootstrap admin")
+    create_user(name, pw, role="admin", actor="env-bootstrap", note="bootstrap admin", must_change=True)
     return norm_username(name)
+
+
+# -- one-time setup / reset code (printed once, stored only as a hash) ---------------------------
+@dataclass
+class IssuedCode:
+    """A setup code for the log. ``code`` is empty when the owner set it themselves (do not print it)."""
+
+    code: str
+    expires: float
+    purpose: str
+    username: str
+
+
+_MISSING_SETUP_HASH = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+
+
+def _env_flag(name: str) -> bool:
+    return (config.env(name) or "").lower() in ("1", "true", "yes", "on")
+
+
+def normalize_setup_code(code: str) -> str:
+    """Ignore spaces and dashes so a grouped code can be typed either way. Case stays significant."""
+    return re.sub(r"[\s-]", "", (code or "").strip())
+
+
+def setup_digest(code: str) -> str:
+    return hashlib.sha256(normalize_setup_code(code).encode()).hexdigest()
+
+
+def generate_setup_code() -> str:
+    """High-entropy code from ``secrets.token_urlsafe``, grouped in fours so it is easy to copy from a log."""
+    raw = ""
+    while len(raw) < 24:
+        raw += secrets.token_urlsafe(18).replace("-", "").replace("_", "")
+    raw = raw[:24]
+    return "-".join(raw[i:i + 4] for i in range(0, 24, 4))
+
+
+def clear_setup_code() -> None:
+    with _db() as con:
+        con.execute("DELETE FROM kv WHERE key=?", (SETUP_KV,))
+
+
+def _load_setup() -> dict[str, Any] | None:
+    with _db() as con:
+        row = con.execute("SELECT value FROM kv WHERE key=?", (SETUP_KV,)).fetchone()
+    if not row:
+        return None
+    try:
+        rec = json.loads(row["value"])
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(rec, dict) or not isinstance(rec.get("hash"), str):
+        return None
+    return rec
+
+
+def issue_setup_code(*, purpose: str, username: str = "", code: str | None = None,
+                     ttl: float = SETUP_TTL_S) -> IssuedCode:
+    """Store only the hash. A generated code is returned for the log; an owner-supplied code is not."""
+    if purpose not in ("create", "reset"):
+        raise AccountError("bad setup purpose")
+    reveal = code is None
+    raw = generate_setup_code() if reveal else code
+    if len(normalize_setup_code(raw)) < STRONG_MIN_PASSWORD:
+        raise AccountError(f"setup code must be at least {STRONG_MIN_PASSWORD} characters")
+    expires = time.time() + ttl
+    rec = {"hash": setup_digest(raw), "expires": expires, "purpose": purpose, "username": username}
+    with _db() as con:
+        con.execute(
+            "INSERT INTO kv(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (SETUP_KV, json.dumps(rec)))
+    audit("system", "setup_code", username or purpose, json.dumps({"purpose": purpose}))
+    return IssuedCode(raw if reveal else "", expires, purpose, username)
+
+
+def setup_status() -> dict[str, Any]:
+    """What /setup may show. Never includes the code or its hash."""
+    rec = _load_setup()
+    if not rec:
+        if admin_count():
+            return {"available": False, "reason": "an admin already exists"}
+        return {"available": False, "reason": "no setup code is active - restart the server and read the log"}
+    if float(rec.get("expires") or 0) < time.time():
+        return {"available": False,
+                "reason": "this setup code has expired - restart the server and copy the new code from the logs"}
+    if rec.get("purpose") == "create" and admin_count() > 0:
+        return {"available": False, "reason": "an admin already exists"}
+    return {"available": True, "mode": rec.get("purpose") or "create", "expires_at": rec.get("expires"),
+            "username": rec.get("username") or "", "min_password": STRONG_MIN_PASSWORD}
+
+
+def complete_setup(code: str, username: str, password: str) -> User:
+    """Check the code in constant time, then create the first admin or reset one admin's password.
+
+    A wrong code, an expired code, and a code used when an admin already exists do not create an account.
+    A code works once. Password mistakes do not use the code up.
+    """
+    with _LOCK:
+        rec = _load_setup()
+        presented = setup_digest(code)
+        stored = rec["hash"] if rec and len(rec["hash"]) == len(presented) else _MISSING_SETUP_HASH
+        # Always compare two equal-length digests, even when nothing is stored.
+        match = hmac.compare_digest(presented, stored) and rec is not None and stored == rec["hash"]
+        if rec is None or not match:
+            raise SetupRejected("wrong setup code", 401)
+        if float(rec.get("expires") or 0) < time.time():
+            raise SetupRejected(
+                "this setup code has expired - restart the server and copy the new code from the logs", 400)
+        purpose = rec.get("purpose")
+        target = (rec.get("username") or "").strip().lower()
+        if purpose == "create":
+            if admin_count() > 0:
+                raise SetupRejected("an admin already exists", 403)
+            name = norm_username(username)
+            check_password_rules(password, name, strong=True)
+            clear_setup_code()
+            try:
+                return create_user(name, password, role="admin", actor="setup-code",
+                                   note="first admin via setup code", strong=True)
+            except AccountError:
+                # The code was already single-use. A failed create (taken name) must not leave it valid.
+                raise
+        if purpose == "reset":
+            try:
+                typed = norm_username(username) if (username or "").strip() else target
+            except AccountError:
+                typed = ""
+            user = find_user(typed) if typed else None
+            if (not user or not user.is_admin or user.status != "active"
+                    or (target and user.username != target)):
+                raise SetupRejected("this code cannot reset that account", 403)
+            check_password_rules(password, user.username, strong=True)
+            clear_setup_code()
+            # The password typed here is still temporary: the next sign-in must choose a different one.
+            set_password(user.id, password, "setup-reset", must_change=True, strong=True)
+            return get_user(user.id)  # type: ignore[return-value]
+        raise SetupRejected("wrong setup code", 401)
+
+
+def _reset_target() -> User | None:
+    """The one admin AUTOMOTO_ADMIN_RESET may reset, or None when that is ambiguous."""
+    wanted = config.env("AUTOMOTO_ADMIN_USER") or ""
+    if wanted:
+        user = find_user(wanted)
+        if user and user.is_admin and user.status == "active":
+            return user
+        return None
+    admins = [u for u in list_users() if u.is_admin and u.status == "active"]
+    return admins[0] if len(admins) == 1 else None
+
+
+def _banner(title: str, body: list[str]) -> list[str]:
+    bar = "=" * 64
+    return [bar, title, *body, bar]
+
+
+def _page_lines(setup_url: str) -> list[str]:
+    lines = ["Page:       /setup"]
+    if setup_url and setup_url != "/setup":
+        lines.append(f"Full URL:   {setup_url}")
+    return lines
+
+
+def startup_admin_access(setup_url: str = "/setup") -> list[str]:
+    """Decide how the owner gets the first admin. Returns log lines and never includes a password.
+
+    A previous setup code is dropped on every start (it expires, and a restart replaces it).
+    """
+    lines: list[str] = []
+    clear_setup_code()
+    reset = _env_flag("AUTOMOTO_ADMIN_RESET")
+    name = config.env("AUTOMOTO_ADMIN_USER") or ""
+    pw = config.env("AUTOMOTO_ADMIN_PASSWORD") or ""
+    if name and pw:
+        try:
+            made = bootstrap_admin_from_env()
+        except AccountError as exc:
+            lines.append(f"Could not create an admin from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD: {exc}")
+            lines.append("The password was not written here. Use a longer password, or unset both variables "
+                         "and restart to get a setup code.")
+            if not reset:
+                return lines
+        else:
+            if made:
+                lines.append(f"Created the first admin '{made}' from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD.")
+                lines.append("That password is temporary. Sign in, then choose a new password "
+                             f"(at least {STRONG_MIN_PASSWORD} characters, and not a common one).")
+                lines.append("If this disk is wiped on restart (Render's free plan does that), the admin is "
+                             "created again and must choose a new password again. Use a persistent disk, or unset "
+                             "both admin variables and use the setup code.")
+                if not reset:
+                    return lines
+            else:
+                lines.append("An admin already exists. AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD were not "
+                             "applied, and the existing password was not changed.")
+                lines.append("On a host that wipes its disk, that admin disappears on restart and these variables "
+                             "create it again as a temporary password. Prefer a persistent disk, or the one-time "
+                             "setup code.")
+                if not reset:
+                    return lines
+    elif name or pw:
+        lines.append("Set both AUTOMOTO_ADMIN_USER and AUTOMOTO_ADMIN_PASSWORD, or neither. "
+                     "A single one is ignored. Nothing secret was written here.")
+
+    if reset:
+        target = _reset_target()
+        if target:
+            issued = issue_setup_code(purpose="reset", username=target.username)
+            lines.extend(_banner("AutoMoto admin password reset", [
+                "AUTOMOTO_ADMIN_RESET=1 is set. Do these steps:",
+                "  1. Copy the reset code below.",
+                "  2. Open /setup on this server.",
+                f"  3. Enter the code and a temporary password for admin '{target.username}'.",
+                "  4. Sign in. AutoMoto will ask you to choose a different password.",
+                "  5. Remove AUTOMOTO_ADMIN_RESET and restart.",
+                f"Reset code: {issued.code}",
+                *_page_lines(setup_url),
+                "This code works once. It expires in 60 minutes. A restart prints a new one.",
+            ]))
+            return lines
+        if admin_count() == 0:
+            lines.append("AUTOMOTO_ADMIN_RESET=1 is set, but there is no admin yet. Create one with the setup code below.")
+        else:
+            who = config.env("AUTOMOTO_ADMIN_USER") or ""
+            if who:
+                lines.append(f"AUTOMOTO_ADMIN_RESET=1 is set, but '{who}' is not an active admin. "
+                             "No reset code was issued.")
+            else:
+                lines.append("AUTOMOTO_ADMIN_RESET=1 is set, but more than one admin exists. "
+                             "Set AUTOMOTO_ADMIN_USER to the admin to reset, then restart. No reset code was issued.")
+            return lines
+
+    if admin_count() == 0:
+        env_code = config.env("AUTOMOTO_SETUP_CODE") or ""
+        if env_code and len(normalize_setup_code(env_code)) < STRONG_MIN_PASSWORD:
+            lines.append(f"AUTOMOTO_SETUP_CODE is shorter than {STRONG_MIN_PASSWORD} characters, so it was ignored. "
+                         "A random setup code was generated instead. The short code was not written here.")
+            env_code = ""
+        if env_code:
+            issue_setup_code(purpose="create", code=env_code)
+            lines.extend(_banner("AutoMoto first login", [
+                "No admin account yet. There is no default password.",
+                "  1. Open /setup on this server.",
+                "  2. Enter the setup code from AUTOMOTO_SETUP_CODE (it is not printed here).",
+                "  3. Choose your admin username and a password.",
+                *_page_lines(setup_url),
+                "This code works once. It expires in 60 minutes. Restart the server if you need longer.",
+            ]))
+        else:
+            issued = issue_setup_code(purpose="create")
+            lines.extend(_banner("AutoMoto first login", [
+                "No admin account yet. There is no default password. Do these 3 steps:",
+                "  1. Copy the setup code below.",
+                "  2. Open /setup on this server.",
+                "  3. Paste the code, then choose a username and a password.",
+                f"Setup code: {issued.code}",
+                *_page_lines(setup_url),
+                "This code works once. It expires in 60 minutes.",
+                "Restart the server if you need a new code.",
+            ]))
+    return lines

@@ -357,6 +357,7 @@ pre.code { font-size: 12px; white-space: pre-wrap; word-break: break-word; backg
 .auth-tabs button { flex: 1; justify-content: center; }
 .seg button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
 .auth-err { color: var(--bad); font-size: 13px; }
+.auth input.code { font-family: var(--mono); letter-spacing: .06em; }
 .btn.wide { width: 100%; justify-content: center; }
 .small { font-size: 12px; }
 .linkish { background: none; border: 0; padding: 0; color: var(--dim); text-decoration: underline; cursor: pointer; font: inherit; }

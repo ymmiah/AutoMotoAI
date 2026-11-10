@@ -331,8 +331,9 @@ Create a file called **`.env`** in that folder (it's git-ignored):
 
 ```ini
 NVIDIA_API_KEY=nvapi-...
-AUTOMOTO_ADMIN_USER=yourname
-AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
+# Optional. Leave these unset and use the setup code from the logs at /setup.
+# AUTOMOTO_ADMIN_USER=yourname
+# AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
 ```
 
 ### Option A — hosted mode for yourself (Windows, macOS, Linux)
@@ -341,7 +342,9 @@ AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
 docker compose up -d --build
 ```
 
-Open <http://127.0.0.1:8765> and sign in as `yourname`. Admins have no usage limit. In Docker you get the
+Open the logs (`docker compose logs automoto`), copy the setup code, and open <http://127.0.0.1:8765/setup>.
+If you set the admin env vars instead, sign in at <http://127.0.0.1:8765> and choose a new password.
+Admins have no usage limit. In Docker you get the
 **hosted tool set** (web research, Office, archives, data files — no shell or desktop control), which is the safe
 choice for a container. Manage it with `docker compose exec automoto python -m automoto admin list`.
 
@@ -370,6 +373,24 @@ give containers your `localhost` the same way — use option A there, or the nor
 
 Hosted mode gives every person an account, their own sandbox and a usage limit (**60 minutes a day** by default).
 You are the admin. Full reference: **[HOSTING.md](HOSTING.md)** (settings, honest free-host comparison, limits).
+
+### First login on any host
+
+This is the same on Render, Railway, Fly, Oracle, a VPS or Docker. There is no default password.
+
+1. Start the server.
+2. Open the logs.
+3. Copy the setup code.
+4. Open `/setup` (add it to the server address, for example `https://your-server/setup`).
+5. Paste the code, choose a username and a password, and submit.
+6. Sign in at `/`.
+
+The code works once. It lasts 60 minutes. Restart the server if you need a new one.
+
+A password set with `AUTOMOTO_ADMIN_USER` / `AUTOMOTO_ADMIN_PASSWORD` is temporary: sign in, then choose a new one.
+If the disk is wiped on restart, that admin is created again. Use a disk that keeps data, or the setup code.
+Forgot the password and cannot open a shell? Set `AUTOMOTO_ADMIN_RESET=1`, restart, copy the new code from the logs,
+open `/setup`, then sign in and choose a different password. Remove `AUTOMOTO_ADMIN_RESET` afterwards.
 
 ### Admin basics (any setup)
 
@@ -418,6 +439,7 @@ Your PC must stay on while people use it.
    git clone https://github.com/ymmiah/AutoMotoAI && cd AutoMotoAI
    cat > .env <<'ENV'
    NVIDIA_API_KEY=nvapi-...
+   # Optional. Leave unset and use the setup code from `docker compose logs` at /setup.
    AUTOMOTO_ADMIN_USER=yourname
    AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
    AUTOMOTO_ALLOWED_HOSTS=automoto.example.com
@@ -437,9 +459,10 @@ Your PC must stay on while people use it.
 
 ### C. Render free (demo only — data is wiped)
 
-Fork the repo → <https://render.com> → *New → Blueprint* → your fork (uses `render.yaml`) → set `NVIDIA_API_KEY`,
-`AUTOMOTO_ADMIN_USER`, `AUTOMOTO_ADMIN_PASSWORD`. Free services sleep after 15 minutes and have **no disk**:
-every sleep/redeploy deletes all accounts except the admin from env, and all files. Good for a demo, not for users.
+Fork the repo → <https://render.com> → *New → Blueprint* → your fork (uses `render.yaml`) → set `NVIDIA_API_KEY`.
+Admin env vars are optional. Open the logs, copy the setup code, open `/setup`. Free services sleep after 15 minutes
+and have **no disk**: every sleep/redeploy deletes accounts and files. If you set `AUTOMOTO_ADMIN_PASSWORD`, that
+admin is created again after each wipe and must change the password again. Good for a demo, not for users.
 
 ### D. Phones and tablets on your home Wi-Fi
 

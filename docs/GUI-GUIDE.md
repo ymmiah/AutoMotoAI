@@ -621,8 +621,8 @@ Hosted mode lets friends or classmates use your AutoMoto with their own private 
 
 ### For the owner (you)
 
-**Step 19.1** — create your admin account (the first account is the admin; it asks for a password of 10+
-characters that doesn't contain your username):
+**Step 19.1** — create your admin account. On a host with no shell, open the server logs, copy the setup code, and open `/setup` ([HOSTING.md](HOSTING.md#first-login-on-any-host)). With a shell, the first account is the admin; it asks for a password of 10+
+characters that doesn't contain your username:
 
 ```bash
 automoto admin create yourname
