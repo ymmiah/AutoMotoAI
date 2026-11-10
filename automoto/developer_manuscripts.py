@@ -87,9 +87,9 @@ def _masked(source: str, fmt: str) -> str:
     def blank(match):
         return re.sub(r"[^\n\r]", " ", match.group(0))
     if fmt == "quarto":
-        text = re.sub(r"(?ms)^ {0,3}([\x60~]{3,})[^\n]*\n.*?^ {0,3}\1[ \t]*$", blank, source)
+        text = re.sub(r"(?ms)^ {0,3}([\x60~]{3,})[^\n]*\n.*?^ {0,3}\1[ \t]*\r?$", blank, source)
         text = re.sub(r"<!--.*?-->", blank, text, flags=re.S)
-        text = re.sub(r"(?ms)\A---[^\n]*\n.*?^---[ \t]*$", blank, text, count=1)
+        text = re.sub(r"(?ms)\A---[^\n]*\n.*?^---[ \t]*\r?$", blank, text, count=1)
         text = re.sub(r"\x60[^\x60\n]{0,2000}\x60", blank, text)
     else:
         text = re.sub(r"(?s)/\*.*?\*/", blank, source)
