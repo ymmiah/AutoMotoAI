@@ -39,8 +39,9 @@ FRAMEWORK_FILES = {
     "Vite": ("vite.config.js","vite.config.ts"),
 }
 DANGEROUS = {"script","style","template","svg","math","iframe","object",
-             "embed","video","audio","source","link","meta","base","canvas",
-             "form","frame","frameset","portal","picture","noscript"}
+             "video","audio","canvas","form","frame","frameset","portal",
+             "picture","noscript"}
+DROP_VOID = {"embed","source","link","meta","base","param","track","wbr","area"}
 TAGS = {"div","span","p","h1","h2","h3","h4","h5","h6",
         "header","footer","main","nav","section","article","aside",
         "ul","ol","li","strong","em","b","i","small","code","pre",
@@ -208,6 +209,9 @@ class _SafeHTML(HTMLParser):
     def handle_starttag(self,tag,pairs):
         if self.skip:
             if tag in DANGEROUS:self.skip+=1
+            return
+        if tag in DROP_VOID:
+            self.omitted+=1
             return
         if tag in DANGEROUS:
             self.skip=1
