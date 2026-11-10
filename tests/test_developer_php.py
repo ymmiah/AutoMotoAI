@@ -39,6 +39,11 @@ COMPOSER={"name":"example/reviewable-notice","type":"wordpress-plugin",
           "require-dev":{"phpunit/phpunit":"^11.0","phpstan/phpstan":"^2.0"},
           "scripts":{"test":"phpunit","post-install-cmd":"echo never execute automatically"}}
 
+def write_exact(path:Path,text:str,newline:bytes=b"\n")->None:
+    """Write source bytes with an explicit ending. Text mode would translate newlines."""
+    logical=text.replace("\r\n","\n").replace("\r","\n").encode("utf-8")
+    path.write_bytes(logical.replace(b"\n",newline))
+
 @pytest.fixture
 def project(tmp_path, monkeypatch):
     monkeypatch.setenv("AUTOMOTO_HOME",str(tmp_path/"home"))
@@ -47,9 +52,9 @@ def project(tmp_path, monkeypatch):
     monkeypatch.delenv("AUTOMOTO_MODE",raising=False)
     root=sandbox.default_root()/"v16-wp-plugin"
     root.mkdir(parents=True)
-    (root/"reviewable-notice.php").write_text(PLUGIN,encoding="utf-8")
-    (root/"composer.json").write_text(json.dumps(COMPOSER),encoding="utf-8")
-    (root/"composer.lock").write_text('{"packages":[],"packages-dev":[]}',encoding="utf-8")
+    write_exact(root/"reviewable-notice.php",PLUGIN)
+    write_exact(root/"composer.json",json.dumps(COMPOSER))
+    write_exact(root/"composer.lock",'{"packages":[],"packages-dev":[]}')
     return TestClient(server.app),root
 
 def inspect(client,root):
@@ -101,18 +106,36 @@ def test_readonly_inspection_finds_plugin_headers_hooks_settings_and_composer(pr
     assert value["tool_executed"] is False
     assert {p.name:p.read_bytes() for p in root.iterdir() if p.is_file()}==originals
 
-def test_real_wordpress_security_patch_uses_v2_checksum_save_and_preserves_hooks_and_settings(project):
+def _ending(line:bytes)->bytes:
+    if line.endswith(b"\r\n"):
+        return b"\r\n"
+    if line.endswith(b"\n"):
+        return b"\n"
+    if line.endswith(b"\r"):
+        return b"\r"
+    return b""
+
+
+@pytest.mark.parametrize("line_ending", [b"\n", b"\r\n"], ids=["lf", "crlf"])
+def test_real_wordpress_security_patch_uses_v2_checksum_save_and_preserves_hooks_and_settings(project,line_ending):
     client,root=project
-    old=(root/"reviewable-notice.php").read_bytes()
+    source=root/"reviewable-notice.php"
+    write_exact(source,PLUGIN,line_ending)
+    old=source.read_bytes()
     resp=patch(client,root)
     assert resp.status_code==200,resp.text
     data=resp.json()
+    style="crlf" if line_ending==b"\r\n" else "lf"
     assert data["saved"] is False
     assert data["preview_only"] is True
     assert data["preserved_hooks"]==3
+    assert data["encoding"]=="utf-8"
+    assert data["newline"]==style
     assert data["source_sha256"]==hashlib.sha256(old).hexdigest()
-    assert (root/"reviewable-notice.php").read_bytes()==old
+    assert source.read_bytes()==old
     new=data["patched_text"]
+    # The approved digest is the exact bytes V2 save writes for this newline style.
+    assert hashlib.sha256(new.encode("utf-8")).hexdigest()==data["patched_sha256"]
     assert "echo isset( $_GET['notice'] ) ? esc_html(" in new
     assert "sanitize_text_field( wp_unslash( $_GET['notice'] ) )" in new
     for original in ("register_activation_hook( __FILE__, 'reviewable_activate' );",
@@ -120,20 +143,44 @@ def test_real_wordpress_security_patch_uses_v2_checksum_save_and_preserves_hooks
                      "add_action( 'admin_notices', 'reviewable_notice' );",
                      "add_filter( 'the_content', 'reviewable_content' );"):
         assert original in new
+    # The editor stores LF text and restores the file's original newline on save.
+    logical=new.replace("\r\n","\n").replace("\r","\n")
+    body={"project":str(root),"path":"reviewable-notice.php","text":logical,
+          "encoding":data["encoding"],"newline":data["newline"],
+          "expected_sha256":data["source_sha256"],"confirmed":True}
     # The existing V2 editor is the ONLY source writer. No V16 auto-change.
-    assert client.post("/api/developer/studio/save-file",headers=AUTH,json={
-        "project":str(root),"path":"reviewable-notice.php","text":new,
-        "encoding":"utf-8","newline":"lf","expected_sha256":data["source_sha256"],
-        "confirmed":True}).status_code==403
+    assert client.post("/api/developer/studio/save-file",headers=AUTH,json=body).status_code==403
     trust(client,root)
-    saved=client.post("/api/developer/studio/save-file",headers=AUTH,json={
-        "project":str(root),"path":"reviewable-notice.php","text":new,
-        "encoding":"utf-8","newline":"lf","expected_sha256":data["source_sha256"],
-        "confirmed":True})
+    saved=client.post("/api/developer/studio/save-file",headers=AUTH,json=body)
     assert saved.status_code==200,saved.text
     assert saved.json()["sha256"]==data["patched_sha256"]
+    written=source.read_bytes()
+    assert hashlib.sha256(written).hexdigest()==data["patched_sha256"]
+    assert written==new.encode("utf-8")
+    old_lines=old.splitlines(keepends=True)
+    new_lines=written.splitlines(keepends=True)
+    assert len(old_lines)==len(new_lines)
+    changed=[(before,after) for before,after in zip(old_lines,new_lines) if before!=after]
+    assert len(changed)==1
+    assert b"echo $_GET['notice'];" in changed[0][0]
+    assert b"esc_html" in changed[0][1]
+    assert _ending(changed[0][0])==line_ending
+    assert _ending(changed[0][1])==line_ending
+    assert all(_ending(line)==line_ending for line in new_lines)
     assert patch(client,root,sha=data["source_sha256"]).status_code==409
-    assert "echo $_GET['notice'];" not in (root/"reviewable-notice.php").read_text()
+    assert b"echo $_GET['notice'];" not in written
+
+
+def test_mixed_line_endings_do_not_publish_a_checksum_save_cannot_preserve(project):
+    client,root=project
+    source=root/"reviewable-notice.php"
+    logical=PLUGIN.replace("\r\n","\n").replace("\r","\n")
+    mixed=logical.replace("\n","\r\n",1).encode("utf-8")
+    assert b"\r\n" in mixed and b"\n" in mixed.replace(b"\r\n",b"")
+    source.write_bytes(mixed)
+    response=patch(client,root)
+    assert response.status_code==422,response.text
+    assert source.read_bytes()==mixed
 
 def test_installed_php_syntax_and_wordpress_behavior_with_stubbed_wp_hooks(project):
     client,root=project
@@ -153,7 +200,8 @@ def test_installed_php_syntax_and_wordpress_behavior_with_stubbed_wp_hooks(proje
     assert lint.json()["status"]=="completed"
     save=client.post("/api/developer/studio/save-file",headers=AUTH,json={
         "project":str(root),"path":"reviewable-notice.php",
-        "text":proposal["patched_text"],"encoding":"utf-8","newline":"lf",
+        "text":proposal["patched_text"].replace("\r\n","\n").replace("\r","\n"),
+        "encoding":proposal["encoding"],"newline":proposal["newline"],
         "expected_sha256":proposal["source_sha256"],"confirmed":True})
     assert save.status_code==200,save.text
     after=version_run(client,root,task="lint",path="reviewable-notice.php",
@@ -187,12 +235,12 @@ echo json_encode(['notice'=>$notice,'hooks'=>$hooks,'settings'=>$options,
 def test_stale_sha_rejected_and_only_specific_fix_pattern_supported(project):
     client,root=project
     path=root/"reviewable-notice.php"
-    path.write_text(PLUGIN.replace("echo $_GET['notice'];","print($_GET['notice']);"))
+    write_exact(path,PLUGIN.replace("echo $_GET['notice'];","print($_GET['notice']);"))
     response=patch(client,root)
     assert response.status_code==422,response.text
-    path.write_text(PLUGIN+"echo $_GET['notice'];\n")
+    write_exact(path,PLUGIN+"echo $_GET['notice'];\n")
     assert patch(client,root).status_code==422
-    path.write_text(PLUGIN)
+    write_exact(path,PLUGIN)
     assert patch(client,root,sha="f"*64).status_code==409
 
 def test_composer_duplicate_manifest_and_restricted_paths(project,tmp_path):
@@ -201,10 +249,10 @@ def test_composer_duplicate_manifest_and_restricted_paths(project,tmp_path):
     assert inspect(client,root).status_code==422
     (root/"composer.json").write_text(json.dumps(COMPOSER))
     assert patch(client,root,path="../private.php",sha="0"*64).status_code in (403,404,422)
-    (root/"--help.php").write_text(PLUGIN)
+    write_exact(root/"--help.php",PLUGIN)
     assert patch(client,root,path="--help.php").status_code==422
     outside=tmp_path/"plugin.php"
-    outside.write_text(PLUGIN)
+    write_exact(outside,PLUGIN)
     link=root/"link.php"
     try:
         link.symlink_to(outside)
@@ -239,7 +287,7 @@ def test_task_requires_trust_fingerprint_source_sha_and_confirmations(project):
     assert success.json()["status"]=="completed"
     assert success.json()["deployment_started"] is False
     assert success.json()["agent_deployment_approved"] is False
-    (root/"composer.json").write_text((root/"composer.json").read_text()+"\n")
+    (root/"composer.json").write_bytes((root/"composer.json").read_bytes()+b"\n")
     assert client.post(BASE+"/run",headers=AUTH,json=body).status_code==409
 
 def test_opt_in_project_tool_command_is_fixed_and_wordpress_readonly(project):

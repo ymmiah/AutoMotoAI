@@ -252,6 +252,9 @@ def _patch(root:Path,path:str,digest:str)->dict:
     headers=dict((k.lower(),v) for k,v in WP_HEADER.findall(source[:8192].split("*/",1)[0]))
     if "plugin name" not in headers:
         raise HTTPException(422,"Choose an existing file with a WordPress plugin header.")
+    newline=editor._newlines(source)
+    if newline=="mixed":
+        raise HTTPException(422,"Mixed line endings cannot be preserved. Choose LF, CRLF or CR in the editor first.")
     matches=list(RAW_NOTICE.finditer(source))
     if len(matches)!=1:
         raise HTTPException(422,"This narrow fix requires exactly one literal echo of the notice GET field.")
@@ -262,16 +265,27 @@ def _patch(root:Path,path:str,digest:str)->dict:
     after=source[:target.start()]+fixed+source[target.end():]
     before_hooks=_hooks(source)
     after_hooks=_hooks(after)
-    if before_hooks!=after_hooks or len(after.encode("utf-8"))>editor.MAX_BYTES:
+    if before_hooks!=after_hooks:
         raise HTTPException(409,"Patch does not preserve hooks or exceeds the editor size limit.")
-    return {"path":path,"source_sha256":original,"patched_text":after,
-            "patched_sha256":hashlib.sha256(after.encode("utf-8")).hexdigest(),
+    # Save rewrites endings through the V2 encoder. Hash those exact bytes, using the
+    # file's own newline style, so the checksum a reviewer approves is what gets written.
+    logical=after.replace("\r\n","\n").replace("\r","\n")
+    try:
+        patched=editor._encode(logical,"utf-8",newline)
+    except HTTPException as exc:
+        if exc.status_code==413:
+            raise HTTPException(409,"Patch does not preserve hooks or exceeds the editor size limit.") from None
+        raise
+    rendered=patched.decode("utf-8")
+    return {"path":path,"source_sha256":original,"patched_text":rendered,
+            "patched_sha256":hashlib.sha256(patched).hexdigest(),
+            "encoding":"utf-8","newline":newline,
             "finding":"raw-superglobal-echo",
             "mitigation":"check missing input, unslash, sanitise text, escape HTML output",
             "preserved_hooks":len(before_hooks),
             "preview_only":True,"existing_settings_untouched":True,
             "saved":False,"linted":False,"agent_deployment_approved":False,
-            "instructions":"Review both versions, validate the exact HTML context, and use V2 guarded save with the original SHA-256. Run PHP -l and plugin tests before agent deployment-readiness review."}
+            "instructions":"Review both versions, validate the exact HTML context, and use V2 guarded save with this encoding, newline style and the original SHA-256. Run PHP -l and plugin tests before agent deployment-readiness review."}
 
 
 @router.get("/inspect")

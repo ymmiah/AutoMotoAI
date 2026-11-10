@@ -117,7 +117,8 @@ export function mountDeveloperPHP({api,host,getProject,editor,status}) {
       if(p!==project()||id!==seq)return;
       clear();heading("Exact WordPress patch preview · NOT saved");
       line("Original SHA-256: "+result.source_sha256);
-      line("Proposed SHA-256: "+result.patched_sha256);
+      line("Proposed SHA-256: "+result.patched_sha256+
+        (result.newline?" · preserve "+result.newline.toUpperCase()+" line endings":""));
       line(result.mitigation+". "+result.preserved_hooks+" hook declaration(s) preserved.");
       const text=document.createElement("textarea");text.className="input ds-php-source";
       text.readOnly=true;text.rows=11;text.value=result.patched_text;
