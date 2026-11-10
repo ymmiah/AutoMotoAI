@@ -299,3 +299,21 @@
 .ds-manuscript-preview{font:12px/1.5 var(--mono);width:100%;resize:vertical;min-height:88px}
 #dsManStatus.ds-error{color:var(--bad)}
 @media(max-width:650px){.ds-manuscript-head{align-items:flex-start;flex-direction:column}.ds-manuscript-controls .input{min-width:0;max-width:100%;flex:1 1 100%}}
+
+
+/* V13: consented Node.js / JS / TS project toolchains and diagnostics. */
+.ds-js-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ds-js-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ds-js-head h3{font-size:14px;font-weight:700;margin:0}
+.ds-js-body{display:grid;gap:12px;padding:14px 16px;min-width:0}
+.ds-js-body>.ds-footnote{padding:0}
+.ds-js-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ds-js-controls label{font-size:12px;color:var(--dim)}
+.ds-js-controls .input{flex:1 1 145px;min-width:145px;max-width:360px}
+.ds-js-summary{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;min-height:52px;overflow:auto;display:grid;gap:7px}
+.ds-js-summary h4{font-size:13px;font-weight:700;margin:8px 0 2px}
+.ds-js-line{font:12px/1.5 var(--mono);margin:0;overflow-wrap:anywhere}
+.ds-js-line[data-kind=warning]{color:var(--bad)}
+.ds-js-output{max-width:100%;max-height:225px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 var(--mono)}
+#dsJsStatus.ds-error{color:var(--bad)}
+@media(max-width:650px){.ds-js-head{align-items:flex-start;flex-direction:column}.ds-js-controls .input{min-width:0;max-width:100%;flex:1 1 100%}}
