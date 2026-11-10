@@ -201,6 +201,8 @@ def test_composer_duplicate_manifest_and_restricted_paths(project,tmp_path):
     assert inspect(client,root).status_code==422
     (root/"composer.json").write_text(json.dumps(COMPOSER))
     assert patch(client,root,path="../private.php").status_code in (403,404,422)
+    (root/"--help.php").write_text(PLUGIN)
+    assert patch(client,root,path="--help.php").status_code==422
     outside=tmp_path/"plugin.php"
     outside.write_text(PLUGIN)
     link=root/"link.php"
