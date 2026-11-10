@@ -2181,7 +2181,14 @@ let browser;
   assert.equal(v11SyncReverse,1);
   await page.screenshot({path:path.join(output,'developer-studio-v11-tex-pdf-preview.png')});
   await page.unrouteAll();
+  // Restore the editor to its pre-V11 single-source context before the
+  // original V2/V3 save/lifecycle regression assertions run.
+  for(const name of ['method.tex','references.bib']){
+    const tab=page.locator('.ds-tab').filter({hasText:name});
+    if(await tab.count())await tab.locator('.ds-tab-close').click();
+  }
   await page.locator('.ds-tab-select',{hasText:'main.ts'}).click();
+  await page.locator('#dsModeEdit').click();
   await page.waitForFunction(()=>document.querySelector('#dsSourceText')?.value?.includes('read-only'));
 
   await replaceDeveloperSource('export const title = "edited";\n');
@@ -2202,7 +2209,8 @@ let browser;
   await page.locator('#dsModeEdit').click();
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#dsSaveFile').click();
-  await page.waitForFunction(() => document.querySelector('#dsStatus')?.textContent?.includes('Saved:'));
+  await page.waitForFunction(() => /Saved:|Save blocked:|Save failed:/.test(document.querySelector('#dsStatus')?.textContent||''));
+  assert.match(await page.locator('#dsStatus').innerText(),/Saved:/,'V2 safe save status');
   assert.equal(readFileSync(path.join(devProject,'main.ts'),'utf8'),'export const title = "edited";\n');
   await page.locator('.ds-entry', {hasText:'other.py'}).click();
   await page.waitForFunction(() => document.querySelectorAll('.ds-tab').length===2);
