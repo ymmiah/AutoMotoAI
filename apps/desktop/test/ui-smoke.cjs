@@ -2264,6 +2264,45 @@ let browser;
   await page.screenshot({path:path.join(output,'developer-studio-v12-typst-quarto-research.png')});
   await page.unrouteAll();
 
+  // V13: inspect an actual local Node project; never auto-run a script or tool.
+  const v13Config=JSON.parse(readFileSync(path.join(devProject,'package.json'),'utf8'));
+  v13Config.name='automoto-v13-browser-real-node';
+  v13Config.private=true;
+  v13Config.engines={node:'>=20'};
+  v13Config.packageManager='npm@10.0.0';
+  v13Config.scripts.test='node --test v13-task.test.cjs';
+  v13Config.scripts.build='node --check v13-task.test.cjs';
+  v13Config.devDependencies={typescript:'^5.9.0'};
+  writeFileSync(path.join(devProject,'package.json'),JSON.stringify(v13Config));
+  writeFileSync(path.join(devProject,'v13-task.test.cjs'),
+    "const test=require('node:test');const assert=require('node:assert/strict');"+
+    "test('v13 genuine Node smoke',()=>assert.equal(3*7,21));\n");
+  const v13TestOriginal=readFileSync(path.join(devProject,'v13-task.test.cjs'));
+  await page.locator('#dsJsInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsStatus')?.textContent?.includes('Project inspected'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Next.js/);
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Manifest SHA-256/);
+  assert.equal(await page.locator('#dsJsSummary script').count(),0);
+  await page.locator('#dsJsTool').selectOption('node');
+  await page.locator('#dsJsTask').selectOption('node_test');
+  await page.locator('#dsJsFile').fill('v13-task.test.cjs');
+  assert.equal(await page.locator('#dsJsRun').isEnabled(),true);
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsJsRun').click();
+  assert.match(await page.locator('#dsJsStatus').innerText(),/Project inspected/,
+    'Cancelled V13 execution must not run the Node test');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsJsRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsStatus')?.textContent?.includes('Task completed'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/v13 genuine Node smoke/);
+  assert.deepEqual(readFileSync(path.join(devProject,'v13-task.test.cjs')),v13TestOriginal);
+  await page.locator('#dsJsTask').selectOption('tool_version');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsJsRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsSummary')?.textContent?.includes('Reported version: v'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Reported version: v\d+/);
+  await page.screenshot({path:path.join(output,'developer-studio-v13-js-ts-project-tests.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
