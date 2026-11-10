@@ -142,6 +142,8 @@ app.include_router(developer_manuscripts.router)  # V12 read-only Typst/Quarto p
 app.include_router(developer_research_transfer.router)  # V12 source-reverified review-only research manuscripts
 from automoto import developer_javascript
 app.include_router(developer_javascript.router)  # V13 explicit JS/TS testing, typechecks and project-script workflows
+from automoto import developer_frontend
+app.include_router(developer_frontend.router)  # V14 non-executing web UI, accessibility and sandboxed static preview
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
