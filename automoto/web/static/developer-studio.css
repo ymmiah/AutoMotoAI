@@ -354,3 +354,21 @@
 .ds-data-output{padding:12px;margin:0;background:var(--code);border:1px solid var(--line);border-radius:8px;min-height:62px;max-height:380px;overflow:auto;font:11px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
 #dsDataStatus.ds-error{color:var(--bad)}
 @media(max-width:650px){.ds-data-head{align-items:flex-start;flex-direction:column}.ds-data-controls .input{min-width:0;max-width:100%;flex:1 1 100%}}
+
+
+/* V16 — PHP / WordPress security and central-agent deployment review. */
+.ds-php-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ds-php-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ds-php-head h3{margin:0;font-size:14px;font-weight:700}
+.ds-php-body{padding:14px 16px;display:grid;gap:11px;min-width:0}
+.ds-php-body>.ds-footnote{padding:0}
+.ds-php-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ds-php-controls label{font-size:12px;color:var(--dim)}
+.ds-php-controls .input{flex:1 1 175px;min-width:170px;max-width:360px}
+.ds-php-results{min-height:58px;max-height:480px;overflow:auto;background:var(--code);padding:12px;border:1px solid var(--line);border-radius:8px;display:grid;gap:7px}
+.ds-php-results h4{margin:8px 0 2px;font-size:13px;font-weight:700}
+.ds-php-line{font:12px/1.55 var(--mono);margin:0;overflow-wrap:anywhere}
+.ds-php-line[data-severity=warning],#dsPhpStatus.ds-error{color:var(--bad)}
+.ds-php-source{width:100%;font:12px/1.5 var(--mono);min-height:150px;resize:vertical}
+.ds-php-output{font:12px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;max-width:100%;overflow:auto}
+@media(max-width:650px){.ds-php-head{align-items:flex-start;flex-direction:column}.ds-php-controls .input{min-width:0;max-width:100%;flex:1 1 100%}}
