@@ -382,8 +382,9 @@ def run(request: Request, body: RunIn):
         result["external_process_unsandboxed"] = True
         result["package_installation_performed_by_app"] = False
         result["network_prevented_by_os"] = False
-        result["framework_build_verified"] = (
+        result["build_script_exited_zero"] = (
             body.task == "script" and body.script == "build" and result["status"] == "completed")
+        result["framework_build_verified"] = False  # Real output and framework acceptance are separate.
         version = NODE_VERSION.search(result["output"]) if body.task in ("node_version", "tool_version") and body.tool == "node" else None
         result["node_runtime_version"] = version.group(0) if version else None
         result["reported_tool_version"] = result["output"].strip()[:120] if body.task in ("node_version", "tool_version") and result["status"] == "completed" else None
