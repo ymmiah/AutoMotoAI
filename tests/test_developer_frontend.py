@@ -223,6 +223,47 @@ def test_symlinks_and_oversized_html_cannot_be_previewed(project,tmp_path):
     assert post(client,"preview",root,path="index.html").status_code==413
 
 
+
+def test_built_html_directory_and_file_links_refused(project,tmp_path):
+    client,root=project
+    target=tmp_path/"other-index.html"
+    target.write_text("<h1>EXTERNAL PRIVATE DATA</h1>",encoding="utf-8")
+    built=root/"dist"/"index.html"
+    built.unlink()
+    try:
+        built.symlink_to(target)
+    except (OSError,NotImplementedError):
+        pytest.skip("Symlink creation unsupported on this runner")
+    r=post(client,"preview",root,path="dist/index.html")
+    assert r.status_code==403
+    assert "EXTERNAL PRIVATE DATA" not in r.text
+    built.unlink()
+    folder=root/"dist"
+    folder.rmdir()
+    try:
+        folder.symlink_to(tmp_path,target_is_directory=True)
+    except (OSError,NotImplementedError):
+        pytest.skip("Linked directory unsupported on this runner")
+    assert post(client,"preview",root,path="dist/index.html").status_code==403
+
+
+def test_preview_css_fail_closed_on_active_functions():
+    css='''.tile{display:grid;position:fixed;
+    background:url(https://evil.example/x);
+    color:expression(alert(1));font-size:16px;
+    background-color:#f7f7f7;--data:"url(https://evil.example)"}
+    @import url(https://evil.example/from.css);'''
+    result,dropped=fe._css_preview(css)
+    assert ".tile{" in result
+    assert "display:grid" in result
+    assert "font-size:16px" in result
+    assert "background-color:#f7f7f7" in result
+    assert "https://" not in result
+    assert "position:fixed" not in result
+    assert "expression" not in result
+    assert dropped>=3
+
+
 def test_scanner_is_bounded_and_csp_sandbox_never_loosens():
     assert "default-src 'none'" in fe.CSP
     assert "script-src 'none'" in fe.CSP
