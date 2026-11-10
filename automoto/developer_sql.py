@@ -149,8 +149,8 @@ def _params(values:list[Any])->list[Any]:
     return result
 
 def _query(con:sqlite3.Connection,statement:str,params:list[Any])->dict:
-    if not READ_PREFIX.match(statement):
-        raise HTTPException(422,"Only a SELECT/CTE read query can be inspected.")
+    if not READ_PREFIX.match(statement) or ";" in statement.strip().rstrip(";"):
+        raise HTTPException(422,"Only one SELECT/CTE read query can be inspected.")
     con.execute("PRAGMA query_only=ON")
     con.set_authorizer(_authorizer)
     _progress(con)
@@ -179,7 +179,7 @@ def _query(con:sqlite3.Connection,statement:str,params:list[Any])->dict:
                 "original_database_written":False,
                 "result_bytes":used}
     except HTTPException:raise
-    except sqlite3.DatabaseError as exc:
+    except (sqlite3.DatabaseError,sqlite3.Warning) as exc:
         raise HTTPException(422,"SQL query was denied or invalid; no write occurred.") from exc
     finally:
         con.set_authorizer(None)
