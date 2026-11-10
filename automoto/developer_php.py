@@ -30,6 +30,13 @@ PHP_DIAGNOSTIC=re.compile(r"(?im)^(?:PHP\s+)?(?:Parse\s+error|Fatal\s+error|Warn
 PHP_VERSION=re.compile(r"PHP\s+(\d+\.\d+\.\d+)")
 WP_HEADER=re.compile(r"(?mi)^\s*\*?\s*(Plugin Name|Version|Requires PHP|Text Domain):[ \t]*(.{1,160})$")
 HOOK=re.compile(r"\b(add_action|add_filter|add_shortcode|register_activation_hook|register_deactivation_hook)\s*\(\s*(['\"])([^'\"]{1,160})\2")
+ACTIVATION_HOOK=re.compile(r"\b(register_(?:de)?activation_hook)\s*\(\s*__FILE__\s*,",re.I)
+
+def _hooks(text: str) -> list[tuple[str,str]]:
+    ordinary=[(m.group(1),m.group(3)) for m in HOOK.finditer(text)]
+    lifecycle=[(m.group(1),"__FILE__") for m in ACTIVATION_HOOK.finditer(text)]
+    return ordinary+lifecycle
+
 RAW_NOTICE=re.compile(r"(?m)^(?P<indent>[ \t]*)echo[ \t]+\$_GET\[(?P<quote>['\"])notice(?P=quote)\][ \t]*;[ \t]*(?P<end>\r?$)")
 RULES=(
     ("raw-superglobal-echo",re.compile(r"\becho\s+\$_(?:GET|POST|REQUEST)\s*\[",re.I),
@@ -157,8 +164,8 @@ def _project(root:Path)->dict:
                for k,v in WP_HEADER.findall(beginning.split("*/",1)[0])}
             if h.get("plugin_name"):
                 plugins.append({"path":path,"sha256":checksum,
-                                "header":h,"hooks":[{"type":m.group(1),"identifier":m.group(3)}
-                                                  for m in list(HOOK.finditer(text))[:60]]})
+                                "header":h,"hooks":[{"type":kind,"identifier":identifier}
+                                                  for kind,identifier in _hooks(text)[:60]]})
         issues.extend(_issues(text,path)[:max(0,MAX_FINDINGS-len(issues))])
     tools=[]
     for name in TOOLS:
@@ -247,8 +254,8 @@ def _patch(root:Path,path:str,digest:str)->dict:
            "echo isset( $_GET['notice'] ) ? esc_html( sanitize_text_field( wp_unslash( $_GET['notice'] ) ) ) : '';"+
            target.group("end"))
     after=source[:target.start()]+fixed+source[target.end():]
-    before_hooks=[(m.group(1),m.group(3)) for m in HOOK.finditer(source)]
-    after_hooks=[(m.group(1),m.group(3)) for m in HOOK.finditer(after)]
+    before_hooks=_hooks(source)
+    after_hooks=_hooks(after)
     if before_hooks!=after_hooks or len(after.encode("utf-8"))>editor.MAX_BYTES:
         raise HTTPException(409,"Patch does not preserve hooks or exceeds the editor size limit.")
     return {"path":path,"source_sha256":original,"patched_text":after,
