@@ -137,6 +137,11 @@ from automoto import developer_bibliography
 app.include_router(developer_bibliography.router)  # V10 local citation preflight and explicit DOI registry verification
 from automoto import developer_texbuild
 app.include_router(developer_texbuild.router)  # V11 consent-bound local TeX builds, ephemeral PDF previews and SyncTeX
+from automoto import developer_manuscripts, developer_research_transfer
+app.include_router(developer_manuscripts.router)  # V12 read-only Typst/Quarto project intelligence
+app.include_router(developer_research_transfer.router)  # V12 source-reverified review-only research manuscripts
+from automoto import developer_javascript
+app.include_router(developer_javascript.router)  # V13 explicit JS/TS testing, typechecks and project-script workflows
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

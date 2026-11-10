@@ -2181,6 +2181,128 @@ let browser;
   assert.equal(v11SyncReverse,1);
   await page.screenshot({path:path.join(output,'developer-studio-v11-tex-pdf-preview.png')});
   await page.unrouteAll();
+  // V12: real local Typst/Quarto preflight, inert Research Studio review-only hand-off.
+  const v12Dir=path.join(devProject,'v12-manuscript');
+  mkdirSync(path.join(v12Dir,'chapters'),{recursive:true});
+  writeFileSync(path.join(v12Dir,'references.bib'),
+    '@article{smith2026,title={Verified local record},author={Smith, Anna},year={2026}}\n');
+  writeFileSync(path.join(v12Dir,'main.typ'),
+    '= Source analysis\n#include "chapters/chapter.typ"\n'+
+    'Refer to @smith2026.\n#bibliography("references.bib")\n');
+  writeFileSync(path.join(v12Dir,'chapters','chapter.typ'),'== Chapter\n');
+  const v12Fence=String.fromCharCode(96).repeat(3);
+  writeFileSync(path.join(v12Dir,'main.qmd'),
+    '---\ntitle: "Research"\nbibliography: references.bib\n'+
+    'execute:\n  enabled: false\n---\n# Findings\nSee [@missing2026].\n'+
+    v12Fence+'{python}\nprint("@ghost")\n'+v12Fence+'\n');
+  const v12Original=readFileSync(path.join(v12Dir,'main.typ'));
+  await page.locator('#dsManFormat').selectOption('typst');
+  await page.locator('#dsManMain').fill('v12-manuscript/main.typ');
+  await page.locator('#dsManScan').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManStatus')?.textContent?.includes('Static analysis complete'));
+  assert.match(await page.locator('#dsManResult').innerText(),/Source analysis/);
+  assert.match(await page.locator('#dsManResult').innerText(),/No unresolved or duplicate keys/);
+  await page.locator('#dsManFormat').selectOption('quarto');
+  await page.locator('#dsManMain').fill('v12-manuscript/main.qmd');
+  await page.locator('#dsManScan').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManResult')?.textContent?.includes('Unresolved citation: missing2026'));
+  assert.match(await page.locator('#dsManResult').innerText(),/1 Quarto code chunk/);
+  assert.doesNotMatch(await page.locator('#dsManResult').innerText(),/Unresolved citation: ghost/);
+  await page.locator('#dsManTools').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManResult')?.textContent?.includes('pandoc'));
+  await page.locator('#dsManStarter').click();
+  await page.waitForFunction(()=>document.querySelector('.ds-manuscript-preview')?.value?.includes('Research manuscript'));
+  assert.equal(await page.locator('.ds-manuscript-preview').first().isEnabled(),true);
+
+  const v12Audit='artifacts/research/handoffs/handoff-'+('a'.repeat(24))+'.handoff.json';
+  let v12Exports=0,v12Previews=0;
+  await page.route('**/api/developer/studio/research-transfer/**',async route=>{
+    const endpoint=route.request().url().split('/').at(-1);
+    const posted=route.request().postDataJSON?.()||{};
+    let result={};
+    if(endpoint==='handoffs'){
+      result={handoffs:[{path:v12Audit,sha256:'b'.repeat(64),
+        target:'developer',research_question:'Independent source-reviewed evidence'}]};
+    }else if(endpoint==='preview'){
+      v12Previews++;
+      assert.equal(posted.handoff_path,v12Audit);
+      assert.equal(posted.format,'quarto');
+      assert.equal(posted.bindings.length,0);
+      result={written:false,publication_ready:false,
+        manifest:{review_only:true,publication_ready:false,manual_review_required:true},
+        files:[{path:'manuscript.qmd',text:'# Human-reviewed draft only\n'},
+          {path:'evidence.review.json',
+            text:'{"quote":"<script>alert(1)</script>","source_sha256":"'+('c'.repeat(64))+'"}'}]};
+    }else if(endpoint==='download'){
+      v12Exports++;
+      assert.equal(posted.confirmed,true);
+      assert.equal(posted.acknowledge_not_publication_ready,true);
+      result={filename:'automoto-research-quarto-review.zip',
+        zip_base64:Buffer.from('PK test-only archive fixture').toString('base64'),
+        manifest:{review_only:true,publication_ready:false}};
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result)});
+  });
+  await page.locator('#dsManHandoffs').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManHandoffSelect')?.options.length===2);
+  await page.locator('#dsManHandoffSelect').selectOption(v12Audit);
+  await page.locator('#dsManReview').click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('#dsManResult .ds-manuscript-preview')].some(x=>x.value.includes('source_sha256')));
+  assert.equal(await page.locator('#dsManResult .ds-manuscript-preview').count(),2);
+  assert.equal(v12Previews,1);
+  assert.equal(await page.locator('#dsManResult script').count(),0,
+    'V12 evidence must display inertly, never execute source markup');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsManDownload').click();
+  assert.equal(v12Exports,0,'Cancelled publication review must not export a ZIP');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsManDownload').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManStatus')?.textContent?.includes('ZIP exported'));
+  assert.equal(v12Exports,1);
+  assert.deepEqual(readFileSync(path.join(v12Dir,'main.typ')),v12Original,
+    'Research hand-off must not overwrite project source');
+  await page.screenshot({path:path.join(output,'developer-studio-v12-typst-quarto-research.png')});
+  await page.unrouteAll();
+
+  // V13: inspect an actual local Node project; never auto-run a script or tool.
+  const v13Config=JSON.parse(readFileSync(path.join(devProject,'package.json'),'utf8'));
+  v13Config.name='automoto-v13-browser-real-node';
+  v13Config.private=true;
+  v13Config.engines={node:'>=20'};
+  v13Config.packageManager='npm@10.0.0';
+  v13Config.scripts.test='node --test v13-task.test.cjs';
+  v13Config.scripts.build='node --check v13-task.test.cjs';
+  v13Config.devDependencies={typescript:'^5.9.0'};
+  writeFileSync(path.join(devProject,'package.json'),JSON.stringify(v13Config));
+  writeFileSync(path.join(devProject,'v13-task.test.cjs'),
+    "const test=require('node:test');const assert=require('node:assert/strict');"+
+    "test('v13 genuine Node smoke',()=>assert.equal(3*7,21));\n");
+  const v13TestOriginal=readFileSync(path.join(devProject,'v13-task.test.cjs'));
+  await page.locator('#dsJsInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsStatus')?.textContent?.includes('Project inspected'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Next.js/);
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Manifest SHA-256/);
+  assert.equal(await page.locator('#dsJsSummary script').count(),0);
+  await page.locator('#dsJsTool').selectOption('node');
+  await page.locator('#dsJsTask').selectOption('node_test');
+  await page.locator('#dsJsFile').fill('v13-task.test.cjs');
+  assert.equal(await page.locator('#dsJsRun').isEnabled(),true);
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsJsRun').click();
+  assert.match(await page.locator('#dsJsStatus').innerText(),/Project inspected/,
+    'Cancelled V13 execution must not run the Node test');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsJsRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsStatus')?.textContent?.includes('Task completed'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/v13 genuine Node smoke/);
+  assert.deepEqual(readFileSync(path.join(devProject,'v13-task.test.cjs')),v13TestOriginal);
+  await page.locator('#dsJsTask').selectOption('tool_version');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsJsRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsSummary')?.textContent?.includes('Reported version: v'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Reported version: v\d+/);
+  await page.screenshot({path:path.join(output,'developer-studio-v13-js-ts-project-tests.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
