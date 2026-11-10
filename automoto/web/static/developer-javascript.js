@@ -154,7 +154,7 @@ export function mountDeveloperJavaScript({api,host,getProject,editor,status}) {
       if(result.reported_tool_version)addLine("Reported version: "+result.reported_tool_version);
       if(result.output_truncated)addLine("Output exceeded the safe limit and the process was stopped.","warning");
       if(result.timed_out)addLine("Process exceeded its runtime budget and was stopped.","warning");
-      if(result.framework_build_verified)
+      if(result.build_script_exited_zero)
         addLine("The selected build script exited successfully on this machine; output artefacts and framework correctness require separate review.");
       for(const d of result.diagnostics||[])
         addLine((d.path||"compiler")+(d.line?":"+d.line+":"+d.column:"")+
