@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from automoto import developer_index as idx
 from automoto import developer_javascript as js
 from automoto import developer_studio as studio
+from automoto import sandbox
 
 router = APIRouter(prefix="/api/developer/studio/frontend", tags=["developer-frontend"])
 MAX_BYTES = 96 * 1024
@@ -83,17 +84,30 @@ class PreviewIn(RootIn):
 def _read(root: Path, rel: str, suffixes: set[str]) -> tuple[str, str]:
     if Path(rel).suffix.lower() not in suffixes:
         raise HTTPException(422, "Select a supported frontend source file.")
-    file = studio._path(root, rel)
+    parts = rel.split("/")
+    built_index = (len(parts) == 2 and parts[0] in {"dist","build","out"}
+                   and parts[1] == "index.html" and suffixes == {".html"})
+    if built_index:
+        # V1 deliberately excludes generated directories. Permit ONLY this
+        # exact standard built HTML entry, never the directory or arbitrary
+        # generated files, and still enforce the same root sandbox.
+        folder = root / parts[0]
+        file = folder / parts[1]
+        if (folder.is_symlink() or file.is_symlink()
+                or getattr(folder, "is_junction", lambda: False)()
+                or getattr(file, "is_junction", lambda: False)()):
+            raise HTTPException(403, "Linked build artefact is not inspectable.")
+        try:
+            file = sandbox.resolve(str(file), base=root, allow_outside=False)
+        except sandbox.SandboxError as exc:
+            raise HTTPException(403, "Generated HTML is outside the approved root.") from exc
+    else:
+        file = studio._path(root, rel)
+        if any(idx._excluded(part, i < len(parts)-1)
+               for i, part in enumerate(parts)):
+            raise HTTPException(403, "Restricted or generated paths are not inspectable.")
     if not file.is_file():
         raise HTTPException(404, "Selected frontend file does not exist.")
-    if any(idx._excluded(part, i < len(rel.split("/"))-1)
-           for i, part in enumerate(rel.split("/"))):
-        # Only built HTML is an explicit exception to V7's generated-file
-        # exclusion. It is never interpreted or executed as an application.
-        if not (len(rel.split("/")) == 2
-                and rel.split("/")[0] in {"dist","build","out"}
-                and rel.split("/")[1] == "index.html"):
-            raise HTTPException(403, "Restricted or generated paths are not inspectable.")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
     try:
         fd = os.open(file, flags)
