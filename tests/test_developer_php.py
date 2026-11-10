@@ -92,7 +92,7 @@ def test_readonly_inspection_finds_plugin_headers_hooks_settings_and_composer(pr
     assert value["wordpress_plugins"][0]["header"]["plugin_name"]=="Reviewable Notice"
     hooks=value["wordpress_plugins"][0]["hooks"]
     assert {x["identifier"] for x in hooks}=={
-        "admin_notices","the_content"}
+        "admin_notices","the_content","__FILE__"}
     assert {x["type"] for x in hooks}=={"add_action","add_filter","register_activation_hook"}
     assert any(x["code"]=="raw-superglobal-echo" for x in value["findings"])
     assert value["central_agent_studio"]=="developer"
@@ -200,7 +200,7 @@ def test_composer_duplicate_manifest_and_restricted_paths(project,tmp_path):
     (root/"composer.json").write_text('{"require":{"php":">=8"},"require":{"php":">=9"}}')
     assert inspect(client,root).status_code==422
     (root/"composer.json").write_text(json.dumps(COMPOSER))
-    assert patch(client,root,path="../private.php").status_code in (403,404,422)
+    assert patch(client,root,path="../private.php",sha="0"*64).status_code in (403,404,422)
     (root/"--help.php").write_text(PLUGIN)
     assert patch(client,root,path="--help.php").status_code==422
     outside=tmp_path/"plugin.php"
