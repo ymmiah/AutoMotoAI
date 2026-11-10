@@ -533,8 +533,9 @@ Want classmates or friends to use your AutoMoto without giving them your compute
 It's opt-in: plain `serve` stays single-user and nothing about local mode changes.
 
 ```bash
-AUTOMOTO_MODE=multiuser python -m automoto admin create yasin    # you are the owner / admin
 AUTOMOTO_MODE=multiuser python -m automoto serve --hosted        # or: docker build -t automoto . && docker run …
+# First login, no shell: copy the setup code from the log and open /setup. No default password.
+# With a shell: AUTOMOTO_MODE=multiuser python -m automoto admin create yasin
 ```
 
 <img src="docs/admin-panel.png" width="49%" alt="Admin panel: users, usage meters, bonus time"> <img src="docs/limit-reached.png" width="49%" alt="A user who reached the 1-hour limit">

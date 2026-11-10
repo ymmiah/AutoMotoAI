@@ -25,8 +25,9 @@ router = APIRouter()
 
 # (method, path regex) a hosted user may reach. Anything else is 404 in hosted mode.
 ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
-    ("GET", r"/"), ("GET", r"/static/.+"), ("GET", r"/login"),
+    ("GET", r"/"), ("GET", r"/static/.+"), ("GET", r"/login"), ("GET", r"/setup"),
     ("GET", r"/api/health"),
+    ("GET", r"/api/setup/info"), ("POST", r"/api/setup"),
     ("POST", r"/api/auth/(login|signup|logout|password)"), ("GET", r"/api/auth/info"), ("GET", r"/api/me"),
     ("POST", r"/api/auth/device/(login|launch|logout)"),
     ("GET", r"/api/devices"), ("DELETE", r"/api/devices/[0-9a-f]{16}"),
@@ -88,7 +89,7 @@ ALLOWED: list[tuple[str, re.Pattern[str]]] = [(m, re.compile(p)) for m, p in [
 
 
 def is_hosted_only(path: str) -> bool:
-    return path.startswith(("/api/auth/", "/api/admin/", "/api/devices")) or path in ("/api/me", "/login")
+    return path.startswith(("/api/auth/", "/api/admin/", "/api/devices", "/api/setup")) or path in ("/api/me", "/login", "/setup")
 
 
 # -- native apps (Windows/macOS/Linux desktop, phones, VS Code) ---------------------------------
@@ -163,6 +164,16 @@ def path_allowed(method: str, path: str) -> bool:
 _AUTH_HITS: dict[str, deque] = {}
 _AUTH_LOCK = threading.Lock()
 AUTH_PER_15MIN = 20
+SETUP_FAIL_LIMIT = 5
+SETUP_FAIL_WINDOW = 900
+
+# While must_change_password is set, only these APIs answer. Everything else is 403.
+PASSWORD_CHANGE_ALLOWED = {
+    ("POST", "/api/auth/password"),
+    ("POST", "/api/auth/logout"),
+    ("GET", "/api/auth/info"),   # public signup info
+    ("GET", "/api/me"),          # session info, including the must-change flag
+}
 
 
 def _auth_limited(key: str, limit: int = AUTH_PER_15MIN, window: float = 900) -> bool:
@@ -182,6 +193,35 @@ def _auth_limited(key: str, limit: int = AUTH_PER_15MIN, window: float = 900) ->
 
 def client_ip(request: Request) -> str:
     return request.client.host if request.client else "?"
+
+
+def _setup_blocked(ip: str) -> bool:
+    now = time.monotonic()
+    with _AUTH_LOCK:
+        q = _AUTH_HITS.get("setup:" + ip)
+        if not q:
+            return False
+        while q and q[0] < now - SETUP_FAIL_WINDOW:
+            q.popleft()
+        return len(q) >= SETUP_FAIL_LIMIT
+
+
+def _note_setup_fail(ip: str) -> None:
+    now = time.monotonic()
+    with _AUTH_LOCK:
+        q = _AUTH_HITS.setdefault("setup:" + ip, deque())
+        while q and q[0] < now - SETUP_FAIL_WINDOW:
+            q.popleft()
+        q.append(now)
+
+
+def block_until_password_changed(request: Request, user: accounts.User) -> None:
+    """A temporary password can only change itself, sign out, or read session info."""
+    if not user.must_change_password:
+        return
+    if (request.method, request.url.path) in PASSWORD_CHANGE_ALLOWED:
+        return
+    raise HTTPException(403, "Choose a new password before continuing.")
 
 
 def tenant_for(user: accounts.User) -> tenancy.Tenant:
@@ -265,7 +305,8 @@ def _origin_required(request: Request) -> None:
 
 @router.get("/api/auth/info")
 def auth_info() -> dict[str, Any]:
-    return {"signup": accounts.get_setting("signup"), "min_password": accounts.MIN_PASSWORD}
+    return {"signup": accounts.get_setting("signup"), "min_password": accounts.MIN_PASSWORD,
+            "strong_min_password": accounts.STRONG_MIN_PASSWORD}
 
 
 @router.post("/api/auth/login")
@@ -320,14 +361,44 @@ def change_password(body: PasswordIn, request: Request):
     if _auth_limited("pw:" + user.id, limit=10):
         raise HTTPException(429, "too many attempts")
     try:
-        accounts.authenticate(user.username, body.current)
-        accounts.set_password(user.id, body.new, actor=user.username)
+        user = accounts.change_password(user.id, body.current, body.new, actor=user.username)
     except accounts.AccountError as exc:
         raise HTTPException(400, str(exc)) from None
     tok, _ = accounts.new_session(user, client_ip(request))  # other sessions were signed out
-    resp = JSONResponse({"ok": True})
+    resp = JSONResponse({"ok": True, "user": user.public()})
     _cookie(resp, request, tok, int(accounts.session_days() * 86400))
     return resp
+
+
+class SetupIn(BaseModel):
+    code: str = Field(..., min_length=1, max_length=200)
+    username: str = Field("", max_length=64)
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+@router.get("/api/setup/info")
+def setup_info() -> dict[str, Any]:
+    """Whether /setup can be used right now. Does not reveal the code."""
+    return accounts.setup_status()
+
+
+@router.post("/api/setup")
+def setup_submit(body: SetupIn, request: Request):
+    """Redeem the one-time code from the server log. No session yet, so there is no CSRF token;
+    the code is the secret, and the request must still come from this server's own page."""
+    _origin_required(request)
+    ip = client_ip(request)
+    if _setup_blocked(ip):
+        raise HTTPException(429, "too many attempts - wait 15 minutes")
+    try:
+        user = accounts.complete_setup(body.code, body.username, body.password)
+    except accounts.SetupRejected as exc:
+        if exc.status == 401:
+            _note_setup_fail(ip)
+        raise HTTPException(exc.status, str(exc)) from None
+    except accounts.AccountError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return {"ok": True, "username": user.username, "must_change_password": user.must_change_password}
 
 
 class DeviceLoginIn(LoginIn):
@@ -348,6 +419,8 @@ def device_login(body: DeviceLoginIn, request: Request) -> dict[str, Any]:
         user = accounts.authenticate(body.username, body.password)
     except accounts.AccountError as exc:
         raise HTTPException(401, str(exc)) from None
+    if user.must_change_password:
+        raise HTTPException(403, "Choose a new password in the browser before signing this app in.")
     tok, dev = accounts.new_device(user, body.device_name, body.platform, ip)
     return {"ok": True, "token": tok, "device": dev, "user": user.public(), "server": {"version": __version__}}
 
@@ -368,6 +441,8 @@ def _require_device(request: Request) -> tuple[accounts.User, dict[str, Any]]:
 def device_launch(request: Request) -> dict[str, Any]:
     """A one-time link (60 s) that opens the normal AutoMoto page, signed in, in the app's window."""
     user, dev = _require_device(request)
+    if user.must_change_password:
+        raise HTTPException(403, "Choose a new password in the browser before opening the app.")
     code = accounts.device_launch_code(dev["id"], user.id)
     return {"path": "/?device_launch=" + code, "expires_in": 60, "user": user.public()}
 
@@ -522,7 +597,7 @@ def admin_create_user(body: NewUserIn, request: Request) -> dict[str, Any]:
     admin = require_admin(request)
     try:
         u = accounts.create_user(body.username, body.password, role=body.role, actor=admin.username,
-                                 note="created by admin")
+                                 note="created by admin", must_change=True)
         if body.quota_minutes is not None:
             u = accounts.update_user(u.id, admin.username, quota_minutes=body.quota_minutes)
     except accounts.AccountError as exc:
@@ -590,7 +665,7 @@ def admin_password(uid: str, body: AdminPasswordIn, request: Request) -> dict[st
     admin = require_admin(request)
     _get(uid)
     try:
-        accounts.set_password(uid, body.password, admin.username)
+        accounts.set_password(uid, body.password, admin.username, must_change=True)
     except accounts.AccountError as exc:
         _err(exc)
     return {"ok": True}

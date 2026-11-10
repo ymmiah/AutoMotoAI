@@ -963,7 +963,7 @@ PAGES.account = async () => {
       <div class="tbl-wrap"><table class="tbl small" id="devList"></table></div></div>
     <div class="card"><h3>${icon("lock")} Change password</h3><form id="pwForm" class="stack">
       <input class="input" type="password" name="current" placeholder="Current password" autocomplete="current-password" required>
-      <input class="input" type="password" name="new" placeholder="New password (10+ characters)" autocomplete="new-password" required>
+      <input class="input" type="password" name="new" placeholder="New password (12+ characters, not a common one)" autocomplete="new-password" required>
       <div class="row"><button class="btn primary">Change password</button></div></form></div>`);
   const m = $("#usageMeter"); if (m) $("#acctMeter").innerHTML = m.innerHTML;
   const loadDevices = async () => {
@@ -992,7 +992,7 @@ PAGES.admin = async () => {
     <div class="card"><h3>${icon("settings")} Defaults</h3><form id="admSet" class="grid-form"></form></div>
     <div class="card"><h3>${icon("user")} Users</h3><div class="tbl-wrap"><table class="tbl" id="admUsers"></table></div>
       <details class="mt"><summary>Add a user</summary><form id="admNew" class="grid-form">
-        <input class="input" name="username" placeholder="username" required><input class="input" name="password" type="password" placeholder="password (10+)" required autocomplete="new-password">
+        <input class="input" name="username" placeholder="username" required><input class="input" name="password" type="password" placeholder="temporary password (10+)" required autocomplete="new-password">
         <input class="input" name="quota" type="number" min="0" step="1" placeholder="minutes (blank = default)"><select class="input" name="role"><option value="user">user</option><option value="admin">admin</option></select>
         <button class="btn primary">Create</button></form></details></div>
     <div class="card"><h3>${icon("key")} Invite codes</h3><form id="admInv" class="grid-form">
@@ -1044,7 +1044,7 @@ PAGES.admin = async () => {
   };
   $("#admNew").onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
-    try { await api("/api/admin/users", { username: f.get("username"), password: f.get("password"), role: f.get("role"), quota_minutes: f.get("quota") === "" ? null : +f.get("quota") }); e.target.reset(); toast("User created"); load(); }
+    try { await api("/api/admin/users", { username: f.get("username"), password: f.get("password"), role: f.get("role"), quota_minutes: f.get("quota") === "" ? null : +f.get("quota") }); e.target.reset(); toast("User created. They must choose a new password when they sign in."); load(); }
     catch (err) { toast(err.message, "bad"); }
   };
   $("#admInv").onsubmit = async (e) => {
@@ -1862,7 +1862,11 @@ async function refreshBadge() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = BRAND; });
 
 async function boot() {
-  if (HOSTED) { await refreshMe(); setupHosted(); }
+  if (HOSTED) {
+    await refreshMe();
+    if (state.me?.must_change_password) { location.replace("/"); return; }
+    setupHosted();
+  }
   hydrateIcons(document);
   $("#verLabel").textContent = `v${VERSION}`;
   $("#switchLocation").hidden = !DESKTOP_SHELL;

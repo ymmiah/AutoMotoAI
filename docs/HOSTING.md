@@ -35,13 +35,41 @@ uses an allow-list, so a new endpoint is closed until it's reviewed for hosted u
   (`AUTOMOTO_DEFAULT_TOKEN_CAP`, ~4 characters per token).
 * Admins are unlimited. Suspended users can't sign in.
 
+## First login on any host
+
+There is **no default password** and no shared `admin` / `admin` account. On Render, Railway, Fly, Oracle, a VPS or Docker you do not need a shell.
+
+1. Start the server the way that host starts it (Deploy, `docker run`, `automoto serve --hosted`).
+2. Open the host's **logs**.
+3. Copy the **setup code** (it looks like `k7Qx-m2Lp-9aZd-b3Nc-e8Rf-q1Ws`).
+4. Open **`/setup`** on that server (for example `https://your-server/setup`).
+5. Paste the code. Choose a username and a password (12 characters or more, not a common password).
+6. Sign in at **`/`**.
+
+The code works **once**, expires after **60 minutes**, and a restart prints a new one. Only its hash is stored. Wrong tries are limited per IP.
+
+You can set `AUTOMOTO_SETUP_CODE` yourself if you would rather not read a generated code from the logs. It is not printed.
+
+**Env admin (optional).** `AUTOMOTO_ADMIN_USER` and `AUTOMOTO_ADMIN_PASSWORD` still create the first admin when none exists. That password is **temporary**: the first sign-in asks you to choose a new one. If an admin is already in the database, those variables do **not** overwrite it.
+
+**Disks that get wiped** (Render's free plan deletes data on sleep or redeploy): the env admin is created again after each wipe and must change the password again. Use a persistent disk, or leave the env password unset and use the setup code on a disk that keeps `accounts.db`.
+
+**Lost the admin password and there is no shell:**
+
+1. Set `AUTOMOTO_ADMIN_RESET=1` and restart.
+2. Copy the reset code from the logs and open `/setup`.
+3. Set a temporary password, sign in, and choose a different one.
+4. Remove `AUTOMOTO_ADMIN_RESET` and restart.
+
+A shell can still do `python -m automoto admin reset-password <name>` (or `admin passwd`). That password is temporary too.
+
 ## Admin guide
 
-Create yourself as admin first (CLI on the server, or the two env vars on a container host):
+If you have a shell, you can still create the admin there. The password you type yourself is yours. A password passed in from an environment variable is temporary:
 
 ```bash
 python -m automoto admin create yasin                 # prompts for a password (10+ chars)
-# or: AUTOMOTO_ADMIN_USER=yasin AUTOMOTO_ADMIN_PASSWORD='…'  (only used when no admin exists yet)
+# or: AUTOMOTO_ADMIN_USER=yasin AUTOMOTO_ADMIN_PASSWORD='…'  (only when no admin exists; must change it at first sign-in)
 ```
 
 Then sign in to the web page → **Admin**. Everything there also exists on the CLI:
@@ -69,7 +97,9 @@ admin can't be removed.
 | `AUTOMOTO_MODE` | *(local)* | `multiuser` turns hosted mode on (the Docker image sets it) |
 | `AUTOMOTO_DATA_DIR` | `~/.automoto` | all data: `accounts.db`, `users/<id>/…` (`/data` in Docker) |
 | `NVIDIA_API_KEY` (or other provider keys) | — | the AI keys all users share — **set as a secret**, never in the repo |
-| `AUTOMOTO_ADMIN_USER` / `AUTOMOTO_ADMIN_PASSWORD` | — | create the first admin on start if none exists |
+| `AUTOMOTO_ADMIN_USER` / `AUTOMOTO_ADMIN_PASSWORD` | — | optional. Create the first admin on start if none exists. The password is temporary (change it at first sign-in). An existing admin is not overwritten. On a wiped disk this admin is created again |
+| `AUTOMOTO_SETUP_CODE` | random, printed once | optional. The one-time `/setup` code, instead of a generated one. Not printed. At least 12 characters |
+| `AUTOMOTO_ADMIN_RESET` | off | set to `1` and restart to print a one-time code that resets an admin password. Remove it afterwards |
 | `AUTOMOTO_ALLOWED_HOSTS` | localhost | your public host name(s), comma-separated. Render / Koyeb / HF host names are added automatically |
 | `AUTOMOTO_SIGNUP` | `invite` | `open`, `invite` or `closed` (admin can change it later) |
 | `AUTOMOTO_DEFAULT_QUOTA_MINUTES` | `60` | minutes per period for new and default users |
@@ -139,7 +169,7 @@ vanish on every restart.
 |---|---|---|---|
 | **Your own PC + Cloudflare Tunnel** | Yes | **Yes** | Best free choice if your PC can stay on. Tunnel is free; a quick tunnel gives a random `trycloudflare.com` URL, a named tunnel needs a domain on Cloudflare. |
 | **Oracle Cloud Always Free VM** | Yes (card needed for identity check) | **Yes** (up to 200 GB block storage) | Ampere A1 Arm VM (2 OCPU / 12 GB in total since Aug 2026). Popular regions sometimes say "out of capacity". Best free always-on option. |
-| **Render** (free web service) | Yes | **No** | Sleeps after 15 min idle (~1 min to wake), 750 h / month. No disks on the free plan, so **all accounts and files are wiped** on every sleep / redeploy. Demo only — the admin is recreated from env each start, but users aren't. |
+| **Render** (free web service) | Yes | **No** | Sleeps after 15 min idle (~1 min to wake), 750 h / month. No disks on the free plan, so **all accounts and files are wiped** on every sleep / redeploy. Demo only — use `/setup` from the logs, or an env admin that is created again (and must change password again) after each wipe. |
 | **Koyeb** (free instance) | Yes | **No** | 1 service, 0.1 vCPU / 512 MB, sleeps when idle, no volumes on free. Demo only. |
 | **Hugging Face Spaces** (Docker) | **No** | No (paid storage) | Docker / Gradio Spaces on free CPU now need a PRO subscription; only static Spaces are free. |
 | **Fly.io** | **No** | Yes (paid volumes) | No free tier for new accounts (short trial only); a small always-on machine is a few dollars a month. |
@@ -149,11 +179,12 @@ vanish on every restart.
 ```bash
 pip install "automoto-ai[office,data]"   # or clone the repo and pip install -e .
 export AUTOMOTO_MODE=multiuser NVIDIA_API_KEY=…  AUTOMOTO_COOKIE_SECURE=1
-python -m automoto admin create yasin
+python -m automoto serve --hosted
+# the log prints a setup code — open http://127.0.0.1:8765/setup
+# (a shell can still run: python -m automoto admin create yasin)
 # quick tunnel (random URL, no account needed):
 cloudflared tunnel --url http://127.0.0.1:8765
-# put the printed host name in AUTOMOTO_ALLOWED_HOSTS, then:
-AUTOMOTO_ALLOWED_HOSTS=random-words.trycloudflare.com python -m automoto serve --hosted
+# put the printed host name in AUTOMOTO_ALLOWED_HOSTS, then restart the server
 ```
 
 `cloudflared` connects from your PC to localhost, so leave `AUTOMOTO_FORWARDED_ALLOW_IPS` at its default.
@@ -179,16 +210,21 @@ For a stable URL, add a domain to Cloudflare and create a named tunnel (`cloudfl
 
 ### Option C — Render free (demo only, data is wiped)
 
-Fork the repo → Render → *New → Blueprint* → pick the repo (uses `render.yaml`). Set `NVIDIA_API_KEY`,
-`AUTOMOTO_ADMIN_USER`, `AUTOMOTO_ADMIN_PASSWORD` as secrets. Your admin comes back after every restart; other
-accounts and all files do not.
+Fork the repo → Render → *New → Blueprint* → pick the repo (uses `render.yaml`). Set `NVIDIA_API_KEY`.
+You do **not** have to set an admin password: open the logs, copy the setup code, open `/setup`.
+If you do set `AUTOMOTO_ADMIN_USER` and `AUTOMOTO_ADMIN_PASSWORD`, that password is temporary and, because the
+free plan has no disk, the admin is created again on every restart and must change it again. Other accounts and
+all files do not come back. Prefer a persistent disk for anything but a demo.
 
 ## Docker
 
 ```bash
 docker build -t automoto .                               # add --build-arg WITH_OFFICE=1 for LibreOffice (PDF export)
 docker run -d -p 127.0.0.1:8765:8765 -v automoto-data:/data -e NVIDIA_API_KEY=… \
-  -e AUTOMOTO_ADMIN_USER=yasin -e AUTOMOTO_ADMIN_PASSWORD='…' -e AUTOMOTO_ALLOWED_HOSTS=your.domain automoto
+  -e AUTOMOTO_ALLOWED_HOSTS=your.domain automoto
+docker logs <container>                                 # copy the setup code, then open http://127.0.0.1:8765/setup
+# optional, instead of the setup code:
+#   -e AUTOMOTO_ADMIN_USER=yasin -e AUTOMOTO_ADMIN_PASSWORD='…'   (temporary; change it at first sign-in)
 docker exec -it <container> python -m automoto admin list
 ```
 

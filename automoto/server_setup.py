@@ -64,8 +64,14 @@ def _env_template(target: str, domain: str, admin: str) -> str:
 NVIDIA_API_KEY=<paste your key>
 # GEMINI_API_KEY=<optional backup key>
 AUTOMOTO_MODE=multiuser
-AUTOMOTO_ADMIN_USER={admin}
-AUTOMOTO_ADMIN_PASSWORD=<choose a long password>
+# Easiest first login: leave the admin lines unset. Start the server, copy the setup code from
+# the logs, open /setup, and choose your username and password. There is no default password.
+# Or set both of these. The password is temporary: change it at first sign-in. It is ignored
+# once an admin already exists. On a disk that gets wiped, it is created again each restart.
+# AUTOMOTO_ADMIN_USER={admin}
+# AUTOMOTO_ADMIN_PASSWORD=<choose a long password>
+# Lost the password and have no shell? Set this, restart, copy the code from the logs, open /setup:
+# AUTOMOTO_ADMIN_RESET=1
 AUTOMOTO_ALLOWED_HOSTS={host}
 AUTOMOTO_COOKIE_SECURE={"0" if target in ("local", "docker") and not domain else "1"}
 """ + ("# Safe only because the port is published on 127.0.0.1 and Caddy/the tunnel is the only way in:\n"
@@ -128,8 +134,10 @@ runcmd:
 """
     if target == "render":
         f["render-steps.md"] = (f"1. Fork {REPO} on GitHub.\n2. On render.com: New > Blueprint > pick your fork (it uses render.yaml).\n"
-                                "3. Add NVIDIA_API_KEY, AUTOMOTO_ADMIN_USER and AUTOMOTO_ADMIN_PASSWORD as secrets.\n"
-                                "4. Remember: the free plan wipes accounts and files on every restart. Demo only.\n")
+                                "3. Add NVIDIA_API_KEY as a secret. Leave the admin password unset.\n"
+                                "4. Open the logs, copy the setup code, and open /setup.\n"
+                                "5. The free plan wipes accounts and files on every restart. Demo only. "
+                                "If you set AUTOMOTO_ADMIN_PASSWORD, that temporary admin is created again after each wipe.\n")
     f["CHECKLIST.md"] = "\n".join(f"{i}. [ ] {s['do']}" + (f"\n   `{s['run']}`" if s.get("run") else "")
                                   for i, s in enumerate(plan(target, domain)["steps"], 1)) + "\n"
     return f
@@ -148,17 +156,19 @@ def plan(target: str, domain: str = "") -> dict:
     elif target == "tunnel":
         step("Install cloudflared (free, from Cloudflare)", "winget install Cloudflare.cloudflared  (Mac: brew install cloudflared)",
              "cloudflared --version")
-        step("Copy .env.template to .env and fill in your AI key and an admin password")
-        step("Create your admin account", "python -m automoto admin create <name>")
-        step("Start the server", "./start-server.sh", "http://127.0.0.1:8765 shows the sign-in page")
+        step("Copy .env.template to .env and fill in your AI key")
+        step("Start the server", "./start-server.sh", "the log prints a one-time setup code")
+        step("Open /setup, paste that code, and choose your admin username and password",
+             check="http://127.0.0.1:8765/setup")
         step("Start the tunnel and copy the https://… address it prints", "./start-tunnel.sh")
         step("Put that host name in AUTOMOTO_ALLOWED_HOSTS in .env and restart the server")
         step("Open the https address on your phone and sign in", check="the sign-in page loads over https")
     elif target == "docker":
         step("Install Docker Desktop (Windows/Mac) or docker.io (Linux)", check="docker --version")
-        step("Copy .env.template to .env and fill it in")
+        step("Copy .env.template to .env and fill in your AI key (an admin password is optional)")
         step("Start it", "docker compose up -d --build", "docker compose ps shows automoto running")
-        step("Open http://127.0.0.1:8765 and sign in with the admin from .env")
+        step("Copy the setup code from the logs and open http://127.0.0.1:8765/setup",
+             "docker compose logs automoto")
     elif target == "oracle":
         step("Sign up at cloud.oracle.com (stay on Always Free shapes)")
         step("Create a VM: Ampere A1 Flex, Ubuntu, 2 OCPU / 12 GB; paste cloud-init.yaml as the initialization script")
