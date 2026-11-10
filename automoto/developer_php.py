@@ -118,6 +118,8 @@ def _composer(root:Path)->tuple[dict,str]:
 
 
 def _php_source(root:Path,path:str)->tuple[str,str]:
+    if path.startswith("-") or any(ord(char)<32 for char in path):
+        raise HTTPException(422,"PHP source path cannot contain controls or begin with a CLI option.")
     if not path.lower().endswith(".php"):
         raise HTTPException(422,"Select an existing project-local .php source file.")
     record=index._source(root,path)
@@ -155,7 +157,11 @@ def _project(root:Path)->dict:
     plugins=[]
     issues=[]
     for path in files:
-        text,checksum=_php_source(root,path)
+        try:
+            text,checksum=_php_source(root,path)
+        except HTTPException:
+            truncated=True
+            continue
         # WordPress plugin headers must be in the opening comment, not in
         # arbitrary code or a translated/embedded string.
         beginning=text[:8192]
@@ -319,7 +325,8 @@ def run(request:Request,body:RunIn):
         result=js._run_task(root,record)
         result.update({"task":body.task,"tool":body.tool,
                        "composer_sha256":body.expected_manifest_sha256,
-                       "agent_linked":True,"agent_deployment_approved":False,
+                       "central_agent_studio":"developer","agent_handoff_created":False,
+                       "agent_deployment_approved":False,
                        "deployment_started":False,"external_process_unsandboxed":True,
                        "files_unchanged":"not_verified",
                        "php_version":(PHP_VERSION.search(result["output"]).group(1)
