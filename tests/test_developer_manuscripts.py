@@ -128,6 +128,23 @@ def test_quarto_code_never_executes_or_creates_citation(project):
     assert "ghost" not in r["cited_keys"]
 
 
+
+@pytest.mark.parametrize("newline",[b"\n",b"\r\n"])
+def test_quarto_code_cells_yaml_and_citations_with_real_line_endings(project,newline):
+    client,root=project
+    doc=root/"main.qmd"
+    # Preserve explicit byte-level LF/CRLF on every host OS, not just TextIO translation.
+    raw=doc.read_bytes().replace(b"\r\n",b"\n").replace(b"\n",newline)
+    doc.write_bytes(raw)
+    result=scan(client,root,"quarto")
+    assert result.status_code==200,result.text
+    data=result.json()
+    assert data["executable_code_chunks"]==1
+    assert data["cited_keys"]==["smith2026","not_found"]
+    assert data["missing_citations"]==["not_found"]
+    assert "ghost" not in data["cited_keys"]
+
+
 def test_unsafe_includes_and_linked_bib_files_blocked(project,tmp_path):
     client,root=project
     outside=tmp_path/"outside.typ"
