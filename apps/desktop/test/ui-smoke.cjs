@@ -2103,6 +2103,87 @@ let browser;
   await page.screenshot({path:path.join(output,'developer-studio-v10-citation-preflight.png')});
   await page.unrouteAll();
 
+  // V11: real UI, mock external compiler transport, separate execution consent.
+  // Python tests run a *real* bounded local subprocess and parse synthetic SyncTeX.
+  let v11Starts=0,v11PreviewReads=0,v11SyncForward=0,v11SyncReverse=0;
+  const v11Hash='b'.repeat(64), v11Pdf=Buffer.from(
+    '%PDF-1.4\n1 0 obj\n<</Type/Catalog>>\nendobj\n%%EOF\n').toString('base64');
+  await page.route('**/api/developer/studio/texbuild/**',async route=>{
+    const url=new URL(route.request().url());
+    const endpoint=url.pathname.split('/').at(-1);
+    const req=route.request().postDataJSON?.()||{};
+    let payload={};
+    if(endpoint==='engines'){
+      payload={auto_execute:false,platform_sandbox:false,engines:[
+        {name:'tectonic',status:'installed_not_executed',
+          executable:'/usr/local/bin/tectonic',sha256:v11Hash,size_bytes:12345},
+        {name:'latexmk',status:'unavailable'}]};
+    }else if(endpoint==='build'){
+      v11Starts++;
+      assert.equal(req.engine,'tectonic');
+      assert.equal(req.expected_sha256,v11Hash);
+      assert.equal(req.expected_executable,'/usr/local/bin/tectonic');
+      assert.equal(req.confirmed,true);
+      assert.equal(req.acknowledge_external_process_risk,true);
+      assert.equal(req.main,'thesis/main.tex');
+      payload={pdf_ready:true,build_id:'testonly-fakeid-012345678901234567890',
+        compiler:'tectonic',status:'completed',elapsed_ms:32,
+        input_file_count:4,input_bytes:1012,
+        pdf_size:56,pdf_sha256:'a'.repeat(64),
+        figures:[],table_locations:[{kind:'table',path:'thesis/main.tex',line:4}],
+        synctex_available:true,synctex_records:2,
+        diagnostics:[{severity:'warning',
+          message:'Unexpected <img src=x onerror=alert(1)> tool output',
+          path:null,line:null}],build_log:'<script>alert(1)</script> compiler log'};
+    }else if(endpoint==='preview'){
+      assert.equal(req.build_id,'testonly-fakeid-012345678901234567890');
+      v11PreviewReads++;
+      payload={pdf_base64:v11Pdf,pdf_sha256:'a'.repeat(64),
+        content_type:'application/pdf',cached_only:true};
+    }else if(endpoint==='source-to-pdf'){
+      v11SyncForward++;
+      assert.equal(req.path,'thesis/chapters/method.tex');
+      payload={path:req.path,requested_line:1,matched_line:1,page:2,
+        exact_line_match:true,page_navigation_only:true};
+    }else if(endpoint==='page-to-source'){
+      v11SyncReverse++;
+      assert.equal(req.page,2);
+      payload={page:2,path:'thesis/chapters/method.tex',line:1,
+        approximate_page_to_source:true};
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(payload)});
+  });
+  await page.locator('#dsTexBuildMain').fill('thesis/main.tex');
+  await page.locator('#dsTexBuildInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildEngine')?.options.length>=2);
+  await page.locator('#dsTexBuildEngine').selectOption('tectonic');
+  assert.equal(await page.locator('#dsTexBuildRun').isEnabled(),true);
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsTexBuildRun').click();
+  assert.equal(v11Starts,0,'Cancelling external execution must not start TeX');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsTexBuildRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildStatus')?.textContent?.includes('PDF build succeeded'));
+  assert.equal(v11Starts,1);
+  assert.equal(v11PreviewReads,0,'Compiler must not automatically load PDF preview');
+  assert.equal(await page.locator('#dsTexBuildSummary img').count(),0);
+  assert.equal(await page.locator('#dsTexBuildSummary script').count(),0);
+  await page.locator('#dsTexBuildPreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildFrame')?.getAttribute('src')?.startsWith('blob:'));
+  assert.equal(v11PreviewReads,1);
+  await page.locator('#dsTexBuildSource').fill('thesis/chapters/method.tex');
+  await page.locator('#dsTexBuildLine').fill('1');
+  await page.locator('#dsTexBuildForward').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildPage')?.value==='2');
+  assert.equal(v11SyncForward,1);
+  await page.locator('#dsTexBuildReverse').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFilename')?.textContent?.includes('method.tex'));
+  assert.equal(v11SyncReverse,1);
+  await page.screenshot({path:path.join(output,'developer-studio-v11-tex-pdf-preview.png')});
+  await page.unrouteAll();
+  await page.locator('.ds-tab-select',{hasText:'main.ts'}).click();
+  await page.waitForFunction(()=>document.querySelector('#dsSourceText')?.value?.includes('read-only'));
+
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
