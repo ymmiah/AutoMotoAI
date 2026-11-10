@@ -35,18 +35,18 @@ jobs:
       contents: write   # only used on tags, to attach the installers to the release
     env:
       AUTOMOTO_DEFAULT_SERVER: ${{ vars.AUTOMOTO_DEFAULT_SERVER }}
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: apps/desktop/src-tauri -> target
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Versions agree (pyproject, app, Cargo, package.json)
@@ -77,12 +77,21 @@ jobs:
         run: |
           cargo test --locked
           cargo clippy --locked --all-targets -- -D warnings
-      - name: Build the installers
+      - name: Install the app's npm packages (no signing key in this step)
         working-directory: apps/desktop
         shell: pwsh
         run: |
           npm ci --no-fund --no-audit
           node --check dist/app.js
+      - name: Build the installers
+        working-directory: apps/desktop
+        shell: pwsh
+        # The updater signing key signs every auto-update: only this step gets it, so a compromised
+        # action or npm install script in another step can't read it.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
           # Include the matching engine in the standalone installers as well as the Store MSIX.
           $config = @{ bundle = @{ resources = @{
             "../../../scripts/install.ps1" = "resources/install.ps1"
@@ -113,7 +122,7 @@ jobs:
             $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($f.FullName)
             $icon.ToBitmap().Save("shots/icon-$($f.BaseName).png", [System.Drawing.Imaging.ImageFormat]::Png)
           }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: automoto-ai-windows
           path: out/*
@@ -126,7 +135,7 @@ jobs:
           MSSTORE_PUBLISHER_DISPLAY_NAME: ${{ vars.MSSTORE_PUBLISHER_DISPLAY_NAME }}
           MSSTORE_DISPLAY_NAME: ${{ vars.MSSTORE_DISPLAY_NAME }}
         run: ./scripts/ci/pack-msix.ps1 -Out msstore -TestInstall
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: automoto-ai-msstore
           path: msstore/*
@@ -142,7 +151,7 @@ jobs:
       - name: Smoke test - MSI silent install, launch, local engine, close, uninstall
         shell: pwsh
         run: ./scripts/ci/smoke-windows.ps1 -Kind msi -Dir out -Shots shots
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: smoke-test-screenshots-and-logs
@@ -182,12 +191,12 @@ jobs:
             Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
           if ($missing) { "::notice::Microsoft Store upload skipped - not set: $($missing -join ', ')"; "go=false" >> $env:GITHUB_OUTPUT }
           else { "go=true" >> $env:GITHUB_OUTPUT }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         if: steps.gate.outputs.go == 'true'
         with:
           name: automoto-ai-msstore
           path: msstore
-      - uses: microsoft/microsoft-store-apppublisher@v1.1
+      - uses: microsoft/microsoft-store-apppublisher@15abd1c50fcc164b19cb240fb04ef3c49bf715a2 # v1.1
         if: steps.gate.outputs.go == 'true'
       - name: Upload to Partner Center (draft, not submitted)
         if: steps.gate.outputs.go == 'true'

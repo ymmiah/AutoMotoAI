@@ -553,8 +553,9 @@ def session_launch(request: Request) -> dict[str, Any]:
     _authorise(request, local_only=True)
     if not _is_loopback(request):
         raise HTTPException(403, "local only")
-    host = request.headers.get("host", "127.0.0.1")
-    return {"url": f"http://{host}/?launch={new_launch_token()}"}
+    # Built from the socket we listen on, not the Host header: the link carries a login token.
+    port = (request.scope.get("server") or (None, None))[1] or request.url.port or 8765
+    return {"url": f"http://127.0.0.1:{int(port)}/?launch={new_launch_token()}"}
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
