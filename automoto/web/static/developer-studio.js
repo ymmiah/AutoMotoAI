@@ -8,10 +8,11 @@ import {mountDeveloperAdapters} from "./developer-adapters.js";
 import {mountDeveloperLatex} from "./developer-latex.js";
 import {mountDeveloperBibliography} from "./developer-bibliography.js";
 import {mountDeveloperTexBuild} from "./developer-texbuild.js";
+import {mountDeveloperManuscripts} from "./developer-manuscripts.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V11 · TeX build & PDF preview. Compile explicitly approved temporary LaTeX snapshots, inspect diagnostics and navigate with SyncTeX; no automatic execution.",
+    "V12 · Typst, Quarto & research hand-offs. Analyse manuscripts locally and export source-verified, review-only research packages without running code.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -31,6 +32,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsLatexRoot" aria-label="LaTeX multi-file thesis authoring"></div>'+ 
       '<div id="dsBibliographyRoot" aria-label="Citation evidence and bibliography preflight"></div>'+ 
       '<div id="dsTexBuildRoot" aria-label="Approved TeX build and ephemeral PDF preview"></div>'+ 
+      '<div id="dsManuscriptsRoot" aria-label="Typst Quarto and source-verified Research Studio review packages"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -47,9 +49,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
@@ -58,6 +60,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   latex=mountDeveloperLatex({api,host,getProject:()=>project,editor,status});
   bibliography=mountDeveloperBibliography({api,host,getProject:()=>project,editor,status});
   texBuild=mountDeveloperTexBuild({api,host,getProject:()=>project,editor,status});
+  manuscripts=mountDeveloperManuscripts({api,host,getProject:()=>project,editor,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -118,6 +121,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       latex.projectChanged();
       bibliography.projectChanged();
       texBuild.projectChanged();
+      manuscripts.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
