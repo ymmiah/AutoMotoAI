@@ -171,7 +171,8 @@ def test_catalog_covers_requested_services():
 
 
 # -- skills -----------------------------------------------------------------------------
-REQUESTED = ["web-design", "graphic-design", "video-editing", "audio-editing", "bug-fixing", "linux-terminal",
+REQUESTED = ["document-assistant", "spreadsheet-invoices", "research-studio", "visual-studio", "developer-studio",
+             "web-design", "graphic-design", "video-editing", "audio-editing", "bug-fixing", "linux-terminal",
              "coding-python", "coding-javascript", "html-css", "latex", "go", "algorithms", "cross-platform-apps",
              "vscode", "photoshop", "illustrator", "premiere-pro", "autocad", "canva", "google-drive", "onedrive",
              "github", "gitlab", "notion", "figma", "vercel", "zotero", "online-shopping", "travel-booking"]

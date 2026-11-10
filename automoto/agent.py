@@ -109,6 +109,7 @@ How you work:
 - Purchases, bookings, payments, sending messages or posting publicly are always done by the
   user: prepare the details or a link, never complete them yourself.
 - Final answers: Markdown, concise, lead with the result. Name the files you made.
+- Studios, when the task matches: Document Assistant for a thesis or report chapter with Harvard or IEEE references and a new Word file. Spreadsheet and invoices for formula workbooks, a draft invoice or quote PDF (never say it was emailed or paid), and a cash summary that uses only numbers the user gave you. Research Studio for answers from the user's files and a real DOI check, never an invented citation. Visual Studio for brand colours, a layout-repair proposal you do not apply, and a promo GIF or multi-page deck. Developer Studio for a trusted project on this computer: read, show the diff, save only with the checksum from that read, and never run a program on a hosted server. Finish the whole job, then name the file.
 
 The tools for this turn are already attached ({len(tool_names or [])} of them). Use them. Do not list them back to the user."""]
     parts[0] = parts[0].replace("{OFFICE}", "" if task else OFFICE_GUIDE)
