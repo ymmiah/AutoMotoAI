@@ -58,12 +58,27 @@ MCP_TOOLS: list[tools_mod.Tool] = []
 MCP_ERRORS: list[str] = []
 
 
+STUDIO_REVIEW_TOOLS = frozenset({"project_inspect", "list_dir", "search_files",
+                                  "web_search", "fetch_url"})
+
 def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | None = None,
-                   local_apps: bool = False, meter: Any = None) -> Agent:
-    if tenancy.current() is not None:  # hosted user: the safe tool set in their own sandbox, metered
-        return Agent(tools=hosted.hosted_tools(), desktop=False, client="web", workspace=None, meter=meter)
+                   local_apps: bool = False, meter: Any = None,
+                   review_only: bool = False) -> Agent:
+    if tenancy.current() is not None:  # hosted user: tenant-specific safe tool registry and quota
+        registry = hosted.hosted_tools()
+        if review_only:
+            registry = {n: t for n, t in registry.items()
+                        if n in STUDIO_REVIEW_TOOLS and t.level == "safe"}
+        return Agent(tools=registry, desktop=False, client="web", workspace=None, meter=meter)
     tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS, local_apps=local_apps)
-    return Agent(tools=tl, desktop=desktop, client=client, workspace=workspace, meter=meter)
+    if review_only:
+        # Do not rely on auto_deny alone: global approval_mode=auto may bypass
+        # the approval callback. Removing tools from the registry makes writes,
+        # shell access, publishing, deployment and installations unavailable.
+        tl = {n: t for n, t in tl.items()
+              if n in STUDIO_REVIEW_TOOLS and t.level == "safe"}
+    return Agent(tools=tl, desktop=desktop and not review_only, client=client,
+                 workspace=workspace, meter=meter)
 
 
 def _local(request: Request) -> bool:
@@ -144,6 +159,10 @@ from automoto import developer_javascript
 app.include_router(developer_javascript.router)  # V13 explicit JS/TS testing, typechecks and project-script workflows
 from automoto import developer_frontend
 app.include_router(developer_frontend.router)  # V14 non-executing web UI, accessibility and sandboxed static preview
+from automoto import developer_sql, developer_data, studio_agent_bridge
+app.include_router(developer_sql.router)  # V15 SQL read-only snapshots and migration preview
+app.include_router(developer_data.router)  # V15 SQL dialect and GraphQL static inspection
+app.include_router(studio_agent_bridge.router)  # shared central agent linkage across all five Studios
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

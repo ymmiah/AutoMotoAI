@@ -2,7 +2,7 @@
 // No provider keys or model requests. PYTHON selects the installed engine interpreter.
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
@@ -2358,6 +2358,47 @@ let browser;
     'V14 must never write project HTML');
   await page.screenshot({path:path.join(output,'developer-studio-v14-responsive-a11y-preview.png')});
 
+  // V15: real SQLite snapshot SELECT and rollback-only schema migration.
+  const v15Db=path.join(devProject,'v15-data.sqlite');
+  const v15Seed=spawnSync(process.env.PYTHON||'python',
+    ['-c',"import sqlite3,sys; c=sqlite3.connect(sys.argv[1]);"+
+      "c.execute('CREATE TABLE products(id INTEGER PRIMARY KEY,name TEXT)');"+
+      "c.execute('INSERT INTO products(name) VALUES (?)',('A real item',));"+
+      "c.commit();c.close()",v15Db],{encoding:'utf8'});
+  assert.equal(v15Seed.status,0,'V15 SQLite fixture failed: '+v15Seed.stderr);
+  writeFileSync(path.join(devProject,'v15-schema.graphql'),
+    'type Query {\n products: [Product!]!\n version: String\n}\n'+
+    'type Product {\n name: String!\n}\n');
+  const v15DbBefore=readFileSync(v15Db);
+  await page.locator('#dsDataDB').fill('v15-data.sqlite');
+  await page.locator('#dsDataSchema').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"name": "products"'));
+  await page.locator('#dsDataQuery').fill('SELECT name FROM products WHERE id = ?');
+  await page.locator('#dsDataArgs').fill('[1]');
+  await page.locator('#dsDataRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('A real item'));
+  await page.locator('#dsDataMigration').fill('ALTER TABLE products ADD COLUMN reviewed INTEGER');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsDataPreview').click();
+  assert.equal(await page.locator('#dsDataOutput').innerText().then(t=>t.includes('migration_applied')),false);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsDataPreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"rollback_verified": true'));
+  assert.equal(await page.locator('#dsDataOutput').innerText().then(t=>t.includes('"migration_applied": false')),true);
+  assert.deepEqual(readFileSync(v15Db),v15DbBefore,'V15 migration preview must not write source SQLite bytes');
+  await page.locator('#dsDataSchemaFile').fill('v15-schema.graphql');
+  await page.locator('#dsDataInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"name": "Query"'));
+  await page.locator('#dsDataOperation').fill('mutation { destroyAll }');
+  await page.locator('#dsDataGraphQL').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"allowed": false'));
+  assert.equal(await page.locator('#studioAgentSend').isDisabled(),true);
+  await page.locator('#studioAgentMessage').fill('Review the V15 SQLite migration and rollout risks.');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#studioAgentSend').click();
+  assert.match(await page.locator('#studioAgentResult').innerText(),/confirm|shared|review/i);
+  await page.screenshot({path:path.join(output,'developer-studio-v15-sql-agent-bridge.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
@@ -2566,6 +2607,18 @@ let browser;
     assert.equal(await page.locator('#msgs').evaluate(el => el.scrollTop), 0);
     await page.screenshot({ path: path.join(output, `workspace-${width}.png`) });
   }
+  // Every existing Studio must have one authenticated central Agent link.
+  await page.setViewportSize({width:1280,height:900});
+  for(const name of ['documents','research','spreadsheets','visual','developer']){
+    await page.locator('.nav [data-page="'+name+'"]').click();
+    await page.locator('.studio-agent-bridge').waitFor();
+    await page.waitForFunction(()=>document.querySelector('.studio-agent-state')?.textContent
+      ==='Connected to central agent');
+    assert.equal(await page.locator('.studio-agent-bridge').count(),1,
+      'Every Studio must share one central Agent bridge: '+name);
+  }
+  await page.screenshot({path:path.join(output,'all-five-studios-central-agent.png')});
+
   // Serve the bundled launcher through a browser route; native commands are mocked.
   await page.setViewportSize({ width: 1200, height: 1050 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });

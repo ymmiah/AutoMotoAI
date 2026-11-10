@@ -1,5 +1,6 @@
 // AutoMoto AI GUI - vanilla ES module, no build step, no CDN.
 import { icon, hydrateIcons, TOOL_ICONS } from "./icons.js";
+import { mountStudioAgentBridge } from "./studio-agent-bridge.js";
 
 // Auth: the HttpOnly session cookie set by the one-time launch link (the page never sees a token).
 const TOKEN = document.querySelector('meta[name="automoto-token"]')?.content || "";
@@ -889,12 +890,22 @@ async function stopRun() {
 }
 
 // ---------------------------------------------------------------- pages
+const STUDIO_AGENT_PAGES=Object.freeze({
+  "Document Assistant":"documents",
+  "Research Studio":"research",
+  "Invoice & Spreadsheet Intelligence":"spreadsheets",
+  "Visual Studio":"visual",
+  "Developer Studio":"developer"
+});
 function page(title, lead, inner) {
   $("#pageTitle").textContent = title;
   $("#view").innerHTML = `<div class="page"><div class="page-inner"><h2>${esc(title)}</h2><p class="lead">${lead}</p>${inner}</div></div>`;
   hydrateIcons($("#view"));
   $("#view").focus({ preventScroll: true });
-  return $("#view .page-inner");
+  const host=$("#view .page-inner");
+  const agentStudio=STUDIO_AGENT_PAGES[title];
+  if(agentStudio)mountStudioAgentBridge({api,host,studio:agentStudio});
+  return host;
 }
 const statusPill = (s) => `<span class="pill ${esc(s)}">${esc(String(s).replace("_", " "))}</span>`;
 const PAGES = {};
