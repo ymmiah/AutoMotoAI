@@ -472,6 +472,9 @@ def build(*, desktop: bool = False, extra: list[Tool] | None = None, local_apps:
     from automoto import research
 
     tools += research.TOOLS
+    from automoto.studio_registry import collect_tools
+
+    tools += collect_tools(local_apps=local_apps, existing={t.name for t in tools})
     if local_apps:  # the user's own computer only (never hosted)
         from automoto import devbrowser, server_setup
 

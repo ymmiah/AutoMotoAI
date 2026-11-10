@@ -36,6 +36,8 @@ class Scenario:
     answer: str = "Done - see above."
     text_mode: bool = False               # JSON-in-text tool calls (models without native tools)
     max_tools: int = 24                   # the planner must offer at most this many
+    files_glob: tuple[str, ...] = ()      # glob under the workspace; each match must open cleanly
+    glob_contains: dict[str, list[str]] = field(default_factory=dict)  # glob -> text a match must contain
 
     def goal(self) -> str:
         if not self.attach:
@@ -97,10 +99,27 @@ OFFLINE = {"web_search": _fake_search, "fetch_url": _fake_fetch, "download_file"
 
 def _need_for(tool: str) -> str:
     """What a model would say to more_tools when it lacks ``tool`` (a capability's plain label)."""
-    for c in planner.CAPS:
+    for c in planner.capability_list():
         if tool in c.tools:
             return c.label
     return tool.replace("_", " ")
+
+
+def _bind_runtime(sc: Scenario) -> Scenario:
+    """Replace ``@sha:relative/path`` with the file's real SHA-256 (line endings differ by OS)."""
+    import hashlib
+
+    root = sandbox.root()
+    steps = []
+    changed = False
+    for name, args in sc.steps:
+        new = dict(args)
+        for key, value in list(new.items()):
+            if isinstance(value, str) and value.startswith("@sha:"):
+                new[key] = hashlib.sha256((root / value[5:]).read_bytes()).hexdigest()
+                changed = True
+        steps.append((name, new))
+    return replace(sc, steps=steps) if changed else sc
 
 
 def _call(name: str, args: dict[str, Any], i: int) -> dict[str, Any]:
@@ -172,6 +191,9 @@ def _valid(path: Path) -> str:
                 bad = z.testzip()
                 if bad:
                     return f"corrupt member {bad}"
+        elif ext == ".gif":
+            if path.read_bytes()[:6] not in (b"GIF87a", b"GIF89a"):
+                return "not a GIF"
         elif ext == ".json":
             json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001 - any parse error means an invalid file
@@ -253,6 +275,21 @@ def _check(sc: Scenario, res, events, out: Outcome, *, scripted: bool) -> None:
         for n in needles:
             if n.lower() not in text.lower():
                 out.problems.append(f"{f} lacks {n!r}")
+    for pattern in sc.files_glob:
+        matches = sorted(sandbox.root().glob(pattern))
+        if not matches:
+            out.problems.append(f"no file matched {pattern}")
+            continue
+        for match in matches:
+            why = _valid(match)
+            if why:
+                out.problems.append(f"{match.name}: {why}")
+    for pattern, needles in sc.glob_contains.items():
+        matches = sorted(sandbox.root().glob(pattern))
+        text = "\n".join(_text_of(m.relative_to(sandbox.root()).as_posix()) for m in matches)
+        for n in needles:
+            if n.lower() not in text.lower():
+                out.problems.append(f"{pattern} lacks {n!r}")
     for c in sc.caps:
         if c not in out.caps:
             out.problems.append(f"planner missed capability {c!r} (picked {out.caps})")
@@ -282,6 +319,7 @@ def run_mock(sc: Scenario) -> Outcome:
             for k in p.env_keys:
                 if k != "NVIDIA_API_KEY":
                     os.environ.pop(k, None)
+        sc = _bind_runtime(sc)
         model = MockModel(sc)
         agent = Agent(memory=Memory(), transport=model, client="eval")
         for name, fn in OFFLINE.items():
@@ -332,6 +370,7 @@ def run_real(sc: Scenario, max_steps: int = 14) -> Outcome:
     t0 = time.monotonic()
     keep = {k: v for k, v in os.environ.items() if k.endswith(("_API_KEY", "_TOKEN")) or k == "AI_PROVIDER"}
     with isolated({**keep, "AUTOMOTO_APPROVAL": "auto"}):
+        sc = _bind_runtime(sc)
         agent = Agent(memory=Memory(), client="eval")
         for name, fn in OFFLINE.items():
             if name in agent.tools:

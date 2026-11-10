@@ -349,6 +349,14 @@ def _authorise(request: Request, *, local_only: bool = False) -> None:
     if tenancy.multiuser():
         if local_only:
             raise HTTPException(403, "not available on a hosted AutoMoto server")
+        # Studio tools call endpoints with a synthetic request. Accept it only when this
+        # task already belongs to a signed-in tenant. HTTP clients cannot set the flag.
+        if getattr(request.state, "automoto_agent_call", False):
+            tenant = tenancy.current()
+            if tenant is None:
+                raise HTTPException(403, "hosted studio tools need a signed-in session")
+            request.state.user = tenant
+            return
         hosted.authenticate(request)
         return
     if _is_loopback(request):

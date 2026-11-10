@@ -144,8 +144,10 @@ def test_v4_preflight_creates_no_files_and_counts_real_word_structure(client):
 
 
 def test_v4_contents_field_present_and_no_unverified_page_number_claim(client,monkeypatch):
-    from automoto import office
+    from automoto import office, office_build
+    # publishing_spec calls the name imported into office_build, not office.lo_available.
     monkeypatch.setattr(office,"lo_available",lambda:False)
+    monkeypatch.setattr(office_build,"lo_available",lambda:False)
     data=source()
     data["publication"]["contents_page"]=True
     result=client.post(BASE+"/preflight",headers=AUTH,json=data)
