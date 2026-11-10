@@ -2399,6 +2399,37 @@ let browser;
   assert.match(await page.locator('#studioAgentResult').innerText(),/confirm|shared|review/i);
   await page.screenshot({path:path.join(output,'developer-studio-v15-sql-agent-bridge.png')});
 
+  // V16: real WordPress plugin fixture, source-safe patch and shared Agent readiness.
+  const v16Plugin=path.join(devProject,'v16-reviewable-plugin.php');
+  const v16Original=[
+    '<?php','/*','Plugin Name: V16 Reviewable Plugin','Version: 1.0.0','*/',
+    "add_action( 'admin_notices', 'v16_review_notice' );",
+    "register_activation_hook( __FILE__, 'v16_review_activate' );",
+    "function v16_review_activate() { update_option( 'v16_setting', true ); }",
+    "function v16_review_notice() {",
+    "    echo $_GET['notice'];",
+    "}",''
+  ].join('\n');
+  writeFileSync(v16Plugin,v16Original);
+  await page.locator('#dsPhpInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPhpStatus')?.textContent?.includes('Project inspected'));
+  assert.match(await page.locator('#dsPhpResults').innerText(),/V16 Reviewable Plugin/);
+  assert.match(await page.locator('#dsPhpResults').innerText(),/raw-superglobal-echo/);
+  await page.locator('#dsPhpPath').fill('v16-reviewable-plugin.php');
+  await page.locator('#dsPhpPatch').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPhpStatus')?.textContent?.includes('Proposed limited WordPress fix'));
+  assert.match(await page.locator('#dsPhpResults .ds-php-source').inputValue(),/sanitize_text_field/);
+  assert.match(await page.locator('#dsPhpResults .ds-php-source').inputValue(),/register_activation_hook/);
+  assert.deepEqual(readFileSync(v16Plugin,'utf8'),v16Original,
+    'V16 fix preview must never silently edit the WordPress plugin');
+  await page.locator('#dsPhpAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/WordPress plugin security and hook/);
+  assert.match(await page.locator('#dsPhpStatus').innerText(),/Send separately with your confirmation/);
+  assert.deepEqual(readFileSync(v16Plugin,'utf8'),v16Original,
+    'Central Agent review preparation must not deploy or change project source');
+  await page.screenshot({path:path.join(output,'developer-studio-v16-php-wordpress-agent.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){

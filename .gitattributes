@@ -2,3 +2,6 @@
 # Never translate line endings on Windows checkout or the integrity manifest fails.
 # This rule applies to the bundled JS workers, CSS, fonts, licences and manifest.
 automoto/web/static/vendor/monaco/** -text
+# Test modules embed source fixtures and compare approved SHA-256 bytes.
+# Check them out as LF so core.autocrlf cannot rewrite those fixtures on Windows.
+tests/** text eol=lf
