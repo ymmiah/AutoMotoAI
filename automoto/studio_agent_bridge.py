@@ -91,7 +91,7 @@ def handoff(request:Request,body:HandoffIn):
        source="studio:"+body.studio,
        title=STUDIOS[body.studio]["label"]+" · "+body.action.replace("_"," "),
        agent_kwargs={"desktop":False,"client":"web","workspace":workspace,
-                     "local_apps":False,"meter":meter},
+                     "local_apps":False,"meter":meter,"review_only":True},
        auto_deny=True,  # safety gate for all Studio-initiated agent workflows
        conversation_id=cid,on_done=server._saver(cid),
        owner=server._owner(request))
