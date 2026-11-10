@@ -253,3 +253,29 @@
 .ds-bib-preview{width:100%;font:12px/1.6 var(--mono);min-height:100px;resize:vertical}
 #dsBibStatus.ds-error{color:var(--bad)}
 @media(max-width:640px){.ds-bib-head{align-items:flex-start;flex-direction:column}.ds-bib-controls .input,.ds-bib-actions .input{min-width:0;flex:1 1 100%}}
+
+
+/* V11 — explicit, unsandboxed TeX compiler, diagnostics and ephemeral PDF preview. */
+.ds-texbuild-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ds-texbuild-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ds-texbuild-head h3{font-size:14px;font-weight:700;margin:0}
+.ds-texbuild-guard{font-size:10px;letter-spacing:.08em;font-weight:800;color:var(--dim)}
+.ds-texbuild-body{display:grid;gap:12px;padding:14px 16px;min-width:0}
+.ds-texbuild-body>.ds-footnote{padding:0}
+.ds-texbuild-toolbar,.ds-texbuild-navigate,.ds-texbuild-preview-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.ds-texbuild-toolbar label,.ds-texbuild-navigate label{font-size:12px;color:var(--dim)}
+.ds-texbuild-toolbar .input{min-width:140px;max-width:340px;flex:1 1 170px}
+.ds-texbuild-navigate .input{min-width:70px;max-width:320px;flex:1}
+.ds-texbuild-navigate input[type=number]{max-width:95px;min-width:70px}
+.ds-texbuild-summary{min-height:48px;max-height:360px;overflow:auto;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:8px}
+.ds-texbuild-info{font:12px/1.6 var(--mono);margin:0;overflow-wrap:anywhere}
+.ds-texbuild-info[data-kind=warning]{color:var(--bad)}
+.ds-texbuild-diagnostic{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:6px 0}
+.ds-texbuild-diagnostic span{font:12px/1.5 var(--mono);overflow-wrap:anywhere;flex:1}
+.ds-texbuild-summary details{min-width:0}
+.ds-texbuild-summary summary{cursor:pointer;font-size:12px}
+.ds-texbuild-summary pre{font:11px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}
+.ds-texbuild-frame{width:100%;height:min(72vh,720px);min-height:360px;border:1px solid var(--line);border-radius:8px;background:var(--code)}
+.ds-texbuild-frame[hidden]{display:none!important}
+#dsTexBuildStatus.ds-error{color:var(--bad)}
+@media(max-width:650px){.ds-texbuild-head{align-items:flex-start;flex-direction:column}.ds-texbuild-toolbar .input,.ds-texbuild-navigate .input{min-width:0;max-width:100%;flex:1 1 100%}.ds-texbuild-frame{min-height:280px;height:460px}}

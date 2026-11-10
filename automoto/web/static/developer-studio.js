@@ -7,10 +7,11 @@ import {mountDeveloperIndex} from "./developer-index.js";
 import {mountDeveloperAdapters} from "./developer-adapters.js";
 import {mountDeveloperLatex} from "./developer-latex.js";
 import {mountDeveloperBibliography} from "./developer-bibliography.js";
+import {mountDeveloperTexBuild} from "./developer-texbuild.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V10 · Bibliography & Citations. Preflight local BibTeX/BibLaTeX, optionally verify DOI metadata with Crossref, and preview Harvard/IEEE references.",
+    "V11 · TeX build & PDF preview. Compile explicitly approved temporary LaTeX snapshots, inspect diagnostics and navigate with SyncTeX; no automatic execution.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -29,6 +30,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsAdaptersRoot" aria-label="Explicitly approved local toolchain and debugger adapters"></div>'+ 
       '<div id="dsLatexRoot" aria-label="LaTeX multi-file thesis authoring"></div>'+ 
       '<div id="dsBibliographyRoot" aria-label="Citation evidence and bibliography preflight"></div>'+ 
+      '<div id="dsTexBuildRoot" aria-label="Approved TeX build and ephemeral PDF preview"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -45,9 +47,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex,bibliography;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
@@ -55,6 +57,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   adapters=mountDeveloperAdapters({api,host,getProject:()=>project,status});
   latex=mountDeveloperLatex({api,host,getProject:()=>project,editor,status});
   bibliography=mountDeveloperBibliography({api,host,getProject:()=>project,editor,status});
+  texBuild=mountDeveloperTexBuild({api,host,getProject:()=>project,editor,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -114,6 +117,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       await adapters.projectChanged();
       latex.projectChanged();
       bibliography.projectChanged();
+      texBuild.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
@@ -260,7 +264,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();editor.trustChanged();await lsp.trustChanged();await adapters.trustChanged();await locations();
+      showTrust();editor.trustChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
       status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });
