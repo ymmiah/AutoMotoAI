@@ -304,7 +304,7 @@ def test_synctex_rejects_external_source_tags_and_gzip_bombs(project):
 def test_fixed_engine_argv_untrusted_offline_and_shell_escape_disabled():
     t=tex._command("tectonic","/usr/bin/tectonic","main.tex",Path("/tmp/safe-output"))
     assert t[1:] == ["--untrusted","--only-cached","--synctex","--keep-logs",
-                     "--outdir","/tmp/safe-output","main.tex"]
+                     "--outdir",str(Path("/tmp/safe-output")),"main.tex"]
     assert "-shell-escape" not in t
     l=tex._command("latexmk","/usr/bin/latexmk","main.tex",Path("/tmp/safe-output"))
     assert "-norc" in l
