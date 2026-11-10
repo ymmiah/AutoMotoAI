@@ -2247,7 +2247,8 @@ let browser;
   await page.waitForFunction(()=>document.querySelector('#dsManHandoffSelect')?.options.length===2);
   await page.locator('#dsManHandoffSelect').selectOption(v12Audit);
   await page.locator('#dsManReview').click();
-  await page.waitForFunction(()=>document.querySelector('#dsManResult')?.textContent?.includes('source_sha256'));
+  await page.waitForFunction(()=>[...document.querySelectorAll('#dsManResult .ds-manuscript-preview')].some(x=>x.value.includes('source_sha256')));
+  assert.equal(await page.locator('#dsManResult .ds-manuscript-preview').count(),2);
   assert.equal(v12Previews,1);
   assert.equal(await page.locator('#dsManResult script').count(),0,
     'V12 evidence must display inertly, never execute source markup');
