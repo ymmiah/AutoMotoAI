@@ -695,8 +695,12 @@ def hosted_tools() -> dict[str, Any]:
     No shell, no local apps, no desktop control, no services/connectors (their secrets are the host's)."""
     from automoto import tools as tools_mod
 
+    from automoto.studio_registry import hosted_blocked, hosted_groups
+
     tl = tools_mod.build(desktop=False, extra=[], local_apps=False, services=False, office=True, files=True)
-    return {n: t for n, t in tl.items() if t.group in HOSTED_GROUPS and n not in BLOCKED_TOOLS}
+    allowed = set(HOSTED_GROUPS) | hosted_groups()
+    blocked = set(BLOCKED_TOOLS) | hosted_blocked()
+    return {n: t for n, t in tl.items() if t.group in allowed and n not in blocked}
 
 
 # An allow-list: a new tool group stays out of hosted mode until it is reviewed and added here.

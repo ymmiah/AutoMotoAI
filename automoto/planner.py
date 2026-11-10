@@ -158,6 +158,45 @@ CAPS: tuple[Capability, ...] = (
                how="Desktop tools act on the real computer: only when the user asks."),
 )
 BY_ID = {c.id: c for c in CAPS}
+_STUDIO_IDS: list[str] = []
+
+
+def sync_studios() -> None:
+    """Merge studios discovered by the registry. Built-in capability ids are left as they are."""
+    global _ALL_EXTS
+    from automoto.studio_registry import load_studios
+
+    for cid in _STUDIO_IDS:
+        BY_ID.pop(cid, None)
+        FUZZY.pop(cid, None)
+    _STUDIO_IDS.clear()
+    builtin = {c.id for c in CAPS}
+    for spec in load_studios():
+        try:
+            cap = spec.capability()
+        except Exception:
+            import logging
+            logging.getLogger("automoto.studio_registry").exception("skipping studio capability %s", getattr(spec, "id", "?"))
+            continue
+        if cap.id in builtin:
+            continue
+        BY_ID[cap.id] = cap
+        _STUDIO_IDS.append(cap.id)
+        if spec.fuzzy:
+            FUZZY[cap.id] = tuple(spec.fuzzy)
+        for name, label in spec.labels.items():
+            STEP_LABELS[name] = label
+    _ALL_EXTS = {e for c in BY_ID.values() for e in c.exts}
+
+
+def _all_caps() -> list[Capability]:
+    sync_studios()
+    return [*CAPS, *[BY_ID[i] for i in _STUDIO_IDS if i in BY_ID]]
+
+
+def capability_list() -> list[Capability]:
+    """Built-in capabilities plus every studio the registry loaded."""
+    return _all_caps()
 
 # Mentioned files: "uploads/My Deck.pptx", "report.docx", "C:\\x\\y.csv"
 _FILE_RE = re.compile(r"([\w\-./\\() ]{0,120}?\.([A-Za-z0-9]{1,6}))(?=$|[\s,;:)\]'\"`!?])")
@@ -196,6 +235,7 @@ _KIND = {".pptx": "your slides", ".ppt": "your slides", ".odp": "your slides", "
 def human_step(name: str, args: dict[str, Any] | None = None) -> str:
     """'Reading your slides…' instead of 'office_read'. Never contains secrets (no argument values except
     a file's base name, an app id or a service name)."""
+    sync_studios()
     args = args or {}
     path = str(args.get("path") or args.get("out") or "")
     file = ""
@@ -222,6 +262,7 @@ class Plan:
     goal: str = ""
 
     def as_dict(self) -> dict[str, Any]:
+        sync_studios()
         labels = [BY_ID[c].label for c in self.capabilities if c in BY_ID]
         summary = ("I'll take this from here: " + ", ".join(labels) + ".") if labels else "I'll take this from here."
         return {"capabilities": self.capabilities, "labels": labels, "summary": summary,
@@ -229,6 +270,7 @@ class Plan:
 
 
 def mentioned_files(text: str) -> list[str]:
+    sync_studios()
     out = []
     for m in _FILE_RE.finditer(text or ""):
         cand = m.group(1).strip(" ./\\(")
@@ -272,15 +314,17 @@ def _fuzzy_hits(goal: str) -> dict[str, int]:
 def classify(goal: str, files: Iterable[str] = ()) -> list[str]:
     """Capability ids for a goal, strongest first (file types count double)."""
     goal = goal or ""
+    caps = _all_caps()
+    index = {c.id: i for i, c in enumerate(caps)}
     score: dict[str, int] = {}
     for f in list(files) + mentioned_files(goal):
         ext = PurePosixPath(f.replace("\\", "/").lower()).suffix
         if f.lower().endswith((".tar.gz", ".tar.bz2", ".tar.xz")):
             ext = ".gz"
-        for c in CAPS:
+        for c in caps:
             if ext in c.exts:
                 score[c.id] = score.get(c.id, 0) + 3
-    for c in CAPS:
+    for c in caps:
         n = len(re.findall(c.words, goal, re.I))
         if n:
             score[c.id] = score.get(c.id, 0) + min(n, 3)
@@ -289,7 +333,7 @@ def classify(goal: str, files: Iterable[str] = ()) -> list[str]:
     # a .php file inside a zip about a plugin is WordPress, not generic code
     if "wordpress" in score and "code" in score:
         score["wordpress"] += 2
-    order = sorted(score, key=lambda k: (-score[k], [c.id for c in CAPS].index(k)))
+    order = sorted(score, key=lambda k: (-score[k], index.get(k, 999)))
     return order[:4]
 
 
@@ -336,6 +380,7 @@ def plan(goal: str, available: dict[str, Any], *, files: Iterable[str] = (), ext
 
 def prompt_block(p: Plan, skills: dict[str, Any] | None = None, *, max_chars: int = 3500) -> str:
     """System-prompt section: what this task needs, the skill to follow, and the other skills by name only."""
+    sync_studios()
     parts = []
     if p.capabilities:
         parts.append("## This task\nLooks like: " + ", ".join(BY_ID[c].label for c in p.capabilities) +
