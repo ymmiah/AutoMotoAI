@@ -10,10 +10,11 @@ import {mountDeveloperBibliography} from "./developer-bibliography.js";
 import {mountDeveloperTexBuild} from "./developer-texbuild.js";
 import {mountDeveloperManuscripts} from "./developer-manuscripts.js";
 import {mountDeveloperJavaScript} from "./developer-javascript.js";
+import {mountDeveloperFrontend} from "./developer-frontend.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V13 · JavaScript & TypeScript. Inspect Node.js projects and run approved local tests, typechecks and build scripts with bounded diagnostics.",
+    "V14 · Web UI and frontend frameworks. Inspect HTML, CSS, SCSS and component sources; review static accessibility findings and safe responsive layout previews.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -35,6 +36,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsTexBuildRoot" aria-label="Approved TeX build and ephemeral PDF preview"></div>'+ 
       '<div id="dsManuscriptsRoot" aria-label="Typst Quarto and source-verified Research Studio review packages"></div>'+ 
       '<div id="dsJavaScriptRoot" aria-label="Node.js JavaScript TypeScript project tasks"></div>'+ 
+      '<div id="dsFrontendRoot" aria-label="Frontend project inspection, accessibility and static responsive preview"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -51,9 +53,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
@@ -64,6 +66,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   texBuild=mountDeveloperTexBuild({api,host,getProject:()=>project,editor,status});
   manuscripts=mountDeveloperManuscripts({api,host,getProject:()=>project,editor,status});
   javascript=mountDeveloperJavaScript({api,host,getProject:()=>project,editor,status});
+  frontend=mountDeveloperFrontend({api,host,getProject:()=>project,editor,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -126,6 +129,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       texBuild.projectChanged();
       manuscripts.projectChanged();
       javascript.projectChanged();
+      frontend.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
