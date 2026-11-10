@@ -63,7 +63,7 @@ class ProjectIn(BaseModel):
 
 
 class RunIn(ProjectIn):
-    task: Literal["node_version", "node_check", "node_test", "tsc_check", "script"]
+    task: Literal["tool_version", "node_version", "node_check", "node_test", "tsc_check", "script"]
     tool: Literal["node", "npm", "pnpm", "yarn"]
     relative_file: Optional[str] = Field(default=None, max_length=1024)
     script: Optional[Literal["test", "build", "lint", "typecheck"]] = None
@@ -217,6 +217,10 @@ def _tsc_file(root: Path) -> Path:
 
 
 def _command(root: Path, body: RunIn, summary: dict, executable: str) -> list[str]:
+    if body.task == "tool_version":
+        if body.relative_file or body.script:
+            raise HTTPException(422, "Tool version detection does not accept a source or script.")
+        return [executable, "--version"]
     if body.task == "node_version":
         if body.tool != "node" or body.script or body.relative_file:
             raise HTTPException(422, "Version detection accepts Node only.")
@@ -249,6 +253,56 @@ def _command(root: Path, body: RunIn, summary: dict, executable: str) -> list[st
                     "--no-fund", "run", body.script]
         return [executable, "run", body.script]
     raise HTTPException(422, "Unsupported task.")
+
+
+def _run_task(root: Path, record: dict) -> dict:
+    """Bounded real subprocess via the V8 approved/rehashing launch boundary."""
+    started = time.monotonic()
+    proc = adapters._start(root, record, dap=False)
+    output = bytearray()
+    overflow = threading.Event()
+    timeout = False
+
+    def read_bounded():
+        try:
+            while True:
+                part = proc.stdout.read(4096)
+                if not part:
+                    break
+                remaining = MAX_OUTPUT - len(output)
+                output.extend(part[:max(0, remaining)])
+                if len(part) > remaining:
+                    overflow.set()
+                    adapters._terminate(proc)
+                    break
+        except (OSError, ValueError):
+            pass
+
+    reader = threading.Thread(target=read_bounded, daemon=True)
+    reader.start()
+    try:
+        try:
+            proc.wait(timeout=MAX_RUN_SECONDS)
+        except subprocess.TimeoutExpired:
+            timeout = True
+            adapters._terminate(proc)
+        reader.join(timeout=1)
+    finally:
+        adapters._terminate(proc)
+        if proc.stdout:
+            proc.stdout.close()
+    return {
+        "status": "output_limit" if overflow.is_set() else
+                  "timeout" if timeout else
+                  "completed" if proc.returncode == 0 else "nonzero_exit",
+        "exit_code": proc.returncode,
+        "elapsed_ms": int((time.monotonic() - started)*1000),
+        "output": output.decode("utf-8", errors="replace"),
+        "output_truncated": overflow.is_set(), "timed_out": timeout,
+        "explicit_approval": True, "execution_mode": "trusted_local_subprocess",
+        "platform_sandbox": False, "source_files_unchanged": "not_verified",
+        "registry_modified": False,
+    }
 
 
 def _diagnostics(text: str, root: Path) -> list[dict]:
@@ -320,7 +374,7 @@ def run(request: Request, body: RunIn):
                   "args": command[1:], "project_identity": studio._identity(root)}
         # V8 SDK already supplies process-group termination, bounded output,
         # inherited-environment sanitisation and a strict timeout.
-        result = adapters._run_process(root, record)
+        result = _run_task(root, record)
         result["task"] = body.task
         result["tool"] = body.tool
         result["manifest_sha256"] = sha
@@ -330,8 +384,9 @@ def run(request: Request, body: RunIn):
         result["network_prevented_by_os"] = False
         result["framework_build_verified"] = (
             body.task == "script" and body.script == "build" and result["status"] == "completed")
-        version = NODE_VERSION.search(result["output"]) if body.task == "node_version" else None
+        version = NODE_VERSION.search(result["output"]) if body.task in ("node_version", "tool_version") and body.tool == "node" else None
         result["node_runtime_version"] = version.group(0) if version else None
+        result["reported_tool_version"] = result["output"].strip()[:120] if body.task in ("node_version", "tool_version") and result["status"] == "completed" else None
         return result
     finally:
         RUN_LOCK.release()
