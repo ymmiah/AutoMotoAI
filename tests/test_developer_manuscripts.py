@@ -240,6 +240,11 @@ def test_bibtex_export_is_derived_from_confirmed_publication_identity(project,mo
     records=transfer._bib_records({"sources":[fake]},[binding])
     assert records[0]["citation_key"].startswith("ref_")
     assert "doi = {10.1234/original}" in transfer._bib_output(records)
+    assert "@article{" in transfer._bib_output(records)
+    fake["type"]="book"
+    generic=transfer._bib_output(transfer._bib_records({"sources":[fake]},[binding]))
+    assert "@misc{" in generic and "howpublished = {Journal}" in generic
+    assert "@article{" not in generic
     fake["title"]="\\write18{command}"
     with pytest.raises(Exception):
         transfer._bib_records({"sources":[fake]},[binding])
