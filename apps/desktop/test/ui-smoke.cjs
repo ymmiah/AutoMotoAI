@@ -2303,6 +2303,61 @@ let browser;
   assert.match(await page.locator('#dsJsSummary').innerText(),/Reported version: v\d+/);
   await page.screenshot({path:path.join(output,'developer-studio-v13-js-ts-project-tests.png')});
 
+  // V14: real local HTML/CSS, framework declarations, heuristic accessibility
+  // and a responsive sandboxed iframe that executes no source JavaScript.
+  writeFileSync(path.join(devProject,'v14-page.html'),
+    '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<script>window.__V14_EXECUTED=true;</script>'+
+    '<link rel="stylesheet" href="https://v14-exfil.example/evil.css"></head>'+
+    '<body><main><h1>V14 Real responsive card</h1>'+
+    '<section class="v14-card">Native HTML remains readable</section>'+
+    '<img src="https://v14-exfil.example/pixel">'+
+    '<button onclick="window.__V14_EXECUTED=true"></button>'+
+    '<input id="missing-label"></main></body></html>');
+  writeFileSync(path.join(devProject,'v14-styles.css'),
+    '.v14-card{display:grid;gap:16px;padding:20px;background-color:#efefef;'+
+    'background-image:url(https://v14-exfil.example/danger)}');
+  writeFileSync(path.join(devProject,'v14-component.tsx'),
+    'export default function App(){return <main><h1>React component</h1></main>;}');
+  const v14Before=readFileSync(path.join(devProject,'v14-page.html'));
+  const v14Leaked=[];
+  page.on('request',req=>{if(req.url().includes('v14-exfil.example'))v14Leaked.push(req.url());});
+  await page.locator('#dsFeInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFeStatus')?.textContent?.includes('Frontend inventory complete'));
+  assert.match(await page.locator('#dsFeFindings').innerText(),/Next\.js/);
+  assert.match(await page.locator('#dsFeFindings').innerText(),/React/);
+  await page.locator('#dsFeFile').fill('v14-component.tsx');
+  await page.locator('#dsFeAudit').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFeStatus')?.textContent?.includes('Read-only source audit complete'));
+  assert.match(await page.locator('#dsFeFindings').innerText(),/dynamic framework syntax/);
+  await page.locator('#dsFeHtml').fill('v14-page.html');
+  await page.locator('#dsFeCss').fill('v14-styles.css');
+  await page.locator('#dsFePreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFeStatus')?.textContent?.includes('Sanitised static preview ready'));
+  await page.frameLocator('#dsFeFrame').getByRole('heading',{name:'V14 Real responsive card'}).waitFor();
+  assert.match(await page.locator('#dsFeFindings').innerText(),/image-alt/);
+  assert.match(await page.locator('#dsFeFindings').innerText(),/button-name/);
+  assert.match(await page.locator('#dsFeFindings').innerText(),/input-name/);
+  assert.equal(await page.locator('#dsFeFrame').getAttribute('sandbox'),'');
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('script').count(),0);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('iframe').count(),0);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('img').count(),0);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('.v14-card').count(),1);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('.v14-card').evaluate(
+    node=>getComputedStyle(node).display),'grid');
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('body').evaluate(
+    ()=>Boolean(window.__V14_EXECUTED)),false,'HTML scripts must not execute in the preview');
+  await page.locator('#dsFeTablet').click();
+  assert.equal(await page.locator('#dsFeFrame').evaluate(node=>node.getBoundingClientRect().width),768);
+  await page.locator('#dsFeDesktop').click();
+  assert.equal(await page.locator('#dsFeFrame').evaluate(node=>node.getBoundingClientRect().width),1440);
+  await page.locator('#dsFeMobile').click();
+  assert.equal(await page.locator('#dsFeFrame').evaluate(node=>node.getBoundingClientRect().width),375);
+  assert.equal(v14Leaked.length,0,'Static preview must not fetch any remote source assets');
+  assert.deepEqual(readFileSync(path.join(devProject,'v14-page.html')),v14Before,
+    'V14 must never write project HTML');
+  await page.screenshot({path:path.join(output,'developer-studio-v14-responsive-a11y-preview.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
