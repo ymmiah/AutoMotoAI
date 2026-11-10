@@ -181,7 +181,8 @@ def test_npm_build_executes_only_predeclared_script_with_consent(project):
     r=request_run(client,root,task="script",tool="npm",script="build")
     assert r.status_code==200,r.text
     assert r.json()["status"]=="completed"
-    assert r.json()["framework_build_verified"] is True
+    assert r.json()["build_script_exited_zero"] is True
+    assert r.json()["framework_build_verified"] is False
     assert (root/"output-built.txt").read_text()=="built"
     assert not (root/"node_modules").exists()
 
