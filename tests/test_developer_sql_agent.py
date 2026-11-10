@@ -174,8 +174,7 @@ def test_studio_agent_registry_covers_all_five_real_pages(root):
         "documents","research","spreadsheets","visual","developer"}
     assert r.json()["automatic_deployment"] is False
     assert r.json()["requires_human_confirmation"] is True
-    from automoto import web
-    src=(Path(web.__file__).parent/"static"/"app.js").read_text(encoding="utf-8")
+    src=(Path(server.__file__).parent/"web"/"static"/"app.js").read_text(encoding="utf-8")
     for id_ in bridge.STUDIOS:
         assert '"'+id_+'"' in src
     assert "mountStudioAgentBridge" in src
