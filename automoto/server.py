@@ -144,6 +144,10 @@ from automoto import developer_javascript
 app.include_router(developer_javascript.router)  # V13 explicit JS/TS testing, typechecks and project-script workflows
 from automoto import developer_frontend
 app.include_router(developer_frontend.router)  # V14 non-executing web UI, accessibility and sandboxed static preview
+from automoto import developer_sql, developer_data, studio_agent_bridge
+app.include_router(developer_sql.router)  # V15 SQL read-only snapshots and migration preview
+app.include_router(developer_data.router)  # V15 SQL dialect and GraphQL static inspection
+app.include_router(studio_agent_bridge.router)  # shared central agent linkage across all five Studios
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
