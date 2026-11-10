@@ -205,6 +205,7 @@ def test_studio_agent_handoff_requires_auth_consent_and_no_auto_deploy(root,monk
     assert kw["source"]=="studio:visual"
     assert kw["agent_kwargs"]["desktop"] is False
     assert kw["agent_kwargs"]["local_apps"] is False
+    assert kw["agent_kwargs"]["review_only"] is True
     assert kw["conversation_id"]==r.json()["conversation_id"]
     assert "Do NOT deploy or publish" in args_[0][0]["content"]
 
@@ -220,3 +221,17 @@ def test_agent_workspace_must_be_trusted_developer_and_hosted_paths(root,monkeyp
     assert path_allowed("POST",BRIDGE+"/handoff") is True
     assert path_allowed("POST",BASE+"/query") is False
     assert path_allowed("POST",DATA+"/inspect") is False
+
+
+def test_studio_agent_is_readonly_even_when_user_approval_mode_is_auto(root,monkeypatch):
+    # The security gate is enforced at the available tool registry, not by a
+    # prompt or the callback. Global policy auto may skip the approver entirely.
+    from automoto import policy
+    monkeypatch.setattr(policy,"mode",lambda:"auto")
+    agent=server._agent_factory(review_only=True)
+    assert set(agent.tools).issubset(server.STUDIO_REVIEW_TOOLS)
+    assert all(item.level=="safe" for item in agent.tools.values())
+    assert not {"run_shell","write_file","edit_file","office_create_docx",
+                "open_app","run_app","publish","archive_create"} & set(agent.tools)
+    normal=server._agent_factory(review_only=False)
+    assert set(normal.tools)!=set(agent.tools)
