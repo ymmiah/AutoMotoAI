@@ -270,4 +270,10 @@ def test_no_hosted_routes_or_unauthenticated_execution(project):
         assert path_allowed("GET",route) is False
     assert path_allowed("POST",BASE+"/run") is False
     assert client.get(BASE+"/inspect",params={"project":str(root)}).status_code==403
-    assert client.post(BASE+"/run",json={"project":str(root)}).status_code==403
+    assert client.post(BASE+"/run",json={
+        "project":str(root),"task":"node_version","tool":"node",
+        "expected_manifest_sha256":"a"*64,
+        "expected_executable":str(Path(sys.executable).resolve()),
+        "expected_sha256":"b"*64,"confirmed":True,
+        "accept_unsandboxed_execution_and_write_risk":True
+    }).status_code==403
