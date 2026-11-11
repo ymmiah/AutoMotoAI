@@ -215,7 +215,7 @@ def _manifest(root: Path) -> tuple[dict, str]:
                 if not isinstance(spec, dict) or "path" not in spec:
                     continue
                 path = spec["path"]
-                if (not isinstance(path, str) or not PATH_TOKEN.fullmatch(path)
+                if (not isinstance(path, str) or not re.fullmatch(r"[A-Za-z0-9_./-]{1,180}", path)
                         or path.startswith(("/", "\\", "-"))
                         or "\\" in path):
                     warnings.append("Unsafe local Cargo dependency path in " + member + ".")
