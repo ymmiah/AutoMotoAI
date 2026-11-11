@@ -1,0 +1,42 @@
+name: Developer Studio V18 Go acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_go.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-go.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_go.py"
+      - ".github/workflows/developer-go-v18.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go-integration:
+    name: Go 1.27.4 / Python 3.13 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.4"
+          cache: false
+      - name: Verify pinned Go installation
+        run: go version
+      - name: Install AutoMoto and test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Multi-module Go service tests and explicit-tool security regression
+        env:
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q tests/test_developer_go.py
