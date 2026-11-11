@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 from pathlib import Path
 
@@ -275,3 +276,194 @@ def test_hosted_and_missing_token_denied_before_rust_project_io(project, monkeyp
     assert client.get(BASE + "/inspect", params={"project": str(root)}).status_code in (401, 403)
     monkeypatch.setenv("AUTOMOTO_MODE", "multiuser")
     assert inspect(client, root).status_code in (401, 403, 404)
+
+
+def _windows_isolate(monkeypatch, tmp_path):
+    """Keep toolchain discovery out of the real home directory and the project tree."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setenv("AUTOMOTO_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("AUTOMOTO_WORKSPACE", str(workspace))
+    monkeypatch.setenv("AUTOMOTO_ALLOWED_ROOTS", "")
+    monkeypatch.delenv("AUTOMOTO_MODE", raising=False)
+    return workspace
+
+
+def _msvc_tree(program_files):
+    toolset = (program_files / "Microsoft Visual Studio" / "2022" / "Enterprise"
+               / "VC" / "Tools" / "MSVC" / "14.40.33807")
+    link_dir = toolset / "bin" / "Hostx64" / "x64"
+    link_dir.mkdir(parents=True)
+    (toolset / "lib" / "x64").mkdir(parents=True)
+    (toolset / "include").mkdir()
+    return toolset, link_dir
+
+
+def _sdk_tree(program_files_x86):
+    version = program_files_x86 / "Windows Kits" / "10"
+    lib = version / "Lib" / "10.0.22621.0"
+    (lib / "um" / "x64").mkdir(parents=True)
+    (lib / "ucrt" / "x64").mkdir(parents=True)
+    (lib / "um" / "x64" / "kernel32.lib").write_bytes(b"lib")
+    include = version / "Include" / "10.0.22621.0"
+    for name in ("ucrt", "um", "shared"):
+        (include / name).mkdir(parents=True)
+    return version
+
+
+def test_windows_rust_environment_prefers_msvc_link_and_keeps_secrets_out(tmp_path, monkeypatch):
+    """Git's usr\\bin link.exe must not be the first link.exe rustc will execute."""
+    workspace = _windows_isolate(monkeypatch, tmp_path)
+    root = workspace / "crate"
+    root.mkdir()
+    program_files = tmp_path / "Program Files"
+    program_x86 = tmp_path / "Program Files (x86)"
+    toolset, link_dir = _msvc_tree(program_files)
+    _sdk_tree(program_x86)
+    (link_dir / "link.exe").write_bytes(b"Microsoft (R) Incremental Linker Version 14.40")
+    gnu_bin = tmp_path / "Git" / "usr" / "bin"
+    gnu_bin.mkdir(parents=True)
+    (gnu_bin / "link.exe").write_bytes(b"GNU coreutils\nlink: extra operand\n")
+    neutral = tmp_path / "neutral-bin"
+    neutral.mkdir()
+    outside_lib = tmp_path / "outside-lib"
+    outside_lib.mkdir()
+    project_lib = root / "decoy-lib"
+    project_lib.mkdir()
+    project_bin = root / "bin"
+    project_bin.mkdir()
+    (project_bin / "link.exe").write_bytes(b"Microsoft (R) Incremental Linker planted")
+    command = tmp_path / "Windows" / "System32" / "cmd.exe"
+    command.parent.mkdir(parents=True)
+    command.write_bytes(b"cmd")
+    monkeypatch.setenv("PATH", os.pathsep.join(
+        [str(gnu_bin), str(project_bin), str(neutral), str(tmp_path / "missing")]))
+    monkeypatch.setenv("programfiles", str(program_files))
+    monkeypatch.setenv("ProgramFiles(x86)", str(program_x86))
+    monkeypatch.setenv("LIB", os.pathsep.join([str(project_lib), "relative-lib", str(outside_lib)]))
+    monkeypatch.setenv("INCLUDE", str(outside_lib))
+    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+    monkeypatch.setenv("PROCESSOR_ARCHITECTURE", "AMD64")
+    monkeypatch.setenv("VCToolsVersion", "14.40.33807")
+    monkeypatch.setenv("WindowsSDKVersion", "10.0.22621.0\\")
+    monkeypatch.setenv("SystemDrive", "C:")
+    monkeypatch.setenv("ComSpec", str(command))
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret-value")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret-value")
+    monkeypatch.setenv("VCToolsVersion_IGNORE", "14.40;injected")
+    cargo_temp = tmp_path / "cargo-temp"
+    cargo_temp.mkdir()
+    env, problem = rust._environment(root, cargo_temp, windows=True)
+    assert problem is None
+    assert env["CARGO_NET_OFFLINE"] == "true"
+    assert env["CARGO_TARGET_DIR"].endswith("target")
+    path = env["PATH"].split(os.pathsep)
+    assert path[0] == str(link_dir.resolve())
+    assert str(gnu_bin.resolve()) in path
+    assert path.index(str(link_dir.resolve())) < path.index(str(gnu_bin.resolve()))
+    assert str(neutral.resolve()) in path
+    assert str(project_bin.resolve()) not in path
+    assert env["ProgramFiles"] == str(program_files.resolve())
+    assert env["ProgramFiles(x86)"] == str(program_x86.resolve())
+    assert env["LIB"] == str(outside_lib.resolve())
+    assert env["INCLUDE"] == str(outside_lib.resolve())
+    assert env["PATHEXT"] == ".COM;.EXE;.BAT;.CMD"
+    assert env["VCToolsVersion"] == "14.40.33807"
+    assert env["WindowsSDKVersion"] == "10.0.22621.0\\"
+    assert env["SystemDrive"] == "C:"
+    assert env["ComSpec"] == str(command.resolve())
+    assert env["PROCESSOR_ARCHITECTURE"] == "AMD64"
+    flattened = "\n".join(env.values())
+    assert "sk-secret-value" not in flattened
+    assert "aws-secret-value" not in flattened
+    assert "relative-lib" not in env["LIB"]
+    assert str(project_lib.resolve()) not in env["LIB"]
+    assert "VCToolsVersion_IGNORE" not in env
+    # The SDK filler must not replace library paths a developer prompt already set.
+    assert "kernel32" not in env["LIB"]
+    assert (toolset / "lib" / "x64").is_dir()
+
+
+def test_windows_rust_environment_fills_sdk_paths_and_rejects_a_planted_gnu_link(
+        tmp_path, monkeypatch):
+    workspace = _windows_isolate(monkeypatch, tmp_path)
+    root = workspace / "crate"
+    root.mkdir()
+    program_files = tmp_path / "Program Files"
+    program_x86 = tmp_path / "Program Files (x86)"
+    toolset, link_dir = _msvc_tree(program_files)
+    _sdk_tree(program_x86)
+    # No "Incremental Linker" text: the standard MSVC directory layout still counts.
+    (link_dir / "link.exe").write_bytes(b"MZ" + b"\0" * 200_000)
+    planted = (program_files / "Microsoft Visual Studio" / "2019" / "Community"
+               / "VC" / "Tools" / "MSVC" / "14.29.30133" / "bin" / "Hostx64" / "x64")
+    planted.mkdir(parents=True)
+    (planted / "link.exe").write_bytes(b"MZ GNU coreutils extra operand" + b"\0" * 200_000)
+    source = {
+        "ProgramFiles": str(program_files),
+        "ProgramFiles(x86)": str(program_x86),
+        "PROCESSOR_ARCHITECTURE": "AMD64",
+        "OPENAI_API_KEY": "sk-secret-value",
+        "VCToolsVersion": "14.40;injected",
+    }
+    env = {"PATH": ""}
+    problem = rust._prepare_windows_toolchain(env, source, root)
+    assert problem is None
+    assert env["PATH"].split(os.pathsep)[0] == str(link_dir.resolve())
+    assert str(planted.resolve()) not in env["PATH"].split(os.pathsep)
+    assert "kernel32.lib" not in env["LIB"]
+    assert str((toolset / "lib" / "x64").resolve()) in env["LIB"].split(os.pathsep)
+    assert str((program_x86 / "Windows Kits" / "10" / "Lib" / "10.0.22621.0"
+                / "um" / "x64").resolve()) in env["LIB"].split(os.pathsep)
+    assert str((toolset / "include").resolve()) in env["INCLUDE"].split(os.pathsep)
+    assert "ucrt" in env["INCLUDE"]
+    assert "VCToolsVersion" not in env
+    assert "sk-secret-value" not in "\n".join(env.values())
+
+
+def test_windows_rust_environment_explains_a_missing_msvc_linker(tmp_path, monkeypatch):
+    workspace = _windows_isolate(monkeypatch, tmp_path)
+    root = workspace / "crate"
+    root.mkdir()
+    gnu_bin = tmp_path / "Git" / "usr" / "bin"
+    gnu_bin.mkdir(parents=True)
+    (gnu_bin / "link.exe").write_bytes(b"not-a-linker")
+    program_files = tmp_path / "Program Files"
+    program_files.mkdir()
+    monkeypatch.setenv("PATH", str(gnu_bin))
+    monkeypatch.setenv("ProgramFiles", str(program_files))
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret-value")
+    cargo_temp = tmp_path / "cargo-temp"
+    cargo_temp.mkdir()
+    env, problem = rust._environment(root, cargo_temp, windows=True)
+    assert problem == rust._GNU_LINK_DIAGNOSTIC
+    assert "Visual Studio" in problem
+    assert "Unix tools" in problem
+    assert "extra operand" not in problem
+    assert str(gnu_bin.resolve()) in env["PATH"].split(os.pathsep)
+    assert "sk-secret-value" not in problem
+    assert "sk-secret-value" not in "\n".join(env.values())
+    assert env["CARGO_NET_OFFLINE"] == "true"
+    assert rust._gnu_link_output(
+        "link: extra operand 'demo.o'\nTry 'link --help' for more information.\n")
+    assert not rust._linker_failure_is_not_msvc(
+        "LINK : fatal error LNK1181: cannot open input file 'kernel32.lib'")
+    assert rust._linker_failure_is_not_msvc(
+        "error: linker `link.exe` not found\nexit code: 1")
+
+
+def test_linux_rust_environment_stays_offline_without_a_windows_linker(tmp_path, monkeypatch):
+    if os.name == "nt":
+        pytest.skip("Covered by the Windows toolchain tests.")
+    _windows_isolate(monkeypatch, tmp_path)
+    root = tmp_path / "workspace" / "crate"
+    root.mkdir()
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret-value")
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path))
+    cargo_temp = tmp_path / "cargo-temp"
+    cargo_temp.mkdir()
+    env, problem = rust._environment(root, cargo_temp)
+    assert problem is None
+    assert env["CARGO_NET_OFFLINE"] == "true"
+    assert "ProgramFiles(x86)" not in env
+    assert "sk-secret-value" not in "\n".join(env.values())

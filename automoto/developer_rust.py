@@ -17,7 +17,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Mapping, Optional
 
 try:
     import tomllib
@@ -47,6 +47,47 @@ SYMBOL = re.compile(r"(?m)^\s*(?:pub(?:\([^)]{0,60}\))?\s+)?"
 DIAGNOSTIC = re.compile(r"^(.{1,300}\.rs):(\d{1,8}):(\d{1,7}):\s*"
                         r"(error|warning)(?:\[([A-Z]\d{4})\])?:\s*(.{1,500})$")
 PATH_TOKEN = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_./-]{0,180}$")
+# Tasks that invoke the native linker (or a build script that does).
+_LINKER_TASKS = frozenset({"check", "build", "test", "clippy"})
+# Names rustc and the cc crate read while locating vswhere and the MSVC tools.
+# Values are installation paths or short toolchain tokens, never secrets.
+_WINDOWS_DIR_VARS = (
+    "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "SystemRoot",
+    "VSINSTALLDIR", "VCINSTALLDIR", "VCToolsInstallDir", "VCToolsRedistDir",
+    "WindowsSdkDir", "WindowsSdkBinPath", "WindowsSdkVerBinPath",
+    "UniversalCRTSdkDir",
+)
+_WINDOWS_TOKEN_VARS = {
+    "SystemDrive": re.compile(r"^[A-Za-z]:$"),
+    "PROCESSOR_ARCHITECTURE": re.compile(r"^(?:x86|AMD64|ARM64|IA64)$", re.I),
+    "PROCESSOR_ARCHITEW6432": re.compile(r"^(?:x86|AMD64|ARM64)$", re.I),
+    "PATHEXT": re.compile(r"^(?:\.[A-Za-z0-9]{1,8};?){1,20}$"),
+    "VCToolsVersion": re.compile(r"^[0-9]+(?:\.[0-9]+){1,3}$"),
+    "WindowsSDKVersion": re.compile(r"^[0-9]+(?:\.[0-9]+){1,3}\\?$"),
+    "WindowsSDKLibVersion": re.compile(r"^[0-9]+(?:\.[0-9]+){1,3}\\?$"),
+    "UCRTVersion": re.compile(r"^[0-9]+(?:\.[0-9]+){1,3}\\?$"),
+    "VisualStudioVersion": re.compile(r"^[0-9]{2}\.[0-9]$"),
+    "VSCMD_ARG_HOST_ARCH": re.compile(r"^(?:x86|x64|arm|arm64)$", re.I),
+    "VSCMD_ARG_TGT_ARCH": re.compile(r"^(?:x86|x64|arm|arm64)$", re.I),
+    "VSCMD_ARG_VCVARS_SPECTRE": re.compile(r"^spectre$"),
+    "VSCMD_VER": re.compile(r"^[0-9]+(?:\.[0-9]+){1,4}$"),
+}
+_WINDOWS_PATH_LIST_VARS = ("LIB", "LIBPATH", "INCLUDE", "EXTERNAL_INCLUDE")
+_VS_YEARS = ("2026", "18", "2022", "2019", "2017")
+_VS_EDITIONS = ("Enterprise", "Professional", "Community", "BuildTools", "Preview")
+_MSVC_MISSING = (
+    "This Windows Rust build needs Microsoft's linker (link.exe from the "
+    "Visual Studio C++ build tools). AutoMoto did not find that linker. "
+    "Install Visual Studio Build Tools with the Desktop development with C++ "
+    "workload, then try again."
+)
+_GNU_LINK_DIAGNOSTIC = (
+    "This Windows Rust build needs Microsoft's linker (link.exe from the "
+    "Visual Studio C++ build tools). AutoMoto found a different program named "
+    "link from Unix tools, often Git for Windows. That program cannot link "
+    "Rust code. Install Visual Studio Build Tools with the Desktop development "
+    "with C++ workload, then try again."
+)
 
 
 class WorkspaceIn(BaseModel):
@@ -341,7 +382,427 @@ def _command(body: RunIn, exe: str, summary: dict) -> list[str]:
     raise HTTPException(422, "Unsupported fixed Rust task.")
 
 
-def _environment(root: Path, temp: Path) -> dict:
+def _env_lookup(source: Mapping[str, str], name: str) -> Optional[str]:
+    """Windows environment names are case-insensitive. Tests pass a plain dict."""
+    if name in source:
+        return source[name]
+    folded = name.casefold()
+    for key, value in source.items():
+        if key.casefold() == folded and isinstance(value, str):
+            return value
+    return None
+
+
+def _env_has(env: Mapping[str, str], name: str) -> bool:
+    folded = name.casefold()
+    return any(key.casefold() == folded for key in env)
+
+
+def _version_key(name: str) -> tuple:
+    parts = []
+    for piece in name.split("."):
+        if not piece.isdigit():
+            return ()
+        parts.append(int(piece))
+    return tuple(parts)
+
+
+def _approved_directory(value: Optional[str], root: Path) -> Optional[Path]:
+    """Absolute existing directory outside the project and other approved roots."""
+    if not value or len(value) > 300 or "\x00" in value or "\n" in value:
+        return None
+    folder = Path(value)
+    if not folder.is_absolute():
+        return None
+    try:
+        resolved = folder.resolve(strict=True)
+    except (OSError, ValueError):
+        return None
+    if not resolved.is_dir() or adapters._disallowed_workspace_executable(resolved, root):
+        return None
+    return resolved
+
+
+def _approved_directories(value: Optional[str], root: Path, limit: int = 30) -> list:
+    if not value:
+        return []
+    approved = []
+    for item in value.split(os.pathsep)[:limit]:
+        folder = _approved_directory(item, root)
+        if folder is not None and folder not in approved:
+            approved.append(folder)
+    return approved
+
+
+def _link_executable(directory: Path) -> Optional[Path]:
+    direct = directory / "link.exe"
+    if direct.is_file():
+        return direct
+    try:
+        for child in directory.iterdir():
+            if child.is_file() and child.name.casefold() == "link.exe":
+                return child
+    except OSError:
+        return None
+    return None
+
+
+def _read_signature(path: Path) -> bytes:
+    size = path.stat().st_size
+    with path.open("rb") as handle:
+        if size <= 6 * 1024 * 1024:
+            return handle.read(6 * 1024 * 1024 + 1)
+        head = handle.read(2 * 1024 * 1024)
+        handle.seek(max(0, size - 2 * 1024 * 1024))
+        return head + handle.read(2 * 1024 * 1024)
+
+
+def _signature_kind(blob: bytes) -> str:
+    incremental = "Incremental Linker".encode("utf-16le")
+    if b"Incremental Linker" in blob or incremental in blob:
+        return "msvc"
+    if (b"coreutils" in blob or b"extra operand" in blob
+            or b"gnu.org/software/coreutils" in blob):
+        return "gnu"
+    return "unknown"
+
+
+def _msvc_tool_layout(path: Path) -> bool:
+    parts = [part.casefold() for part in path.parts]
+    return (path.name.casefold() == "link.exe" and "vc" in parts
+            and "tools" in parts and "msvc" in parts and "bin" in parts)
+
+
+def _unix_tools_directory(directory: Path) -> bool:
+    parts = [part.casefold() for part in directory.parts]
+    if len(parts) >= 2 and parts[-1] == "bin" and parts[-2] == "usr":
+        return True
+    return len(parts) >= 2 and parts[-1] == "bin" and parts[-2] in {
+        "mingw64", "mingw32", "cygwin64", "cygwin", "msys64", "msys32"}
+
+
+def _classify_link_file(path: Path, root: Path) -> str:
+    try:
+        if not path.is_file():
+            return "absent"
+        resolved = path.resolve(strict=True)
+        if (not resolved.is_file()
+                or adapters._disallowed_workspace_executable(resolved, root)):
+            return "absent"
+        blob = _read_signature(resolved)
+    except (OSError, ValueError):
+        return "absent"
+    kind = _signature_kind(blob)
+    if kind != "unknown":
+        return kind
+    try:
+        size = resolved.stat().st_size
+    except OSError:
+        return "unknown"
+    if _msvc_tool_layout(resolved) and blob.startswith(b"MZ") and size >= 200_000:
+        return "msvc"
+    if _unix_tools_directory(resolved.parent):
+        return "gnu"
+    return "unknown"
+
+
+def _classify_directory(directory: Path, root: Path) -> str:
+    allowed = _approved_directory(str(directory), root)
+    if allowed is None:
+        return "blocked"
+    executable = _link_executable(allowed)
+    if executable is None:
+        return "absent"
+    return _classify_link_file(executable, root)
+
+
+def _lib_arch(source: Mapping[str, str]) -> str:
+    arch = (_env_lookup(source, "PROCESSOR_ARCHITECTURE") or "AMD64").casefold()
+    if arch in {"arm64", "aarch64"}:
+        return "arm64"
+    if arch in {"x86", "i386"}:
+        return "x86"
+    return "x64"
+
+
+def _host_targets(source: Mapping[str, str]) -> list:
+    arch = _lib_arch(source)
+    if arch == "arm64":
+        return [("HostARM64", "arm64"), ("Hostx64", "arm64"), ("Hostx64", "x64")]
+    if arch == "x86":
+        return [("Hostx86", "x86"), ("Hostx64", "x86")]
+    return [("Hostx64", "x64"), ("HostX64", "x64"), ("Hostx86", "x64")]
+
+
+def _pinned_toolset(source: Mapping[str, str]) -> str:
+    value = (_env_lookup(source, "VCToolsVersion") or "").strip()
+    if _WINDOWS_TOKEN_VARS["VCToolsVersion"].fullmatch(value):
+        return value
+    return ""
+
+
+def _link_in_toolset(toolset: Path, source: Mapping[str, str], root: Path) -> Optional[Path]:
+    pinned = _pinned_toolset(source)
+    if pinned and toolset.name != pinned:
+        return None
+    if not toolset.is_dir() or toolset.is_symlink():
+        return None
+    for host, target in _host_targets(source):
+        candidate = toolset / "bin" / host / target / "link.exe"
+        if _classify_link_file(candidate, root) == "msvc":
+            try:
+                return candidate.resolve(strict=True)
+            except (OSError, ValueError):
+                continue
+    return None
+
+
+def _toolsets(instance: Path, source: Mapping[str, str]) -> list:
+    tools = instance / "VC" / "Tools" / "MSVC"
+    if not tools.is_dir() or tools.is_symlink():
+        return []
+    pinned = _pinned_toolset(source)
+    found = []
+    try:
+        children = list(tools.iterdir())
+    except OSError:
+        return []
+    for child in children[:12]:
+        if not child.is_dir() or child.is_symlink() or not _version_key(child.name):
+            continue
+        if pinned and child.name != pinned:
+            continue
+        found.append(child)
+    found.sort(key=lambda item: _version_key(item.name), reverse=True)
+    return found
+
+
+def _vs_instances(source: Mapping[str, str], root: Path) -> list:
+    instances = []
+    install = _approved_directory(_env_lookup(source, "VSINSTALLDIR"), root)
+    if install is not None:
+        instances.append(install)
+    vc_install = _approved_directory(_env_lookup(source, "VCINSTALLDIR"), root)
+    if vc_install is not None and vc_install.name.casefold() == "vc":
+        instances.append(vc_install.parent)
+    for key in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+        base = _approved_directory(_env_lookup(source, key), root)
+        if base is None:
+            continue
+        visual_studio = base / "Microsoft Visual Studio"
+        for year in _VS_YEARS:
+            for edition in _VS_EDITIONS:
+                instance = visual_studio / year / edition
+                if instance.is_dir() and not instance.is_symlink() and instance not in instances:
+                    instances.append(instance)
+    return instances
+
+
+def _find_msvc_link(source: Mapping[str, str], root: Path) -> Optional[Path]:
+    tools = _approved_directory(_env_lookup(source, "VCToolsInstallDir"), root)
+    if tools is not None:
+        found = _link_in_toolset(tools, source, root)
+        if found is not None:
+            return found
+    best = None
+    best_version = ()
+    for instance in _vs_instances(source, root):
+        for toolset in _toolsets(instance, source):
+            found = _link_in_toolset(toolset, source, root)
+            version = _version_key(toolset.name)
+            if found is not None and version >= best_version:
+                best, best_version = found, version
+    return best
+
+
+def _kits_roots(source: Mapping[str, str], root: Path) -> list:
+    roots = []
+    sdk = _approved_directory(_env_lookup(source, "WindowsSdkDir"), root)
+    if sdk is not None:
+        roots.append(sdk)
+    for key in ("ProgramFiles(x86)", "ProgramFiles", "ProgramW6432"):
+        base = _approved_directory(_env_lookup(source, key), root)
+        if base is None:
+            continue
+        kits = base / "Windows Kits" / "10"
+        if kits.is_dir() and not kits.is_symlink() and kits not in roots:
+            roots.append(kits)
+    return roots
+
+
+def _sdk_version(kits: Path, arch: str) -> Optional[Path]:
+    lib_root = kits / "Lib"
+    if not lib_root.is_dir() or lib_root.is_symlink():
+        return None
+    found = []
+    try:
+        children = list(lib_root.iterdir())
+    except OSError:
+        return None
+    for child in children[:40]:
+        if not child.is_dir() or child.is_symlink() or not _version_key(child.name):
+            continue
+        if (child / "um" / arch / "kernel32.lib").is_file():
+            found.append(child)
+    if not found:
+        return None
+    return max(found, key=lambda item: _version_key(item.name))
+
+
+def _fill_sdk_paths(env: dict, source: Mapping[str, str], root: Path,
+                    link_exe: Path) -> None:
+    """Supply LIB and INCLUDE when a developer prompt has not already set them.
+
+    Microsoft's linker still needs kernel32.lib. A LIB that only names the
+    compiler directory is not enough, so this waits until the Windows SDK
+    library folder is present too.
+    """
+    if len(link_exe.parents) < 4:
+        return
+    toolset = link_exe.parents[3]
+    arch = _lib_arch(source)
+    spectre = _env_lookup(source, "VSCMD_ARG_VCVARS_SPECTRE") == "spectre"
+    msvc_lib = toolset / "lib" / "spectre" / arch if spectre else toolset / "lib" / arch
+    libs = []
+    approved_msvc = _approved_directory(str(msvc_lib), root)
+    if approved_msvc is not None:
+        libs.append(approved_msvc)
+    includes = []
+    approved_include = _approved_directory(str(toolset / "include"), root)
+    if approved_include is not None:
+        includes.append(approved_include)
+    sdk_libs = 0
+    for kits in _kits_roots(source, root):
+        version = _sdk_version(kits, arch)
+        if version is None:
+            continue
+        for folder in (version / "um" / arch, version / "ucrt" / arch):
+            approved = _approved_directory(str(folder), root)
+            if approved is not None:
+                libs.append(approved)
+                sdk_libs += 1
+        include_root = kits / "Include" / version.name
+        for name in ("ucrt", "um", "shared"):
+            approved = _approved_directory(str(include_root / name), root)
+            if approved is not None:
+                includes.append(approved)
+        break
+    if not _env_has(env, "LIB") and approved_msvc is not None and sdk_libs:
+        env["LIB"] = os.pathsep.join(str(folder) for folder in libs)
+    if not _env_has(env, "INCLUDE") and includes:
+        env["INCLUDE"] = os.pathsep.join(str(folder) for folder in includes)
+
+
+def _copy_windows_locators(env: dict, source: Mapping[str, str], root: Path) -> None:
+    for name in _WINDOWS_DIR_VARS:
+        if _env_has(env, name):
+            continue
+        folder = _approved_directory(_env_lookup(source, name), root)
+        if folder is not None:
+            env[name] = str(folder)
+    comspec = _env_lookup(source, "ComSpec")
+    if comspec and not _env_has(env, "ComSpec"):
+        command = Path(comspec)
+        try:
+            resolved = command.resolve(strict=True) if command.is_absolute() else None
+        except (OSError, ValueError):
+            resolved = None
+        if (resolved is not None and resolved.is_file()
+                and resolved.name.casefold() == "cmd.exe"
+                and not adapters._disallowed_workspace_executable(resolved, root)):
+            env["ComSpec"] = str(resolved)
+    for name, pattern in _WINDOWS_TOKEN_VARS.items():
+        if _env_has(env, name):
+            continue
+        value = _env_lookup(source, name)
+        if value and pattern.fullmatch(value.strip()):
+            env[name] = value.strip()
+    for name in _WINDOWS_PATH_LIST_VARS:
+        if _env_has(env, name):
+            continue
+        approved = _approved_directories(_env_lookup(source, name), root)
+        if approved:
+            env[name] = os.pathsep.join(str(folder) for folder in approved)
+
+
+def _prepare_windows_toolchain(env: dict, source: Mapping[str, str],
+                               root: Path) -> Optional[str]:
+    """Make rustc's MSVC link.exe win, without admitting secret environment values.
+
+    rustc finds the linker itself when ProgramFiles(x86) is present (vswhere)
+    or a developer prompt has set VCINSTALLDIR. The scrubbed V8 environment
+    dropped those locator variables. cargo then executed bare link.exe, and
+    Git for Windows' usr\\bin (GNU coreutils link) was the first match.
+    """
+    _copy_windows_locators(env, source, root)
+    discovered = _find_msvc_link(source, root)
+    ordered = []
+    gnu_found = False
+    msvc_dirs = []
+    neutral = []
+    gnu_dirs = []
+    for item in (env.get("PATH") or "").split(os.pathsep)[:40]:
+        if not item:
+            continue
+        kind = _classify_directory(Path(item), root)
+        if kind == "blocked":
+            continue
+        try:
+            folder = str(Path(item).resolve(strict=True))
+        except (OSError, ValueError):
+            continue
+        if kind == "msvc":
+            msvc_dirs.append(folder)
+        elif kind == "gnu":
+            gnu_found = True
+            gnu_dirs.append(folder)
+        elif folder not in neutral:
+            neutral.append(folder)
+    if discovered is not None:
+        msvc_dirs.insert(0, str(discovered.parent))
+    seen = set()
+    # MSVC directories stay in front of Git/MSYS usr\\bin. GNU link can remain
+    # later on PATH so a windows-gnu toolchain still finds gcc beside it.
+    for folder in msvc_dirs + neutral + gnu_dirs:
+        key = os.path.normcase(folder)
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(folder)
+    env["PATH"] = os.pathsep.join(ordered)
+    if msvc_dirs:
+        if discovered is not None:
+            _fill_sdk_paths(env, source, root, discovered)
+        return None
+    # Keep Unix-tool directories on PATH. A windows-gnu toolchain needs them,
+    # and deleting them would hide gcc. The caller substitutes a plain
+    # diagnostic if this MSVC toolchain still ends up executing GNU link.
+    if gnu_found:
+        return _GNU_LINK_DIAGNOSTIC
+    return _MSVC_MISSING
+
+
+def _gnu_link_output(output: str) -> bool:
+    """GNU coreutils link, not Microsoft's linker, produced this failure."""
+    lowered = output.casefold()
+    return "extra operand" in lowered and "link --help" in lowered
+
+
+def _linker_failure_is_not_msvc(output: str) -> bool:
+    """True when the failure is GNU link or a missing link.exe, not an LNK error."""
+    lowered = output.casefold()
+    if "lnk1" in lowered:
+        return False
+    if _gnu_link_output(output):
+        return True
+    if "link.exe" not in lowered:
+        return False
+    return ("not found" in lowered or "os error 2" in lowered
+            or "cannot find the file" in lowered
+            or "the system cannot find the file" in lowered)
+
+
+def _environment(root: Path, temp: Path, *, windows: Optional[bool] = None) -> tuple:
     env = adapters._environment(root)
     env.update({
         "CARGO_HOME": str(temp / "cargo-home"),
@@ -353,28 +814,14 @@ def _environment(root: Path, temp: Path) -> dict:
         "RUST_BACKTRACE": "0",
     })
     (temp / "cargo-home").mkdir(mode=0o700, exist_ok=True)
-    if os.name == "nt":
-        # Native MSVC linker requires VS/Windows SDK include/library directories.
-        # V8's scrubbed environment correctly omits arbitrary inherited values;
-        # admit only existing absolute OS toolchain dirs outside approved roots.
-        for name in ("LIB", "LIBPATH", "INCLUDE"):
-            approved = []
-            for value in os.environ.get(name, "").split(os.pathsep)[:30]:
-                if not value or len(value) > 600:
-                    continue
-                try:
-                    folder = Path(value)
-                    if not folder.is_absolute():
-                        continue
-                    resolved = folder.resolve(strict=True)
-                    if (resolved.is_dir()
-                            and not adapters._disallowed_workspace_executable(resolved, root)):
-                        approved.append(str(resolved))
-                except (OSError, ValueError):
-                    continue
-            if approved:
-                env[name] = os.pathsep.join(approved)
-    return env
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return env, None
+    # V8's scrubbed environment still omits arbitrary inherited values.
+    # Only Windows toolchain locators and absolute library directories
+    # outside every approved project root are added back.
+    return env, _prepare_windows_toolchain(env, os.environ, root)
 
 
 def _execute(root: Path, tool: dict, command: list[str], env: dict) -> dict:
@@ -495,8 +942,15 @@ def run(request: Request, body: RunIn):
                 or after["source_sha256"] != body.expected_source_sha256):
             raise HTTPException(409, "Rust workspace changed during execution preparation.")
         with tempfile.TemporaryDirectory(prefix="automoto-rust19-") as workdir:
-            env = _environment(root, Path(workdir))
+            env, linker_problem = _environment(root, Path(workdir))
             result = _execute(root, tool, command, env)
+        if (os.name == "nt" and body.task in _LINKER_TASKS
+                and result["status"] != "completed"
+                and _linker_failure_is_not_msvc(result["output"])):
+            if _gnu_link_output(result["output"]):
+                result["output"] = _GNU_LINK_DIAGNOSTIC
+            else:
+                result["output"] = linker_problem or _MSVC_MISSING
         result.update({"task": body.task, "tool": body.tool,
                        "manifest_sha256": body.expected_manifest_sha256,
                        "source_sha256": body.expected_source_sha256,
