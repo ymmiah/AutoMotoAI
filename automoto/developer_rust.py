@@ -353,6 +353,27 @@ def _environment(root: Path, temp: Path) -> dict:
         "RUST_BACKTRACE": "0",
     })
     (temp / "cargo-home").mkdir(mode=0o700, exist_ok=True)
+    if os.name == "nt":
+        # Native MSVC linker requires VS/Windows SDK include/library directories.
+        # V8's scrubbed environment correctly omits arbitrary inherited values;
+        # admit only existing absolute OS toolchain dirs outside approved roots.
+        for name in ("LIB", "LIBPATH", "INCLUDE"):
+            approved = []
+            for value in os.environ.get(name, "").split(os.pathsep)[:30]:
+                if not value or len(value) > 600:
+                    continue
+                try:
+                    folder = Path(value)
+                    if not folder.is_absolute():
+                        continue
+                    resolved = folder.resolve(strict=True)
+                    if (resolved.is_dir()
+                            and not adapters._disallowed_workspace_executable(resolved, root)):
+                        approved.append(str(resolved))
+                except (OSError, ValueError):
+                    continue
+            if approved:
+                env[name] = os.pathsep.join(approved)
     return env
 
 
