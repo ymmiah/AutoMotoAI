@@ -334,6 +334,23 @@ def _env(root: Path, temp: Path) -> dict:
                 "DOTNET_MULTILEVEL_LOOKUP": "0",
                 "NUGET_CREDENTIALPROVIDERS_PATH": ""})
     (temp / "dotnet-home").mkdir(mode=0o700, exist_ok=True)
+    if os.name == "nt":
+        # NuGet.ConfigurationDefaults needs ProgramFiles/ProgramFiles(x86)
+        # to locate machine-wide defaults. Excluding these paths causes a
+        # Windows-only Path.Combine(path1=null) failure during restore.
+        # Admit only existing system directories outside approved workspaces;
+        # do not restore arbitrary inherited environment variables.
+        for name in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "ProgramData"):
+            candidate = os.environ.get(name, "")
+            if not candidate or len(candidate) > 600:
+                continue
+            try:
+                folder = Path(candidate).resolve(strict=True)
+                if (folder.is_dir() and Path(candidate).is_absolute()
+                        and not adapters._disallowed_workspace_executable(folder, root)):
+                    env[name] = str(folder)
+            except (OSError, ValueError):
+                continue
     # The existing cache is a read-through local dependency source, NOT a
     # claim of sandboxed execution or a permanent project cache.
     cached = Path.home() / ".nuget" / "packages"
