@@ -3,4 +3,6 @@ plugins {
 }
 group = 'example.automoto'
 version = '1.0.0'
-sourceCompatibility = JavaVersion.VERSION_21
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+}
