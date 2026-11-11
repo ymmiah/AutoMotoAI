@@ -126,6 +126,9 @@ def _manifest(root: Path) -> tuple[dict, str]:
     build_requires = build.get("requires", [])
     if not isinstance(build_requires, list):
         build_requires = []
+    venv = _venv_info(root)
+    fingerprint.update(b"virtualenv\0" + venv["status"].encode("ascii") + b"\0" +
+                       venv.get("config_sha256", "").encode("ascii"))
     summary = {
         "name": str(project.get("name", ""))[:160],
         "requires_python": str(project.get("requires-python", ""))[:100],
@@ -155,7 +158,9 @@ def _venv_info(root: Path) -> dict:
     if not folder.is_dir() or config.is_symlink():
         return {"status": "not_found"}
     try:
-        with config.open("rb") as stream:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+        fd = os.open(config, flags)
+        with os.fdopen(fd, "rb") as stream:
             if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
                 return {"status": "invalid"}
             raw = stream.read(8193)
@@ -168,12 +173,15 @@ def _venv_info(root: Path) -> dict:
                   if "=" in line and len(line) < 512
                   for key, value in (line.split("=", 1),))
     return {"status": "detected_not_executed",
+            "config_sha256": hashlib.sha256(raw).hexdigest(),
             "version_declared": values.get("version", "").strip()[:60],
             "include_system_site_packages": values.get("include-system-site-packages", "").strip()[:20]}
 
 
 def _venv_binary(root: Path) -> Optional[dict]:
-    if _venv_info(root)["status"] != "detected_not_executed":
+    venv = _venv_info(root)
+    if (venv["status"] != "detected_not_executed" or
+            venv.get("include_system_site_packages", "").lower() != "false"):
         return None
     folder = root / ".venv"
     candidates = ((folder / "Scripts" / "python.exe",) if os.name == "nt"
@@ -309,7 +317,7 @@ def _command(body: RunIn, executable: str) -> list[str]:
     if body.task == "ty_check" and body.tool == "ty":
         return [executable, "check", "--no-progress"]
     if body.task == "ruff_check" and body.tool == "ruff":
-        return [executable, "check", "--no-cache", "."]
+        return [executable, "check", "--no-cache", "--no-fix", "."]
     raise HTTPException(422, "Tests require a verified copied .venv Python; choose the right tool for checks.")
 
 
@@ -322,7 +330,6 @@ def _run_venv(root: Path, tool: dict, command: list[str]) -> dict:
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["PIP_NO_INDEX"] = "1"
     env["PYTHONNOUSERSITE"] = "1"
-    env["PATH"] = str(Path(tool["executable"]).parent) + os.pathsep + env.get("PATH", "")
     started = time.monotonic()
     proc = subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
