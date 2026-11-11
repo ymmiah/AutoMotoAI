@@ -14,10 +14,11 @@ import {mountDeveloperFrontend} from "./developer-frontend.js";
 import {mountDeveloperData} from "./developer-data.js";
 import {mountDeveloperPHP} from "./developer-php.js";
 import {mountDeveloperPython} from "./developer-python.js";
+import {mountDeveloperGo} from "./developer-go.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V17 · Python & emerging tooling. Inspect Python and PHP projects, run consented local checks and request central-agent release review.",
+    "V18 · Go services, modules and workspaces. Inspect Go/Python/PHP projects, approve local tooling and request central-agent release review.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -43,6 +44,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsDataRoot" aria-label="Bounded SQLite and GraphQL read-only inspection"></div>'+ 
       '<div id="dsPhpRoot" aria-label="PHP and WordPress security and approved tool workflows"></div>'+ 
       '<div id="dsPythonRoot" aria-label="Python packaging, uv, type checking and approved tests"></div>'+ 
+      '<div id="dsGoRoot" aria-label="Go modules workspaces profiling and approved build test vet"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -59,9 +61,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
@@ -76,6 +78,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   dataStudio=mountDeveloperData({api,host,getProject:()=>project,editor,status});
   phpStudio=mountDeveloperPHP({api,host,getProject:()=>project,editor,status});
   pythonStudio=mountDeveloperPython({api,host,getProject:()=>project,status});
+  goStudio=mountDeveloperGo({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -142,6 +145,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       dataStudio.projectChanged();
       phpStudio.projectChanged();
       pythonStudio.projectChanged();
+      goStudio.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
