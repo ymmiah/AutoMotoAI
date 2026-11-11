@@ -98,9 +98,9 @@ jobs:
         working-directory: tests/fixtures/v25-react-native
         run: |
           mkdir -p "$RUNNER_TEMP/v25-rn-out"
-          npx --no-install metro build index.js --out "$RUNNER_TEMP/v25-rn-out/index.bundle"
-          test -s "$RUNNER_TEMP/v25-rn-out/index.bundle"
-          grep -q V25_RN_METRO_PASS "$RUNNER_TEMP/v25-rn-out/index.bundle"
+          npx --no-install metro build index.js --out "$RUNNER_TEMP/v25-rn-out/index.bundle.js"
+          test -s "$RUNNER_TEMP/v25-rn-out/index.bundle.js"
+          grep -q V25_RN_METRO_PASS "$RUNNER_TEMP/v25-rn-out/index.bundle.js"
 
   flutter-android:
     name: Flutter Android 35 APK and isolated emulator smoke
