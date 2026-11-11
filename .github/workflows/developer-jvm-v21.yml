@@ -1,0 +1,58 @@
+name: Developer Studio V21 Java JVM acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_jvm.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-jvm.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_jvm.py"
+      - "tests/fixtures/v21-junit/**"
+      - "tests/fixtures/v21-gradle/**"
+      - ".github/workflows/developer-jvm-v21.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jvm-integration:
+    name: JDK ${{ matrix.java }} / Python 3.13 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, java: '21'}
+          - {os: ubuntu-latest, java: '25'}
+          - {os: macos-latest, java: '21'}
+          - {os: windows-latest, java: '21'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "${{ matrix.java }}"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.2.1"
+      - name: Report installed Java and Gradle
+        run: |
+          java -version
+          javac -version
+          gradle --version
+      - name: Prewarm real JUnit and Maven plugins on Linux CI only
+        if: runner.os == 'Linux'
+        run: mvn -B -ntp -f tests/fixtures/v21-junit/pom.xml test
+      - name: Install AutoMoto and test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Run exact JDK, JUnit, Gradle and security regression
+        env:
+          AUTOMOTO_RATE_LIMIT: "10000"
+          AUTOMOTO_V21_JUNIT_READY: ${{ runner.os == 'Linux' && '1' || '0' }}
+        run: python -m pytest -q tests/test_developer_jvm.py

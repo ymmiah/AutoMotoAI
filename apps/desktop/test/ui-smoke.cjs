@@ -2515,6 +2515,33 @@ let browser;
   assert.deepEqual(readFileSync(v20NativeFile,'utf8'),v20NativeSource,'V20 Agent review does not deploy');
   await page.screenshot({path:path.join(output,'developer-studio-v20-native-c-cpp.png')});
 
+  // V21: inert Java/JVM Maven/JUnit/Spring discovery and central Agent review.
+  const v21Java=path.join(devProject,'v21-browser.java');
+  const v21JavaSource='package example;\nimport org.junit.jupiter.api.Test;\n@SpringBootApplication\npublic class V21BrowserService { public static void main(String[] args) {} }\n';
+  writeFileSync(v21Java,v21JavaSource);
+  writeFileSync(path.join(devProject,'pom.xml'),
+    '<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId>'+
+    '<artifactId>v21-browser-service</artifactId><version>1.0.0</version>'+
+    '<properties><maven.compiler.release>21</maven.compiler.release></properties>'+
+    '<dependencies><dependency><groupId>org.junit.jupiter</groupId>'+
+    '<artifactId>junit-jupiter</artifactId><version>5.11.4</version></dependency></dependencies>'+
+    '</project>');
+  await page.locator('#dsJvmInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJvmStatus')?.textContent?.includes('JVM inspection complete'));
+  const v21Body=await page.locator('#dsJvmResults').innerText();
+  assert.match(v21Body,/v21-browser-service/);
+  assert.match(v21Body,/JUnit Jupiter/);
+  assert.match(v21Body,/Spring/);
+  assert.match(v21Body,/Installed tools, fingerprints only/);
+  assert.deepEqual(readFileSync(v21Java,'utf8'),v21JavaSource,
+    'V21 JVM inspection must never execute or alter source');
+  await page.locator('#dsJvmAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V21 Java\/JVM release readiness/);
+  assert.deepEqual(readFileSync(v21Java,'utf8'),v21JavaSource,
+    'Central Agent review cannot alter Java source or deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v21-java-jvm.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
