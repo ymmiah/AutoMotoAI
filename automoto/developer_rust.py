@@ -134,6 +134,7 @@ def _manifest(root: Path) -> tuple[dict, str]:
         raise HTTPException(422, "No supported explicit Cargo workspace members found.")
     manifests = {}
     crates = []
+    parsed_manifests = []
     warnings = []
     for member in members:
         file = "Cargo.toml" if member == "." else member + "/Cargo.toml"
@@ -141,6 +142,7 @@ def _manifest(root: Path) -> tuple[dict, str]:
             # Refuse linked ancestors before reading manifests.
             studio._path(root, member)
         manifest, digest = (main, sha) if member == "." else _toml(root, file)
+        parsed_manifests.append((member, manifest))
         meta = manifest.get("package")
         if not isinstance(meta, dict):
             raise HTTPException(422, "Workspace member lacks a Cargo package table.")
@@ -149,7 +151,8 @@ def _manifest(root: Path) -> tuple[dict, str]:
             raise HTTPException(422, "Invalid or missing Cargo package name.")
         if not isinstance(version, str) or len(version) > 80:
             raise HTTPException(422, "Invalid or missing Cargo package version.")
-        if meta.get("build") not in (None, False) or (root / member / "build.rs").exists():
+        script = root / member / "build.rs"
+        if meta.get("build") not in (None, False) or script.exists() or script.is_symlink():
             warnings.append("Build script in " + member + " requires independent review.")
         for kind in ("lib", "bin", "example", "test", "bench"):
             block = manifest.get(kind)
@@ -159,9 +162,10 @@ def _manifest(root: Path) -> tuple[dict, str]:
                     continue
                 custom = item.get("path")
                 if custom is not None:
-                    if not isinstance(custom, str) or not PATH_TOKEN.fullmatch(custom) or (
-                        ".." in custom.split("/") or custom.startswith("/")):
-                        warnings.append("Unsafe custom Cargo target path in " + member + ".")
+                    # Any custom target path may bypass the bounded source
+                    # inventory, including paths with no literal "..".
+                    warnings.append("Custom Cargo target path in " + member +
+                                    " requires review before execution.")
         if manifest.get("patch") or manifest.get("replace"):
             warnings.append("Cargo patch/replace directives in " + member + " require review.")
         manifests[file] = {"sha256": digest, "name": name, "version": version}
@@ -172,9 +176,10 @@ def _manifest(root: Path) -> tuple[dict, str]:
     config = root / ".cargo" / "config.toml"
     if config.exists() or config.is_symlink():
         warnings.append("Project-local Cargo config requires manual review.")
-    toolchain = root / "rust-toolchain.toml"
-    if toolchain.exists() or toolchain.is_symlink():
-        warnings.append("Project toolchain override requires manual review.")
+    for toolchain_name in ("rust-toolchain.toml", "rust-toolchain"):
+        toolchain = root / toolchain_name
+        if toolchain.exists() or toolchain.is_symlink():
+            warnings.append("Project toolchain override requires manual review.")
     lock = root / "Cargo.lock"
     if lock.is_symlink() or getattr(lock, "is_junction", lambda: False)():
         raise HTTPException(403, "Linked Cargo.lock is forbidden.")
@@ -183,6 +188,45 @@ def _manifest(root: Path) -> tuple[dict, str]:
         manifests["Cargo.lock"] = {"sha256": digest}
     else:
         warnings.append("Cargo.lock missing; frozen builds cannot be verified.")
+    # Cargo may compile dependencies declared through a local path, not just
+    # listed workspace crates. Require every such path to resolve to one
+    # of the inspected and approved in-root crates.
+    approved = {(root if member == "." else root / member).resolve()
+                for member in members}
+    for member, manifest in parsed_manifests:
+        dependency_maps = [(member, manifest.get(kind)) for kind in
+                           ("dependencies", "dev-dependencies", "build-dependencies")]
+        target_tables = manifest.get("target", {})
+        if isinstance(target_tables, dict):
+            for table in list(target_tables.values())[:50]:
+                if isinstance(table, dict):
+                    dependency_maps.extend((member, table.get(kind)) for kind in
+                                           ("dependencies", "dev-dependencies", "build-dependencies"))
+        workspace_table = manifest.get("workspace", {})
+        if isinstance(workspace_table, dict):
+            dependency_maps.append((".", workspace_table.get("dependencies")))
+        for base, deps in dependency_maps:
+            if deps is None:
+                continue
+            if not isinstance(deps, dict):
+                warnings.append("Cargo dependencies must be a table in " + member + ".")
+                continue
+            for dep, spec in list(deps.items())[:200]:
+                if not isinstance(spec, dict) or "path" not in spec:
+                    continue
+                path = spec["path"]
+                if (not isinstance(path, str) or not PATH_TOKEN.fullmatch(path)
+                        or path.startswith(("/", "\\", "-"))
+                        or "\\" in path):
+                    warnings.append("Unsafe local Cargo dependency path in " + member + ".")
+                    continue
+                try:
+                    resolved = (root / base / path).resolve(strict=True)
+                    if resolved not in approved or not resolved.is_dir():
+                        warnings.append("Cargo dependency path outside approved crates: " +
+                                        str(dep)[:70])
+                except (OSError, ValueError):
+                    warnings.append("Missing or unsafe Cargo dependency path in " + member + ".")
     # The Cargo CLI could expand additional workspace globs if present; only
     # explicit members and exact crate manifests are admitted here.
     if workspace and (workspace.get("exclude") or workspace.get("default-members")):
