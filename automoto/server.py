@@ -165,6 +165,8 @@ app.include_router(developer_data.router)  # V15 SQL dialect and GraphQL static 
 app.include_router(studio_agent_bridge.router)  # shared central agent linkage across all five Studios
 from automoto import developer_php
 app.include_router(developer_php.router)  # V16 PHP/WordPress security inspection and explicitly approved local tooling
+from automoto import developer_python
+app.include_router(developer_python.router)  # V17 Python/uv/type checking and approved virtualenv tests
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
