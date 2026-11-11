@@ -289,6 +289,17 @@ def _windows_isolate(monkeypatch, tmp_path):
     return workspace
 
 
+def _hide_host_visual_studio(monkeypatch, program_files, program_x86, program_w6432):
+    """A developer machine or CI image already has Visual Studio on these variables."""
+    monkeypatch.setenv("ProgramFiles", str(program_files))
+    monkeypatch.setenv("ProgramFiles(x86)", str(program_x86))
+    monkeypatch.setenv("ProgramW6432", str(program_w6432))
+    for name in ("VSINSTALLDIR", "VCINSTALLDIR", "VCToolsInstallDir", "VCToolsRedistDir",
+                 "WindowsSdkDir", "WindowsSdkBinPath", "WindowsSdkVerBinPath",
+                 "UniversalCRTSdkDir"):
+        monkeypatch.delenv(name, raising=False)
+
+
 def _msvc_tree(program_files):
     toolset = (program_files / "Microsoft Visual Studio" / "2022" / "Enterprise"
                / "VC" / "Tools" / "MSVC" / "14.40.33807")
@@ -338,8 +349,7 @@ def test_windows_rust_environment_prefers_msvc_link_and_keeps_secrets_out(tmp_pa
     command.write_bytes(b"cmd")
     monkeypatch.setenv("PATH", os.pathsep.join(
         [str(gnu_bin), str(project_bin), str(neutral), str(tmp_path / "missing")]))
-    monkeypatch.setenv("programfiles", str(program_files))
-    monkeypatch.setenv("ProgramFiles(x86)", str(program_x86))
+    _hide_host_visual_studio(monkeypatch, program_files, program_x86, program_files)
     monkeypatch.setenv("LIB", os.pathsep.join([str(project_lib), "relative-lib", str(outside_lib)]))
     monkeypatch.setenv("INCLUDE", str(outside_lib))
     monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
@@ -429,9 +439,11 @@ def test_windows_rust_environment_explains_a_missing_msvc_linker(tmp_path, monke
     gnu_bin.mkdir(parents=True)
     (gnu_bin / "link.exe").write_bytes(b"not-a-linker")
     program_files = tmp_path / "Program Files"
+    program_x86 = tmp_path / "Program Files (x86)"
     program_files.mkdir()
+    program_x86.mkdir()
     monkeypatch.setenv("PATH", str(gnu_bin))
-    monkeypatch.setenv("ProgramFiles", str(program_files))
+    _hide_host_visual_studio(monkeypatch, program_files, program_x86, program_files)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-secret-value")
     cargo_temp = tmp_path / "cargo-temp"
     cargo_temp.mkdir()
@@ -450,6 +462,7 @@ def test_windows_rust_environment_explains_a_missing_msvc_linker(tmp_path, monke
         "LINK : fatal error LNK1181: cannot open input file 'kernel32.lib'")
     assert rust._linker_failure_is_not_msvc(
         "error: linker `link.exe` not found\nexit code: 1")
+    assert rust._env_lookup({"programfiles": str(program_files)}, "ProgramFiles") == str(program_files)
 
 
 def test_linux_rust_environment_stays_offline_without_a_windows_linker(tmp_path, monkeypatch):
