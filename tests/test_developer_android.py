@@ -200,7 +200,7 @@ def test_real_kotlin_jvm_gradle_build_and_tests(project):
         answer = invoke(client, root, task)
         assert answer.status_code == 200, (task, answer.text)
         data = answer.json()
-        assert data["status"] == "completed", (task, data["output"])
+        assert data["status"] == "completed", (task, "\n".join(data["output"].splitlines()[-45:]))
         assert data["temporary_project_deleted"] is True
         assert data["external_process_unsandboxed"]
         assert not data["emulator_started"]
@@ -225,7 +225,7 @@ def test_real_android_offline_assemble_and_unit_test(project):
         res = invoke(client, root, task)
         assert res.status_code == 200, (task, res.text)
         result = res.json()
-        assert result["status"] == "completed", (task, result["output"])
+        assert result["status"] == "completed", (task, "\n".join(result["output"].splitlines()[-45:]))
         assert result["temporary_project_deleted"]
         assert not result["emulator_started"] and not result["device_touched"]
         assert not result["deployment_started"]
