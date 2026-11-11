@@ -108,7 +108,7 @@ def test_destructive_scripts_risk_signalled_and_never_smoke_eligible(project):
 def test_fixture_grammar_rejects_unapproved_shell_code(project, bad):
     client, root = project
     script = root / "scripts/smoke.sh"
-    script.write_text("#!/usr/bin/env bash\n" + bad)
+    # Preserve the required LF bytes even on Windows: Bash fixture execution\n    # intentionally rejects CRLF / carriage returns, not just unsafe tokens.\n    script.write_bytes(("#!/usr/bin/env bash\n" + bad).encode("utf-8"))
     data = inspect(client, root).json()
     item = next(x for x in data["files"] if x["path"] == "scripts/smoke.sh")
     if bad == "echo SAFE\n":
