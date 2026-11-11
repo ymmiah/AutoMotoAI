@@ -1,0 +1,77 @@
+// !$*UTF8*$!
+{
+  archiveVersion = 1;
+  classes = {};
+  objectVersion = 56;
+  objects = {
+
+/* Begin PBXBuildFile section */
+    A00000000000000000000010 /* V24App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000007 /* V24App.swift */; };
+    A00000000000000000000011 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000008 /* ContentView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+    A00000000000000000000007 /* V24App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V24App.swift; sourceTree = "<group>"; };
+    A00000000000000000000008 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+    A00000000000000000000009 /* V24iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = V24iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+    A00000000000000000000002 = {isa = PBXGroup; children = (A00000000000000000000003 /* V24iOS */, A00000000000000000000004 /* Products */); sourceTree = "<group>"; };
+    A00000000000000000000003 /* V24iOS */ = {isa = PBXGroup; children = (A00000000000000000000007 /* V24App.swift */, A00000000000000000000008 /* ContentView.swift */); path = V24iOS; sourceTree = "<group>"; };
+    A00000000000000000000004 /* Products */ = {isa = PBXGroup; children = (A00000000000000000000009 /* V24iOS.app */); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+    A00000000000000000000005 /* V24iOS */ = {
+      isa = PBXNativeTarget;
+      buildConfigurationList = A00000000000000000000017 /* Build configuration list for PBXNativeTarget "V24iOS" */;
+      buildPhases = (A00000000000000000000006 /* Sources */);
+      buildRules = ();
+      dependencies = ();
+      name = V24iOS;
+      productName = V24iOS;
+      productReference = A00000000000000000000009 /* V24iOS.app */;
+      productType = "com.apple.product-type.application";
+    };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+    A00000000000000000000001 /* Project object */ = {
+      isa = PBXProject;
+      attributes = {
+        BuildIndependentTargetsInParallel = YES;
+        LastUpgradeCheck = 1600;
+        TargetAttributes = { A00000000000000000000005 = { CreatedOnToolsVersion = 16.0; }; };
+      };
+      buildConfigurationList = A00000000000000000000016 /* Build configuration list for PBXProject "V24iOS" */;
+      compatibilityVersion = "Xcode 14.0";
+      developmentRegion = en;
+      hasScannedForEncodings = 0;
+      knownRegions = (en, Base);
+      mainGroup = A00000000000000000000002;
+      productRefGroup = A00000000000000000000004 /* Products */;
+      projectDirPath = "";
+      projectRoot = "";
+      targets = (A00000000000000000000005 /* V24iOS */);
+    };
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+    A00000000000000000000006 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000010 /* V24App.swift in Sources */, A00000000000000000000011 /* ContentView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+    A00000000000000000000012 /* Project Debug */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_OPTIMIZATION_LEVEL = 0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 5.0; }; name = Debug; };
+    A00000000000000000000013 /* Project Release */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_VERSION = 5.0; }; name = Release; };
+    A00000000000000000000014 /* Target Debug */ = {isa = XCBuildConfiguration; buildSettings = { CODE_SIGNING_ALLOWED = NO; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = org.automoto.v24fixture; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+    A00000000000000000000015 /* Target Release */ = {isa = XCBuildConfiguration; buildSettings = { CODE_SIGNING_ALLOWED = NO; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = org.automoto.v24fixture; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+    A00000000000000000000016 /* Build configuration list for PBXProject "V24iOS" */ = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000012 /* Debug */, A00000000000000000000013 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+    A00000000000000000000017 /* Build configuration list for PBXNativeTarget "V24iOS" */ = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000014 /* Debug */, A00000000000000000000015 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+  };
+  rootObject = A00000000000000000000001 /* Project object */;
+}

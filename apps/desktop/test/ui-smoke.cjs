@@ -2603,6 +2603,31 @@ let browser;
     'V23 shared Agent review does not deploy or rewrite Kotlin source');
   await page.screenshot({path:path.join(output,'developer-studio-v23-kotlin-android.png')});
 
+  // V24: inert Swift/SwiftUI, SwiftPM and SourceKit-LSP inspection; no simulator.
+  const v24SwiftFile=path.join(devProject,'V24Browser.swift');
+  const v24SwiftSource='import SwiftUI\nstruct V24BrowserView: View { var body: some View { Text("V24_SWIFTUI") } }\n';
+  writeFileSync(v24SwiftFile,v24SwiftSource);
+  writeFileSync(path.join(devProject,'Package.swift'),
+    '// swift-tools-version: 5.9\nimport PackageDescription\n'+
+    'let package = Package(name: "V24Browser", targets: [.executableTarget(name: "V24Browser")])\n');
+  await page.locator('#dsSwiftInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsSwiftStatus')?.textContent?.includes('inspection complete'));
+  const v24Body=await page.locator('#dsSwiftResults').innerText();
+  assert.match(v24Body,/V24Browser\.swift/);
+  assert.match(v24Body,/V24BrowserView/);
+  assert.match(v24Body,/SwiftUI/);
+  assert.match(v24Body,/SwiftPM executable: V24Browser/);
+  assert.match(v24Body,/Simulator state: not_queried/);
+  assert.match(v24Body,/SourceKit-LSP/);
+  assert.deepEqual(readFileSync(v24SwiftFile,'utf8'),v24SwiftSource,
+    'V24 read-only Swift inspection must not execute or alter source');
+  await page.locator('#dsSwiftAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V24 Swift\/iOS release readiness/);
+  assert.deepEqual(readFileSync(v24SwiftFile,'utf8'),v24SwiftSource,
+    'V24 central Agent review cannot boot an iOS Simulator or change source');
+  await page.screenshot({path:path.join(output,'developer-studio-v24-swift-ios.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){

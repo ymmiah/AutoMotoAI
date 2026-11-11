@@ -1,0 +1,104 @@
+name: Developer Studio V24 Swift iOS acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_swift.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-swift.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_swift.py"
+      - "tests/fixtures/v24-*/**"
+      - "tests/scripts/v24_ios_simulator.sh"
+      - ".github/workflows/developer-swift-v24.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  swift-inspection:
+    name: Swift/Objective-C static security inspection (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install AutoMoto and tests
+        run: python -m pip install -e ".[dev]"
+      - name: Real Swift source/manifest and trust security regression (without claiming Apple toolchain)
+        env:
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q tests/test_developer_swift.py
+
+  swiftpm-macos:
+    name: SwiftPM compiler, XCTest and executable (macOS Xcode)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Report installed Swift, Xcode and SourceKit tools
+        run: |
+          swift --version
+          swiftc --version
+          xcodebuild -version
+          xcrun --find sourcekit-lsp
+      - name: Compile and execute real SwiftPM sample and tests
+        run: |
+          swift build --package-path tests/fixtures/v24-swiftpm --disable-automatic-resolution
+          swift test --package-path tests/fixtures/v24-swiftpm --disable-automatic-resolution
+          swift run --package-path tests/fixtures/v24-swiftpm --skip-build V24CLI | grep -q V24_SWIFTPM_SMOKE_PASS
+      - name: Install AutoMoto and tests
+        run: python -m pip install -e ".[dev]"
+      - name: Real consent-gated SwiftPM build/test/smoke and security tests
+        env:
+          AUTOMOTO_RATE_LIMIT: "10000"
+          AUTOMOTO_V24_REAL_SWIFT: "1"
+        run: python -m pytest -q tests/test_developer_swift.py
+
+  ios-simulator:
+    name: Xcode unsigned SwiftUI app and real iOS Simulator launch
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Inspect installed Xcode and simulator runtimes
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun simctl list devices available
+      - name: Build real unsigned SwiftUI iOS simulator sample
+        run: |
+          xcodebuild -project tests/fixtures/v24-ios/V24iOS.xcodeproj -scheme V24iOS -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/v24-ios-derived" -disableAutomaticPackageResolution -quiet CODE_SIGNING_ALLOWED=NO build
+          test -d "$RUNNER_TEMP/v24-ios-derived/Build/Products/Debug-iphonesimulator/V24iOS.app"
+      - name: Install AutoMoto and tests
+        run: python -m pip install -e ".[dev]"
+      - name: Real approval-gated unsigned simulator build and Xcode inspection
+        env:
+          AUTOMOTO_RATE_LIMIT: "10000"
+          AUTOMOTO_V24_REAL_XCODE: "1"
+        run: python -m pytest -q tests/test_developer_swift.py
+      - name: Launch and screenshot the actual iOS app on an isolated CI simulator
+        env:
+          V24_APP: "${{ runner.temp }}/v24-ios-derived/Build/Products/Debug-iphonesimulator/V24iOS.app"
+          V24_SCREENSHOT: "${{ runner.temp }}/v24-ios-simulator.png"
+        run: bash tests/scripts/v24_ios_simulator.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: automoto-v24-ios-simulator
+          path: "${{ runner.temp }}/v24-ios-simulator.png"
+          if-no-files-found: ignore
