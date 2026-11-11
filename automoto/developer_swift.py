@@ -80,7 +80,9 @@ class RunIn(BaseModel):
 def _relevant(path: str) -> tuple[bool, bool]:
     low = path.lower()
     leaf = path.rsplit("/", 1)[-1]
-    source = low.endswith(SOURCES)
+    # Package.swift is executable *build metadata*, never counted as an
+    # application source file that could independently authorise a build.
+    source = low.endswith(SOURCES) and leaf != "Package.swift"
     manifest = (leaf in CONFIG_FILES or
                 (path.endswith(".xcodeproj/project.pbxproj") and path.count("/") == 1) or
                 (".xcodeproj/xcshareddata/xcschemes/" in path and path.endswith(".xcscheme")) or
@@ -165,11 +167,30 @@ def _metadata(root: Path, manifest: dict) -> dict:
         for token in UNSAFE_XCODE:
             if token in text:
                 warnings.append("Xcode requires manual review: " + token)
+        if text.count("isa = PBXNativeTarget;") != 1:
+            warnings.append("Exactly one native Xcode target is supported.")
+        if ('sourceTree = "<absolute>"' in text or
+                re.search(r'(?m)\bpath\s*=\s*(?:"?\.\./|"/)', text)):
+            warnings.append("Xcode project references absolute or parent-relative file paths.")
         # A portable, auditable single-target project must have a shared scheme.
         scheme = ios["scheme"]
         expected = f"{ios['project']}/xcshareddata/xcschemes/{scheme}.xcscheme"
         if expected not in manifest:
             warnings.append("Xcode shared build scheme is absent.")
+        else:
+            scheme_xml, _, _ = jvm._read(root, expected)
+            try:
+                doc = SafeXML.fromstring(scheme_xml)
+            except (ValueError, SafeXML.ParseError) as exc:
+                raise HTTPException(422, "Unsafe or malformed Xcode shared scheme XML.") from exc
+            refs = [node for node in doc.iter()
+                    if node.tag.rsplit("}", 1)[-1] == "BuildableReference"]
+            if (doc.tag.rsplit("}", 1)[-1] != "Scheme" or not refs or
+                    any(ref.attrib.get("ReferencedContainer") !=
+                        "container:" + ios["project"] or
+                        ref.attrib.get("BlueprintName") != scheme
+                        for ref in refs)):
+                warnings.append("Xcode shared scheme references an unsupported or external build target.")
         if not ios["bundle_ids"]:
             warnings.append("No declared iOS bundle identifier.")
         if not ios["deployment_targets"]:
