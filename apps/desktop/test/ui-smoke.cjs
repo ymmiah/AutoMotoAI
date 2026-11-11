@@ -2542,6 +2542,34 @@ let browser;
     'Central Agent review cannot alter Java source or deploy');
   await page.screenshot({path:path.join(output,'developer-studio-v21-java-jvm.png')});
 
+  // V22: inert .NET SDK, NuGet, ASP.NET/Blazor and shared central Agent review.
+  const v22CSharpFile=path.join(devProject,'V22Browser.cs');
+  const v22CSharpSource='namespace AutoMoto.V22;\npublic class V22Browser { public static int Value() => 42; }\n';
+  writeFileSync(v22CSharpFile,v22CSharpSource);
+  writeFileSync(path.join(devProject,'V22.Browser.csproj'),
+    '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup>'+
+    '<TargetFramework>net8.0</TargetFramework></PropertyGroup>'+
+    '<ItemGroup><PackageReference Include="xunit" Version="2.9.2"/>'+
+    '<PackageReference Include="NUnit" Version="4.3.2"/></ItemGroup></Project>');
+  writeFileSync(path.join(devProject,'V22Component.razor'),'@page "/v22"\n<h1>Native .NET evidence</h1>\n');
+  await page.locator('#dsDotnetInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDotnetStatus')?.textContent?.includes('inspection completed'));
+  const v22Body=await page.locator('#dsDotnetResults').innerText();
+  assert.match(v22Body,/V22\.Browser\.csproj/);
+  assert.match(v22Body,/net8\.0/);
+  assert.match(v22Body,/xunit/);
+  assert.match(v22Body,/ASP\.NET Core/);
+  assert.match(v22Body,/Blazor/);
+  assert.match(v22Body,/Installed SDK\/IDE tools/);
+  assert.deepEqual(readFileSync(v22CSharpFile,'utf8'),v22CSharpSource,
+    'V22 .NET source inspection cannot compile, execute or alter files');
+  await page.locator('#dsDotnetAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V22 C#\/\.NET release readiness/);
+  assert.deepEqual(readFileSync(v22CSharpFile,'utf8'),v22CSharpSource,
+    'V22 shared Agent release review cannot deploy or rewrite files');
+  await page.screenshot({path:path.join(output,'developer-studio-v22-dotnet-csharp.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
