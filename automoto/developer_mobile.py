@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/developer/studio/mobile", tags=["developer-mobil
 VERSION = "1.0.0"
 LOCK = threading.Lock()
 MAX_FILES = 130
-MAX_TOTAL = 9 * 1024 * 1024
+MAX_TOTAL = 18 * 1024 * 1024
 MAX_CONFIG = 512 * 1024
 TIMEOUT = 180
 MANIFESTS = {
@@ -120,7 +120,8 @@ def _inputs(root: Path) -> tuple[dict, dict, str, str, bool]:
         if len(manifest) + len(source) >= MAX_FILES:
             incomplete = True
             continue
-        text, sha, size = jvm._read(root, name, MAX_CONFIG if is_manifest else index.MAX_FILE_BYTES)
+        limit = 4 * 1024 * 1024 if name.endswith(("-lock.json", ".lock")) else (MAX_CONFIG if is_manifest else index.MAX_FILE_BYTES)
+        text, sha, size = jvm._read(root, name, limit)
         total += size
         if total > MAX_TOTAL:
             incomplete = True
@@ -301,8 +302,8 @@ def _copy(root: Path, data: dict, stage: Path) -> None:
         if not name or name.startswith("/") or ".." in name.split("/"):
             raise HTTPException(403, "Unsafe mobile source staging path.")
         entry = entries[name]
-        text, sha, size = jvm._read(root, name, MAX_CONFIG if name in data["manifests"]
-                                   else index.MAX_FILE_BYTES)
+        limit = 4 * 1024 * 1024 if name.endswith(("-lock.json", ".lock")) else (MAX_CONFIG if name in data["manifests"] else index.MAX_FILE_BYTES)
+        text, sha, size = jvm._read(root, name, limit)
         if sha != entry["sha256"]:
             raise HTTPException(409, "Mobile source file changed while copying.")
         total += size
