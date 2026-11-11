@@ -75,7 +75,10 @@ jobs:
           (cd "$RUNNER_TEMP" && python -c "from importlib.resources import files; import json; root=files('automoto').joinpath('web/static/vendor/monaco'); m=json.loads(root.joinpath('manifest.json').read_text()); assert m['version']=='0.57.0'; assert all(root.joinpath(n).is_file() for n in ('monaco.js','monaco.css','editor.worker.js','ts.worker.js','json.worker.js','css.worker.js','html.worker.js','MONACO-LICENSE.txt','DOMPURIFY-LICENSE.txt'))")
           cd apps/desktop
           npm ci --no-fund --no-audit
-          npx playwright install --with-deps chromium
+          # GitHub's runner already provides Chromium's core shared libraries.
+          # Avoid apt-based optional font installation: transient Ubuntu mirror
+          # DNS failures were preventing the browser regressions from running.
+          npx playwright install chromium
       - name: Browser regressions (no API keys)
         working-directory: apps/desktop
         env:
@@ -98,9 +101,15 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install LibreOffice (headless) and poppler
+        # The 26.04 runner mirror list is only azure/archive/security.ubuntu.com.
+        # A DNS failure for those names makes apt wait ~20s per package and exit
+        # 100 after 20+ minutes. Keep the real LibreOffice/poppler install, but
+        # bound it and fall back to another signed mirror when those hosts are down.
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui poppler-utils fonts-crosextra-carlito fonts-crosextra-caladea fonts-dejavu-core
+          bash scripts/ci/apt-install.sh \
+            libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui \
+            poppler-utils fonts-crosextra-carlito fonts-crosextra-caladea fonts-dejavu-core
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
@@ -127,7 +136,9 @@ jobs:
       - name: Archives, WordPress and data files (real php -l, 7-Zip, Parquet)
         run: |
           php -v | head -1
-          command -v 7z || sudo apt-get install -y -q p7zip-full
+          # 26.04 publishes 7zip; older Ubuntu images still use p7zip-full. Same
+          # mirror fallback as the LibreOffice install when 7z is not already there.
+          command -v 7z || bash scripts/ci/apt-install.sh 7zip || bash scripts/ci/apt-install.sh p7zip-full
           pip install "pyarrow>=15" "py7zr>=0.21"
           python -c "import shutil; assert shutil.which('php'), 'php not found'"
           python -m pytest -q -rs tests/test_archives.py tests/test_wordpress.py tests/test_datafiles.py
@@ -240,7 +251,7 @@ jobs:
           [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/install.ps1", [ref]$t, [ref]$e)
           if ($e.Count) { $e | ForEach-Object { $_.Message }; exit 1 }
           if ($IsLinux) {
-            shellcheck -S warning scripts/install.sh
+            shellcheck -S warning scripts/install.sh scripts/ci/apt-install.sh
             Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
             $r = Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Warning,Error
             if ($r) { $r | Format-Table -AutoSize | Out-String -Width 200; exit 1 }
