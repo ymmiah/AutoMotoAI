@@ -91,6 +91,23 @@ def test_swift_package_inventory_is_read_only(project):
     assert snapshot(root) == original
 
 
+def test_prewarmed_swiftpm_build_artifacts_are_excluded(project):
+    client, root = project
+    artifacts = root / ".build" / "generated"
+    artifacts.mkdir(parents=True)
+    for number in range(280):
+        (artifacts / f"cache-{number}.bin").write_bytes(b"swiftpm-generated-cache")
+    before = snapshot(root)
+    response = inspect(client, root)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["safe_to_offer_builds"], data["warnings"]
+    assert any(x["name"] == "Greeting" for x in data["symbols"])
+    assert not data["source_sha256"] == ""
+    assert not any(".build" in x["path"] for x in data["files"])
+    assert snapshot(root) == before
+
+
 def test_xcode_shared_scheme_and_swiftui_are_detected_without_build(project):
     client, root = project
     replace(root, "v24-ios")
@@ -207,7 +224,6 @@ def test_apple_toolchain_requires_macos(project):
     assert data["simulator_status"] == "not_queried"
     if sys.platform != "darwin":
         # Never advertise an Apple build option as a cross-platform executable.
-        assert swift._commands if callable(swift._commands) else True
         assert data["platform"] != "darwin"
 
 
