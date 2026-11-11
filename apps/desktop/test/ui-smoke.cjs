@@ -2470,6 +2470,28 @@ let browser;
   assert.deepEqual(readFileSync(v18Go,'utf8'),v18GoSource,'Agent review must not deploy');
   await page.screenshot({path:path.join(output,'developer-studio-v18-go-workspaces.png')});
 
+  // V19: read-only Rust Cargo project discovery, source symbols and Agent boundary.
+  const v19RustFile=path.join(devProject,'v19-lib.rs');
+  const v19RustSource='pub fn v19_greet(name: &str) -> String {\n    format!("Hello, {name}")\n}\n';
+  writeFileSync(v19RustFile,v19RustSource);
+  writeFileSync(path.join(devProject,'Cargo.toml'),
+    '[package]\nname = "v19-browser"\nversion = "0.1.0"\nedition = "2021"\n\n[lib]\npath = "v19-lib.rs"\n');
+  writeFileSync(path.join(devProject,'Cargo.lock'),
+    'version = 4\n\n[[package]]\nname = "v19-browser"\nversion = "0.1.0"\n');
+  await page.locator('#dsRsInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsRsStatus')?.textContent?.includes('inspection completed'));
+  assert.match(await page.locator('#dsRsResults').innerText(),/v19-browser/);
+  assert.match(await page.locator('#dsRsResults').innerText(),/v19_greet/);
+  assert.match(await page.locator('#dsRsResults').innerText(),/Cargo.lock/);
+  assert.deepEqual(readFileSync(v19RustFile,'utf8'),v19RustSource,
+    'V19 Cargo inspection cannot alter source');
+  await page.locator('#dsRsAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V19 Rust workspace release readiness/);
+  assert.deepEqual(readFileSync(v19RustFile,'utf8'),v19RustSource,
+    'V19 shared Agent review must not deploy or modify source');
+  await page.screenshot({path:path.join(output,'developer-studio-v19-rust-workspaces.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
