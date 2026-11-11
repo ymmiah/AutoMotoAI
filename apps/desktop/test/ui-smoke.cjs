@@ -2492,6 +2492,29 @@ let browser;
     'V19 shared Agent review must not deploy or modify source');
   await page.screenshot({path:path.join(output,'developer-studio-v19-rust-workspaces.png')});
 
+  // V20: CMake/C++ read-only inspection, redacted compile commands and shared Agent.
+  const v20NativeFile=path.join(devProject,'v20-browser.cpp');
+  const v20NativeSource='#include <iostream>\nint native_test() { return 20 + 20; }\n';
+  writeFileSync(v20NativeFile,v20NativeSource);
+  writeFileSync(path.join(devProject,'CMakeLists.txt'),
+    'cmake_minimum_required(VERSION 3.16)\nproject(v20_browser LANGUAGES C CXX)\nadd_executable(v20-app v20-browser.cpp)\n');
+  writeFileSync(path.join(devProject,'compile_commands.json'),JSON.stringify([{
+    file:'v20-browser.cpp',directory:devProject,command:'clang++ -DSECRET_TOKEN_NEVER_DISPLAY -c v20-browser.cpp'
+  }]));
+  await page.locator('#dsNativeInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsNativeStatus')?.textContent?.includes('Native inspection complete'));
+  const v20Body=await page.locator('#dsNativeResults').innerText();
+  assert.match(v20Body,/v20-browser\.cpp/);
+  assert.match(v20Body,/native_test/);
+  assert.match(v20Body,/compile command entries safely inspected/);
+  assert.doesNotMatch(v20Body,/SECRET_TOKEN_NEVER_DISPLAY/);
+  assert.deepEqual(readFileSync(v20NativeFile,'utf8'),v20NativeSource,'V20 native project inspection never edits source');
+  await page.locator('#dsNativeAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V20 C\/C\+\+ release readiness/);
+  assert.deepEqual(readFileSync(v20NativeFile,'utf8'),v20NativeSource,'V20 Agent review does not deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v20-native-c-cpp.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
