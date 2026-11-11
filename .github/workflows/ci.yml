@@ -75,7 +75,10 @@ jobs:
           (cd "$RUNNER_TEMP" && python -c "from importlib.resources import files; import json; root=files('automoto').joinpath('web/static/vendor/monaco'); m=json.loads(root.joinpath('manifest.json').read_text()); assert m['version']=='0.57.0'; assert all(root.joinpath(n).is_file() for n in ('monaco.js','monaco.css','editor.worker.js','ts.worker.js','json.worker.js','css.worker.js','html.worker.js','MONACO-LICENSE.txt','DOMPURIFY-LICENSE.txt'))")
           cd apps/desktop
           npm ci --no-fund --no-audit
-          npx playwright install --with-deps chromium
+          # GitHub's runner already provides Chromium's core shared libraries.
+          # Avoid apt-based optional font installation: transient Ubuntu mirror
+          # DNS failures were preventing the browser regressions from running.
+          npx playwright install chromium
       - name: Browser regressions (no API keys)
         working-directory: apps/desktop
         env:
