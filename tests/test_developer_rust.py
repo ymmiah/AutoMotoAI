@@ -246,7 +246,8 @@ def test_real_rustc_and_cargo_version_and_build_test_check_clippy_fmt(project):
         response = run(client, root, task=task, tool=tool)
         assert response.status_code == 200, (task, response.text)
         data = response.json()
-        assert data["status"] == "completed", (task, data["output"][:2500])
+        if data["status"] != "completed":
+            pytest.fail("Rust "+task+" failed:\n"+data["output"], pytrace=False)
         assert data["temporary_build_artifacts_deleted"] is True
         assert data["external_process_unsandboxed"] is True
         assert data["agent_deployment_approved"] is False
