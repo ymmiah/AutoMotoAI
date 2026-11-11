@@ -1,0 +1,15 @@
+{
+  "name": "automoto-v25-react-native",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/bridge.test.cjs"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-native": "0.88.1"
+  },
+  "devDependencies": {
+    "@react-native/metro-config": "0.88.1"
+  }
+}
