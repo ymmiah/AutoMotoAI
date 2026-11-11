@@ -298,7 +298,8 @@ def _command(body: RunIn, exe: str, summary: dict, output_dir: Path) -> list[str
         if found is None:
             raise HTTPException(422, "Select one discovered local Go package with tests for profiling.")
         return [exe, "test", "-mod=readonly", "-count=1", "-timeout=30s",
-                "-run=Test", "-cpuprofile", str(output_dir / "cpu.pprof"), body.package]
+                "-run=Test", "-o", str(output_dir / "testbinary"),
+                "-cpuprofile", str(output_dir / "cpu.pprof"), body.package]
     raise HTTPException(422, "Task, tool and package selection must match a fixed approved Go command.")
 
 
