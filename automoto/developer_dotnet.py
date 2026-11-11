@@ -368,6 +368,13 @@ def _commands(task: str, exe: str, info: dict, stage: Path, temp: Path) -> list[
     if task == "build":
         return [restore, build]
     if task == "test":
+        primary = next((p for p in info["projects"]
+                        if p["path"] == info["primary_project"]), None)
+        declared = {p["name"].lower() for p in (primary or {}).get("package_references", [])}
+        if (primary is None or not primary["is_test_project"] or
+                "microsoft.net.test.sdk" not in declared or
+                not ({"xunit", "nunit"} & declared)):
+            raise HTTPException(409, "A declared xUnit/NUnit project with Microsoft.NET.Test.Sdk is required.")
         test = ("test", [exe, "test", project, "--configuration", "Debug",
                          "--no-build", "--no-restore", "--logger",
                          "console;verbosity=normal"])
