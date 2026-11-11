@@ -48,7 +48,7 @@ XCODE_BUNDLE = re.compile(r"PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([A-Za-z][A-Za-z0-9.
 IOS_TARGET = re.compile(r"IPHONEOS_DEPLOYMENT_TARGET\s*=\s*([0-9]{1,2}\.[0-9]{1,2})\s*;")
 PACKAGE_TARGET = re.compile(r'(?s)\.executableTarget\s*\(\s*name\s*:\s*"([A-Za-z_][A-Za-z0-9_-]{0,63})"')
 UNSAFE_SWIFTPM = re.compile(r"(?i)\.package\s*\(|\.binaryTarget\s*\(|\.plugin\s*\(|"
-                             r"\.macro\s*\(|\.systemLibrary\s*\(|\.unsafeFlags\s*\(|"
+                             r"\.macro\s*\(|\.systemLibrary\s*\(|\.product\s*\(|\.unsafeFlags\s*\(|"
                              r"Process\s*\(|URLSession|Foundation\.Process")
 UNSAFE_XCODE = ("PBXShellScriptBuildPhase", "XCRemoteSwiftPackageReference",
                 "XCSwiftPackageProductDependency", "PBXContainerItemProxy",
@@ -149,8 +149,9 @@ def _metadata(root: Path, manifest: dict) -> dict:
         package["external_dependencies"] = bool(UNSAFE_SWIFTPM.search(text))
         if package["external_dependencies"]:
             warnings.append("SwiftPM manifest declares remote, plugin, macro or unsafe build facilities.")
-        if "dependencies:" in text and not re.search(r"dependencies\s*:\s*\[\s*\]", text):
-            warnings.append("SwiftPM dependency inventory needs a separate provenance review.")
+        # Local target dependencies are permitted. External package references
+        # and plugin hooks are rejected above, not inferred from any target's
+        # ordinary `dependencies: ["LocalTarget"]` declaration.
         if not re.search(r"//\s*swift-tools-version\s*:\s*\d+\.\d+", text[:250]):
             warnings.append("SwiftPM tools version is not declared.")
     if projects:
@@ -323,7 +324,7 @@ def _commands(body: RunIn, tool: dict, data: dict, stage: Path, temp: Path) -> l
                  "-destination", "generic/platform=iOS Simulator",
                  "-derivedDataPath", str(temp / "derived"),
                  "-disableAutomaticPackageResolution",
-                 "CODE_SIGNING_ALLOWED=NO", "build"]]
+                 "-quiet", "CODE_SIGNING_ALLOWED=NO", "build"]]
     raise HTTPException(422, "Unsupported Swift task.")
 
 
