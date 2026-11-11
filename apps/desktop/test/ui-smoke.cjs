@@ -2532,7 +2532,7 @@ let browser;
   assert.match(v21Body,/v21-browser-service/);
   assert.match(v21Body,/JUnit Jupiter/);
   assert.match(v21Body,/Spring/);
-  assert.match(v21Body,/Java runtime version/);
+  assert.match(v21Body,/Installed tools, fingerprints only/);
   assert.deepEqual(readFileSync(v21Java,'utf8'),v21JavaSource,
     'V21 JVM inspection must never execute or alter source');
   await page.locator('#dsJvmAgent').click();
