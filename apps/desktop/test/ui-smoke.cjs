@@ -2573,6 +2573,8 @@ let browser;
   // V23: static Kotlin/Android/Compose metadata and shared Agent hand-off.
   const v23Kotlin=path.join(devProject,'app','src','main','java','com','automoto','v23','V23Screen.kt');
   const v23Source='package com.automoto.v23\nimport androidx.compose.runtime.Composable\n@Composable fun V23Screen() { }\n';
+  mkdirSync(path.dirname(v23Kotlin),{recursive:true});
+  mkdirSync(path.join(devProject,'gradle','wrapper'),{recursive:true});
   writeFileSync(v23Kotlin,v23Source);
   writeFileSync(path.join(devProject,'settings.gradle.kts'),
     'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\nrootProject.name="V23Browser"\ninclude(":app")\n');
@@ -2589,8 +2591,8 @@ let browser;
   const v23Body=await page.locator('#dsAndroidResults').innerText();
   assert.match(v23Body,/V23Screen\.kt/);
   assert.match(v23Body,/8\.13\.2/);
-  assert.match(v23Body,/Jetpack Compose/);
-  assert.match(v23Body,/Emulator/);
+  assert.match(v23Body,/Compose: heuristic evidence only/);
+  assert.match(v23Body,/emulator/i);
   assert.match(v23Body,/No device connection, AVD launch/);
   assert.deepEqual(readFileSync(v23Kotlin,'utf8'),v23Source,
     'Kotlin inspection does not edit or execute source');
