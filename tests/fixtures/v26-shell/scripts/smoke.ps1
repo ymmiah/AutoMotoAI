@@ -1,0 +1,2 @@
+Write-Output 'V26_POWERSHELL_SMOKE_PASS'
+exit 0
