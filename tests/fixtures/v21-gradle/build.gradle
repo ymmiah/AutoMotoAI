@@ -1,0 +1,6 @@
+plugins {
+    id 'java'
+}
+group = 'example.automoto'
+version = '1.0.0'
+sourceCompatibility = JavaVersion.VERSION_21
