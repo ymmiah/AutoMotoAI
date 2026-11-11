@@ -164,8 +164,9 @@ def _venv_info(root: Path) -> dict:
         text = raw.decode("utf-8", errors="replace")
     except OSError:
         return {"status": "unreadable_configuration"}
-    values = dict(line.split("=", 1) for line in text.splitlines()
-                  if "=" in line and len(line) < 512)
+    values = dict((key.strip(), value.strip()) for line in text.splitlines()
+                  if "=" in line and len(line) < 512
+                  for key, value in (line.split("=", 1),))
     return {"status": "detected_not_executed",
             "version_declared": values.get("version", "").strip()[:60],
             "include_system_site_packages": values.get("include-system-site-packages", "").strip()[:20]}
@@ -300,7 +301,8 @@ def _command(body: RunIn, executable: str) -> list[str]:
     if body.task == "version":
         if body.tool not in ("python", "venv_python", "uv", "ty", "ruff"):
             raise HTTPException(422, "Invalid version tool.")
-        return [executable, "-V" if body.tool in ("python", "venv_python") else "--version"]
+        return [executable, "-V"] if body.tool in ("python", "venv_python") else (
+            [executable, "version"] if body.tool == "ty" else [executable, "--version"])
     if body.task == "pytest" and body.tool == "venv_python":
         return [executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
                 "--disable-warnings"]
