@@ -2430,6 +2430,28 @@ let browser;
     'Central Agent review preparation must not deploy or change project source');
   await page.screenshot({path:path.join(output,'developer-studio-v16-php-wordpress-agent.png')});
 
+  // V17: actual Python manifest and AST, no source execution or Agent release.
+  const v17Python=path.join(devProject,'v17-real.py');
+  const v17Source='def v17_greet(name: str) -> str:\n    return "Hi " + name\n';
+  writeFileSync(v17Python,v17Source);
+  writeFileSync(path.join(devProject,'pyproject.toml'),
+    '[project]\nname = "v17-browser-fixture"\nrequires-python = ">=3.10"\ndependencies = ["fastapi>=0.115"]\n');
+  writeFileSync(path.join(devProject,'uv.lock'),'version = 1\n');
+  await page.locator('#dsPyInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPyStatus')?.textContent?.includes('inspection complete'));
+  assert.match(await page.locator('#dsPyResults').innerText(),/FastAPI/);
+  assert.match(await page.locator('#dsPyResults').innerText(),/uv.lock/);
+  await page.locator('#dsPySource').fill('v17-real.py');
+  await page.locator('#dsPySyntax').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPyStatus')?.textContent?.includes('AST parse successful'));
+  assert.match(await page.locator('#dsPyResults').innerText(),/1 functions and 0 classes/);
+  assert.deepEqual(readFileSync(v17Python,'utf8'),v17Source,'V17 AST must not modify source');
+  await page.locator('#dsPyAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V17 Python deployment readiness/);
+  assert.deepEqual(readFileSync(v17Python,'utf8'),v17Source,'V17 Agent review cannot deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v17-python-emerging.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
