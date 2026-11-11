@@ -179,6 +179,8 @@ from automoto import developer_dotnet
 app.include_router(developer_dotnet.router)  # V22 C#/.NET SDK, NuGet, MSBuild and tests
 from automoto import developer_android
 app.include_router(developer_android.router)  # V23 Kotlin/JVM Android SDK, Compose, Gradle and emulator evidence
+from automoto import developer_swift
+app.include_router(developer_swift.router)  # V24 Swift SwiftPM Xcode simulator build evidence and SourceKit-LSP discovery
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
