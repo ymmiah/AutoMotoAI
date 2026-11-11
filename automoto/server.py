@@ -169,6 +169,8 @@ from automoto import developer_python
 app.include_router(developer_python.router)  # V17 Python/uv/type checking and approved virtualenv tests
 from automoto import developer_go
 app.include_router(developer_go.router)  # V18 Go workspaces, bounded build/test/vet/profile and gopls discovery
+from automoto import developer_rust
+app.include_router(developer_rust.router)  # V19 Rust Cargo, Clippy, frozen builds, formatter and existing LSP/DAP
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
