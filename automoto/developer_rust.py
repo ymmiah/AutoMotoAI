@@ -238,8 +238,14 @@ def _tools(root: Path) -> tuple[list[dict], list[dict]]:
             item = {"name": name, "status": "shell_wrapper_blocked"}
         else:
             try:
+                checked = adapters._fingerprint(str(Path(resolved).absolute()), root)
+                rustup_shim = (Path(resolved).name.lower() in
+                               ("cargo", "cargo.exe", "rustc", "rustc.exe",
+                                "rust-analyzer", "rust-analyzer.exe")
+                               and Path(checked["executable"]).name.lower()
+                               in ("rustup", "rustup.exe"))
                 item = {"name": name, "status": "installed_not_executed",
-                        **adapters._fingerprint(str(Path(resolved).absolute()), root)}
+                        **checked, "rustup_shim": rustup_shim}
             except HTTPException:
                 item = {"name": name, "status": "not_approved"}
         (debug if name in DEBUG_NAMES else values).append(item)
@@ -413,6 +419,12 @@ def run(request: Request, body: RunIn):
                 tool["sha256"] != body.expected_sha256):
             raise HTTPException(409, "Rust executable identity changed since approval.")
         command = _command(body, tool["executable"], before)
+        if tool.get("rustup_shim"):
+            # Linux rustup symlinks resolve to rustup itself. Calling that
+            # realpath as "cargo" instead runs the rustup CLI; invoke only
+            # the already-installed stable toolchain explicitly, offline.
+            # The rustup binary itself is SHA-pinned like other executables.
+            command = [tool["executable"], "run", "stable", body.tool, *command[1:]]
         after = _inspect(root)
         if (after["manifest_sha256"] != body.expected_manifest_sha256
                 or after["source_sha256"] != body.expected_source_sha256):
