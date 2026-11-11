@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from automoto import developer_jvm as jvm, sandbox, server
@@ -227,3 +228,198 @@ def test_untrusted_and_hosted_jvm_calls_denied(workspace, monkeypatch):
     assert client.get(BASE+"/inspect",params={"project":str(root)}).status_code in (401,403)
     monkeypatch.setenv("AUTOMOTO_MODE","multiuser")
     assert inspect(client,root).status_code in (401,403,404)
+
+
+def _plant_jdk(home: Path, version: str, body: str = "#!/bin/sh\necho ok\n") -> Path:
+    bindir = home / "bin"
+    bindir.mkdir(parents=True)
+    for name in ("java", "javac"):
+        exe = bindir / name
+        exe.write_text(body)
+        exe.chmod(0o755)
+    (home / "release").write_text('JAVA_VERSION="' + version + '"\n')
+    return home.resolve()
+
+
+def _plant_launcher(folder: Path, body: str) -> Path:
+    bindir = folder / "bin"
+    bindir.mkdir(parents=True)
+    for name in ("java", "javac"):
+        exe = bindir / name
+        exe.write_text(body)
+        exe.chmod(0o755)
+    return (bindir / "java").resolve()
+
+
+def _java_summary(executable: Path) -> dict:
+    return {"toolchains": [{
+        "name": "java",
+        "status": "installed_not_executed",
+        "executable": str(executable),
+    }]}
+
+
+STUB_LAUNCHER = """#!/bin/sh
+tool=$(basename "$0")
+target="${JAVA_HOME}/bin/${tool}"
+if [ ! -x "$target" ] || [ "$target" -ef "$0" ]; then
+  echo STUB_REEXEC
+  exit 1
+fi
+exec "$target" "$@"
+"""
+REAL_TOOL = """#!/bin/sh
+if [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+  echo LEAKED
+  exit 1
+fi
+echo "JAVA_HOME=$JAVA_HOME"
+echo HOME_OK
+"""
+
+
+def test_apple_stub_directories_are_not_jdk_homes():
+    assert jvm._apple_stub_dir(Path("/usr/bin"))
+    assert jvm._apple_stub_dir(
+        Path("/System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands"))
+    assert jvm._apple_stub_dir(
+        Path("/System/Library/Frameworks/JavaVM.framework/Versions/A/Commands"))
+    assert not jvm._apple_stub_dir(Path("/usr/lib/jvm/java-21-openjdk/bin"))
+    assert jvm._apple_launcher(Path("/usr/bin/java"), darwin=False) is False
+
+
+def test_launcher_without_jdk_release_uses_host_locator_not_its_parent(tmp_path):
+    """The macOS /usr/bin/java hang: JAVA_HOME must not become the stub's parent."""
+    project = tmp_path / "project"
+    project.mkdir()
+    stub = _plant_launcher(tmp_path / "stub", "#!/bin/sh\necho stub\n")
+    planted = _plant_jdk(project / "vendor-jdk", "99")
+    jdk17 = _plant_jdk(tmp_path / "jdk17", "17.0.20")
+    jdk21 = _plant_jdk(tmp_path / "jdk21", "21.0.12")
+    env = jvm._environment(project, _java_summary(stub), darwin=False, source={
+        "JAVA_HOME": str(planted),
+        "JAVA_HOME_17_ARM64": str(jdk17),
+        "JAVA_HOME_21_X64": str(jdk21),
+        "JAVA_HOME_11_X64": "relative/jdk",
+        "OPENAI_API_KEY": "sk-secret-value",
+        "AWS_SECRET_ACCESS_KEY": "aws-secret-value",
+        "JAVA_HOME_NOT_A_LOCATOR": str(jdk17),
+    })
+    assert env["JAVA_HOME"] == str(jdk21)
+    assert env["PATH"].split(os.pathsep)[0] == str(jdk21 / "bin")
+    assert str(stub.parent.parent) not in env["JAVA_HOME"]
+    flattened = "\n".join(env.values())
+    assert "sk-secret-value" not in flattened
+    assert "aws-secret-value" not in flattened
+    assert "JAVA_HOME_NOT_A_LOCATOR" not in env
+    assert "OPENAI_API_KEY" not in env
+
+
+def test_java_home_tool_and_install_scan_run_only_after_locators_miss(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    stub = _plant_launcher(tmp_path / "stub", "#!/bin/sh\necho stub\n")
+    from_tool = _plant_jdk(tmp_path / "from-tool", "21.0.1")
+    scanned = _plant_jdk(
+        tmp_path / "Library" / "Java" / "JavaVirtualMachines" / "jdk-25.jdk" / "Contents" / "Home",
+        "25.0.1")
+    monkeypatch.setattr(jvm, "_system_java_home", lambda root: str(from_tool))
+    env = jvm._environment(project, _java_summary(stub), darwin=True, source={})
+    assert env["JAVA_HOME"] == str(from_tool)
+    assert env["PATH"].split(os.pathsep)[0] == str(from_tool / "bin")
+
+    monkeypatch.setattr(jvm, "_system_java_home", lambda root: None)
+    bases = [tmp_path / "Library" / "Java" / "JavaVirtualMachines"]
+    assert jvm._scan_installed_jdks(project, bases, darwin=False) == scanned
+    # darwin=True scans the host image after the tool returns nothing. Point the
+    # scan at the planted tree so this stays hermetic on Linux and macOS.
+    monkeypatch.setattr(jvm, "_darwin_jdk_bases", lambda: bases)
+    env = jvm._environment(project, _java_summary(stub), darwin=True, source={})
+    assert env["JAVA_HOME"] == str(scanned)
+
+
+def test_installed_jdk_scan_prefers_the_highest_home_outside_the_project(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside" / "JavaVirtualMachines"
+    jdk17 = _plant_jdk(outside / "jdk-17.jdk" / "Contents" / "Home", "17.0.2")
+    jdk21 = _plant_jdk(outside / "jdk-21.jdk" / "Contents" / "Home", "21.0.4")
+    _plant_jdk(project / "JavaVirtualMachines" / "jdk-99.jdk" / "Contents" / "Home", "99")
+    brew = tmp_path / "opt"
+    _plant_jdk(brew / "openjdk@11" / "libexec" / "openjdk.jdk" / "Contents" / "Home", "11.0.5")
+    chosen = jvm._scan_installed_jdks(project, [outside, project / "JavaVirtualMachines", brew])
+    assert chosen == jdk21
+    assert jvm._release_major(jdk21) == 21
+    assert jvm._release_major(jdk17) == 17
+
+
+def test_missing_jdk_locator_fails_before_a_stub_can_hang(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    stub = _plant_launcher(tmp_path / "stub", "#!/bin/sh\necho stub\n")
+    with pytest.raises(HTTPException) as caught:
+        jvm._environment(project, _java_summary(stub), darwin=False, source={
+            "JAVA_HOME": str(stub.parent.parent),
+            "OPENAI_API_KEY": "sk-secret-value",
+        })
+    assert caught.value.status_code == 409
+
+
+def test_real_jdk_binary_keeps_its_own_home(tmp_path):
+    discovered = shutil.which("java")
+    if not discovered:
+        pytest.skip("java is not installed")
+    executable = Path(discovered).resolve()
+    if executable.parent.name.lower() != "bin":
+        pytest.skip("java is not inside a JDK bin directory")
+    project = tmp_path / "project"
+    project.mkdir()
+    home = jvm._approved_jdk_home(str(executable.parent.parent), project, darwin=False)
+    if home is None:
+        pytest.skip("java on PATH is not an approved JDK home")
+    other = _plant_jdk(tmp_path / "other-jdk", "17")
+    env = jvm._environment(project, _java_summary(executable), darwin=False, source={
+        "JAVA_HOME": str(other),
+        "OPENAI_API_KEY": "sk-secret-value",
+    })
+    assert env["JAVA_HOME"] == str(home)
+    assert not env["PATH"].startswith(str(other / "bin"))
+    assert "sk-secret-value" not in "\n".join(env.values())
+
+
+def test_apple_java_stub_runs_the_located_jdk_instead_of_reexec(workspace, monkeypatch, tmp_path):
+    if os.name == "nt":
+        pytest.skip("POSIX shell stand-ins cover the stub; Windows blocks script launchers.")
+    client, root = workspace
+    jdk = _plant_jdk(tmp_path / "real-jdk", "21.0.12", REAL_TOOL)
+    stub_java = _plant_launcher(tmp_path / "apple-stub", STUB_LAUNCHER)
+    gradle = tmp_path / "gradle"
+    gradle.write_text(REAL_TOOL)
+    gradle.chmod(0o755)
+    monkeypatch.setenv("JAVA_HOME", str(jdk))
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret-value")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret-value")
+    original = shutil.which
+
+    def which(name, path=None):
+        if name == "java":
+            return str(stub_java)
+        if name == "javac":
+            return str(stub_java.parent / "javac")
+        if name == "gradle":
+            return str(gradle)
+        return original(name, path=path)
+
+    monkeypatch.setattr(jvm.shutil, "which", which)
+    trust(client, root)
+    for task, tool in (("jdk_version", "java"), ("javac_version", "javac"),
+                       ("gradle_version", "gradle")):
+        response = run(client, root, task, tool)
+        assert response.status_code == 200, (task, response.text)
+        data = response.json()
+        assert data["status"] == "completed", (task, data["output"])
+        assert "STUB_REEXEC" not in data["output"]
+        assert "LEAKED" not in data["output"]
+        assert "HOME_OK" in data["output"]
+        assert "JAVA_HOME=" + str(jdk) in data["output"]
+        assert "JAVA_HOME=" + str(stub_java.parent.parent) not in data["output"]

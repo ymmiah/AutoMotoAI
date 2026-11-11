@@ -12,10 +12,12 @@ import os
 import re
 import shutil
 import stat
+import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Mapping, Optional
 
 from defusedxml import ElementTree as SafeXML
 from fastapi import APIRouter, HTTPException, Request
@@ -59,6 +61,17 @@ GRADLE_JDK_RELEASE = re.compile(
 # Official Gradle compatibility matrix, verified November 2026; an advisory,
 # never a claim that a particular local JDK has been executed or certified.
 GRADLE_MIN_FOR_RUNTIME = {17: (7, 3), 21: (8, 5), 25: (9, 1)}
+# Host locator names a macOS image exports. Values are JDK homes, never secrets.
+_JAVA_HOME_NAME = re.compile(r"^JAVA_HOME(?:_(\d{1,2})_(?:X64|ARM64))?$", re.IGNORECASE)
+_RELEASE_VERSION = re.compile(r'(?m)^JAVA_VERSION="([^"]+)"')
+# Apple's /usr/bin/java and JavaVM.framework Commands are launch stubs. They
+# re-exec $JAVA_HOME/bin/<tool>. They are not themselves a JDK.
+_APPLE_STUB_DIRS = (
+    Path("/usr/bin"),
+    Path("/System/Library/Frameworks/JavaVM.framework/Commands"),
+    Path("/System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands"),
+    Path("/System/Library/Frameworks/JavaVM.framework/Versions/A/Commands"),
+)
 
 
 class RootIn(BaseModel):
@@ -363,13 +376,270 @@ def _copy(root: Path, summary: dict, destination: Path) -> None:
         output.write_text(text, encoding="utf-8")
 
 
-def _environment(root: Path, summary: dict) -> dict:
+def _apple_stub_dir(parent: Path) -> bool:
+    """True for macOS directories whose java/javac only re-exec a real JDK."""
+    if parent.name == "Commands" and "JavaVM.framework" in parent.parts:
+        return True
+    return any(parent == folder for folder in _APPLE_STUB_DIRS)
+
+
+def _apple_launcher(java: Path, *, darwin: Optional[bool] = None) -> bool:
+    if darwin is None:
+        darwin = sys.platform == "darwin"
+    if not darwin:
+        return False
+    try:
+        parent = java.resolve(strict=True).parent
+    except (OSError, ValueError):
+        return False
+    return _apple_stub_dir(parent)
+
+
+def _release_major(home: Path) -> int:
+    release = home / "release"
+    try:
+        resolved = release.resolve(strict=True)
+        if not resolved.is_relative_to(home.resolve()):
+            return 0
+        text = resolved.read_text(encoding="utf-8", errors="replace")[:4000]
+    except (OSError, ValueError):
+        return 0
+    match = _RELEASE_VERSION.search(text)
+    if match is None:
+        return 0
+    value = match.group(1)
+    if value.startswith("1."):
+        parts = value.split(".")
+        return int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+    major = value.split(".", 1)[0].split("+", 1)[0]
+    return int(major) if major.isdigit() else 0
+
+
+def _jdk_release(home: Path) -> bool:
+    release = home / "release"
+    try:
+        resolved = release.resolve(strict=True)
+        return (resolved.is_file() and resolved.is_relative_to(home.resolve())
+                and resolved.stat().st_size <= 65536)
+    except (OSError, ValueError):
+        return False
+
+
+def _companion_javac(java: Path, root: Path) -> bool:
+    names = ("javac.exe", "javac") if os.name == "nt" else ("javac",)
+    home = java.parent.parent
+    for name in names:
+        candidate = java.parent / name
+        try:
+            if not candidate.exists():
+                continue
+            resolved = candidate.resolve(strict=True)
+        except (OSError, ValueError):
+            continue
+        if not resolved.is_relative_to(home):
+            continue
+        if adapters._disallowed_workspace_executable(resolved, root):
+            continue
+        if resolved.is_file() and os.access(resolved, os.X_OK):
+            return True
+    return False
+
+
+def _approved_jdk_home(value: str, root: Path, *,
+                       darwin: Optional[bool] = None) -> Optional[Path]:
+    """A JDK home outside the project whose bin/java is not an Apple stub."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if (not text or len(text) > 2048 or any(ord(ch) < 32 for ch in text)):
+        return None
+    folder = Path(text)
+    if not folder.is_absolute():
+        return None
+    names = ("java.exe", "java") if os.name == "nt" else ("java",)
+    for name in names:
+        candidate = folder / "bin" / name
+        try:
+            if not candidate.exists():
+                continue
+            java = candidate.resolve(strict=True)
+        except (OSError, ValueError):
+            continue
+        if java.parent.name.lower() != "bin":
+            continue
+        if _apple_launcher(java, darwin=darwin):
+            continue
+        home = java.parent.parent
+        if adapters._disallowed_workspace_executable(java, root):
+            continue
+        if not java.is_file() or not os.access(java, os.X_OK):
+            continue
+        if not _jdk_release(home) or not _companion_javac(java, root):
+            continue
+        return home
+    return None
+
+
+def _locator_values(source: Mapping[str, str]) -> list[str]:
+    """JAVA_HOME, then the highest JAVA_HOME_<major>_<arch> locator."""
+    primary = None
+    versioned = []
+    seen = set()
+    for key, value in source.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            continue
+        match = _JAVA_HOME_NAME.fullmatch(key)
+        if match is None:
+            continue
+        folded = key.casefold()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        if len(seen) > 16:
+            break
+        major = match.group(1)
+        if major is None:
+            primary = value
+        else:
+            versioned.append((int(major), key.casefold(), value))
+    versioned.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    ordered = [primary] if primary else []
+    ordered.extend(value for _, _, value in versioned)
+    return ordered
+
+
+def _system_java_home(root: Path) -> Optional[str]:
+    """One path from macOS /usr/libexec/java_home. Never a project file."""
+    if sys.platform != "darwin":
+        return None
+    tool = Path("/usr/libexec/java_home")
+    try:
+        if not tool.is_file() or not os.access(tool, os.X_OK):
+            return None
+        resolved = tool.resolve(strict=True)
+    except (OSError, ValueError):
+        return None
+    if resolved.name != "java_home":
+        return None
+    if adapters._disallowed_workspace_executable(resolved, root):
+        return None
+    try:
+        completed = subprocess.run(
+            [str(resolved)],
+            check=False,
+            shell=False,
+            timeout=5,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    lines = completed.stdout.decode("utf-8", errors="replace").splitlines()
+    if len(lines) != 1:
+        return None
+    found = lines[0].strip()
+    if not found or any(ord(ch) < 32 for ch in found) or len(found) > 2048:
+        return None
+    return found
+
+
+def _darwin_jdk_bases() -> list[Path]:
+    return [
+        Path("/Library/Java/JavaVirtualMachines"),
+        Path("/opt/homebrew/opt"),
+        Path("/usr/local/opt"),
+    ]
+
+
+def _scan_installed_jdks(root: Path, bases: list[Path], *,
+                         darwin: Optional[bool] = None) -> Optional[Path]:
+    """Highest approved JDK under standard macOS install directories."""
+    found = []
+    for base in bases[:8]:
+        try:
+            if not base.is_dir():
+                continue
+            children = list(base.iterdir())[:40]
+        except OSError:
+            continue
+        jvm_root = base.name == "JavaVirtualMachines"
+        for child in children:
+            if jvm_root:
+                candidates = [child / "Contents" / "Home"]
+            elif child.name == "openjdk" or child.name.startswith("openjdk@"):
+                candidates = [
+                    child,
+                    child / "libexec" / "openjdk.jdk" / "Contents" / "Home",
+                ]
+            else:
+                continue
+            for candidate in candidates:
+                home = _approved_jdk_home(str(candidate), root, darwin=darwin)
+                if home is not None and home not in found:
+                    found.append(home)
+    if not found:
+        return None
+    return max(found, key=lambda item: (_release_major(item), str(item)))
+
+
+def _locate_jdk_home(root: Path, source: Mapping[str, str], *,
+                     darwin: Optional[bool] = None) -> Optional[Path]:
+    """Host JDK locators. The scrubbed run environment does not inherit these."""
+    if darwin is None:
+        darwin = sys.platform == "darwin"
+    for candidate in _locator_values(source):
+        home = _approved_jdk_home(candidate, root, darwin=darwin)
+        if home is not None:
+            return home
+    if not darwin:
+        return None
+    discovered = _system_java_home(root)
+    if discovered:
+        home = _approved_jdk_home(discovered, root, darwin=darwin)
+        if home is not None:
+            return home
+    return _scan_installed_jdks(root, _darwin_jdk_bases(), darwin=darwin)
+
+
+def _prepend_bin(env: dict, folder: Path) -> None:
+    text = str(folder)
+    current = [item for item in env.get("PATH", "").split(os.pathsep) if item and item != text]
+    env["PATH"] = os.pathsep.join([text, *current])
+
+
+def _environment(root: Path, summary: dict, *,
+                 darwin: Optional[bool] = None,
+                 source: Optional[Mapping[str, str]] = None) -> dict:
+    """Scrubbed environment for one approved JVM tool.
+
+    A real JDK lives in ``<home>/bin`` and that home has an OpenJDK ``release``
+    file. macOS ``/usr/bin/java`` and ``/usr/bin/javac`` are Apple stubs: their
+    parent is ``/usr``, which has no ``release`` file. Setting ``JAVA_HOME`` to
+    ``/usr`` makes the stub re-exec itself until the task times out with empty
+    output. The shared scrubbed environment also drops the host ``JAVA_HOME``
+    and ``JAVA_HOME_<version>_<arch>`` locators. Restore an approved home from
+    those locators, ``/usr/libexec/java_home``, or a standard macOS install
+    directory, and put that home's ``bin`` ahead of the stub on ``PATH``.
+    """
     env = adapters._environment(root)
     java = _tool(summary, "java")
     executable = Path(java["executable"])
-    if executable.parent.name.lower() != "bin":
+    derived = None
+    if executable.parent.name.lower() == "bin":
+        derived = _approved_jdk_home(str(executable.parent.parent), root, darwin=darwin)
+    home = derived
+    if home is None:
+        home = _locate_jdk_home(root, os.environ if source is None else source,
+                                darwin=darwin)
+    if home is None:
         raise HTTPException(409, "Installed Java path cannot identify a JDK home.")
-    env["JAVA_HOME"] = str(executable.parent.parent)
+    env["JAVA_HOME"] = str(home)
+    if derived is None:
+        _prepend_bin(env, home / "bin")
     env["JAVA_TOOL_OPTIONS"] = "-Dfile.encoding=UTF-8"
     env["GRADLE_OPTS"] = "-Dorg.gradle.daemon=false"
     env["MAVEN_OPTS"] = "-Djava.awt.headless=true"
