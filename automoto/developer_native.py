@@ -18,13 +18,14 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Mapping, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from automoto import developer_adapters as adapters
 from automoto import developer_index as index
+from automoto import developer_rust as rust
 from automoto import developer_studio as studio
 
 router = APIRouter(prefix="/api/developer/studio/native", tags=["developer-native"])
@@ -48,6 +49,30 @@ ERROR = re.compile(r'(?m)^([^\n:]{1,260}\.(?:c|cc|cpp|cxx|h|hpp)):(\d{1,8}):'
 SANITIZER = re.compile(r'(?i)(AddressSanitizer|UndefinedBehaviorSanitizer|'
                        r'runtime error:|heap-buffer-overflow|stack-buffer-overflow|'
                        r'use-after-free|double-free|undefined-behavior)')
+# CMake's Visual Studio generator names. The major version comes from vswhere;
+# the string CMake accepts is not taken from installer text.
+_VS_GENERATORS = {
+    15: "Visual Studio 15 2017",
+    16: "Visual Studio 16 2019",
+    17: "Visual Studio 17 2022",
+    18: "Visual Studio 18 2026",
+}
+_VS_PLATFORMS = {"x64", "Win32", "ARM64", "ARM"}
+_VS_TOOL_X64 = "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+_VS_TOOL_ARM64 = "Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+_VS_WORKLOAD = "Microsoft.VisualStudio.Workload.VCTools"
+_VERSION_TEXT = re.compile(r"[0-9]+(?:\.[0-9]+){1,3}")
+_COMPILER_MISSING = (
+    "This Windows C/C++ build needs a C and C++ compiler. AutoMoto did not "
+    "find Visual Studio C++ tools, Ninja with a compiler, or MinGW. Install "
+    "Visual Studio Build Tools with the Desktop development with C++ "
+    "workload, or install Ninja or MinGW with a C/C++ compiler, then try again."
+)
+_CMAKE_TOO_OLD = (
+    "This Windows C/C++ build found Visual Studio, but the approved CMake "
+    "cannot generate projects for that version. Install a newer CMake, or "
+    "install Ninja or MinGW with a C/C++ compiler, then try again."
+)
 
 
 class RootIn(BaseModel):
@@ -272,29 +297,326 @@ def _sanitizer_compilers(summary: dict) -> tuple[dict, dict] | None:
     return None
 
 
-def _environment(root: Path) -> dict:
+def _path_has_tool(env: Mapping[str, str], root: Path, names: tuple[str, ...]) -> bool:
+    """True when the scrubbed PATH contains one of these tool names."""
+    folders = [item for item in (env.get("PATH") or "").split(os.pathsep) if item][:40]
+    suffixes = [""]
+    for ext in (rust._env_lookup(env, "PATHEXT") or "").split(os.pathsep):
+        if ext.startswith(".") and ext not in suffixes and len(ext) <= 8:
+            suffixes.append(ext)
+    for folder in folders:
+        base = Path(folder)
+        for name in names:
+            candidates = [base / name]
+            for ext in suffixes:
+                if ext:
+                    candidates.append(base / (name + ext))
+            for candidate in candidates:
+                try:
+                    if not candidate.is_file():
+                        continue
+                    resolved = candidate.resolve(strict=True)
+                except (OSError, ValueError):
+                    continue
+                if not adapters._disallowed_workspace_executable(resolved, root):
+                    return True
+    return False
+
+
+def _cmake_platform(env: Mapping[str, str], source: Mapping[str, str]) -> str:
+    arch = (rust._env_lookup(env, "PROCESSOR_ARCHITECTURE")
+            or rust._env_lookup(source, "PROCESSOR_ARCHITECTURE")
+            or "AMD64")
+    kind = rust._lib_arch({"PROCESSOR_ARCHITECTURE": arch})
+    return {"x64": "x64", "arm64": "ARM64", "x86": "Win32"}.get(kind, "x64")
+
+
+def _program_dirs(env: Mapping[str, str], source: Mapping[str, str], root: Path) -> list:
+    found = []
+    for key in ("ProgramFiles(x86)", "ProgramFiles", "ProgramW6432"):
+        for mapping in (env, source):
+            folder = rust._approved_directory(rust._env_lookup(mapping, key), root)
+            if folder is not None and folder not in found:
+                found.append(folder)
+    return found
+
+
+def _locate_vswhere(env: Mapping[str, str], source: Mapping[str, str], root: Path) -> Optional[Path]:
+    """vswhere.exe from the scrubbed PATH or a Program Files installer directory."""
+    candidates = []
+    for folder in (env.get("PATH") or "").split(os.pathsep)[:40]:
+        if folder:
+            candidates.append(Path(folder) / "vswhere.exe")
+    for base in _program_dirs(env, source, root):
+        candidates.append(base / "Microsoft Visual Studio" / "Installer" / "vswhere.exe")
+    seen = set()
+    for candidate in candidates:
+        try:
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            resolved = candidate.resolve(strict=True)
+        except (OSError, ValueError):
+            continue
+        marker = os.path.normcase(str(resolved))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        if (resolved.name.casefold() != "vswhere.exe"
+                or resolved.suffix.casefold() in {".cmd", ".bat", ".ps1"}
+                or adapters._disallowed_workspace_executable(resolved, root)):
+            continue
+        return resolved
+    return None
+
+
+def _decode_tool_output(raw: bytes) -> str:
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16", "replace")
+    return raw.decode("utf-8-sig", "replace")
+
+
+def _run_vswhere(executable: Path, env: dict, component: str) -> str:
+    command = [str(executable), "-products", "*", "-prerelease", "-requires", component,
+               "-format", "json", "-utf8", "-sort"]
+    try:
+        completed = subprocess.run(
+            command, shell=False, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    output = _decode_tool_output(completed.stdout[:262144])
+    if completed.returncode != 0 and not output.strip():
+        return ""
+    return output
+
+
+def _parse_vswhere(text: str) -> list:
+    stripped = (text or "").strip()
+    if not stripped:
+        return []
+    try:
+        parsed = json.loads(stripped)
+    except (ValueError, RecursionError, TypeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    found = []
+    for item in parsed[:8]:
+        if not isinstance(item, dict):
+            continue
+        version = item.get("installationVersion")
+        if not isinstance(version, str) or not _VERSION_TEXT.fullmatch(version):
+            continue
+        generator = _VS_GENERATORS.get(int(version.split(".", 1)[0]))
+        path = item.get("installationPath")
+        if generator is None or (path is not None and not isinstance(path, str)):
+            continue
+        found.append({"major": int(version.split(".", 1)[0]), "generator": generator,
+                      "installationPath": path or ""})
+    found.sort(key=lambda item: item["major"], reverse=True)
+    return found
+
+
+def _accept_vs_install(path: str, root: Path) -> Optional[Path]:
+    """A Visual Studio root outside the workspace that actually contains C++ tools."""
+    approved = rust._approved_directory(path, root)
+    if approved is None:
+        return None
+    if "microsoft visual studio" not in [part.casefold() for part in approved.parts]:
+        return None
+    tools = approved / "VC" / "Tools" / "MSVC"
+    auxiliary = approved / "VC" / "Auxiliary" / "Build"
+    try:
+        if (tools.is_dir() and not tools.is_symlink()) or (
+                auxiliary.is_dir() and not auxiliary.is_symlink()):
+            return approved
+    except OSError:
+        return None
+    return None
+
+
+def _component_order(platform: str) -> tuple:
+    if platform == "ARM64":
+        return (_VS_TOOL_ARM64, _VS_TOOL_X64, _VS_WORKLOAD)
+    return (_VS_TOOL_X64, _VS_WORKLOAD)
+
+
+def _query_vswhere(env: dict, source: Mapping[str, str], root: Path, platform: str) -> list:
+    executable = _locate_vswhere(env, source, root)
+    if executable is None or platform not in _VS_PLATFORMS:
+        return []
+    accepted = []
+    seen = set()
+    for component in _component_order(platform):
+        chosen = "x64" if platform == "ARM64" and component != _VS_TOOL_ARM64 else platform
+        for item in _parse_vswhere(_run_vswhere(executable, env, component)):
+            item["platform"] = chosen
+            if _accept_vs_install(item.get("installationPath") or "", root) is None:
+                continue
+            marker = (item["generator"], chosen, os.path.normcase(item.get("installationPath") or ""))
+            if marker in seen:
+                continue
+            seen.add(marker)
+            accepted.append(item)
+    return accepted
+
+
+def _parse_cmake_generators(text: str) -> set:
+    names = set()
+    started = False
+    blanks = 0
+    for line in (text or "").splitlines():
+        if not started:
+            if "generators are available on this platform" in line.casefold():
+                started = True
+            continue
+        if not line.strip():
+            blanks += 1
+            if blanks >= 2:
+                break
+            continue
+        blanks = 0
+        match = re.match(r"^\s*\*?\s*(.+?)\s+=\s+\S", line)
+        if match:
+            names.add(match.group(1).strip())
+    return names
+
+
+def _supported_generators(cmake: Optional[str], env: dict, root: Path) -> Optional[set]:
+    """Generator names this CMake binary reports. None means the list is unknown."""
+    if not cmake:
+        return None
+    try:
+        tool = Path(cmake).resolve(strict=True)
+    except (OSError, ValueError):
+        return None
+    if adapters._disallowed_workspace_executable(tool, root):
+        return None
+    try:
+        completed = subprocess.run(
+            [str(tool), "--help"], shell=False, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    names = _parse_cmake_generators(_decode_tool_output(completed.stdout[:262144]))
+    return names or None
+
+
+def _compiler_pair(env: Mapping[str, str], root: Path) -> bool:
+    gcc = _path_has_tool(env, root, ("gcc", "gcc.exe"))
+    gxx = _path_has_tool(env, root, ("g++", "g++.exe"))
+    clang = _path_has_tool(env, root, ("clang", "clang.exe"))
+    clangxx = _path_has_tool(env, root, ("clang++", "clang++.exe"))
+    return (gcc and gxx) or (clang and clangxx)
+
+
+def _ninja_usable(env: Mapping[str, str], root: Path) -> bool:
+    return _path_has_tool(env, root, ("ninja", "ninja.exe")) and _compiler_pair(env, root)
+
+
+def _mingw_usable(env: Mapping[str, str], root: Path) -> bool:
+    return (_path_has_tool(env, root, ("mingw32-make", "mingw32-make.exe"))
+            and _path_has_tool(env, root, ("gcc", "gcc.exe"))
+            and _path_has_tool(env, root, ("g++", "g++.exe")))
+
+
+def _generator_allowed(name: str, supported: Optional[set]) -> bool:
+    return supported is None or name in supported
+
+
+def _windows_cmake_plan(env: dict, source: Mapping[str, str], root: Path,
+                        cmake: Optional[str]) -> tuple:
+    """CMake -G/-A args, or a plain diagnostic when no Windows C/C++ compiler exists.
+
+    NMake, CMake's default on Windows, only works when cl.exe is already on PATH
+    (a Developer Command Prompt). A normal Windows session has Visual Studio
+    installed but does not put cl.exe on PATH, so configure must name a generator
+    vswhere can back. Ninja and MinGW are used only when those tools are present.
+    """
+    if _path_has_tool(env, root, ("cl", "cl.exe")):
+        return [], None
+    platform = _cmake_platform(env, source)
+    instances = _query_vswhere(env, source, root, platform)
+    supported = _supported_generators(cmake, env, root)
+    saw_vs = False
+    for item in instances:
+        item_platform = item.get("platform") or platform
+        if item_platform not in _VS_PLATFORMS:
+            continue
+        if _accept_vs_install(item.get("installationPath") or "", root) is None:
+            continue
+        if not _generator_allowed(item["generator"], supported):
+            saw_vs = True
+            continue
+        return ["-G", item["generator"], "-A", item_platform], None
+    if _generator_allowed("Ninja", supported) and _ninja_usable(env, root):
+        return ["-G", "Ninja"], None
+    if _generator_allowed("MinGW Makefiles", supported) and _mingw_usable(env, root):
+        return ["-G", "MinGW Makefiles"], None
+    # A real Visual Studio tree was found, but this CMake has no generator for it.
+    if saw_vs:
+        return [], _CMAKE_TOO_OLD
+    return [], _COMPILER_MISSING
+
+
+def _environment(root: Path, *, windows: Optional[bool] = None,
+                 cmake_executable: Optional[str] = None) -> tuple:
     env = adapters._environment(root)
     env["CMAKE_BUILD_PARALLEL_LEVEL"] = "2"
     env["CTEST_PARALLEL_LEVEL"] = "1"
     env["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
     env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
-    if os.name == "nt":
-        # MSVC requires Visual Studio SDK paths. Only admit existing absolute
-        # directories outside every approved workspace; never raw strings.
-        for key in ("LIB", "LIBPATH", "INCLUDE"):
-            allowed = []
-            for token in os.environ.get(key, "").split(os.pathsep)[:40]:
-                if not token or len(token) > 600:
-                    continue
-                try:
-                    p = Path(token).resolve(strict=True)
-                    if p.is_dir() and not adapters._disallowed_workspace_executable(p, root):
-                        allowed.append(str(p))
-                except (OSError, ValueError):
-                    pass
-            if allowed:
-                env[key] = os.pathsep.join(allowed)
-    return env
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return env, [], None
+    # The shared V8 environment drops arbitrary inherited values. CMake,
+    # vswhere and MSBuild still need the same non-secret Windows toolchain
+    # locators V19 restores for rustc (ProgramFiles, VS/SDK tokens, PATHEXT,
+    # LIB/INCLUDE). Secret values stay out of this dictionary.
+    rust._copy_windows_locators(env, os.environ, root)
+    arguments, problem = _windows_cmake_plan(env, os.environ, root, cmake_executable)
+    return env, arguments, problem
+
+
+def _build_steps(cmake: str, ctest: Optional[str], root: Path, folder: Path,
+                 generator_args: list, compilers) -> list:
+    """Configure, build and optionally test. VS generators need --config and -C Debug."""
+    configure = [cmake, "-S", str(root), "-B", str(folder)]
+    configure.extend(generator_args)
+    configure.extend(["-DCMAKE_BUILD_TYPE=Debug", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"])
+    if compilers:
+        c_compiler, cpp_compiler = compilers
+        configure += ["-DCMAKE_C_COMPILER=" + c_compiler["invocation"],
+                      "-DCMAKE_CXX_COMPILER=" + cpp_compiler["invocation"]]
+        flags = "-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+        configure += ["-DCMAKE_C_FLAGS=" + flags, "-DCMAKE_CXX_FLAGS=" + flags,
+                      "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"]
+    steps = [("configure", configure),
+             ("build", [cmake, "--build", str(folder), "--config", "Debug",
+                        "--parallel", "2"])]
+    if ctest:
+        steps.append(("test", [ctest, "--test-dir", str(folder), "-C", "Debug",
+                               "--output-on-failure", "--timeout", "20"]))
+    return steps
+
+
+def _compiler_problem_result(body: RunIn, message: str) -> dict:
+    return {"task": body.task, "tool": body.tool, "status": "nonzero_exit",
+            "stages": [{"stage": "configure", "status": "nonzero_exit", "exit_code": 1}],
+            "output": message, "elapsed_ms": 0, "diagnostics": [],
+            "sanitizer_detected": False, "sanitizer_evidence": [],
+            "manifest_sha256": body.expected_manifest_sha256,
+            "source_sha256": body.expected_source_sha256,
+            "temporary_build_deleted": True, "source_files_unchanged": "not_verified",
+            "external_process_unsandboxed": True, "network_prevented_by_os": False,
+            "package_installation_performed_by_app": False,
+            "central_agent_studio": "developer",
+            "agent_handoff_created": False, "agent_deployment_approved": False,
+            "deployment_started": False}
 
 
 def _execute(root: Path, command: list[str], env: dict, timeout: int = TIMEOUT) -> dict:
@@ -409,29 +731,21 @@ def run(request: Request, body: RunIn):
                 or after["toolchain_sha256"] != body.expected_toolchain_sha256):
             raise HTTPException(409, "Native inputs changed while preparing the approved task.")
         adapters._trusted(root)
-        env = _environment(root)
+        env, generator_args, compiler_problem = _environment(
+            root, cmake_executable=binary["executable"] if body.tool == "cmake" else None)
+        # Version probes do not need a compiler. Configure/build/test do: return
+        # the plain diagnostic instead of CMake's missing-compiler log.
+        if compiler_problem and not command:
+            return _compiler_problem_result(body, compiler_problem)
         steps = []
         with tempfile.TemporaryDirectory(prefix="automoto-native20-") as temporary:
             folder = Path(temporary) / "build"
             if command:
                 steps.append(("version", command))
             else:
-                configure = [binary["executable"], "-S", str(root), "-B", str(folder),
-                             "-DCMAKE_BUILD_TYPE=Debug", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
-                if compilers:
-                    c, cpp = compilers
-                    configure += ["-DCMAKE_C_COMPILER=" + c["invocation"],
-                                  "-DCMAKE_CXX_COMPILER=" + cpp["invocation"]]
-                    flags = "-fsanitize=address,undefined -fno-omit-frame-pointer -g"
-                    configure += ["-DCMAKE_C_FLAGS=" + flags, "-DCMAKE_CXX_FLAGS=" + flags,
-                                  "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"]
-                steps.append(("configure", configure))
-                steps.append(("build", [binary["executable"], "--build", str(folder),
-                                        "--config", "Debug", "--parallel", "2"]))
-                if ctest:
-                    steps.append(("test", [ctest["executable"], "--test-dir", str(folder),
-                                            "-C", "Debug", "--output-on-failure",
-                                            "--timeout", "20"]))
+                steps.extend(_build_steps(
+                    binary["executable"], ctest["executable"] if ctest else None,
+                    root, folder, generator_args, compilers))
             elapsed = 0
             stage_results = []
             for step, argv in steps:
