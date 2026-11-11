@@ -124,7 +124,7 @@ jobs:
         run: |
           sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
           cd tests/fixtures/v25-flutter
-          flutter create . --platforms android
+          flutter create . --platforms android --project-name automoto_v25_flutter
           flutter pub get
       - name: Build real debug APK
         working-directory: tests/fixtures/v25-flutter
