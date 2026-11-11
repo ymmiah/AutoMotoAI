@@ -2570,6 +2570,37 @@ let browser;
     'V22 shared Agent release review cannot deploy or rewrite files');
   await page.screenshot({path:path.join(output,'developer-studio-v22-dotnet-csharp.png')});
 
+  // V23: static Kotlin/Android/Compose metadata and shared Agent hand-off.
+  const v23Kotlin=path.join(devProject,'app','src','main','java','com','automoto','v23','V23Screen.kt');
+  const v23Source='package com.automoto.v23\nimport androidx.compose.runtime.Composable\n@Composable fun V23Screen() { }\n';
+  writeFileSync(v23Kotlin,v23Source);
+  writeFileSync(path.join(devProject,'settings.gradle.kts'),
+    'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\nrootProject.name="V23Browser"\ninclude(":app")\n');
+  writeFileSync(path.join(devProject,'build.gradle.kts'),
+    'plugins { id("com.android.application") version "8.13.2" apply false; id("org.jetbrains.kotlin.android") version "2.2.21" apply false }\n');
+  writeFileSync(path.join(devProject,'app','build.gradle.kts'),
+    'plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }\nandroid { namespace = "com.automoto.v23"; compileSdk = 35 }\n');
+  writeFileSync(path.join(devProject,'app','src','main','AndroidManifest.xml'),
+    '<?xml version="1.0"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application/></manifest>');
+  writeFileSync(path.join(devProject,'gradle','wrapper','gradle-wrapper.properties'),
+    'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip\n');
+  await page.locator('#dsAndroidInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAndroidStatus')?.textContent?.includes('inspection complete'));
+  const v23Body=await page.locator('#dsAndroidResults').innerText();
+  assert.match(v23Body,/V23Screen\.kt/);
+  assert.match(v23Body,/8\.13\.2/);
+  assert.match(v23Body,/Jetpack Compose/);
+  assert.match(v23Body,/Emulator/);
+  assert.match(v23Body,/No device connection, AVD launch/);
+  assert.deepEqual(readFileSync(v23Kotlin,'utf8'),v23Source,
+    'Kotlin inspection does not edit or execute source');
+  await page.locator('#dsAndroidAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V23 Kotlin\/Android readiness/);
+  assert.deepEqual(readFileSync(v23Kotlin,'utf8'),v23Source,
+    'V23 shared Agent review does not deploy or rewrite Kotlin source');
+  await page.screenshot({path:path.join(output,'developer-studio-v23-kotlin-android.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
