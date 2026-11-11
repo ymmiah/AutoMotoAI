@@ -15,6 +15,7 @@ Linux or VS Code.
 | **[Pick your device](START.md)** | The easiest path for your device (Windows app, phone, Mac/Linux, VS Code), one account everywhere, help. |
 | **[GUI guide](GUI-GUIDE.md)** | Step by step with screenshots: install, add a free key, open the app, every page, VS Code, hosted mode and the admin panel. |
 | **[Install](INSTALL.md)** | Every OS in detail: Windows, macOS, Linux, Docker, Raspberry Pi, ChromeOS, phones. |
+| **[iPhone apps](IOS.md)** | Describe an app, build it, put it on a real iPhone, and send it to Apple only when you press the button. |
 | **[Windows app distribution](WINDOWS-DISTRIBUTION.md)** | SmartScreen, code signing, Microsoft Store and winget (for maintainers). |
 | **[Privacy policy](PRIVACY.md)** | No telemetry. Everything the app connects to, and when. |
 | **[Hosting](HOSTING.md)** | Let other people use it with a daily limit; honest free-hosting comparison. |

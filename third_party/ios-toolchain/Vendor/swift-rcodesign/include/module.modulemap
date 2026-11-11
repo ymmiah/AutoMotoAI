@@ -1,0 +1,4 @@
+module RCodesignBinary [extern_c] {
+    header "rcodesign.h"
+    export *
+}

@@ -2,3 +2,5 @@
 # Never translate line endings on Windows checkout or the integrity manifest fails.
 # This rule applies to the bundled JS workers, CSS, fonts, licences and manifest.
 automoto/web/static/vendor/monaco/** -text
+# The vendored iPhone toolchain is scanned and hashed as LF text.
+third_party/ios-toolchain/** text=auto eol=lf

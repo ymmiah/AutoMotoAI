@@ -5,6 +5,7 @@ import {mountDeveloperLanguageIntelligence} from "./developer-language.js";
 import {mountDeveloperLSP} from "./developer-lsp.js";
 import {mountDeveloperIndex} from "./developer-index.js";
 import {mountDeveloperAdapters} from "./developer-adapters.js";
+import {mountDeveloperIos} from "./developer-ios.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
@@ -37,6 +38,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
           '<p class="ds-footnote" id="dsFileInfo">Select a source file. V2 supports UTF-8, UTF-16 BOM and explicit Windows-1252.</p>'+
           '<div id="dsEditorRoot"></div></section>'+
       '</div>'+
+      '<div id="dsIosRoot" aria-label="iPhone apps"></div>'+
       '<p class="ds-status" id="dsStatus" role="status" aria-live="polite">Developer Studio V1 is ready to open an approved local project.</p>'+
     '</div>');
   const byId=id=>host.querySelector("#"+id);
@@ -49,6 +51,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
   index=mountDeveloperIndex({api,host,getProject:()=>project,editor,status});
   adapters=mountDeveloperAdapters({api,host,getProject:()=>project,status});
+  const iosStudio=mountDeveloperIos({api,host,getProject:()=>project});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -106,6 +109,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       languageIntelligence.reset();
       await index.projectChanged();
       await adapters.projectChanged();
+      await iosStudio.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();

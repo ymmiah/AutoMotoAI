@@ -1,0 +1,34 @@
+# Monthly look at the upstream iPhone toolchain. Disabled unless the repository
+# variable IOS_TOOLCHAIN_SYNC is 1. A manual run opens a pull request only when
+# the input says so. Nothing in this workflow merges.
+name: iOS toolchain upstream sync
+on:
+  workflow_dispatch:
+    inputs:
+      open_pr:
+        description: Open a pull request for a person to review. Never merges.
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 9 1 * *"
+permissions:
+  contents: read
+jobs:
+  sync:
+    if: github.event_name == 'workflow_dispatch' || vars.IOS_TOOLCHAIN_SYNC == '1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Report the pinned snapshot
+        env:
+          IOS_TOOLCHAIN_SYNC: "1"
+        run: |
+          if [ "${{ inputs.open_pr }}" = "true" ]; then
+            python scripts/ios_toolchain_sync.py --open-pr
+          else
+            python scripts/ios_toolchain_sync.py
+          fi
+          echo "This workflow does not merge."

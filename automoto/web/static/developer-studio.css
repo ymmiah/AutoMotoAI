@@ -13,6 +13,13 @@
 .ds-summary #dsTrustState{color:var(--dim);font-size:13px}
 .ds-eyebrow{font-size:10px;letter-spacing:.12em;font-weight:800;color:var(--dim)}
 .ds-warning{margin:0;color:var(--dim);font-size:13px;border-left:3px solid var(--info);padding:6px 12px;background:var(--panel2);border-radius:5px}
+.ios-panel{display:grid;gap:10px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.ios-panel h3{margin:0;font-size:15px}
+.ios-panel ol{margin:0;padding-left:1.2rem;display:grid;gap:6px}
+.ios-panel li{font-size:14px}
+.ios-draft{white-space:pre-wrap;font-size:14px}
+.ios-status{margin:0;color:var(--dim);font-size:13px}
+.ios-status.bad{color:var(--danger,#c44)}
 .ds-columns{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1.9fr);gap:14px;min-height:470px}
 .ds-panel{min-width:0;padding:0;display:flex;flex-direction:column;overflow:hidden}
 .ds-panel-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid var(--line)}
