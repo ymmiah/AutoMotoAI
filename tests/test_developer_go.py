@@ -228,6 +228,8 @@ def test_real_go_build_test_and_vet_multiple_packages_offline(project):
 def test_profile_requires_one_discovered_test_package_and_deletes_raw_profile(project):
     client, root = project
     trust(client, root)
+    originals = {p.relative_to(root).as_posix(): p.read_bytes()
+                 for p in root.rglob("*") if p.is_file()}
     refused = run(client, root, task="profile", package="./outside")
     assert refused.status_code == 422
     output = run(client, root, task="profile", package="./service/api")
@@ -239,6 +241,9 @@ def test_profile_requires_one_discovered_test_package_and_deletes_raw_profile(pr
     if result["profile"].get("sha256"):
         assert len(result["profile"]["sha256"]) == 64
         assert result["profile"]["size_bytes"] <= go.MAX_PROFILE
+    assert originals == {p.relative_to(root).as_posix(): p.read_bytes()
+                         for p in root.rglob("*") if p.is_file()}, (
+        "Go profiling must not retain its test binary or CPU profile in user source.")
 
 
 def test_unknown_binary_task_and_version_reject_package(project):
