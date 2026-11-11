@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 import zipfile
 from pathlib import Path
@@ -149,7 +150,9 @@ def test_wizard_create_listing_and_refuse_until_the_button(client, tmp_path, cap
     assert any(path.is_file() for path in source)
 
     key = _pem(tmp_path)
-    assert stat.S_IMODE(key.stat().st_mode) == 0o600
+    # Windows reports a different mode for chmod; the private-file check is POSIX.
+    if os.name != "nt":
+        assert stat.S_IMODE(key.stat().st_mode) == 0o600
     stored = client.post(BASE + "/secrets", headers=AUTH, json={
         "name": "AUTOMOTO_ASC_KEY_PATH", "value": str(key),
     })
