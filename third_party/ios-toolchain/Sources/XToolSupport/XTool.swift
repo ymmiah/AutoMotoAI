@@ -1,0 +1,90 @@
+import XCLIUtils
+import Foundation
+import XKit
+import ArgumentParser
+import XUtils
+import Dependencies
+
+public enum XTool {
+    public static func run(arguments: [String]? = nil) async throws {
+        TemporaryDirectory.prepare()
+        await XToolCommand.cancellableMain(arguments)
+    }
+}
+
+private struct XToolCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "automoto-ios",
+        abstract: "Cross-platform Xcode replacement",
+        version: "automoto-ios \(XTool.version)",
+        groupedSubcommands: [
+            CommandGroup(
+                name: "Configuration",
+                subcommands: [
+                    SetupCommand.self,
+                    AuthCommand.self,
+                    SDKCommand.self,
+                ]
+            ),
+            CommandGroup(
+                name: "Development",
+                subcommands: [
+                    NewCommand.self,
+                    DevCommand.self,
+                    DSCommand.self,
+                ]
+            ),
+            CommandGroup(
+                name: "Device",
+                subcommands: [
+                    DevicesCommand.self,
+                    InstallCommand.self,
+                    UninstallCommand.self,
+                    LaunchCommand.self,
+                ]
+            )
+        ]
+    )
+}
+
+#if compiler(<6.2)
+private typealias SendableMetatype = Any
+#endif
+
+extension ParsableCommand where Self: SendableMetatype {
+    fileprivate static func cancellableMain(_ arguments: [String]? = nil) async {
+        let (canStart, cont) = AsyncStream.makeStream(of: Never.self)
+        let task = Task {
+            for await _ in canStart {}
+            guard !Task.isCancelled else { return }
+            do {
+                @Dependency(\.shutdownRegistry) var shutdownRegistry
+                defer { await shutdownRegistry.shutdown() }
+                var command = try self.parseAsRoot(arguments)
+                if var asyncCommand = command as? AsyncParsableCommand {
+                    try await asyncCommand.run()
+                } else {
+                    try command.run()
+                }
+            } catch where error is CancellationError || Task.isCancelled {
+                d.out.print("Cancelled.", stream: .stderr)
+                self.exit()
+            } catch {
+                if ProcessInfo.processInfo.environment["XTL_DEBUG_ERRORS"] != nil {
+                    d.out.print("ERROR DETAILS:")
+                    d.out.print(String(reflecting: error))
+                }
+                self.exit(withError: error)
+            }
+        }
+
+        signal(SIGINT, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGINT)
+        source.setEventHandler { task.cancel() }
+        source.resume()
+
+        cont.finish()
+
+        await task.value
+    }
+}

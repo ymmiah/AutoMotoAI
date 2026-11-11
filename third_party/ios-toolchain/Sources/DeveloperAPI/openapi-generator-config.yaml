@@ -1,0 +1,12 @@
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic
+filter:
+  tags:
+    - BundleIds
+    - BundleIdCapabilities
+    - Certificates
+    - Devices
+    - Profiles

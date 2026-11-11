@@ -26,3 +26,8 @@ available under the MIT licence.
 
 Third-party components keep their own licences (for example the files in
 automoto/web/static/vendor/, see the README there).
+
+The iPhone toolchain under third_party/ios-toolchain/ is a modified snapshot
+of an MIT-licensed project. Its copyright notice and MIT text are in
+third_party/ios-toolchain/NOTICE. That directory is part of this AGPL-3.0-only
+program. The MIT notice is kept because the MIT licence requires it.

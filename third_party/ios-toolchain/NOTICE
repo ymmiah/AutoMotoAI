@@ -1,0 +1,53 @@
+MIT licence notice for the iPhone toolchain snapshot
+
+The sources under this directory (except files this project added, listed at
+the bottom) are a snapshot of an MIT-licensed toolchain and three libraries
+it builds with. The combined AutoMoto program is AGPL-3.0-only. The MIT
+notice below is kept because the MIT licence requires it.
+
+Upstream project: https://github.com/xtool-org/xtool
+Pinned commit: a2875dd9ac311aa14c0a1fa3207733da51241376
+Copyright (c) 2024 Kabir Oberai and contributors
+
+Vendored library: https://github.com/xtool-org/xtool-core
+Pinned commit: 154d7213c12e3f21d50793f50ec7bfb89cfd3918
+Copyright (c) 2024 Kabir Oberai
+
+Vendored library: https://github.com/xtool-org/SwiftyMobileDevice
+Pinned commit: 1f6e4cc614a31953bda5d1092a747cfdea90916f
+Copyright (c) 2020 Kabir Oberai
+
+Vendored library: https://github.com/xtool-org/swift-rcodesign
+Pinned commit: d9baaee343b1c3668f9cbee09755054a0a419157
+The pinned snapshot contained no licence file. Confirm the terms before
+redistributing a binary built from it. It binds the apple-codesign crate.
+
+Anisette servers this snapshot used to contact, which this copy does not
+contact: https://servers.sidestore.io and https://mac-ani.jkcoxson.com
+
+MIT Licence
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Files added by this project, not covered by the MIT grant above:
+- NOTICE (this file)
+- README.md
+- UPSTREAM.json
+- Artifacts.json
+- Sources/XToolSupport/AutomotoArtifacts.swift
