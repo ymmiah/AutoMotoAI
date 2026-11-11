@@ -191,6 +191,24 @@ def test_build_scripts_and_unsafe_custom_target_paths_need_review(project):
     assert any("Unsafe custom" in msg for msg in data["warnings"])
 
 
+def test_dependency_escape_and_plain_rust_toolchain_override_fail_closed(project):
+    client, root = project
+    original = inspect(client, root).json()
+    assert original["safe_to_offer_runs"], original["warnings"]
+    member = root / "crates/cli/Cargo.toml"
+    member.write_text(CLI_CARGO.replace("../core", "../../../outside"), encoding="utf-8")
+    response = inspect(client, root)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert not data["safe_to_offer_runs"]
+    assert any("Cargo dependency path" in msg for msg in data["warnings"])
+    member.write_text(CLI_CARGO, encoding="utf-8")
+    (root / "rust-toolchain").write_text("nightly\\n", encoding="utf-8")
+    data = inspect(client, root).json()
+    assert not data["safe_to_offer_runs"]
+    assert any("toolchain override" in msg for msg in data["warnings"])
+
+
 def test_untrusted_run_and_changed_files_cannot_reuse_approval(project):
     client, root = project
     assert run(client, root).status_code == 403
