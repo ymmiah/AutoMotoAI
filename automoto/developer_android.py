@@ -318,9 +318,18 @@ def _env(root: Path, temp: Path, sdk: dict) -> dict:
     # Gradle's read-only dependency cache allows offline resolution of
     # previously obtained artifacts without granting the task write access
     # to the user's normal Gradle home. No cache present => clear failure.
-    cache = Path.home() / ".gradle" / "caches" / "modules-2"
-    if cache.is_dir() and not cache.is_symlink():
-        env["GRADLE_RO_DEP_CACHE"] = str(cache)
+    # Gradle requires GRADLE_RO_DEP_CACHE to point to the parent directory
+    # containing modules-2, NOT to modules-2 itself. This directory is an
+    # existing local dependency cache, not a network repository.
+    cache = Path.home() / ".gradle" / "caches"
+    if ((cache / "modules-2").is_dir() and not cache.is_symlink()
+            and not (cache / "modules-2").is_symlink()):
+        try:
+            resolved = cache.resolve(strict=True)
+            if not adapters._disallowed_workspace_executable(resolved, root):
+                env["GRADLE_RO_DEP_CACHE"] = str(resolved)
+        except (OSError, ValueError):
+            pass
     if sdk["status"] == "installed_not_executed":
         env["ANDROID_HOME"] = sdk["root"]
         env["ANDROID_SDK_ROOT"] = sdk["root"]
