@@ -2452,6 +2452,24 @@ let browser;
   assert.deepEqual(readFileSync(v17Python,'utf8'),v17Source,'V17 Agent review cannot deploy');
   await page.screenshot({path:path.join(output,'developer-studio-v17-python-emerging.png')});
 
+  // V18: real Go module and HTTP-service source. Inspection must remain inert.
+  const v18Go=path.join(devProject,'v18-handler.go');
+  const v18GoSource='package main\nimport "net/http"\nfunc main() { http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }) }\n';
+  writeFileSync(v18Go,v18GoSource);
+  writeFileSync(path.join(devProject,'go.mod'),'module example.com/v18/browser\n\ngo 1.22\n');
+  await page.locator('#dsGoInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsGoStatus')?.textContent?.includes('Go project inspected'));
+  assert.match(await page.locator('#dsGoResults').innerText(),/Go modules and workspace/);
+  assert.match(await page.locator('#dsGoResults').innerText(),/example\.com\/v18\/browser/);
+  assert.match(await page.locator('#dsGoResults').innerText(),/Service imports: http/);
+  assert.deepEqual(readFileSync(v18Go,'utf8'),v18GoSource,
+    'V18 Go inspection must not execute or change source');
+  await page.locator('#dsGoAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V18 Go service release readiness/);
+  assert.deepEqual(readFileSync(v18Go,'utf8'),v18GoSource,'Agent review must not deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v18-go-workspaces.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
