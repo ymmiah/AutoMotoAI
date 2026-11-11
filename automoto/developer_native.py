@@ -208,13 +208,15 @@ def _tools(root: Path) -> tuple[list[dict], list[dict], str]:
         else:
             try:
                 entry = {"name": name, "status": "installed_not_executed",
-                         **adapters._fingerprint(str(Path(candidate).absolute()), root)}
+                         **adapters._fingerprint(str(Path(candidate).absolute()), root),
+                         "invocation": str(Path(candidate).absolute())}
             except HTTPException:
                 entry = {"name": name, "status": "not_approved"}
         (debugger if name in DEBUGGERS else tools).append(entry)
         digest.update(name.encode("ascii") + b"\0" +
                       entry["status"].encode("ascii") + b"\0" +
-                      entry.get("sha256", "").encode("ascii"))
+                      entry.get("sha256", "").encode("ascii") + b"\0" +
+                      entry.get("invocation", "").encode("utf-8"))
     return tools, debugger, digest.hexdigest()
 
 
@@ -260,6 +262,12 @@ def _sanitizer_compilers(summary: dict) -> tuple[dict, dict] | None:
               if x["status"] == "installed_not_executed"}
     for c, cpp in (("clang", "clang++"), ("gcc", "g++")):
         if c in lookup and cpp in lookup and os.name != "nt":
+            try:
+                for driver in (lookup[c], lookup[cpp]):
+                    if Path(driver["invocation"]).resolve(strict=True) != Path(driver["executable"]):
+                        raise HTTPException(409, "Native compiler invocation no longer matches the verified binary.")
+            except (OSError, ValueError) as exc:
+                raise HTTPException(409, "Native compiler invocation path is unavailable.") from exc
             return lookup[c], lookup[cpp]
     return None
 
@@ -412,8 +420,8 @@ def run(request: Request, body: RunIn):
                              "-DCMAKE_BUILD_TYPE=Debug", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
                 if compilers:
                     c, cpp = compilers
-                    configure += ["-DCMAKE_C_COMPILER=" + c["executable"],
-                                  "-DCMAKE_CXX_COMPILER=" + cpp["executable"]]
+                    configure += ["-DCMAKE_C_COMPILER=" + c["invocation"],
+                                  "-DCMAKE_CXX_COMPILER=" + cpp["invocation"]]
                     flags = "-fsanitize=address,undefined -fno-omit-frame-pointer -g"
                     configure += ["-DCMAKE_C_FLAGS=" + flags, "-DCMAKE_CXX_FLAGS=" + flags,
                                   "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"]
