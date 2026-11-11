@@ -16,10 +16,12 @@ removes network tools such as DOI lookup.
 | Research Studio | *what evidence answers the research question about the Friday beta in my notes?* | Quotes from your files, checksum-pinned. A DOI check uses the network and is skipped offline. Citations are not invented. |
 | Visual Studio | *make a promo GIF in my brand colours* or *make a 3-slide promo deck* | A real GIF or PPTX. *repair the layout and do not apply it* returns the proposal only. |
 | Developer Studio | *fix the bug in this repo file and show the diff* | A diff against the checksum it just read. The save is refused if the file changed. Not available on a hosted server. |
+| iPhone apps (inside Developer Studio) | *make an iPhone app that counts taps* | A project on this computer, then a build and an install on a real iPhone when the tools are there. The App Store send waits for the **Send to Apple** button. |
 
-Developer Studio on this version is the explorer, editor, search, symbols, diff, save, language detection
-and already-registered adapters. LaTeX, BibTeX, TeX build, Typst, Quarto and frontend preview are not
-included yet. When those modules are added as below, the assistant picks them up by itself.
+Developer Studio on this version is the explorer, editor, search, symbols, diff, save, language detection,
+already-registered adapters, and iPhone apps (`automoto/developer_ios_studio_tools.py`). LaTeX, BibTeX,
+TeX build, Typst, Quarto and frontend preview are not included yet. When those modules are added as below,
+the assistant picks them up by itself.
 
 ## How to add a new studio so the assistant uses it
 

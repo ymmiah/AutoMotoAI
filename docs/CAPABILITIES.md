@@ -58,6 +58,10 @@ the numbers the tools return and never makes numbers up.
 It reads the code, reproduces the problem (running the tests after you approve), makes the smallest fix and runs
 the tests again to prove it. In VS Code, use the AutoMoto panel's ideas or right-click a file.
 
+*make an iPhone app that counts taps* writes the project and, when this computer can, builds it and installs it
+on a real iPhone. You download Xcode.xip from Apple yourself. Windows uses WSL. The Microsoft Store app cannot
+do this. Nothing goes to App Store Connect until you press **Send to Apple**. Details: [iPhone apps](IOS.md).
+
 ## Web research
 
 *Research the latest news about renewable energy in the UK and give me 5 bullets with links* ·

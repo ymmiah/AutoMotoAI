@@ -238,7 +238,8 @@ async fn start_local_inner(app: &AppHandle) -> Result<Option<Url>, String> {
             let _ = std::fs::create_dir_all(&d);
             d.join("local-engine.log")
         });
-        let child = local::start(&python, &st.launch_token, log)?;
+        let package = if store_package() { Some("msix") } else { None };
+        let child = local::start(&python, &st.launch_token, log, package)?;
         *st.local_child.lock().unwrap() = Some(child);
     }
     let mut child = st.local_child.lock().unwrap().take();

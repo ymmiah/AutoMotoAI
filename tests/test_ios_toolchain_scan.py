@@ -1,5 +1,7 @@
 """The vendored iPhone toolchain must not name hosts it used to contact."""
 
+import subprocess
+import sys
 from pathlib import Path
 
 from automoto.ios_toolchain_scan import ROOT, hits
@@ -36,6 +38,18 @@ def test_support_files_are_not_downloaded_until_published():
     package = (ROOT / "Package.swift").read_text(encoding="utf-8")
     assert 'path: "Vendor/xtool-core"' in package
     assert 'name: "automoto-ios"' in package
+
+
+def test_upstream_sync_is_disabled_and_does_not_merge():
+    root = Path(__file__).resolve().parents[1]
+    script = root / "scripts" / "ios_toolchain_sync.py"
+    text = script.read_text(encoding="utf-8")
+    assert "never merges" in text
+    assert "gh pr merge" not in text and "git merge" not in text
+    completed = subprocess.run([sys.executable, str(script)], cwd=root, capture_output=True, text=True, check=False)
+    assert completed.returncode == 0
+    assert "disabled" in completed.stdout
+    assert "never merges" in completed.stdout
 
 
 def test_a_planted_host_is_reported(tmp_path: Path):

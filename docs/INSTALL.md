@@ -12,7 +12,7 @@ Everything here is free. Latest **stable** release: **v5.5.0** ([downloads](http
 [macOS](#4-macos-intel-and-apple-silicon) · [Linux](#5-linux-ubuntu--debian-fedora-arch-and-others) ·
 [Docker](#6-docker-and-docker-compose-any-os) · [Host it for others](#7-host-it-for-other-people) ·
 [VS Code, ChromeOS, Raspberry Pi, phones, BSD](#8-other-platforms) · [Update](#9-updating) ·
-[Uninstall](#10-uninstalling) · [Troubleshooting](#11-troubleshooting) · [What was tested](#12-what-was-tested-where)
+[Uninstall](#10-uninstalling) · [iPhone apps](#iphone-apps) · [Troubleshooting](#11-troubleshooting) · [What was tested](#12-what-was-tested-where)
 
 ---
 
@@ -542,6 +542,23 @@ code --uninstall-extension ymmiah.automoto-ai
 | Behind a company proxy | Set `HTTPS_PROXY=http://proxy:port` (pip and the AI providers use it). The agent's own web tools (`web_search`, `fetch_url`) connect directly and **don't** use a proxy. If your DNS returns fake IPs (Clash/Surge `198.18.x.x`), set `AUTOMOTO_NET_ALLOW_CIDRS=198.18.0.0/15`. |
 | Checksum mismatch in the installer | Don't continue: download again or use `--from-source`. If it persists, open an issue. |
 | Hosted users see "limit reached" | That's the quota: give time with `automoto admin bonus <name> 30` or the Admin page. |
+
+## iPhone apps
+
+You describe the app, or you give a ZIP. The assistant writes it, builds it, and can put it on your iPhone.
+You do not have to look at the code. The full child-simple version is [iPhone apps](IOS.md). Short version:
+
+1. **This is not a simulator.** You need a real iPhone. Windows and Linux cannot pretend to be an iPhone.
+2. **Download Xcode.xip yourself**, once, from Apple's developer downloads. This app does not keep a copy of Xcode.
+3. On the iPhone: **Settings → Privacy & Security → Developer Mode**, turn it on, then plug the phone in and tap **Trust**.
+4. A **paid Apple Developer account** is needed for the App Store, and so a test copy does not expire after 7 days.
+5. In App Store Connect, create an **API key** once. Put the `.p8` file in `~/.automoto/secrets/` (on Windows, `C:\Users\<you>\.automoto\secrets\`). In the iPhone panel, store the path, the key id, and the issuer id. Do not paste the key into the chat.
+6. **Windows:** install WSL, then build the iPhone tools inside it. The **Microsoft Store** copy cannot do this. Use the engine from this guide instead.
+7. **Mac or Linux:** build the `automoto-ios` command from `third_party/ios-toolchain` with Swift 6.2. Support files for that build are not published yet, so setup will say so and will not download them.
+8. Ask for the app. Read the App Store page. Tick the box. Press **Send to Apple**. Nothing is uploaded before that button.
+9. The first time, create the app record yourself on the App Store Connect website. Apple does not let this step create that first record.
+
+Offline mode can still create the project from files you already have. Sending to Apple needs the internet.
 
 Still stuck? Run `automoto status` and open an issue at <https://github.com/ymmiah/AutoMotoAI/issues> (never paste keys).
 

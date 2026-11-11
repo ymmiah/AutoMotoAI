@@ -224,6 +224,18 @@ needs the internet.
   commands or control a computer**. That's for Local mode on a PC.
 * Uploads up to 20 MB each (your admin can change this).
 
+### B4. Putting your own app on the iPhone
+
+The phone page above is for *using* AutoMoto. To *make* an iPhone app, you do it from a Windows PC, a Mac, or a Linux computer, then install it on the phone. Step by step: [iPhone apps](IOS.md).
+
+On the iPhone itself:
+
+1. Open **Settings**.
+2. Tap **Privacy & Security**.
+3. Tap **Developer Mode** and turn it on. The phone may restart.
+4. Plug the phone into the computer. Tap **Trust**.
+5. There is no pretend iPhone on Windows or Linux. The app runs on this phone.
+
 ---
 
 ## C. Mac or Linux

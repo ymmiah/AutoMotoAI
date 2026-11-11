@@ -70,11 +70,17 @@ pub fn port_busy() -> bool {
     TcpStream::connect_timeout(&ADDR.parse().expect("static addr"), Duration::from_millis(400)).is_ok()
 }
 
-pub fn start(python: &PathBuf, token: &str, log: Option<PathBuf>) -> Result<Child, String> {
+pub fn start(python: &PathBuf, token: &str, log: Option<PathBuf>, package: Option<&str>) -> Result<Child, String> {
     let mut cmd = Command::new(python);
     cmd.args(["-m", "automoto", "serve", "--no-browser", "--port", &PORT.to_string()])
         .env("AUTOMOTO_LAUNCH_TOKEN", token)
         .stdin(Stdio::null());
+    if let Some(name) = package {
+        if !name.is_empty() {
+            // The Microsoft Store build cannot host the iPhone tools. The engine says so in plain words.
+            cmd.env("AUTOMOTO_DESKTOP_PACKAGE", name);
+        }
+    }
     if let Some(dir) = dirs_home() {
         cmd.current_dir(dir);
     }

@@ -32,6 +32,8 @@ The app doesn't ask for your location, contacts, health or payment information.
 | Your AutoMoto account server | while signed in | your chats and files, to the server address **you** entered |
 | Update check (Windows app from GitHub only): `raw.githubusercontent.com`, `github.com` | a few seconds after start, and when you click *Check for updates* | a normal web request (IP address, app version). `AUTOMOTO_NO_UPDATE_CHECK=1` turns it off. **The Microsoft Store edition doesn't do this**: the Store updates it. |
 | Microsoft WebView2 download (installer from GitHub only) | during installation, only if WebView2 is missing | Microsoft's own installer |
+| Apple (App Store Connect) | only after you press **Send to Apple** on an iPhone app you approved | the app file, the store text you approved, and your API key, which goes only to Apple |
+| A provisioning helper on this computer (`127.0.0.1`) | only while signing in to Apple for a device install, if you use that step | the helper runs on your machine. A remote one is used only if you turn that on yourself |
 | Python, Python packages (python.org, PyPI, winget) | only when you click *Install the local engine* and agree | the package downloads |
 
 **Offline mode** (Settings) switches all web and connector traffic off. Data in transit to providers and servers uses
