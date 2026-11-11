@@ -190,6 +190,20 @@ def test_untrusted_stale_hash_and_missing_consent_are_refused(workspace):
     assert client.post(BASE + "/run", headers=AUTH, json=body).status_code == 409
 
 
+def test_windows_nuget_receives_only_approved_program_directory_roots(workspace, tmp_path):
+    if os.name != "nt":
+        pytest.skip("Windows NuGet.ConfigurationDefaults requires Program Files roots.")
+    client, root = workspace
+    env = dotnet._env(root, tmp_path)
+    for name in ("ProgramFiles", "ProgramFiles(x86)"):
+        if name in os.environ and Path(os.environ[name]).is_dir():
+            assert name in env, "NuGet defaults require an OS Program Files directory"
+            assert Path(env[name]).is_absolute()
+            assert Path(env[name]).is_dir()
+    assert "NUGET_CREDENTIALPROVIDERS_PATH" in env
+    assert env["NUGET_CREDENTIALPROVIDERS_PATH"] == ""
+
+
 def test_real_dotnet_sdk_msbuild_build_and_smoke(workspace):
     client, root = workspace
     trust(client, root)
