@@ -157,6 +157,29 @@ def test_remote_swiftpm_packages_and_plugin_admission_denied(project):
         assert data["swiftpm"]["external_dependencies"]
 
 
+def test_manifest_without_any_swift_sources_cannot_admit_build(project):
+    client, root = project
+    shutil.rmtree(root / "Sources")
+    shutil.rmtree(root / "Tests")
+    data = inspect(client, root).json()
+    assert data["project_type"] == "swiftpm"
+    assert not data["safe_to_offer_builds"]
+    assert any("source inventory" in issue for issue in data["warnings"])
+
+
+def test_external_or_malformed_shared_xcode_scheme_is_refused(project):
+    client, root = project
+    replace(root, "v24-ios")
+    scheme = root / "V24iOS.xcodeproj/xcshareddata/xcschemes/V24iOS.xcscheme"
+    original = scheme.read_text()
+    scheme.write_text(original.replace("container:V24iOS.xcodeproj", "container:../outside.xcodeproj"))
+    data = inspect(client, root).json()
+    assert not data["safe_to_offer_builds"]
+    assert any("external build target" in x for x in data["warnings"])
+    scheme.write_text('<!DOCTYPE Scheme [<!ENTITY ext SYSTEM "file:///etc/passwd">]><Scheme>&ext;</Scheme>')
+    assert inspect(client, root).status_code == 422
+
+
 def test_xcode_shell_scripts_and_remote_refs_block_approval(project):
     client, root = project
     replace(root, "v24-ios")
