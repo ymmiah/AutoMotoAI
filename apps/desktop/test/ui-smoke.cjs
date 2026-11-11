@@ -2628,6 +2628,40 @@ let browser;
     'V24 central Agent review cannot boot an iOS Simulator or change source');
   await page.screenshot({path:path.join(output,'developer-studio-v24-swift-ios.png')});
 
+  // V25: read-only Flutter/Dart and React Native mobile bridge evidence.
+  const v25Dart=path.join(devProject,'lib','main.dart');
+  const v25DartSource='import "package:flutter/material.dart";\nvoid main() => runApp(const V25App());\nclass V25App extends StatelessWidget { const V25App({super.key}); @override Widget build(BuildContext context) => const Text("V25_FLUTTER_WEB_PASS"); }\n';
+  mkdirSync(path.dirname(v25Dart),{recursive:true});
+  writeFileSync(v25Dart,v25DartSource);
+  writeFileSync(path.join(devProject,'pubspec.yaml'),
+    'name: automoto_v25_browser\nenvironment:\n  sdk: ">=3.5.0 <4.0.0"\ndependencies:\n  flutter:\n    sdk: flutter\n');
+  writeFileSync(path.join(devProject,'package.json'),JSON.stringify({
+    name:'automoto-v25-rn-browser',version:'1.0.0',
+    dependencies:{'react-native':'0.88.1',react:'19.3.0'}
+  }));
+  writeFileSync(path.join(devProject,'index.js'),
+    'const {AppRegistry} = require("react-native");\nAppRegistry.registerComponent("V25",()=>()=>null);\n');
+  const v25RN=path.join(devProject,'App.js');
+  const v25RNSource='import React from "react";\nimport {View, Text} from "react-native";\nexport function V25RNApp() { return <View><Text>V25_RN_METRO_PASS</Text></View>; }\n';
+  writeFileSync(v25RN,v25RNSource);
+  await page.locator('#dsMobileInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsMobileStatus')?.textContent?.includes('inspection complete'));
+  const v25Body=await page.locator('#dsMobileResults').innerText();
+  assert.match(v25Body,/automoto_v25_browser/);
+  assert.match(v25Body,/automoto-v25-rn-browser/);
+  assert.match(v25Body,/React Native components/);
+  assert.match(v25Body,/Flutter widgets/);
+  assert.match(v25Body,/Device targets: not_queried/);
+  assert.match(v25Body,/Mixed Flutter and React Native roots are inspection-only/);
+  assert.deepEqual(readFileSync(v25Dart,'utf8'),v25DartSource,
+    'V25 Dart inspection must not compile or mutate source');
+  assert.deepEqual(readFileSync(v25RN,'utf8'),v25RNSource,
+    'V25 React Native inspection must not start Metro or mutate source');
+  await page.locator('#dsMobileAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V25 Flutter and React Native readiness/);
+  await page.screenshot({path:path.join(output,'developer-studio-v25-flutter-react-native.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
