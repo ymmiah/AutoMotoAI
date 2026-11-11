@@ -188,7 +188,7 @@ def test_build_scripts_and_unsafe_custom_target_paths_need_review(project):
     (root / "crates/core/Cargo.toml").write_text(CORE_CARGO + '\n[lib]\npath = "../../private.rs"\n')
     data = inspect(client, root).json()
     assert not data["safe_to_offer_runs"]
-    assert any("Unsafe custom" in msg for msg in data["warnings"])
+    assert any("Custom Cargo target path" in msg for msg in data["warnings"])
 
 
 def test_dependency_escape_and_plain_rust_toolchain_override_fail_closed(project):
