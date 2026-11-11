@@ -63,8 +63,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
-      # ubuntu-latest provides ANDROID_HOME and the current Android sdkmanager.
-      # Do not invoke setup-android's legacy `sdkmanager tools` package request.
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
       - name: Install Android SDK 35 platform and tools in isolated CI
         run: |
           sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
