@@ -2786,6 +2786,41 @@ let browser;
   assert.match(await page.locator('#studioAgentMessage').inputValue(),/V28 scientific reproducibility/);
   await page.screenshot({path:path.join(output,'developer-studio-v28-science-reproducibility.png')});
 
+  // V29: Scala/F#/Clojure metadata is discovered without evaluating sbt or EDN.
+  const v29Scala=path.join(devProject,'test','Fixture.scala');
+  const v29Fsharp=path.join(devProject,'test','Fixture.fsx');
+  const v29Clojure=path.join(devProject,'test','fixture_test.clj');
+  const v29ScalaSource='object Fixture extends App { println("V29_SCALA_PASS 42") }\n';
+  const v29FsharpSource='printfn "V29_FSHARP_PASS 42"\n';
+  const v29ClojureSource='(println "V29_CLOJURE_PASS 42")\n';
+  writeFileSync(v29Scala,v29ScalaSource);
+  writeFileSync(v29Fsharp,v29FsharpSource);
+  writeFileSync(v29Clojure,v29ClojureSource);
+  const v29Sbt=path.join(devProject,'build.sbt');
+  const v29Deps=path.join(devProject,'deps.edn');
+  writeFileSync(v29Sbt,'name := "V29 example"\n');
+  writeFileSync(v29Deps,'{:paths ["test"] :deps {}}\n');
+  await page.locator('#dsFunctionalInspect').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsFunctionalStatus')?.textContent?.includes('Inert project inventory ready'));
+  const v29Body=await page.locator('#dsFunctionalResults').innerText();
+  assert.match(v29Body,/test\/Fixture\.scala/);
+  assert.match(v29Body,/test\/Fixture\.fsx/);
+  assert.match(v29Body,/test\/fixture_test\.clj/);
+  assert.match(v29Body,/build\.sbt/);
+  assert.match(v29Body,/deps\.edn/);
+  assert.match(v29Body,/Source executed: false/);
+  assert.match(v29Body,/dependencies resolved: false/);
+  assert.deepEqual(readFileSync(v29Scala,'utf8'),v29ScalaSource);
+  assert.deepEqual(readFileSync(v29Fsharp,'utf8'),v29FsharpSource);
+  assert.deepEqual(readFileSync(v29Clojure,'utf8'),v29ClojureSource);
+  assert.equal(await page.locator('#dsFunctionalRun').isEnabled(),false,
+    'V29 must not run an executable unless the project is trusted and tool pinned');
+  await page.locator('#dsFunctionalAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V29 Scala, F# and Clojure readiness/);
+  await page.screenshot({path:path.join(output,'developer-studio-v29-functional-enterprise.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){

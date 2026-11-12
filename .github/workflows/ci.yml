@@ -185,7 +185,15 @@ jobs:
         run: |
           npm run lint
           npm run test:unit
+      - name: Cache downloaded VS Code test build
+        uses: actions/cache@v4
+        with:
+          path: apps/vscode/.vscode-test
+          key: vscode-test-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            vscode-test-${{ runner.os }}-
       - name: Integration test in a real VS Code (xvfb)
+        timeout-minutes: 20
         working-directory: apps/vscode
         run: xvfb-run -a npm run test:integration
       - name: Package .vsix
