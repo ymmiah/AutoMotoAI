@@ -15,7 +15,10 @@ import sys
 import tempfile
 import threading
 import time
-import tomllib
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:
+    import tomli as tomllib  # Python 3.10; declared project dependency
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
