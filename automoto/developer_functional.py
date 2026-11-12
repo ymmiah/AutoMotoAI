@@ -61,14 +61,14 @@ MARKERS = {"scala_test": "V29_SCALA_PASS 42",
            "fsharp_test": "V29_FSHARP_PASS 42",
            "clojure_test": "V29_CLOJURE_PASS 42"}
 DECLARATIONS = {
-    "scala": re.compile(r"(?m)^\\s*(?:object|class|trait|enum|def)\\s+([A-Za-z_]\\w{0,70})"),
-    "fsharp": re.compile(r"(?m)^\\s*(?:module|namespace|type|let)\\s+([A-Za-z_]\\w{0,70})"),
-    "clojure": re.compile(r"(?m)^\\s*\\((?:ns|defn?|defmacro)\\s+([A-Za-z0-9_.?!*+/-]{1,70})"),
+    "scala": re.compile(r"(?m)^\s*(?:object|class|trait|enum|def)\s+([A-Za-z_]\w{0,70})"),
+    "fsharp": re.compile(r"(?m)^\s*(?:module|namespace|type|let)\s+([A-Za-z_]\w{0,70})"),
+    "clojure": re.compile(r"(?m)^\s*\((?:ns|defn?|defmacro)\s+([A-Za-z0-9_.?!*+/-]{1,70})"),
 }
 RISK = (
-    ("subprocess or shell", re.compile(r"(?i)\\b(?:ProcessBuilder|sys\\.process|System\\.Diagnostics\\.Process|clojure\\.java\\.shell|shell/sh)\\b")),
-    ("network or dependency resolution", re.compile(r"(?i)\\b(?:http-client|HttpClient|java\\.net|java\\.net\\.URL|curl|wget|add-deps|deps/add-lib|load-string)\\b")),
-    ("dynamic loading or compilation", re.compile(r"(?i)\\b(?:eval|load-file|require|macroexpand|#=|CompilerServices|TypeProvider)\\b")),
+    ("subprocess or shell", re.compile(r"(?i)\b(?:ProcessBuilder|sys\.process|System\.Diagnostics\.Process|clojure\.java\.shell|shell/sh)\b")),
+    ("network or dependency resolution", re.compile(r"(?i)\b(?:http-client|HttpClient|java\.net|java\.net\.URL|curl|wget|add-deps|deps/add-lib|load-string)\b")),
+    ("dynamic loading or compilation", re.compile(r"(?i)\b(?:eval|load-file|require|macroexpand|#=|CompilerServices|TypeProvider)\b")),
 )
 
 class RunIn(BaseModel):
@@ -97,7 +97,7 @@ def _kind(path: str) -> tuple[str | None, bool]:
 
 def _inventory(root: Path) -> tuple[list[dict], dict, str, bool]:
     sources, manifests, count, incomplete = [], {}, 0, False
-    digest = hashlib.sha256(b"automoto-v29-functional-inventory\\0")
+    digest = hashlib.sha256(b"automoto-v29-functional-inventory\0")
     for name, warning in index._walk(root):
         if warning:
             incomplete = True
@@ -113,12 +113,12 @@ def _inventory(root: Path) -> tuple[list[dict], dict, str, bool]:
         if count > MAX_TOTAL:
             incomplete = True
             break
-        digest.update(name.encode() + b"\\0" + sha.encode() + b"\\0")
+        digest.update(name.encode() + b"\0" + sha.encode() + b"\0")
         if manifest:
             manifests[name] = {"path": name, "sha256": sha, "bytes": size,
                                "evaluated": False, "resolved_dependencies": False}
         else:
-            signals = [{"kind": label, "line": raw[:m.start()].count("\\n") + 1}
+            signals = [{"kind": label, "line": raw[:m.start()].count("\n") + 1}
                        for label, pattern in RISK if (m := pattern.search(raw[:60000]))]
             sources.append({
                 "path": name, "language": language, "sha256": sha, "bytes": size,
@@ -143,9 +143,9 @@ def _packages(root: Path, manifests: dict) -> dict:
     # Regex extracts only literal-looking coordinates. It never loads project
     # scripts, evaluates EDN readers, traverses a dependency graph or resolves.
     patterns = {
-        "scala": [re.compile(r'(?m)"([A-Za-z0-9_.-]{1,75})"\\s*%{1,2}\\s*"([A-Za-z0-9_.-]{1,75})"')],
-        "fsharp": [re.compile(r'(?i)<PackageReference\\s+Include="([A-Za-z0-9_.-]{1,75})"')],
-        "clojure": [re.compile(r'(?m)(?:[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,60})\\s*\\{\\s*:mvn/version\\s*"([0-9A-Za-z_.-]{1,60})"')],
+        "scala": [re.compile(r'(?m)"([A-Za-z0-9_.-]{1,75})"\s*%{1,2}\s*"([A-Za-z0-9_.-]{1,75})"')],
+        "fsharp": [re.compile(r'(?i)<PackageReference\s+Include="([A-Za-z0-9_.-]{1,75})"')],
+        "clojure": [re.compile(r'(?m)(?:[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,60})\s*\{\s*:mvn/version\s*"([0-9A-Za-z_.-]{1,60})"')],
     }
     declared = {k: [] for k in patterns}
     for path in manifests:
@@ -161,7 +161,7 @@ def _packages(root: Path, manifests: dict) -> dict:
             "coordinates": {key: sorted(set(value))[:60] for key, value in declared.items()}}
 
 def _tools(root: Path) -> tuple[list[dict], str]:
-    entries, digest = [], hashlib.sha256(b"automoto-v29-functional-tools\\0")
+    entries, digest = [], hashlib.sha256(b"automoto-v29-functional-tools\0")
     for name in TOOLS:
         location = shutil.which(name)
         if not location:
@@ -174,8 +174,8 @@ def _tools(root: Path) -> tuple[list[dict], str]:
                         **adapters._fingerprint(str(Path(location).absolute()), root)}
             except HTTPException:
                 item = {"name": name, "status": "untrusted_executable"}
-        digest.update((name + "\\0" + item["status"] + "\\0" +
-                       item.get("sha256", "") + "\\0" +
+        digest.update((name + "\0" + item["status"] + "\0" +
+                       item.get("sha256", "") + "\0" +
                        item.get("executable", "")).encode())
         entries.append(item)
     return entries, digest.hexdigest()
@@ -207,7 +207,7 @@ def _stage(root: Path, snapshot: dict, destination: Path) -> None:
     entries = snapshot["files"] + list(snapshot["manifests"].values())
     for item in entries:
         relative = item["path"]
-        if relative.startswith("/") or "\\\\" in relative or ".." in relative.split("/"):
+        if relative.startswith("/") or chr(92) in relative or ".." in relative.split("/"):
             raise HTTPException(403, "Unsafe functional stage path.")
         source = studio._path(root, relative)
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
