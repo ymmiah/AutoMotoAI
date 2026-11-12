@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "V28-Reproducible-Mean",
+  "dataset": "data/measurements.csv",
+  "column": "value",
+  "expected": {
+    "count": 5,
+    "sum": 150,
+    "mean": 30
+  },
+  "scripts": {
+    "r": "experiments/compute.R",
+    "julia": "experiments/compute.jl",
+    "octave": "experiments/compute.m"
+  }
+}
