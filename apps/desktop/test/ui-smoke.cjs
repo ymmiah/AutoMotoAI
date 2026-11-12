@@ -2690,6 +2690,49 @@ let browser;
     'V26 central Agent review cannot execute destructive shell scripts');
   await page.screenshot({path:path.join(output,'developer-studio-v26-shell-automation.png')});
 
+  // V27: Ruby/Lua/Perl/Groovy package inspection is inert and Agent is review-only.
+  mkdirSync(path.join(devProject,'lib'),{recursive:true});
+  mkdirSync(path.join(devProject,'test'),{recursive:true});
+  const v27Ruby=path.join(devProject,'lib','v27_sample.rb');
+  const v27RubySource='module V27Sample\n  def self.combine(a,b)\n    a + b\n  end\nend\n';
+  writeFileSync(v27Ruby,v27RubySource);
+  const v27Lua=path.join(devProject,'lib','v27.lua');
+  const v27LuaSource='local M = {}\nfunction M.combine(a,b) return a+b end\nreturn M\n';
+  writeFileSync(v27Lua,v27LuaSource);
+  const v27Perl=path.join(devProject,'lib','V27Sample.pm');
+  const v27PerlSource='package V27Sample;\nsub combine { my ($a,$b)=@_; return $a+$b; }\n1;\n';
+  writeFileSync(v27Perl,v27PerlSource);
+  const v27Groovy=path.join(devProject,'V27Sample.groovy');
+  const v27GroovySource='class V27Sample { static int combine(int a,int b) { a+b } }\n';
+  writeFileSync(v27Groovy,v27GroovySource);
+  writeFileSync(path.join(devProject,'Gemfile'),"source 'https://rubygems.org'\ngem 'rake'\n");
+  writeFileSync(path.join(devProject,'cpanfile'),"requires 'Test::More';\n");
+  const v27Malicious=path.join(devProject,'test','malicious.rb');
+  const v27MaliciousSource="system('rm', '-rf', '/home')\n";
+  writeFileSync(v27Malicious,v27MaliciousSource);
+  await page.locator('#dsScriptingInspect').click();
+  await page.waitForFunction(()=>
+    document.querySelector('#dsScriptingStatus')?.textContent?.includes('inventory complete'));
+  const v27Output=await page.locator('#dsScriptingResults').innerText();
+  assert.match(v27Output,/lib\/v27_sample\.rb/);
+  assert.match(v27Output,/lib\/v27\.lua/);
+  assert.match(v27Output,/lib\/V27Sample\.pm/);
+  assert.match(v27Output,/V27Sample\.groovy/);
+  assert.match(v27Output,/ruby declared packages: rake/);
+  assert.match(v27Output,/perl declared packages: Test::More/);
+  assert.match(v27Output,/external process/);
+  assert.match(v27Output,/no install: true/);
+  assert.deepEqual(readFileSync(v27Ruby,'utf8'),v27RubySource,'Ruby discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Lua,'utf8'),v27LuaSource,'Lua discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Perl,'utf8'),v27PerlSource,'Perl discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Groovy,'utf8'),v27GroovySource,'Groovy discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Malicious,'utf8'),v27MaliciousSource,
+    'Malicious Ruby source remains byte-identical and unexecuted');
+  await page.locator('#dsScriptingAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V27 Ruby, Lua, Perl and Groovy readiness/);
+  await page.screenshot({path:path.join(output,'developer-studio-v27-scripting.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
