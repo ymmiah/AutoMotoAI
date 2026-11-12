@@ -150,8 +150,24 @@ def _declared_packages(root: Path, manifests: dict) -> dict:
         elif name == "rebar.config":
             coords["erlang"] = [":".join(item) for item in ERLANG_DEP.findall(source)[:55]]
         elif name == "gleam.toml":
-            # We cannot trust a TOML parse as installed package evidence.
-            coords["gleam"] = GLEAM_DEP.findall(source)[:55]
+            # TOML parsing is inert. Only explicit dependency table entries are
+            # declarations; project name/version/target are NOT packages.
+            try:
+                declaration = tomllib.loads(source)
+                literal = []
+                for table in ("dependencies", "dev-dependencies"):
+                    group = declaration.get(table, {})
+                    if isinstance(group, dict):
+                        literal.extend(
+                            (key, value) for key, value in list(group.items())[:55]
+                            if isinstance(key, str)
+                            and re.fullmatch(r"[a-z][a-z0-9_]{0,60}", key)
+                            and isinstance(value, str) and len(value) <= 80
+                        )
+                coords["gleam"] = literal[:55]
+            except (ValueError, UnicodeError):
+                # Malformed configuration never creates fake metadata.
+                coords["gleam"] = []
     return {"coordinates": coords, "parsed_only": True,
             "manifests_evaluated": False, "dependencies_resolved": False,
             "installation_started": False, "network_started": False}
@@ -320,7 +336,8 @@ def _run(root: Path, body: RunIn) -> dict:
         "elapsed_ms": int((time.monotonic() - start) * 1000),
         "inventory_sha256": before["inventory_sha256"],
         "tool_sha256": selected["sha256"],
-        "temporary_copy_deleted": True, "original_sources_preserved_by_studio": True,
+        "temporary_copy_deleted": True, "original_sources_modified_by_studio": False,
+        "original_workspace_integrity_verified": False,
         "external_code_unsandboxed": True, "os_network_isolation": False,
         "package_installer_called_by_studio": False,
         "runtime_network_activity_not_proven_absent": True,
