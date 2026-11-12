@@ -103,14 +103,18 @@ ipv4s_from_json() {
   '
 }
 
+# Short retries on DNS-over-HTTPS and mirror probes. Fail a dead mirror
+# quickly rather than hanging the job, but survive a single dropped packet.
+CURL_RETRY=(--retry 3 --retry-all-errors --retry-delay 1 --retry-max-time 20)
+
 doh_ipv4() {
   local host="$1" body
-  body="$(curl -fsS --ipv4 --max-time 8 \
+  body="$(curl -fsS --ipv4 --connect-timeout 5 --max-time 8 "${CURL_RETRY[@]}" \
     --resolve "cloudflare-dns.com:443:1.1.1.1" \
     -H "accept: application/dns-json" \
     "https://cloudflare-dns.com/dns-query?name=${host}&type=A" 2>/dev/null || true)"
   if [[ -z "$body" ]]; then
-    body="$(curl -fsS --ipv4 --max-time 8 \
+    body="$(curl -fsS --ipv4 --connect-timeout 5 --max-time 8 "${CURL_RETRY[@]}" \
       --resolve "dns.google:443:8.8.8.8" \
       -H "accept: application/dns-json" \
       "https://dns.google/resolve?name=${host}&type=A" 2>/dev/null || true)"
@@ -153,7 +157,7 @@ ensure_resolvable() {
 mirror_usable() {
   local base="$1" suite="$2" path body
   for path in "$suite" "${suite}-updates" "${suite}-security"; do
-    body="$(curl -4 -fsS --connect-timeout 5 --max-time 20 \
+    body="$(curl -4 -fsS --connect-timeout 5 --max-time 20 "${CURL_RETRY[@]}" \
       "${base}/dists/${path}/InRelease" 2>/dev/null || true)"
     # Match the Suite line exactly. "Suite: resolute" is a prefix of
     # "Suite: resolute-security", so a substring check would accept the wrong index.
@@ -243,14 +247,76 @@ Signed-By: ${key}
 EOF
 }
 
+# Ubuntu 26.04 (and later) sometimes drops a transitional package name.
+# Map the old name onto the package this release actually publishes so a
+# workflow that still lists the historical name does not fail after a
+# runner-image bump. Only used when the original name is absent.
+package_replacement() {
+  case "$1" in
+    p7zip-full) printf '%s' 7zip ;;
+    ocaml-nox) printf '%s' ocaml ;;
+    libpng16-16) printf '%s' libpng16-16t64 ;;
+  esac
+}
+
+# apt-cache show misses virtual packages that only exist as Provides:.
+package_in_cache() {
+  local pkg="$1"
+  if run_root apt-cache show "$pkg" >/dev/null 2>&1; then
+    return 0
+  fi
+  run_root apt-cache showpkg "$pkg" 2>/dev/null | awk '
+    /^Reverse Provides:/ {p=1; next}
+    p && /^[^ ]/ {p=0}
+    p && NF {found=1}
+    END {exit found ? 0 : 1}
+  '
+}
+
+package_is_installed() {
+  local pkg="$1" alt status
+  status="$(dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null || true)"
+  if [[ "$status" == "install ok installed" ]]; then
+    return 0
+  fi
+  alt="$(package_replacement "$pkg")"
+  if [[ -n "$alt" ]]; then
+    status="$(dpkg-query -W -f '${Status}' "$alt" 2>/dev/null || true)"
+    if [[ "$status" == "install ok installed" ]]; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
 packages_installed() {
-  local pkg status
+  local pkg
   for pkg in "$@"; do
-    status="$(dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null || true)"
-    if [[ "$status" != "install ok installed" ]]; then
+    if ! package_is_installed "$pkg"; then
       return 1
     fi
   done
+}
+
+# After apt-get update, rewrite any requested names this release no longer
+# publishes (or that only exist as Provides:) onto an installable package.
+resolve_packages_for_suite() {
+  local pkg alt resolved=()
+  for pkg in "${REQUESTED_PACKAGES[@]}"; do
+    if package_in_cache "$pkg"; then
+      resolved+=("$pkg")
+      continue
+    fi
+    alt="$(package_replacement "$pkg")"
+    if [[ -n "$alt" ]] && package_in_cache "$alt"; then
+      log "${pkg} is not in this Ubuntu release; installing ${alt} instead"
+      resolved+=("$alt")
+      continue
+    fi
+    log "${pkg} is not in ${suite}; not retrying other mirrors"
+    return 3
+  done
+  REQUESTED_PACKAGES=("${resolved[@]}")
 }
 
 install_from_mirror() {
@@ -260,14 +326,7 @@ install_from_mirror() {
   disable_ubuntu_archive_sources
   write_sources "$base" "$suite" "$key"
   apt_cmd "$APT_UPDATE_TIMEOUT" apt-get update -q || return 1
-  for pkg in "${REQUESTED_PACKAGES[@]}"; do
-    # Same Ubuntu release on every mirror. Another mirror will not invent a
-    # package this release does not publish, so do not spend the fallback on it.
-    if ! run_root apt-cache show "$pkg" >/dev/null 2>&1; then
-      log "${pkg} is not in ${suite}; not retrying other mirrors"
-      return 3
-    fi
-  done
+  resolve_packages_for_suite || return $?
   apt_cmd "$APT_INSTALL_TIMEOUT" apt-get install -y -q --no-install-recommends "${REQUESTED_PACKAGES[@]}" || return 1
   packages_installed "${REQUESTED_PACKAGES[@]}"
 }

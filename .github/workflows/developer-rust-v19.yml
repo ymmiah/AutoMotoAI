@@ -1,6 +1,18 @@
 name: Developer Studio V19 Rust acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_rust.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-rust.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_rust.py"
+      - ".github/workflows/developer-rust-v19.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_rust.py"
@@ -9,20 +21,42 @@ on:
       - "automoto/web/static/developer-studio.js"
       - "tests/test_developer_rust.py"
       - ".github/workflows/developer-rust-v19.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "20 4 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_rust.py
+        automoto/web/static/developer-rust.js
+        tests/test_developer_rust.py
+        .github/workflows/developer-rust-v19.yml
+
   rust-integration:
     name: Rust stable / Python 3.13 (${{ matrix.os }})
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-latest", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6

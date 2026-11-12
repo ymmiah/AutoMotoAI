@@ -1,6 +1,21 @@
 name: Developer Studio V24 Swift iOS acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_swift.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-swift.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_swift.py"
+      - "tests/fixtures/v24-*/**"
+      - "tests/scripts/v24_ios_simulator.sh"
+      - ".github/workflows/developer-swift-v24.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_swift.py"
@@ -12,12 +27,35 @@ on:
       - "tests/fixtures/v24-*/**"
       - "tests/scripts/v24_ios_simulator.sh"
       - ".github/workflows/developer-swift-v24.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "35 5 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_swift.py
+        automoto/web/static/developer-swift.js
+        tests/test_developer_swift.py
+        tests/fixtures/v24-*/**
+        tests/scripts/v24_ios_simulator.sh
+        .github/workflows/developer-swift-v24.yml
+
   swift-inspection:
     name: Swift/Objective-C static security inspection (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -40,6 +78,8 @@ jobs:
 
   swiftpm-macos:
     name: SwiftPM compiler, XCTest and executable (macOS Xcode)
+    needs: paths
+    if: ${{ needs.paths.outputs.self == 'true' }}
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -68,6 +108,8 @@ jobs:
 
   ios-simulator:
     name: Xcode unsigned SwiftUI app and real iOS Simulator launch
+    needs: paths
+    if: ${{ needs.paths.outputs.self == 'true' }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:

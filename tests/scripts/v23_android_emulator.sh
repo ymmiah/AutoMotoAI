@@ -75,9 +75,19 @@ main() {
   test -s "$apk"
   adb wait-for-device
   adb install -r "$apk"
-  local result
-  result="$(adb shell am start -W -n com.automoto.v23/.MainActivity)"
-  printf '%s\n' "$result"
+  local result try
+  # A cold start can exceed am start -W's wait. Retry the launch; the
+  # V23_ANDROID_RUNNING UI marker remains the actual acceptance check.
+  result=""
+  for try in 1 2 3 4 5 6; do
+    result="$(adb shell am start -W -n com.automoto.v23/.MainActivity || true)"
+    printf '%s\n' "$result"
+    if grep -q "Status: ok" <<<"$result"; then
+      break
+    fi
+    printf '%s\n' "am start attempt ${try} did not report Status: ok; retrying" >&2
+    sleep 2
+  done
   grep -q "Status: ok" <<<"$result"
   v23_wait_for_ui_marker
   printf '%s\n' "V23_ANDROID_EMULATOR_UI_PASS"

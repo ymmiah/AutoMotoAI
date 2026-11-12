@@ -1,6 +1,20 @@
 name: Developer Studio V29 Scala Fsharp Clojure acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_functional.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-functional.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_functional.py"
+      - "tests/fixtures/v29-functional/**"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - ".github/workflows/developer-functional-v29.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_functional.py"
@@ -11,20 +25,43 @@ on:
       - "tests/fixtures/v29-functional/**"
       - "apps/desktop/test/ui-smoke.cjs"
       - ".github/workflows/developer-functional-v29.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "50 6 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_functional.py
+        automoto/web/static/developer-functional.js
+        tests/test_developer_functional.py
+        tests/fixtures/v29-functional/**
+        .github/workflows/developer-functional-v29.yml
+
   functional-inert:
     name: Inert sources, SHA and authorisation (${{ matrix.os }})
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
@@ -52,8 +89,7 @@ jobs:
           dotnet-version: "8.0.x"
       - name: Install Scala and Clojure only on disposable CI runner
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends scala clojure
+          bash scripts/ci/apt-install.sh scala clojure
           scala -version
           clojure -h | head -6
           dotnet --version

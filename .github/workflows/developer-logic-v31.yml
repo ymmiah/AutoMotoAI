@@ -1,0 +1,103 @@
+name: Developer Studio V31 Haskell OCaml Lisp Scheme Prolog acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_logic.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-logic.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_logic.py"
+      - "tests/fixtures/v31-logic/**"
+      - "docs/DEVELOPER-STUDIO-V31.md"
+      - ".github/workflows/developer-logic-v31.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  pull_request:
+    paths:
+      - "automoto/developer_logic.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-logic.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_logic.py"
+      - "tests/fixtures/v31-logic/**"
+      - "docs/DEVELOPER-STUDIO-V31.md"
+      - ".github/workflows/developer-logic-v31.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "20 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_logic.py
+        automoto/web/static/developer-logic.js
+        tests/test_developer_logic.py
+        tests/fixtures/v31-logic/**
+        docs/DEVELOPER-STUDIO-V31.md
+        .github/workflows/developer-logic-v31.yml
+
+  logic-inert:
+    name: Inert source and security tests (${{ matrix.os }})
+    needs: paths
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Auth source provenance trust symlink and allowlist coverage
+        run: |
+          python -m compileall -q automoto/developer_logic.py tests/test_developer_logic.py
+          python -m pytest -q -rs tests/test_developer_logic.py
+
+  logic-real-ubuntu:
+    name: Real Haskell OCaml Common Lisp Scheme Prolog acceptance (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install interpreters on disposable CI runner only
+        timeout-minutes: 15
+        # Ubuntu 26.04 dropped the ocaml-nox transitional package; "ocaml" is the real one.
+        run: bash scripts/ci/apt-install.sh ghc ocaml sbcl guile-3.0 swi-prolog-nox
+      - name: Prove real language fixtures
+        working-directory: tests/fixtures/v31-logic
+        run: |
+          set -euo pipefail
+          runghc test/v31_fixture.hs | grep -Fx "V31_HASKELL_PASS 42"
+          ocaml -noinit test/v31_fixture.ml | grep -Fx "V31_OCAML_PASS 42"
+          sbcl --noinform --no-sysinit --no-userinit --script test/v31_fixture.lisp | grep -Fx "V31_LISP_PASS 42"
+          guile --no-auto-compile -s test/v31_fixture.scm | grep -Fx "V31_SCHEME_PASS 42"
+          swipl -q -f none -s test/v31_fixture.pl -g main -t halt | grep -Fx "V31_PROLOG_PASS 42"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Verify approved SHA-pinned real interpreter API runs
+        env:
+          AUTOMOTO_V31_REAL_TOOL_TESTS: "1"
+        run: python -m pytest -q -rs tests/test_developer_logic.py

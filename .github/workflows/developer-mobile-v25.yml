@@ -1,6 +1,22 @@
 name: Developer Studio V25 Flutter React Native acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_mobile.py"
+      - "automoto/developer_index.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-mobile.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_mobile.py"
+      - "tests/fixtures/v25-*/**"
+      - "tests/scripts/v25_flutter_android_emulator.sh"
+      - ".github/workflows/developer-mobile-v25.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_mobile.py"
@@ -13,20 +29,44 @@ on:
       - "tests/fixtures/v25-*/**"
       - "tests/scripts/v25_flutter_android_emulator.sh"
       - ".github/workflows/developer-mobile-v25.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "50 5 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_mobile.py
+        automoto/web/static/developer-mobile.js
+        tests/test_developer_mobile.py
+        tests/fixtures/v25-*/**
+        tests/scripts/v25_flutter_android_emulator.sh
+        .github/workflows/developer-mobile-v25.yml
+
   static-security:
     name: Static Flutter/RN security (${{ matrix.os }})
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-latest", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
@@ -42,12 +82,13 @@ jobs:
 
   flutter-web:
     name: Real Flutter 3.47.9 widget/web on ${{ matrix.os }}
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
