@@ -25,8 +25,12 @@ from typing import Iterable, List, Optional, Sequence
 
 
 def path_matches(path: str, pattern: str) -> bool:
-    path = path.replace("\\", "/").lstrip("./")
+    path = path.replace("\\", "/")
+    if path.startswith("./"):
+        path = path[2:]
     pattern = pattern.strip().strip("\"'").replace("\\", "/")
+    if pattern.startswith("./"):
+        pattern = pattern[2:]
     if not pattern or pattern.startswith("#"):
         return False
     if path == pattern:

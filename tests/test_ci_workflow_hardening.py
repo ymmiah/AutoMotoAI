@@ -135,6 +135,12 @@ source scripts/ci/apt-install.sh
     "path,pattern,expected",
     [
         ("automoto/developer_logic.py", "automoto/developer_logic.py", True),
+        (
+            ".github/workflows/developer-shell-v26.yml",
+            ".github/workflows/developer-shell-v26.yml",
+            True,
+        ),
+        ("./automoto/developer_logic.py", "automoto/developer_logic.py", True),
         ("automoto/server.py", "automoto/developer_logic.py", False),
         ("tests/fixtures/v31-logic/test/v31_fixture.hs", "tests/fixtures/v31-logic/**", True),
         ("tests/fixtures/v23-android/app/src/Main.kt", "tests/fixtures/v23-*/**", True),
