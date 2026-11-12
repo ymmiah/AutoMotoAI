@@ -100,12 +100,7 @@ def test_symlink_files_cannot_be_accepted_for_stage(project, tmp_path, filename)
     except (OSError, NotImplementedError):
         pytest.skip("Symlinks unavailable on test runner.")
     response = inspect(client, root)
-    if filename in ("build.sbt", "deps.edn", "Fixture.fsproj"):
-        assert response.status_code == 403
-    else:
-        assert response.status_code in (200, 403)
-        if response.status_code == 200:
-            assert response.json()["scan_incomplete"]
+    assert response.status_code == 403, "Linked canonical source or build manifest must be rejected"
 
 def test_missing_auth_and_hosted_mode_denied(project, monkeypatch):
     client, root = project
