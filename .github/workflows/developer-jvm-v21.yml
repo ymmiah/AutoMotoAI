@@ -1,6 +1,20 @@
 name: Developer Studio V21 Java JVM acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_jvm.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-jvm.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_jvm.py"
+      - "tests/fixtures/v21-junit/**"
+      - "tests/fixtures/v21-gradle/**"
+      - ".github/workflows/developer-jvm-v21.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_jvm.py"
@@ -11,24 +25,44 @@ on:
       - "tests/fixtures/v21-junit/**"
       - "tests/fixtures/v21-gradle/**"
       - ".github/workflows/developer-jvm-v21.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "50 4 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_jvm.py
+        automoto/web/static/developer-jvm.js
+        tests/test_developer_jvm.py
+        tests/fixtures/v21-junit/**
+        tests/fixtures/v21-gradle/**
+        .github/workflows/developer-jvm-v21.yml
+
   jvm-integration:
     name: JDK ${{ matrix.java }} / Python 3.13 (${{ matrix.os }})
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {os: ubuntu-latest, java: '21'}
-          - {os: ubuntu-latest, java: '25'}
-          - {os: macos-latest, java: '21'}
-          - {os: windows-latest, java: '21'}
+        include: ${{ fromJSON(needs.paths.outputs.self == 'true' && '[{"os":"ubuntu-latest","java":"21"},{"os":"ubuntu-latest","java":"25"},{"os":"macos-latest","java":"21"},{"os":"windows-latest","java":"21"}]' || '[{"os":"ubuntu-latest","java":"21"},{"os":"ubuntu-latest","java":"25"},{"os":"windows-latest","java":"21"}]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6

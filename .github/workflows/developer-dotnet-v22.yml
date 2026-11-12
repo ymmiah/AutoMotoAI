@@ -1,6 +1,19 @@
 name: Developer Studio V22 CSharp .NET acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_dotnet.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-dotnet.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_dotnet.py"
+      - "tests/fixtures/v22-*/**"
+      - ".github/workflows/developer-dotnet-v22.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_dotnet.py"
@@ -10,24 +23,43 @@ on:
       - "tests/test_developer_dotnet.py"
       - "tests/fixtures/v22-*/**"
       - ".github/workflows/developer-dotnet-v22.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "5 5 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_dotnet.py
+        automoto/web/static/developer-dotnet.js
+        tests/test_developer_dotnet.py
+        tests/fixtures/v22-*/**
+        .github/workflows/developer-dotnet-v22.yml
+
   dotnet-integration:
     name: .NET ${{ matrix.sdk }} / Python 3.13 (${{ matrix.os }})
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {os: ubuntu-latest, sdk: '8.0.x'}
-          - {os: ubuntu-latest, sdk: '10.0.x'}
-          - {os: macos-latest, sdk: '10.0.x'}
-          - {os: windows-latest, sdk: '10.0.x'}
+        include: ${{ fromJSON(needs.paths.outputs.self == 'true' && '[{"os":"ubuntu-latest","sdk":"8.0.x"},{"os":"ubuntu-latest","sdk":"10.0.x"},{"os":"macos-latest","sdk":"10.0.x"},{"os":"windows-latest","sdk":"10.0.x"}]' || '[{"os":"ubuntu-latest","sdk":"8.0.x"},{"os":"ubuntu-latest","sdk":"10.0.x"},{"os":"windows-latest","sdk":"10.0.x"}]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6

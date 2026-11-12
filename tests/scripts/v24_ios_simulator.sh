@@ -28,8 +28,16 @@ xcrun simctl bootstatus "$uuid" -b
 xcrun simctl install "$uuid" "$V24_APP"
 installed="$(xcrun simctl get_app_container "$uuid" org.automoto.v24fixture app)"
 test -d "$installed"
-result="$(xcrun simctl launch "$uuid" org.automoto.v24fixture)"
-printf '%s\n' "$result"
+result=""
+for try in 1 2 3 4 5 6; do
+  result="$(xcrun simctl launch "$uuid" org.automoto.v24fixture || true)"
+  printf '%s\n' "$result"
+  if grep -q 'org.automoto.v24fixture:' <<<"$result"; then
+    break
+  fi
+  printf '%s\n' "simctl launch attempt ${try} did not report the app pid; retrying" >&2
+  sleep 2
+done
 grep -q 'org.automoto.v24fixture:' <<<"$result"
 sleep 3
 xcrun simctl io "$uuid" screenshot "$V24_SCREENSHOT"

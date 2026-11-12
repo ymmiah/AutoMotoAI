@@ -1,6 +1,18 @@
 name: Developer Studio V18 Go acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_go.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-go.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_go.py"
+      - ".github/workflows/developer-go-v18.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_go.py"
@@ -9,20 +21,42 @@ on:
       - "automoto/web/static/developer-studio.js"
       - "tests/test_developer_go.py"
       - ".github/workflows/developer-go-v18.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "5 4 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_go.py
+        automoto/web/static/developer-go.js
+        tests/test_developer_go.py
+        .github/workflows/developer-go-v18.yml
+
   go-integration:
     name: Go 1.27.4 / Python 3.13 (${{ matrix.os }})
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-latest", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
