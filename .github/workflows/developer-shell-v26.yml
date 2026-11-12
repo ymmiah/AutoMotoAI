@@ -1,6 +1,20 @@
 name: Developer Studio V26 Shell Automation acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_shell.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-shell.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_shell.py"
+      - "tests/fixtures/v26-shell/**"
+      - ".github/workflows/developer-shell-v26.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
   pull_request:
     paths:
       - "automoto/developer_shell.py"
@@ -11,12 +25,34 @@ on:
       - "tests/test_developer_shell.py"
       - "tests/fixtures/v26-shell/**"
       - ".github/workflows/developer-shell-v26.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "5 6 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_shell.py
+        automoto/web/static/developer-shell.js
+        tests/test_developer_shell.py
+        tests/fixtures/v26-shell/**
+        .github/workflows/developer-shell-v26.yml
+
   shell-ubuntu:
     name: Bash Zsh Fish ShellCheck and guarded execution (Ubuntu)
     runs-on: ubuntu-latest
@@ -28,8 +64,7 @@ jobs:
           python-version: "3.13"
       - name: Install Linux shell interpreters and static analyser
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends zsh fish shellcheck
+          bash scripts/ci/apt-install.sh zsh fish shellcheck
           bash --version | head -1
           zsh --version
           fish --version
@@ -45,6 +80,8 @@ jobs:
 
   shell-macos:
     name: macOS built-in Bash/Zsh guarded execution and shell security
+    needs: paths
+    if: ${{ needs.paths.outputs.self == 'true' }}
     runs-on: macos-15
     timeout-minutes: 20
     steps:

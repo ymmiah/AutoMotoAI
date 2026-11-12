@@ -9,6 +9,7 @@ concurrency:
 jobs:
   visual-foundation:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       AUTOMOTO_WORKSPACE: ${{ github.workspace }}/visual-workspace
     steps:
@@ -32,6 +33,7 @@ jobs:
 
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -59,6 +61,7 @@ jobs:
 
   ui:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -95,6 +98,7 @@ jobs:
     # Office suite end to end with free LibreOffice + poppler: PDF export, TOC page numbers, recalc, renders;
     # plus archives / WordPress (php -l) / data files with the optional tools installed
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -145,6 +149,7 @@ jobs:
 
   security:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -172,6 +177,7 @@ jobs:
 
   vscode:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -207,6 +213,7 @@ jobs:
   docker:
     # hosted multi-user image: builds, runs as non-root, bootstraps the admin from env, serves the login page
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Build image
@@ -243,6 +250,7 @@ jobs:
     # the documented installers on real Windows, macOS and Linux runners: release wheel (pinned SHA-256)
     # and the current source, then start the server and sign in with the one-time link
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
