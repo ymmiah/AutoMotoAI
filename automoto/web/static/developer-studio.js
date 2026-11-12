@@ -29,7 +29,7 @@ import {mountDeveloperFunctional} from "./developer-functional.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V28 · Scientific programming: R, Julia, MATLAB/Octave, notebooks, plotting and reproducible experiment evidence.",
+    "V29 · Scala, F# and Clojure tooling, alongside scientific reproducibility and existing multi-language development workflows.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
