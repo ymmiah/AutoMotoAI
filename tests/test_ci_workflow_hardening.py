@@ -112,6 +112,11 @@ def test_apt_install_helper_still_exists_and_handles_renames():
 
 
 def test_package_replacement_function():
+    if sys.platform == "win32":
+        pytest.skip("apt-install.sh is a bash helper for Ubuntu runners")
+    probe = subprocess.run(["bash", "-c", "exit 0"], check=False, capture_output=True)
+    if probe.returncode != 0:
+        pytest.skip("bash is required")
     script = r"""
 set -euo pipefail
 # shellcheck source=scripts/ci/apt-install.sh
