@@ -175,7 +175,7 @@ def test_commands_are_fixed_and_cannot_select_any_other_file(project):
     client, root = project
     data = inspect(client, root).json()
     assert functional._command("scala_test", "scala", "/usr/bin/scala", data) == [
-        "/usr/bin/scala", "test/Fixture.scala"]
+        "/usr/bin/scala", "-nc", "test/Fixture.scala"]
     assert functional._command("clojure_test", "clojure", "/usr/bin/clojure", data) == [
         "/usr/bin/clojure", "test/fixture_test.clj"]
     with pytest.raises(Exception):
