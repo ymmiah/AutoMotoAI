@@ -1,0 +1,127 @@
+name: Developer Studio V27 Ruby Lua Perl Groovy acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_scripting.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-scripting.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_scripting.py"
+      - "tests/fixtures/v27-scripting/**"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - ".github/workflows/developer-scripting-v27.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scripting-static:
+    name: Inert four-language packages and security (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install AutoMoto tests
+        run: python -m pip install -e ".[dev]"
+      - name: Inert Ruby Lua Perl Groovy package inventory, consent and security regression
+        run: python -m pytest -q -rs tests/test_developer_scripting.py
+
+  scripting-ubuntu:
+    name: Real Ruby Lua Perl Groovy compilers and canonical fixture tests (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install independently available Linux language toolchains
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ruby-full lua5.4 perl groovy
+          ruby --version
+          lua -v
+          luac -v
+          perl -v
+          groovy --version
+          groovyc --version
+      - name: Compile / parse actual language sources and execute canonical fixtures directly
+        run: |
+          ruby -c tests/fixtures/v27-scripting/lib/sample.rb
+          luac -p tests/fixtures/v27-scripting/lib/v27.lua
+          perl -c tests/fixtures/v27-scripting/lib/V27Sample.pm
+          mkdir -p "$RUNNER_TEMP/v27-groovy-classes"
+          groovyc -d "$RUNNER_TEMP/v27-groovy-classes" tests/fixtures/v27-scripting/src/V27Sample.groovy
+          (cd tests/fixtures/v27-scripting && ruby test/fixture_test.rb && lua test/fixture_test.lua && perl test/fixture_test.t && groovy test/FixtureTest.groovy)
+      - name: Install AutoMoto tests
+        run: python -m pip install -e ".[dev]"
+      - name: Real SHA-pinned approval-gated Ruby Lua Perl Groovy tests and security checks
+        env:
+          AUTOMOTO_V27_REAL: "1"
+          AUTOMOTO_V27_TOOLS: "ruby,lua,perl,groovy"
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q -rs tests/test_developer_scripting.py
+
+  scripting-macos:
+    name: Real Ruby Lua Perl fixtures with installed macOS toolchains
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - name: Install local Lua compiler and confirm Perl
+        run: |
+          command -v lua || brew install lua
+          ruby --version
+          lua -v
+          luac -v
+          perl -v
+      - name: Install AutoMoto tests
+        run: python -m pip install -e ".[dev]"
+      - name: Approved Ruby Lua Perl compiler/test and static security
+        env:
+          AUTOMOTO_V27_REAL: "1"
+          AUTOMOTO_V27_TOOLS: "ruby,lua,perl"
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q -rs tests/test_developer_scripting.py
+
+  scripting-windows:
+    name: Real Ruby syntax/test on Windows with four-language static security
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - name: Confirm installed Ruby binary
+        run: ruby --version
+      - name: Install AutoMoto tests
+        run: python -m pip install -e ".[dev]"
+      - name: Ruby on Windows exact tool fingerprint, parser, fixture test and guards
+        env:
+          AUTOMOTO_V27_REAL: "1"
+          AUTOMOTO_V27_TOOLS: "ruby"
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q -rs tests/test_developer_scripting.py
