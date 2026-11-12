@@ -23,10 +23,11 @@ import {mountDeveloperAndroid} from "./developer-android.js";
 import {mountDeveloperSwift} from "./developer-swift.js";
 import {mountDeveloperMobile} from "./developer-mobile.js";
 import {mountDeveloperShell} from "./developer-shell.js";
+import {mountDeveloperScripting} from "./developer-scripting.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V26 · Shell and automation engineering. Inspect shell scripts and approved diagnostics alongside Flutter, React Native and all earlier languages.",
+    "V27 · Ruby, Lua, Perl and Groovy engineering. Inspect scripting packages, source, format hints, approved tools and tests.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -60,7 +61,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsAndroidRoot" aria-label="Kotlin Android SDK Gradle Compose and emulator inspection"></div>'+
       '<div id="dsSwiftRoot" aria-label="Swift SwiftUI Objective C SwiftPM Xcode simulator and SourceKit LSP inspection"></div>'+
       '<div id="dsMobileRoot" aria-label="Flutter Dart React Native package management device and bridge evidence"></div>'+
-      '<div id="dsShellRoot" aria-label="Bash Zsh Fish PowerShell Batch script analysis and fixed fixture diagnostics"></div>'+ 
+      '<div id="dsShellRoot" aria-label="Bash Zsh Fish PowerShell Batch script analysis and fixed fixture diagnostics"></div>'+
+      '<div id="dsScriptingRoot" aria-label="Ruby Lua Perl Groovy package metadata source syntax lint and test evidence"></div>'+ 
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -77,9 +79,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio,scriptingStudio;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);scriptingStudio?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
@@ -103,6 +105,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   swiftStudio=mountDeveloperSwift({api,host,getProject:()=>project,status});
   mobileStudio=mountDeveloperMobile({api,host,getProject:()=>project,status});
   shellStudio=mountDeveloperShell({api,host,getProject:()=>project,status});
+  scriptingStudio=mountDeveloperScripting({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -178,6 +181,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       swiftStudio.projectChanged();
       mobileStudio.projectChanged();
       shellStudio.projectChanged();
+      scriptingStudio.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
