@@ -1,0 +1,3 @@
+requires 'strict';
+requires 'warnings';
+test_requires 'Test::More';
