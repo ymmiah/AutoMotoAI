@@ -1,0 +1,77 @@
+name: Developer Studio V29 Scala Fsharp Clojure acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_functional.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-functional.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_functional.py"
+      - "tests/fixtures/v29-functional/**"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - ".github/workflows/developer-functional-v29.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  functional-inert:
+    name: Inert sources, SHA and authorisation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install AutoMoto and tests
+        run: python -m pip install -e ".[dev]"
+      - name: Parse and test V29 scanner, approval and staging
+        run: |
+          python -m compileall -q automoto/developer_functional.py tests/test_developer_functional.py
+          python -m pytest -q -rs tests/test_developer_functional.py
+
+  functional-native-ubuntu:
+    name: Real Scala Fsharp Clojure canonical fixtures (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install Scala and Clojure only on disposable CI runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends scala clojure
+          scala -version
+          clojure -h | head -6
+          dotnet --version
+      - name: Execute reviewed local fixed fixture with installed interpreters
+        working-directory: tests/fixtures/v29-functional
+        run: |
+          set -euo pipefail
+          scala -nc test/Fixture.scala | tee /tmp/v29-scala.txt
+          grep -F 'V29_SCALA_PASS 42' /tmp/v29-scala.txt
+          dotnet fsi --exec test/Fixture.fsx | tee /tmp/v29-fsharp.txt
+          grep -F 'V29_FSHARP_PASS 42' /tmp/v29-fsharp.txt
+          clojure test/fixture_test.clj | tee /tmp/v29-clojure.txt
+          grep -F 'V29_CLOJURE_PASS 42' /tmp/v29-clojure.txt
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Full auth API and end-to-end local fixed execution
+        env:
+          AUTOMOTO_V29_REAL_TOOL_TESTS: "1"
+        run: python -m pytest -q -rs tests/test_developer_functional.py
