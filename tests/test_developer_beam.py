@@ -76,6 +76,7 @@ def test_inert_three_language_inventory_never_evaluates_manifest_or_source(proje
     assert not state["network_started"]
     assert not state["deployment_started"]
     assert state["packages"]["parsed_only"]
+    assert state["packages"]["coordinates"]["gleam"] == [], "Project name/version are not dependencies"
     assert not state["packages"]["dependencies_resolved"]
     assert state["central_agent_studio"] == "developer"
     assert state["agent_deployment_handoff_required"]
@@ -164,6 +165,22 @@ def test_unknown_tools_and_noncanonical_fixture_denied(project):
     with pytest.raises(Exception):
         beam._command(body.model_copy(update={"tool": "elixir"}), refreshed)
 
+
+def test_gleam_dependency_tables_only_not_project_fields(project):
+    client, root = project
+    path = root / "gleam.toml"
+    path.write_text(
+        'name = "v30_fixture"\nversion = "1.0.0"\ntarget = "erlang"\n'
+        '[dependencies]\nexample_package = ">= 1.0.0"\n[dev-dependencies]\n'
+        'test_package = ">= 2.0.0"\n')
+    response = inspect(client, root)
+    assert response.status_code == 200, response.text
+    coordinates = response.json()["packages"]["coordinates"]["gleam"]
+    assert ["example_package", ">= 1.0.0"] in coordinates
+    assert ["test_package", ">= 2.0.0"] in coordinates
+    assert not any(name in {"name", "version", "target"} for name, _ in coordinates)
+    assert not response.json()["packages"]["dependencies_resolved"]
+
 def test_gleam_manifest_strict_no_dependencies_or_extra_source(project):
     client, root = project
     state = inspect(client, root).json()
@@ -220,6 +237,8 @@ def test_trust_consent_sha_validation_marker_and_no_arbitrary_args(project, monk
     assert result["fixture_marker_matched"]
     assert result["temporary_copy_deleted"]
     assert result["external_code_unsandboxed"]
+    assert not result["original_workspace_integrity_verified"]
+    assert result["original_sources_modified_by_studio"] is False
     assert result["central_agent_studio"] == "developer"
     assert len(calls) == 1
     assert calls[0][1] == [executable, "test/v30_fixture.exs"]
