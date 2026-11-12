@@ -191,6 +191,8 @@ from automoto import developer_science
 app.include_router(developer_science.router)  # V28 inert scientific data/notebooks and SHA-pinned R Julia Octave reproduction
 from automoto import developer_functional
 app.include_router(developer_functional.router)  # V29 inert Scala F# Clojure projects and approved fixed fixtures
+from automoto import developer_beam
+app.include_router(developer_beam.router)  # V30 inert Elixir Erlang Gleam and SHA-pinned fixed BEAM tool tasks
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

@@ -2821,6 +2821,46 @@ let browser;
   assert.match(await page.locator('#studioAgentMessage').inputValue(),/V29 Scala, F# and Clojure readiness/);
   await page.screenshot({path:path.join(output,'developer-studio-v29-functional-enterprise.png')});
 
+  // V30: Elixir, Erlang and Gleam manifest/source discovery must be inert.
+  const v30Elixir=path.join(devProject,'test','v30_fixture.exs');
+  const v30Escript=path.join(devProject,'test','v30_fixture.escript');
+  const v30GleamFolder=path.join(devProject,'src');
+  mkdirSync(v30GleamFolder,{recursive:true});
+  const v30Gleam=path.join(v30GleamFolder,'v30_fixture.gleam');
+  const v30ElixirSource='IO.puts("V30_ELIXIR_PASS 42")\n';
+  const v30EscriptSource='#!/usr/bin/env escript\nmain(_) -> io:format("V30_ERLANG_PASS 42~n").\n';
+  const v30GleamSource='pub fn answer() { 6 * 7 }\n';
+  writeFileSync(v30Elixir,v30ElixirSource);
+  writeFileSync(v30Escript,v30EscriptSource);
+  writeFileSync(v30Gleam,v30GleamSource);
+  writeFileSync(path.join(devProject,'mix.exs'),
+    'File.write!("V30_DANGER", "must never execute this manifest")\n');
+  writeFileSync(path.join(devProject,'rebar.config'),'{deps, []}.\n');
+  writeFileSync(path.join(devProject,'gleam.toml'),
+    'name = "v30_fixture"\nversion = "1.0.0"\ntarget = "erlang"\n[dependencies]\n');
+  await page.locator('#dsBeamInspect').click();
+  await page.waitForFunction(()=>
+    document.querySelector('#dsBeamStatus')?.textContent?.includes('inventory complete'));
+  const v30Text=await page.locator('#dsBeamResults').innerText();
+  assert.match(v30Text,/test\/v30_fixture\.exs/);
+  assert.match(v30Text,/test\/v30_fixture\.escript/);
+  assert.match(v30Text,/src\/v30_fixture\.gleam/);
+  assert.match(v30Text,/mix\.exs/);
+  assert.match(v30Text,/rebar\.config/);
+  assert.match(v30Text,/gleam\.toml/);
+  assert.match(v30Text,/Code executed: false/);
+  assert.match(v30Text,/Dependencies resolved: false/);
+  assert.equal(existsSync(path.join(devProject,'V30_DANGER')),false);
+  assert.deepEqual(readFileSync(v30Elixir,'utf8'),v30ElixirSource);
+  assert.deepEqual(readFileSync(v30Escript,'utf8'),v30EscriptSource);
+  assert.deepEqual(readFileSync(v30Gleam,'utf8'),v30GleamSource);
+  assert.equal(await page.locator('#dsBeamRun').isEnabled(),false);
+  await page.locator('#dsBeamAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),
+    /V30 Elixir, Erlang and Gleam/);
+  await page.screenshot({path:path.join(output,'developer-studio-v30-beam-languages.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){

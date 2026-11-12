@@ -1,0 +1,7 @@
+name = "v30_fixture"
+version = "1.0.0"
+target = "erlang"
+
+[dependencies]
+
+[dev-dependencies]

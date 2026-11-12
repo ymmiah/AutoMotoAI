@@ -1,0 +1,75 @@
+name: Developer Studio V30 Elixir Erlang Gleam acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_beam.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-beam.js"
+      - "automoto/web/static/developer-studio.js"
+      - "tests/test_developer_beam.py"
+      - "tests/fixtures/v30-beam/**"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - ".github/workflows/developer-beam-v30.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  beam-inert:
+    name: Inert BEAM scanning and security (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install AutoMoto development dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Inert Elixir Erlang Gleam auth trust SHA and symlink tests
+        run: |
+          python -m compileall -q automoto/developer_beam.py tests/test_developer_beam.py
+          python -m pytest -q -rs tests/test_developer_beam.py
+
+  beam-real-ubuntu:
+    name: Real installed Elixir Erlang Gleam fixed fixtures (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install BEAM language toolchains on disposable runner only
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          elixir-version: "1.18"
+          gleam-version: "1.10"
+      - name: Show actual installed versions
+        run: |
+          set -euo pipefail
+          elixir --version
+          erl -version
+          gleam --version
+      - name: Run real pinned scripts and Gleam Erlang backend
+        working-directory: tests/fixtures/v30-beam
+        run: |
+          set -euo pipefail
+          elixir test/v30_fixture.exs | tee /tmp/v30-elixir.txt
+          grep -F "V30_ELIXIR_PASS 42" /tmp/v30-elixir.txt
+          escript test/v30_fixture.escript | tee /tmp/v30-erlang.txt
+          grep -F "V30_ERLANG_PASS 42" /tmp/v30-erlang.txt
+          gleam run --target erlang --no-print-progress | tee /tmp/v30-gleam.txt
+          grep -F "V30_GLEAM_PASS 42" /tmp/v30-gleam.txt
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Real installed runtime end-to-end authorised API acceptance
+        env:
+          AUTOMOTO_V30_REAL_TOOL_TESTS: "1"
+        run: python -m pytest -q -rs tests/test_developer_beam.py
