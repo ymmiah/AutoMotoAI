@@ -2861,6 +2861,46 @@ let browser;
     /V30 Elixir, Erlang and Gleam/);
   await page.screenshot({path:path.join(output,'developer-studio-v30-beam-languages.png')});
 
+  // V31: five-language source inspection must remain inert and review-only.
+  const v31Haskell=path.join(devProject,'test','v31_fixture.hs');
+  const v31Ocaml=path.join(devProject,'test','v31_fixture.ml');
+  const v31Lisp=path.join(devProject,'test','v31_fixture.lisp');
+  const v31Scheme=path.join(devProject,'test','v31_fixture.scm');
+  const v31Prolog=path.join(devProject,'test','v31_fixture.pl');
+  const v31Contents=[
+    ['v31_fixture.hs','main :: IO ()\nmain = putStrLn "V31_HASKELL_PASS 42"\n'],
+    ['v31_fixture.ml','let () = print_endline "V31_OCAML_PASS 42"\n'],
+    ['v31_fixture.lisp','(format t "V31_LISP_PASS 42~%")\n'],
+    ['v31_fixture.scm','(display "V31_SCHEME_PASS 42")\n'],
+    ['v31_fixture.pl','main :- writeln("V31_PROLOG_PASS 42").\n']
+  ];
+  for(const [filename,code] of v31Contents)
+    writeFileSync(path.join(devProject,'test',filename),code);
+  writeFileSync(path.join(devProject,'cabal.project'),'packages: .\n');
+  writeFileSync(path.join(devProject,'dune-project'),'(lang dune 3.0)\n');
+  writeFileSync(path.join(devProject,'project.asd'),
+    '#.(uiop:run-program (list "touch" "V31_DANGER"))\n');
+  writeFileSync(path.join(devProject,'pack.pl'),'name(v31_fixture).\n');
+  await page.locator('#dsLogicInspect').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsLogicStatus')?.textContent?.includes('Inspection complete'));
+  const v31Text=await page.locator('#dsLogicResults').innerText();
+  for(const [filename] of v31Contents)
+    assert.ok(v31Text.includes(filename),'V31 source visible: '+filename);
+  for(const name of ['cabal.project','dune-project','project.asd','pack.pl'])
+    assert.ok(v31Text.includes(name),'V31 manifest visible: '+name);
+  assert.match(v31Text,/Runtime used: false/);
+  assert.match(v31Text,/dependencies resolved: false/);
+  assert.equal(existsSync(path.join(devProject,'V31_DANGER')),false);
+  for(const [filename,code] of v31Contents)
+    assert.equal(readFileSync(path.join(devProject,'test',filename),'utf8'),code);
+  assert.equal(await page.locator('#dsLogicRun').isEnabled(),false);
+  await page.locator('#dsLogicAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),
+    /V31 Haskell, OCaml, Common Lisp, Scheme and Prolog/);
+  await page.screenshot({path:path.join(output,'developer-studio-v31-functional-logic.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
