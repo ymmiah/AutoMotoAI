@@ -182,3 +182,35 @@ def test_commands_are_fixed_and_cannot_select_any_other_file(project):
         functional._command("fsharp_test", "scala", "/usr/bin/scala", data)
     with pytest.raises(Exception):
         functional._command("other", "scala", "/usr/bin/scala", data)
+
+@pytest.mark.parametrize("task, tool", [
+    ("scala_test", "scala"),
+    ("fsharp_test", "dotnet"),
+    ("clojure_test", "clojure"),
+])
+def test_real_installed_interpreters_only_on_ephemeral_ci(project, task, tool):
+    import os
+    if os.getenv("AUTOMOTO_V29_REAL_TOOL_TESTS") != "1":
+        pytest.skip("Real external execution is opt-in and restricted to controlled CI.")
+    client, root = project
+    trust(client, root)
+    before = snapshot(root)
+    inventory = inspect(client, root).json()
+    record = next((t for t in inventory["toolchains"]
+                   if t["name"] == tool and t["status"] == "installed_not_executed"), None)
+    assert record, "Required real CI interpreter is not installed or approved: " + tool
+    body = {
+        "project": str(root), "task": task, "tool": tool,
+        "expected_inventory_sha256": inventory["inventory_sha256"],
+        "expected_toolchain_sha256": inventory["toolchain_sha256"],
+        "expected_executable": record["executable"],
+        "expected_sha256": record["sha256"], "confirmed": True,
+        "accept_unsandboxed_code_and_network_risk": True,
+    }
+    result = client.post(BASE + "/run", headers=AUTH, json=body)
+    assert result.status_code == 200, result.text
+    evidence = result.json()
+    assert evidence["status"] == "completed", evidence
+    assert evidence["fixture_marker_matched"], evidence
+    assert evidence["temporary_copy_deleted"]
+    assert before == snapshot(root), "V29 must not edit original project"
