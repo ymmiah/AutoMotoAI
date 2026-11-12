@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import threading
@@ -277,10 +278,25 @@ def _stage(root: Path, data: dict, stage: Path) -> None:
         total += size
         if total > MAX_TOTAL_BYTES:
             raise HTTPException(413, "Staged project exceeds maximum size.")
-        # Preserve source text verbatim without editing original workspace.
+        # Open the source with no-follow and verify the actual bytes staged.
+        # A second symlink/contents switch must not turn an approved source
+        # into an unreviewed script between inventory and execution.
+        source = studio._path(root, name)
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+        try:
+            fd = os.open(source, flags)
+            with os.fdopen(fd, "rb") as handle:
+                meta = os.fstat(handle.fileno())
+                if not stat.S_ISREG(meta.st_mode) or meta.st_size > size:
+                    raise HTTPException(409, "Staged source changed size or type.")
+                raw = handle.read(size + 1)
+        except OSError as exc:
+            raise HTTPException(403, "Cannot stage approved regular source.") from exc
+        if hashlib.sha256(raw).hexdigest() != item["sha256"]:
+            raise HTTPException(409, "Source bytes changed during staging.")
         target = stage / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes((root / name).read_bytes())
+        target.write_bytes(raw)
 
 
 def _env(root: Path, tmp: Path, stage: Path) -> dict:
