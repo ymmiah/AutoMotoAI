@@ -187,6 +187,8 @@ from automoto import developer_shell
 app.include_router(developer_shell.router)  # V26 Bash/Zsh/Fish/PowerShell/Batch inspection, syntax checks, literal fixtures
 from automoto import developer_scripting
 app.include_router(developer_scripting.router)  # V27 Ruby Lua Perl Groovy package and explicit toolchain adapters
+from automoto import developer_science
+app.include_router(developer_science.router)  # V28 inert scientific data/notebooks and SHA-pinned R Julia Octave reproduction
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

@@ -1,0 +1,118 @@
+name: Developer Studio V28 Scientific reproducibility acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_science.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-science.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_science.py"
+      - "tests/fixtures/v28-science/**"
+      - ".github/workflows/developer-science-v28.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-scientific:
+    name: Inert R Julia MATLAB Octave notebook/data security (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install AutoMoto and unit test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Bounded scientific CSV, source, notebook and manifest invariants
+        run: python -m pytest -q -rs tests/test_developer_science.py
+
+  science-ubuntu:
+    name: Real R Julia Octave calculations, R graphics and SHA-pinned backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.11"
+      - name: Install R and GNU Octave on isolated Ubuntu runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends r-base-core octave libcairo2 libpng16-16
+          Rscript --version
+          julia --version
+          octave --version
+      - name: Direct reproducible R Julia Octave fixture execution (no dependency resolver)
+        working-directory: tests/fixtures/v28-science
+        run: |
+          mkdir -p outputs
+          Rscript --vanilla experiments/compute.R | grep -q 'V28_R_PASS count=5 sum=150 mean=30'
+          test -s outputs/plot.png
+          julia --startup-file=no --history-file=no --project=@temp experiments/compute.jl | grep -q 'V28_JULIA_PASS count=5 sum=150 mean=30'
+          octave --no-gui --no-init-file --no-site-file --no-history --quiet experiments/compute.m | grep -q 'V28_OCTAVE_PASS count=5 sum=150 mean=30'
+      - name: Install AutoMoto and unit test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Real approval-gated numerical reproduction, exact hashes and R PNG validation
+        env:
+          AUTOMOTO_V28_REAL: "1"
+          AUTOMOTO_V28_LANGUAGES: "r,julia,octave"
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q -rs tests/test_developer_science.py
+
+  science-macos-julia:
+    name: Real Julia numerical reproduction on macOS
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.11"
+      - name: Confirm installed Julia
+        run: julia --version
+      - name: Install AutoMoto and unit test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Reproduce Julia SHA-pinned fixture and run static security
+        env:
+          AUTOMOTO_V28_REAL: "1"
+          AUTOMOTO_V28_LANGUAGES: "julia"
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q -rs tests/test_developer_science.py
+
+  science-windows-julia:
+    name: Real Julia numerical reproduction on Windows
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.11"
+      - name: Confirm installed Julia
+        run: julia --version
+      - name: Install AutoMoto and unit test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Reproduce Julia SHA-pinned fixture and run static security
+        env:
+          AUTOMOTO_V28_REAL: "1"
+          AUTOMOTO_V28_LANGUAGES: "julia"
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q -rs tests/test_developer_science.py
