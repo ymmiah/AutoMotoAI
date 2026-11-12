@@ -128,6 +128,12 @@ def _inventory(root: Path) -> tuple[list[dict], dict, str, bool]:
                                      and FIXTURES.get(language + "_test") == name,
                 "executed": False,
             })
+    # A canonical runnable test can be hidden by the index walker when linked.
+    # Never silently omit a linked executable fixture during discovery.
+    for name in FIXTURES.values():
+        fixture = root / name
+        if fixture.is_symlink() or getattr(fixture, "is_junction", lambda: False)():
+            raise HTTPException(403, "Linked canonical functional fixture refused.")
     # Manifest symlinks that an indexed walk skipped must not silently vanish.
     for name in MANIFESTS:
         path = root / name
