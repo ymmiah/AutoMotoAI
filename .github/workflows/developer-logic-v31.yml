@@ -43,9 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install interpreters on disposable CI runner only
-        run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ghc ocaml-nox sbcl guile-3.0 swi-prolog-nox
+        timeout-minutes: 15
+        # Ubuntu 26.04 dropped the ocaml-nox transitional package; "ocaml" is the real one.
+        run: bash scripts/ci/apt-install.sh ghc ocaml sbcl guile-3.0 swi-prolog-nox
       - name: Prove real language fixtures
         working-directory: tests/fixtures/v31-logic
         run: |
