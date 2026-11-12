@@ -241,7 +241,7 @@ def _command(task: str, tool: str, executable: str, snapshot: dict) -> list[str]
     if not source or (task == "clojure_test" and source["language"] != "clojure"):
         raise HTTPException(409, "Canonical functional fixture missing.")
     if task == "scala_test":
-        return [executable, expected]
+        return [executable, "-nc", expected]
     if task == "fsharp_test":
         return [executable, "fsi", "--exec", expected]
     if task == "clojure_test":
