@@ -2733,6 +2733,59 @@ let browser;
   assert.match(await page.locator('#studioAgentMessage').inputValue(),/V27 Ruby, Lua, Perl and Groovy readiness/);
   await page.screenshot({path:path.join(output,'developer-studio-v27-scripting.png')});
 
+  // V28: numerical experiment/source/lock/notebook inspection is fully inert.
+  const v28Experiments=path.join(devProject,'experiments');
+  const v28Data=path.join(devProject,'data');
+  const v28Notebook=path.join(devProject,'notebooks');
+  for(const folder of [v28Experiments,v28Data,v28Notebook])mkdirSync(folder,{recursive:true});
+  const v28CSV=path.join(v28Data,'measurements.csv');
+  const v28CSVSource='value\n10\n20\n30\n40\n50\n';
+  writeFileSync(v28CSV,v28CSVSource);
+  const v28Manifest=path.join(devProject,'experiment.json');
+  writeFileSync(v28Manifest,JSON.stringify({
+    version:1,name:'V28-Reproducible-Mean',dataset:'data/measurements.csv',
+    column:'value',expected:{count:5,sum:150,mean:30},
+    scripts:{r:'experiments/compute.R',julia:'experiments/compute.jl',octave:'experiments/compute.m'}
+  }));
+  const v28Scripts={
+    'compute.R':'values <- read.csv("data/measurements.csv")$value\nprint(mean(values))\n',
+    'compute.jl':'values = [10,20,30,40,50]\nprintln(sum(values))\n',
+    'compute.m':'values = [10,20,30,40,50]; disp(mean(values));\n'
+  };
+  for(const [name,source] of Object.entries(v28Scripts))
+    writeFileSync(path.join(v28Experiments,name),source);
+  writeFileSync(path.join(devProject,'renv.lock'),JSON.stringify({R:{Version:'unknown'},Packages:{}}));
+  writeFileSync(path.join(devProject,'octave-packages.json'),JSON.stringify({packages:[]}));
+  writeFileSync(path.join(v28Notebook,'study.ipynb'),JSON.stringify({
+    nbformat:4,nbformat_minor:5,metadata:{kernelspec:{name:'ir'}},
+    cells:[{cell_type:'code',source:['system("touch V28_BAD")'],metadata:{},
+      outputs:[],execution_count:null}]
+  }));
+  await page.locator('#dsScienceInspect').click();
+  await page.waitForFunction(()=>
+    document.querySelector('#dsScienceStatus')?.textContent?.includes('inspection complete'));
+  const v28Body=await page.locator('#dsScienceResults').innerText();
+  assert.match(v28Body,/V28-Reproducible-Mean/);
+  assert.match(v28Body,/count=5 sum=150 mean=30/);
+  assert.match(v28Body,/Manifest expected data matches: true/);
+  assert.match(v28Body,/experiment\.json/);
+  assert.match(v28Body,/experiments\/compute\.R/);
+  assert.match(v28Body,/experiments\/compute\.jl/);
+  assert.match(v28Body,/experiments\/compute\.m/);
+  assert.match(v28Body,/Jupyter notebooks/);
+  assert.match(v28Body,/never executed or trusted saved outputs/);
+  assert.match(v28Body,/Inspection executed source=false/);
+  assert.deepEqual(readFileSync(v28CSV,'utf8'),v28CSVSource,'V28 CSV cannot be modified by inspection');
+  for(const [name,source] of Object.entries(v28Scripts))
+    assert.deepEqual(readFileSync(path.join(v28Experiments,name),'utf8'),source,
+      'V28 R, Julia or Octave code cannot be executed/modified by inspection');
+  assert.equal(existsSync(path.join(devProject,'V28_BAD')),false,
+    'Notebook code must not run on inspection');
+  await page.locator('#dsScienceAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V28 scientific reproducibility/);
+  await page.screenshot({path:path.join(output,'developer-studio-v28-science-reproducibility.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
