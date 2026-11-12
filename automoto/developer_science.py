@@ -364,7 +364,7 @@ def _commands(lang: str, exe: str, stage: Path) -> tuple[list[str], list[str]]:
     commands = {
         "r": [exe, "--vanilla", SCRIPTS["r"]],
         "julia": [exe, "--startup-file=no", "--history-file=no",
-                  "--project=@stdlib", SCRIPTS["julia"]],
+                  "--project=@temp", SCRIPTS["julia"]],
         "octave": [exe, "--no-gui", "--no-init-file", "--no-site-file",
                    "--no-history", "--quiet", SCRIPTS["octave"]],
     }
