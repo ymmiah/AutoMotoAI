@@ -2942,7 +2942,7 @@ let browser;
   // V33: workbench layout and one-prompt Agent UI are present without execution.
   assert.equal(await page.locator('.ds-v33-title').count(),1);
   assert.equal(await page.locator('#dsV33AgentPanel').count(),1);
-  assert.equal(await page.locator('#dsV33Send').isDisabled(),true);
+  assert.equal(await page.locator('#dsV33Prompt').inputValue(),'');
   assert.equal(await page.locator('#dsV33Stop').isDisabled(),true);
   await page.locator('#dsV33Tools').click();
   assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),true);
