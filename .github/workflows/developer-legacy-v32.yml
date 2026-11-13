@@ -12,20 +12,39 @@ on:
       - "tests/fixtures/v32-legacy/**"
       - "docs/DEVELOPER-STUDIO-V32.md"
       - ".github/workflows/developer-legacy-v32.yml"
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_legacy.py"
+      - "automoto/server.py"
+      - ".github/workflows/developer-legacy-v32.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_legacy.py
+        automoto/web/static/developer-legacy.js
+        tests/test_developer_legacy.py
+        tests/fixtures/v32-legacy/**
+        docs/DEVELOPER-STUDIO-V32.md
+        .github/workflows/developer-legacy-v32.yml
+
   legacy-static:
     name: V32 static evidence and security (${{ matrix.os }})
+    needs: paths
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
@@ -45,8 +64,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install compilers on disposable CI runner only
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gfortran gnucobol gnat fpc nasm
+          bash scripts/ci/apt-install.sh gfortran gnucobol gnat fpc nasm
       - name: Compile five real sample languages without executing binaries
         working-directory: tests/fixtures/v32-legacy
         run: |

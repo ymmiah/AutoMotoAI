@@ -29,10 +29,12 @@ import {mountDeveloperFunctional} from "./developer-functional.js";
 import {mountDeveloperBeam} from "./developer-beam.js";
 import {mountDeveloperLogic} from "./developer-logic.js";
 import {mountDeveloperLegacy} from "./developer-legacy.js";
+import {mountDeveloperWorkbench} from "./developer-workbench.js";
+import {mountDeveloperWasm} from "./developer-wasm.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V32 · Fortran, COBOL, Ada, Pascal, Assembly and Visual Basic alongside 31 prior milestones.",
+    "V33 · VS Code-inspired workbench, one-prompt autonomous coding Agent and WebAssembly tooling.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -72,7 +74,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsFunctionalRoot" aria-label="Scala F sharp Clojure source manifest and approved fixed tool evidence"></div>'+
       '<div id="dsBeamRoot" aria-label="Elixir Erlang Gleam source and fixed local BEAM tool evidence"></div>'+
       '<div id="dsLogicRoot" aria-label="Haskell OCaml Lisp Scheme Prolog source and fixed interpreter tools"></div>'+
-      '<div id="dsLegacyRoot" aria-label="Fortran COBOL Ada Pascal Assembly and Visual Basic source and fixed compiler evidence"></div>'+  
+      '<div id="dsLegacyRoot" aria-label="Fortran COBOL Ada Pascal Assembly and Visual Basic source and fixed compiler evidence"></div>'+
+      '<div id="dsWasmRoot" aria-label="WebAssembly WAT WASM WIT WASI component source evidence"></div>'+  
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -89,9 +92,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio,scriptingStudio,scienceStudio,functionalStudio,beamStudio,logicStudio,legacyStudio;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio,scriptingStudio,scienceStudio,functionalStudio,beamStudio,logicStudio,legacyStudio,workbench,wasmStudio;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);scriptingStudio?.fileChanged(path);scienceStudio?.fileChanged(path);functionalStudio?.fileChanged(path);beamStudio?.fileChanged(path);logicStudio?.fileChanged(path);legacyStudio?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);scriptingStudio?.fileChanged(path);scienceStudio?.fileChanged(path);functionalStudio?.fileChanged(path);beamStudio?.fileChanged(path);logicStudio?.fileChanged(path);legacyStudio?.fileChanged(path);wasmStudio?.fileChanged(path);workbench?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
@@ -121,6 +124,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
   beamStudio=mountDeveloperBeam({api,host,getProject:()=>project,status});
   logicStudio=mountDeveloperLogic({api,host,getProject:()=>project,status});
   legacyStudio=mountDeveloperLegacy({api,host,getProject:()=>project,status});
+  wasmStudio=mountDeveloperWasm({api,host,getProject:()=>project,status});
+  workbench=mountDeveloperWorkbench({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -202,6 +207,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       beamStudio.projectChanged();
       logicStudio.projectChanged();
       legacyStudio.projectChanged();
+      workbench.projectChanged();
+      wasmStudio.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
