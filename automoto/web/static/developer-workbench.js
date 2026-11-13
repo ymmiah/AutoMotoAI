@@ -256,12 +256,12 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     }
   }
   el("dsV34Project").addEventListener("click",()=>{
-    const control=el("dsProject")||el("dsProjectSelect")||el("dsOpenProject");
+    const control=el("dsPath")||el("dsRoots")||el("dsOpen");
     if(control){control.focus();control.scrollIntoView({block:"center"});}
     else toolbar?.scrollIntoView({block:"center"});
   });
   el("dsV34Trust").addEventListener("click",()=>{
-    const control=el("dsTrust")||el("dsTrustProject");
+    const control=el("dsTrust");
     if(control){control.focus();control.scrollIntoView({block:"center"});}
     else toolbar?.scrollIntoView({block:"center"});
   });
