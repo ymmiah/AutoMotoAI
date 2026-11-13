@@ -3197,10 +3197,13 @@ let browser;
   // The queue stays on screen when the studio changes, and a second task waits.
   await page.locator('.nav [data-page="documents"]').click();
   await page.locator('.studio-drop').waitFor();
-  await page.evaluate(() => window.automotoQueue.enqueue({
-    studio: 'documents', title: 'Summarise the draft',
-    run: () => new Promise(resolve => setTimeout(resolve, 1500)),
-  }));
+  await page.evaluate(() => {
+    window.__queueHold = new Promise((resolve) => { window.__releaseQueue = resolve; });
+    return window.automotoQueue.enqueue({
+      studio: 'documents', title: 'Summarise the draft',
+      run: () => window.__queueHold,
+    });
+  });
   await page.evaluate(() => window.automotoQueue.enqueue({
     studio: 'research', title: 'Check the sources',
     run: async () => 'ok',
@@ -3214,6 +3217,7 @@ let browser;
   await page.screenshot({ path: path.join(output, 'studio-visual.png') });
   await page.locator('[data-sq-cancel]').last().click();
   await page.waitForFunction(() => !document.querySelector('#studioQueue [data-status="queued"]'));
+  await page.evaluate(() => window.__releaseQueue?.());
   const shots = ['sidebar-1280x600.png', 'sidebar-1280x400.png', 'sidebar-phone.png', 'settings-shell.png', 'studio-queue.png', 'studio-visual.png'];
   try {
     const artifacts = '/opt/cursor/artifacts';

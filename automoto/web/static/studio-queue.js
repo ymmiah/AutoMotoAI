@@ -92,7 +92,8 @@ export function bindStudioQueue(opts) {
         await client.api("/api/studio-queue/cancel", { id });
         runners.delete(id);
       } else return;
-      await pump();
+      await reload();
+      void pump();
     } catch (err) { client.toast(err.message, "bad"); }
   });
   reload().catch(() => {});
@@ -103,6 +104,9 @@ export async function enqueueStudioTask({ studio, title, run }) {
   if (!STUDIOS.includes(studio)) throw new Error("Unknown studio.");
   const job = await client.api("/api/studio-queue", { studio, title });
   if (typeof run === "function") runners.set(job.id, run);
+  // Paint before starting work. A pump that is already inside the running task
+  // would otherwise hide this row until that task finished.
+  await reload();
   void pump();
   return job;
 }
