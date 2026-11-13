@@ -197,6 +197,8 @@ from automoto import developer_logic
 app.include_router(developer_logic.router)  # V31 static Haskell OCaml Lisp Scheme Prolog and approved local fixture tests
 from automoto import developer_legacy
 app.include_router(developer_legacy.router)  # V32 inert legacy source and approved compilation
+from automoto import developer_wasm
+app.include_router(developer_wasm.router)  # V33 inert WebAssembly source and component evidence
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
