@@ -1,5 +1,5 @@
 /* Single central AutoMoto agent link for ALL existing Studio pages. */
-export function mountStudioAgentBridge({api,host,studio}) {
+export function mountStudioAgentBridge({api,host,studio,enqueue}) {
   const anchor=host.querySelector(".lead")||host.querySelector("h2");
   if(!anchor)return;
   const panel=document.createElement("section");
@@ -22,10 +22,10 @@ export function mountStudioAgentBridge({api,host,studio}) {
     'Your request and selected Studio are shared only when you confirm. No file bytes or secrets are included automatically.</p>';
   anchor.insertAdjacentElement("afterend",panel);
   const el=id=>panel.querySelector("#"+id);
-  let ready=false,busy=false;
+  let ready=false;
   const status=(s,bad=false)=>{el("studioAgentResult").textContent=s;
     el("studioAgentResult").classList.toggle("bad",bad);};
-  function controls(){el("studioAgentSend").disabled=busy||!ready||
+  function controls(){el("studioAgentSend").disabled=!ready||
     el("studioAgentMessage").value.trim().length<5;}
   async function load(){
     try{
@@ -44,27 +44,32 @@ export function mountStudioAgentBridge({api,host,studio}) {
   }
   async function handoff(){
     const note=el("studioAgentMessage").value.trim();
-    if(!ready||busy||note.length<5)return;
+    if(!ready||note.length<5)return;
     const action=el("studioAgentAction").value;
     const explanation="Send this "+studio+" Studio request to the central AutoMoto AI Agent "+
       "as a REVIEW-ONLY task? It will create a saved Agent conversation and audit task. "+
       "Risky tools are denied for this hand-off. No deployment, publication, installation "+
       "or file upload is authorised.";
     if(!window.confirm(explanation))return;
-    busy=true;controls();status("Creating approved central-agent hand-off…");
+    const req={studio,action,request:note,confirmed:true,accept_agent_review_only:true};
+    if(studio==="developer"&&host.querySelector("#dsTrustState")?.textContent?.startsWith("Trusted")){
+      const folder=host.querySelector("#dsPath")?.value?.trim();
+      if(folder)req.workspace=folder;
+    }
+    const send=enqueue||(async(item)=>item.run());
+    status("Queued. This studio stays open. The task starts when the one ahead of it finishes.");
+    el("studioAgentMessage").value="";
+    controls();
     try{
-      const req={studio,action,request:note,confirmed:true,accept_agent_review_only:true};
-      if(studio==="developer"&&host.querySelector("#dsTrustState")?.textContent?.startsWith("Trusted")){
-        const folder=host.querySelector("#dsPath")?.value?.trim();
-        if(folder)req.workspace=folder;
-      }
-      const result=await api("/api/agent/studios/handoff",req);
-      if(!result.linked||!result.conversation_id||result.deployment_started)
-        throw Error("Agent did not confirm a safe, linked hand-off.");
-      status("Linked as task "+result.task_id+". Opening central agent conversation.");
-      window.location.hash="#/c/"+encodeURIComponent(result.conversation_id);
+      await send({studio,title:action+": "+note.slice(0,80),run:async(job)=>{
+        await job.update("Asking the central agent…");
+        const result=await api("/api/agent/studios/handoff",req);
+        if(!result.linked||!result.conversation_id||result.deployment_started)
+          throw Error("Agent did not confirm a safe, linked hand-off.");
+        status("Linked as task "+result.task_id+". The studio stayed open. Open the conversation when you want it.");
+        return result;
+      }});
     }catch(e){status("Agent hand-off refused: "+e.message,true);}
-    finally{busy=false;controls();}
   }
   el("studioAgentMessage").addEventListener("input",controls);
   el("studioAgentSend").addEventListener("click",()=>void handoff());

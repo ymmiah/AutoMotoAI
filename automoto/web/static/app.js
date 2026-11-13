@@ -1,6 +1,7 @@
 // AutoMoto AI GUI - vanilla ES module, no build step, no CDN.
 import { icon, hydrateIcons, TOOL_ICONS } from "./icons.js";
 import { mountStudioAgentBridge } from "./studio-agent-bridge.js";
+import { attachStudioDrop, bindStudioQueue, enqueueStudioTask } from "./studio-queue.js";
 
 // Auth: the HttpOnly session cookie set by the one-time launch link (the page never sees a token).
 const TOKEN = document.querySelector('meta[name="automoto-token"]')?.content || "";
@@ -177,27 +178,67 @@ async function loadConvs() {
   catch { state.convs = []; }
   renderConvs();
 }
-function renderConvs() {
-  const list = $("#convList");
-  if (!state.convs.length) {
-    list.innerHTML = `<div class="empty-list">${$("#convSearch").value ? "No chats match." : "No chats yet. Start one!"}</div>`;
-    return;
-  }
+const CONV_VIRTUAL = 40;
+const CONV_ROW = 36;
+const CONV_GROUP = 24;
+let convFrame = 0;
+function convEntries(convs) {
   const now = new Date(); const day = 86400;
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
   const group = (t) => t >= start ? "Today" : t >= start - day ? "Yesterday" : t >= start - 7 * day ? "Previous 7 days" : "Older";
-  let last = "", html = "";
-  for (const c of state.convs) {
+  const items = [];
+  let last = "";
+  for (const c of convs) {
     const g = group(c.updated);
-    if (g !== last) { html += `<div class="group-label">${g}</div>`; last = g; }
-    const active = state.cur?.id === c.id ? " active" : "";
-    html += `<div class="conv${active}" role="listitem" tabindex="0" data-id="${esc(c.id)}" title="${esc(c.title)}">
+    if (g !== last) { items.push({ kind: "group", label: g }); last = g; }
+    items.push({ kind: "conv", conv: c });
+  }
+  return items;
+}
+function convRow(c) {
+  const active = state.cur?.id === c.id ? " active" : "";
+  return `<div class="conv${active}" role="listitem" tabindex="0" data-id="${esc(c.id)}" title="${esc(c.title)}">
       ${state.running.has(c.id) ? '<span class="running" aria-label="running"></span>' : icon(c.mode === "chat" ? "chat" : "bolt")}
       <span class="t">${esc(c.title)}</span>
       <span class="acts"><button class="icon-btn sm" data-act="rename" aria-label="Rename chat">${icon("edit")}</button><button class="icon-btn sm" data-act="delete" aria-label="Delete chat">${icon("trash")}</button></span></div>`;
-  }
-  list.innerHTML = html;
 }
+function renderConvs() {
+  const list = $("#convList");
+  if (!list) return;
+  if (!state.convs.length) {
+    list.dataset.virtual = "0";
+    list.innerHTML = `<div class="empty-list">${$("#convSearch").value ? "No chats match." : "No chats yet. Start one!"}</div>`;
+    return;
+  }
+  const items = convEntries(state.convs);
+  const scroll = $("#sideScroll");
+  const virtual = items.length > CONV_VIRTUAL && scroll;
+  const row = (it) => it.kind === "group" ? `<div class="group-label">${esc(it.label)}</div>` : convRow(it.conv);
+  if (!virtual) {
+    list.dataset.virtual = "0";
+    list.innerHTML = items.map(row).join("");
+    return;
+  }
+  const heights = items.map((it) => it.kind === "group" ? CONV_GROUP : CONV_ROW);
+  const total = heights.reduce((sum, h) => sum + h, 0);
+  const top = Math.max(0, scroll.scrollTop - list.offsetTop);
+  const view = scroll.clientHeight + CONV_ROW * 8;
+  let acc = 0, start = 0;
+  while (start < items.length && acc + heights[start] < top) { acc += heights[start]; start++; }
+  let end = start, bottom = acc;
+  while (end < items.length && bottom < top + view) { bottom += heights[end]; end++; }
+  const padTop = acc;
+  const padBot = Math.max(0, total - bottom);
+  list.dataset.virtual = "1";
+  list.innerHTML = (padTop ? `<div class="conv-spacer" style="height:${padTop}px"></div>` : "") +
+    items.slice(start, end).map(row).join("") +
+    (padBot ? `<div class="conv-spacer" style="height:${padBot}px"></div>` : "");
+}
+$("#sideScroll")?.addEventListener("scroll", () => {
+  if ((state.convs?.length || 0) <= CONV_VIRTUAL) return;
+  if (convFrame) return;
+  convFrame = requestAnimationFrame(() => { convFrame = 0; renderConvs(); });
+}, { passive: true });
 $("#convList").addEventListener("click", (e) => {
   const row = e.target.closest(".conv"); if (!row) return;
   const id = row.dataset.id, act = e.target.closest("[data-act]")?.dataset.act;
@@ -614,6 +655,7 @@ function metaHtml(m) {
   if (m.steps) bits.push(`<span>${m.steps} step${m.steps === 1 ? "" : "s"}</span>`);
   const fails = m.switched?.length || (m.tried || []).filter((t) => !t.ok).length;
   if (fails) bits.push(`<span class="failover" title="${esc((m.switched || (m.tried || []).filter((t) => !t.ok).map((t) => `${t.provider}: ${t.error || ""}`)).join("\n"))}">failover ×${fails}</span>`);
+  if (m.tps) bits.push(`<span>${esc(m.tps)} tokens/sec</span>`);
   if (m.mode) bits.push(`<span>${m.mode === "chat" ? "chat" : "agent"}</span>`);
   return bits.join('<span class="sep">·</span>');
 }
@@ -869,10 +911,14 @@ async function send() {
     refreshMe();
   } else {
     setBusy(true); $(".st-text", el).textContent = "Writing…";
-    const ctrl = { cancelled: false }; activeCtx = { el, tid: null, steps: [], switched: [], chat: ctrl };
+    const ctrl = { cancelled: false, abort: null }; activeCtx = { el, tid: null, steps: [], switched: [], chat: ctrl };
+    const streamLocal = !!(state.settings?.offline || prefer() === "local" || state.settings?.gguf_model);
     try {
-      const r = await api("/api/conversations/chat", { conversation_id: conv.id, message, keys: keys(), prefer: prefer(), client: "web" });
-      if (!ctrl.cancelled) { finishBot(el, r.text, { ...r, mode: "chat" }); if (r.actions?.length) renderActions(el, r.actions); }
+      if (streamLocal) await streamLocalChat(conv, message, el, ctrl);
+      else {
+        const r = await api("/api/conversations/chat", { conversation_id: conv.id, message, keys: keys(), prefer: prefer(), client: "web" });
+        if (!ctrl.cancelled) { finishBot(el, r.text, { ...r, mode: "chat" }); if (r.actions?.length) renderActions(el, r.actions); }
+      }
     } catch (e) {
       if (e.status === 429 && e.data?.detail?.quota) { el.remove(); limitCard(e.data.detail); activeCtx = null; setBusy(false); return; }
       const tried = e.data?.tried?.map((t) => `${t.provider}: ${t.error || "failed"}`).join("\n");
@@ -881,9 +927,56 @@ async function send() {
     activeCtx = null; setBusy(false); loadConvs().then(renderTitle); refreshMe();
   }
 }
+async function streamLocalChat(conv, message, el, ctrl) {
+  const headers = { "Content-Type": "application/json", ...(TOKEN ? { "X-AutoMoto-Token": TOKEN } : {}), ...(CSRF ? { "X-CSRF-Token": CSRF } : {}) };
+  const abort = new AbortController();
+  ctrl.abort = abort;
+  const response = await fetch("/api/conversations/chat/stream", {
+    method: "POST", credentials: "same-origin", headers, signal: abort.signal,
+    body: JSON.stringify({ conversation_id: conv.id, message, keys: keys(), prefer: prefer() || "local", client: "web" }),
+  });
+  if (!response.ok || !response.body) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(typeof data.detail === "string" ? data.detail : "The offline model did not start.");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "", text = "", meta = null;
+  while (true) {
+    const step = await reader.read();
+    if (step.done) break;
+    buf += decoder.decode(step.value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop() || "";
+    for (const part of parts) {
+      const line = part.split("\n").find((item) => item.startsWith("data:"));
+      if (!line) continue;
+      const data = JSON.parse(line.slice(5).trim() || "{}");
+      if (data.token) {
+        text += data.token;
+        const ans = $(".answer", el);
+        if (ans) ans.textContent = text;
+      }
+      if (data.tps) $(".st-text", el).textContent = `${data.tps} tokens/sec`;
+      if (data.error) throw new Error(data.error);
+      if (data.cancelled) { finishBot(el, text || "Stopped.", { mode: "chat" }); return; }
+      if (data.done) meta = data;
+    }
+  }
+  if (ctrl.cancelled) return;
+  const finalText = meta?.text || text;
+  finishBot(el, finalText, { ...(meta || {}), mode: "chat", tps: meta?.tps });
+  if (meta?.actions?.length) renderActions(el, meta.actions);
+}
 async function stopRun() {
   const ctx = activeCtx; if (!ctx) return;
-  if (ctx.chat) { ctx.chat.cancelled = true; finishBot(ctx.el, "Stopped. (The reply was discarded.)", {}); activeCtx = null; setBusy(false); return; }
+  if (ctx.chat) {
+    ctx.chat.cancelled = true;
+    ctx.chat.abort?.abort();
+    api("/api/local/gguf/cancel", {}).catch(() => {});
+    finishBot(ctx.el, "Stopped. (The reply was discarded.)", {});
+    activeCtx = null; setBusy(false); return;
+  }
   $("#sendBtn").disabled = true;
   try { await api(`/api/tasks/${ctx.tid}/cancel`, {}); toast("Stopping after the current step…"); }
   catch (e) { toast(e.message, "bad"); }
@@ -904,7 +997,10 @@ function page(title, lead, inner) {
   $("#view").focus({ preventScroll: true });
   const host=$("#view .page-inner");
   const agentStudio=STUDIO_AGENT_PAGES[title];
-  if(agentStudio)mountStudioAgentBridge({api,host,studio:agentStudio});
+  if(agentStudio){
+    mountStudioAgentBridge({api,host,studio:agentStudio,enqueue:enqueueStudioTask});
+    attachStudioDrop(host);
+  }
   return host;
 }
 const statusPill = (s) => `<span class="pill ${esc(s)}">${esc(String(s).replace("_", " "))}</span>`;
@@ -1406,8 +1502,14 @@ PAGES.files = async () => {
 
 const ACCENTS = ["#38f2a5", "#4da3ff", "#a78bfa", "#ff7ab6", "#ffb020", "#ff5d5d", "#22d3ee"];
 PAGES.settings = async () => {
-  const [s, st] = await Promise.all([api("/api/settings"), refreshStatus()]);
-  state.settings = s;
+  const shellAt = performance.now();
+  const s = state.settings || {
+    approval_mode: "", default_mode: state.mode || "agent", effective_approval_mode: "ask",
+    theme: localStorage.getItem("automoto_theme") || "dark",
+    accent: localStorage.getItem("automoto_accent") || "#38f2a5",
+    allowed_roots: [], provider_order: [], offline: false,
+  };
+  const st = { providers: state.providers || [] };
   const theme = localStorage.getItem("automoto_theme") || s.theme || "dark";
   const accent = localStorage.getItem("automoto_accent") || s.accent;
   const k = keys();
@@ -1438,7 +1540,7 @@ PAGES.settings = async () => {
         ${HOSTED ? "" : `<section class="set-panel" data-set-panel="offline" id="offlineCard" tabindex="-1" hidden>
           <h3>Offline AI</h3>
           <p class="set-lead" data-help="offline-ai" title="Download a model once. After that it answers with no internet and no extra program to install.">A model on this computer, using the engine built into ${esc(BRAND_SHORT)}. No API key, and no Ollama or Python install. With Offline only on, cloud models and web tools stay off. <a href="#/help">How it works</a></p>
-          <div id="offlineBody" aria-live="polite">Checking this computer…</div>
+          <div id="offlineBody" class="skel-block" aria-busy="true" aria-live="polite"><div class="skel"></div><div class="skel"></div><div class="skel short"></div></div>
         </section>`}
         <section class="set-panel" data-set-panel="look" tabindex="-1" hidden>
           <h3>Appearance</h3>
@@ -1476,7 +1578,7 @@ PAGES.settings = async () => {
           <div class="set-block">
             <h4 data-help="connectors" title="Optional sign-in to another service. Each action still asks first.">Connectors</h4>
             <p class="set-lead">Official servers where they exist. Remote ones sign in with OAuth in your browser on first use. Tokens stay in <code>.env</code> and are never shown here. Each connector tool asks before it runs.</p>
-            <div id="connList" class="muted">Loading…</div>
+            <div id="connList" class="muted">Open this section to load connectors.</div>
             <div class="row"><button type="button" class="btn sm" id="connReload">Reconnect now</button></div>
           </div>
           <div class="set-block">
@@ -1493,6 +1595,7 @@ PAGES.settings = async () => {
         </section>
       </div>
     </div>`);
+  window.__automotoSettingsShellMs = Math.round(performance.now() - shellAt);
   const showSettingsPanel = (id) => {
     const panels = $$("[data-set-panel]");
     if (!panels.some((p) => p.dataset.setPanel === id)) id = "assistant";
@@ -1507,6 +1610,8 @@ PAGES.settings = async () => {
     const b = e.target.closest("button[data-set]");
     if (!b) return;
     showSettingsPanel(b.dataset.set);
+    if (b.dataset.set === "offline") drawOffline();
+    if (b.dataset.set === "more") drawConns();
     document.querySelector(`[data-set-panel="${CSS.escape(b.dataset.set)}"]`)?.focus();
   });
 
@@ -1587,7 +1692,7 @@ PAGES.settings = async () => {
     const pulling = job?.state === "downloading";
     const error = job?.state === "error" ? job.error : "";
     const active = g.selected === m.id;
-    const recommended = g.best === m.id ? '<span class="pill">Best fit</span>' : "";
+    const recommended = g.best === m.id ? '<span class="pill on">Recommended for this PC</span>' : "";
     const blocked = !m.can_run ? '<span class="pill bad">Won\'t fit</span>' : "";
     let action = "";
     if (!m.installed && !m.can_download) action = `<span class="muted small">${m.downloadable ? "Too big for this computer" : "Not downloaded here"}</span>`;
@@ -1607,7 +1712,7 @@ PAGES.settings = async () => {
   box.innerHTML = `
     <div class="ai-status" data-state="${stateName}">
       <span class="ai-dot" aria-hidden="true"></span>
-      <div><b>Built-in engine: ${stateLabel}</b><div class="muted small">${esc(g.why || "")}${g.free_gb != null ? ` About ${esc(String(g.free_gb))} GB free.` : ""}</div></div>
+      <div><b>Built-in engine: ${stateLabel}</b><div class="muted small">${esc(g.why || "")}${g.free_gb != null ? ` About ${esc(String(g.free_gb))} GB free.` : ""}</div>${g.tune ? `<div class="muted small">Tuned for this PC: ${esc(String(g.tune.threads))} threads, context ${esc(String(g.tune.context))}, batch ${esc(String(g.tune.batch))}, memory mapping on${g.tune.flash_attn ? ", flash attention" : ""}, KV cache ${esc(g.tune.kv_type)}${g.tune.gpu_layers ? ", GPU offload" : ", CPU"}.</div>` : ""}</div>
       <div class="ai-status-act"><button type="button" class="btn sm" id="offlineCheck">Refresh</button></div>
     </div>
     ${runtime.message ? `<p class="small">${esc(runtime.message)}</p>` : ""}
@@ -1721,7 +1826,7 @@ PAGES.settings = async () => {
   };
 };
 
-  drawOffline();
+  if (savedPanel === "offline") drawOffline();
   const drawConns = async () => {
     try {
       const d = await api("/api/connectors");
@@ -1733,13 +1838,19 @@ PAGES.settings = async () => {
       });
     } catch (err) { $("#connList").textContent = err.message; }
   };
-  drawConns();
+  if (savedPanel === "more") drawConns();
   $("#connReload").onclick = async () => {
     $("#connReload").disabled = true;
     try { const r = await api("/api/connectors-reload", {}); toast(`${r.connected_tools} connector tool(s) ready${r.errors.length ? `, ${r.errors.length} error(s)` : ""}`, r.errors.length ? "bad" : ""); drawConns(); }
     catch (err) { toast(err.message, "bad"); } finally { $("#connReload").disabled = false; }
   };
   $("#forgetKeys").onclick = async () => { sessionStorage.removeItem("automoto_keys"); $$("#keyForm input").forEach((i) => i.value = ""); await refreshStatus(); toast("Keys forgotten"); };
+  void (async () => {
+    try {
+      const fresh = await api("/api/settings");
+      if ($(".settings")?.isConnected) state.settings = fresh;
+    } catch { /* the shell already used the last saved settings */ }
+  })();
 };
 
 // ---------------------------------------------------------------- command palette
@@ -1924,6 +2035,7 @@ async function boot() {
     setupHosted();
   }
   hydrateIcons(document);
+  bindStudioQueue({ api, toast, esc });
   $("#verLabel").textContent = `v${VERSION}`;
   $("#switchLocation").hidden = !DESKTOP_SHELL;
   if (!isMac) $$("kbd").forEach((k) => (k.textContent = k.textContent.replace("⌘", "Ctrl+")));

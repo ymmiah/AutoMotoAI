@@ -17,7 +17,7 @@ SETTINGS: tuple[dict[str, str], ...] = (
     {"id": "new-chats", "title": "New chats",
      "text": "Assistant does the work: files, research and steps. Chat only answers and does not change files or run tools."},
     {"id": "offline-ai", "title": "Offline AI",
-     "text": "Download a model onto this computer and chat without an API key. After the download, that model works with the internet off. You do not install Ollama or Python yourself."},
+     "text": "Download a model onto this computer and chat without an API key. After the download, that model works with the internet off. You do not install Ollama or Python yourself. AutoMoto tunes llama.cpp for this PC: one thread per physical core, a context size and batch that fit the memory, memory mapping, flash attention when the engine supports it, a smaller KV cache on a 16 GB PC, and GPU offload when a Vulkan, CUDA or Metal build is available. The model marked Recommended for this PC is the one that fits. The first reply loads it; later replies start straight away. Tokens stream with a tokens-per-second count, Stop cancels the reply, and the model unloads after it has been idle so the memory is free again."},
     {"id": "offline-only", "title": "Offline only",
      "text": "Use only a model on this computer. Cloud models and web search stay off until you turn this off."},
     {"id": "gguf-model", "title": "Built-in model",
@@ -46,7 +46,7 @@ SETTINGS: tuple[dict[str, str], ...] = (
 
 PAGES: tuple[dict[str, str], ...] = (
     {"id": "chat", "title": "Chat",
-     "text": "The home of the app. Type what you want finished. Assistant mode does the steps. Chat mode only replies. The list on the left is your saved conversations."},
+     "text": "The home of the app. Type what you want finished. Assistant mode does the steps. Chat mode only replies. The list on the left is your saved conversations. New chat, search and Quick commands stay at the top. Studios, Library and chats scroll in the middle, including on a short window or a phone-width layout. Settings, Help and the version stay at the bottom. A long chat list only draws the rows you can see."},
     {"id": "tasks", "title": "Tasks",
      "text": "Runs that are still going, waiting for you to approve a step, or finished. Open one to see the plain-language progress."},
     {"id": "memory", "title": "Memory",
@@ -56,13 +56,13 @@ PAGES: tuple[dict[str, str], ...] = (
     {"id": "files", "title": "Files",
      "text": "The sandbox folder: uploads, exports and files the assistant made. You can open, download, zip and unzip them here."},
     {"id": "settings", "title": "Settings",
-     "text": "Assistant behaviour, offline models, appearance, folders and cloud providers. Saved on this computer. Keys you paste stay in this window only."},
+     "text": "Assistant behaviour, offline models, appearance, folders and cloud providers. The page opens from the last saved settings straight away. The model list, hardware details and disk space fill in afterwards. Saved on this computer. Keys you paste stay in this window only."},
     {"id": "help", "title": "Help",
      "text": "This page. It explains each setting, studio and tool in ordinary language."},
 )
 
 STUDIO_PLAIN: dict[str, str] = {
-    "document": "Write and edit documents. You keep the draft, export Word, and can ask a local model to suggest a proofread or a summary. Nothing is sent to a cloud model unless you have chosen one for the chat.",
+    "document": "Write and edit documents. You keep the draft, export Word, and can ask a local model to suggest a proofread or a summary. Drop a file on the studio to import it. A task stays in the queue if another is already running, and the studio stays usable. With Offline on, the review uses the built-in engine on this PC. Nothing is sent to a cloud model unless you have chosen one for the chat.",
     "research": "Collect sources, compare quotes and keep the evidence next to the claim. Publishing a citation still asks you before it writes a file.",
     "spreadsheet": "Open a workbook, calculate, and export a spreadsheet or an invoice. The original file stays the source of truth until you export a new one.",
     "visual": "Make and edit images, simple layouts and exports such as PNG, PDF or slides. Brand colours and motion stay in this studio.",

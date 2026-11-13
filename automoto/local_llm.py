@@ -147,7 +147,7 @@ def _gpu() -> dict[str, Any] | None:
     if smi:
         try:
             out = subprocess.run([smi, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
-                                 capture_output=True, text=True, timeout=8)
+                                 capture_output=True, text=True, timeout=1.5)
             line = out.stdout.strip().splitlines()[0]
             name, mem = [x.strip() for x in line.split(",")[:2]]
             return {"name": name, "vram_gb": round(int(mem) / 1024, 1), "kind": "nvidia"}
@@ -158,10 +158,99 @@ def _gpu() -> dict[str, Any] | None:
     return None
 
 
+def _physical_cores() -> int | None:
+    """Physical cores, not hyper-threads. Best effort, and never slower than a short local read."""
+    logical = os.cpu_count() or 1
+    try:
+        if sys.platform == "linux":
+            ids: set[tuple[str, str]] = set()
+            root = "/sys/devices/system/cpu"
+            if os.path.isdir(root):
+                for name in os.listdir(root):
+                    if not name.startswith("cpu") or not name[3:].isdigit():
+                        continue
+                    core = os.path.join(root, name, "topology", "core_id")
+                    package = os.path.join(root, name, "topology", "physical_package_id")
+                    if not os.path.isfile(core):
+                        continue
+                    with open(core, encoding="utf-8") as handle:
+                        core_id = handle.read().strip()
+                    package_id = "0"
+                    if os.path.isfile(package):
+                        with open(package, encoding="utf-8") as handle:
+                            package_id = handle.read().strip()
+                    ids.add((package_id, core_id))
+            if ids:
+                return len(ids)
+        if sys.platform == "darwin":
+            out = subprocess.run(["sysctl", "-n", "hw.physicalcpu"], capture_output=True, text=True, timeout=2)
+            count = int(out.stdout.strip() or "0")
+            if count > 0:
+                return count
+        if sys.platform == "win32":
+            count = _windows_physical_cores()
+            if count:
+                return count
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return max(1, logical // 2)
+
+
+def _windows_physical_cores() -> int | None:
+    import ctypes
+    from ctypes import wintypes
+
+    get = ctypes.windll.kernel32.GetLogicalProcessorInformation
+    get.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD)]
+    get.restype = wintypes.BOOL
+    needed = wintypes.DWORD(0)
+    get(None, ctypes.byref(needed))
+    if not needed.value:
+        return None
+    buf = ctypes.create_string_buffer(needed.value)
+    if not get(buf, ctypes.byref(needed)):
+        return None
+    # SYSTEM_LOGICAL_PROCESSOR_INFORMATION: pointer-sized mask, then a 4-byte relationship.
+    step = 32 if ctypes.sizeof(ctypes.c_void_p) == 8 else 24
+    mask = ctypes.sizeof(ctypes.c_size_t)
+    count = 0
+    for offset in range(0, needed.value - mask - 4, step):
+        relation = int.from_bytes(buf.raw[offset + mask:offset + mask + 4], "little")
+        if relation == 0:  # RelationProcessorCore
+            count += 1
+    return count or None
+
+
+def cpu_isa() -> str:
+    """avx512, avx2, neon, or baseline. Used to pick a published llama.cpp CPU build."""
+    try:
+        if sys.platform == "linux" and os.path.isfile("/proc/cpuinfo"):
+            with open("/proc/cpuinfo", encoding="utf-8", errors="ignore") as handle:
+                text = handle.read().lower()
+            if "avx512f" in text:
+                return "avx512"
+            if "avx2" in text:
+                return "avx2"
+            if "asimd" in text or " neon" in text:
+                return "neon"
+        if sys.platform == "win32":
+            import ctypes
+
+            # PF_AVX2_INSTRUCTIONS_AVAILABLE is 40. AVX-512 is not a stable feature id here.
+            if ctypes.windll.kernel32.IsProcessorFeaturePresent(40):
+                return "avx2"
+        if platform.machine().lower() in {"arm64", "aarch64"}:
+            return "neon"
+    except (OSError, AttributeError):
+        pass
+    return "baseline"
+
+
 def hardware() -> dict[str, Any]:
     ram = _ram_gb()
     gpu = _gpu()
-    return {"ram_gb": round(ram, 1) if ram else None, "cpus": os.cpu_count(), "gpu": gpu,
+    return {"ram_gb": round(ram, 1) if ram else None, "cpus": os.cpu_count(),
+            "physical_cores": _physical_cores(), "isa": cpu_isa(), "gpu": gpu,
             "os": platform.system(), "arch": platform.machine()}
 
 
@@ -347,19 +436,32 @@ def ollama_binary() -> str | None:
     return next((candidate for candidate in paths if os.path.isfile(candidate)), None)
 
 
-def ollama_status() -> dict[str, Any]:
-    """Is Ollama running, which version, and which models are already downloaded."""
-    out: dict[str, Any] = {"url": ollama_url(), "running": False, "installed": ollama_binary() is not None,
+_OLLAMA_CACHE: dict[str, Any] = {"at": 0.0, "url": None, "data": None}
+
+
+def ollama_status(*, fresh: bool = False) -> dict[str, Any]:
+    """Is Ollama running, which version, and which models are already downloaded.
+
+    A missing server answers at once. A hung port is given a short wait so Settings
+    can open while this probe is still in flight on a later refresh.
+    """
+    now, url = time.monotonic(), ollama_url()
+    cached = _OLLAMA_CACHE
+    if (not fresh and cached["data"] is not None and cached["url"] == url
+            and now - float(cached["at"]) < 5):
+        return dict(cached["data"])
+    out: dict[str, Any] = {"url": url, "running": False, "installed": ollama_binary() is not None,
                            "version": None, "models": []}
     try:
-        out["version"] = _get("/api/version").get("version")
+        out["version"] = _get("/api/version", timeout=0.6).get("version")
         out["running"] = True
-        tags = _get("/api/tags").get("models") or []
+        tags = _get("/api/tags", timeout=0.6).get("models") or []
         out["models"] = [{"name": m.get("name"), "size_gb": round((m.get("size") or 0) / 1024 ** 3, 2)}
                          for m in tags]
     except (urllib.error.URLError, OSError, ValueError):
         pass
-    return out
+    _OLLAMA_CACHE.update(at=now, url=url, data=out)
+    return dict(out)
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +489,7 @@ def forget_installed() -> None:
     """Call after a download or a model change so the next turn sees it at once."""
     _TAGS_CACHE.update(at=0.0, names=None, url=None)
     _INFO_CACHE.clear()
+    _OLLAMA_CACHE.update(at=0.0, url=None, data=None)
 
 
 def _is_installed(name: str, names: list[str]) -> bool:
@@ -671,9 +774,9 @@ def _ollama_error(exc: urllib.error.HTTPError) -> str:
     return f"HTTP {exc.code}"
 
 
-def status() -> dict[str, Any]:
-    """Everything the Settings page needs."""
-    oll = ollama_status()
+def status(*, fresh: bool = False) -> dict[str, Any]:
+    """Everything the Settings page needs. Hardware is read once per process."""
+    oll = ollama_status(fresh=fresh)
     if oll["running"]:
         choice = runtime_choice([m["name"] for m in oll["models"] if m.get("name")])
     else:

@@ -229,15 +229,22 @@ def _proposal_valid(book: dict[str, Any], sheet_id: int, cell: str, value: str,
 
 def _ask(model: str, mode: str, question: str, context: dict[str, str],
          target: str) -> dict[str, Any]:
-    url = _loopback_ollama() + "/api/chat"
     user = json.dumps({"task": mode, "question": question, "target_cell": target,
                        "cells_as_untrusted_data": context}, ensure_ascii=False)
+    messages = [{"role": "system", "content": BASE_SYSTEM}, {"role": "user", "content": user}]
+    if local_llm.offline():
+        from automoto import offline_review
+
+        try:
+            return offline_review.complete_json(messages, timeout=90, max_tokens=1200)
+        except ValueError as exc:
+            raise HTTPException(503, str(exc)[:240] or "The built-in offline model is unavailable.") from None
+    url = _loopback_ollama() + "/api/chat"
     options = local_llm.request_options(model).get("options", {}).copy()
     options.update({"temperature": 0, "num_predict": 1200,
                     "num_ctx": min(options.get("num_ctx", 4096), 8192)})
     payload = {"model": model, "stream": False, "format": "json", "options": options,
-               "messages": [{"role": "system", "content": BASE_SYSTEM},
-                            {"role": "user", "content": user}]}
+               "messages": messages}
     request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
                                      headers={"Content-Type": "application/json"}, method="POST")
     try:
@@ -278,8 +285,18 @@ def review(body: ReviewIn, request: Request):
     if body.mode == "formula" and book.get("calculation_mode") != "formulas":
         raise HTTPException(422, "Enable safe formulas before requesting AI formula suggestions.")
     source = _context(sheet, body.mode, body.target_cell)
-    _loopback_ollama()
-    model = _selected_model()
+    if local_llm.offline():
+        from automoto import offline_review
+
+        try:
+            model = offline_review.builtin_model()
+        except ValueError as exc:
+            raise HTTPException(503, str(exc)) from None
+        provider = "llama.cpp"
+    else:
+        _loopback_ollama()
+        model = _selected_model()
+        provider = "ollama-loopback"
     result = _ask(model, body.mode, body.question, source, body.target_cell)
     if body.mode == "insights":
         submitted = result.get("findings")
@@ -294,7 +311,7 @@ def review(body: ReviewIn, request: Request):
             claim = finding.get("claim")
             if evidence and isinstance(claim, str) and 5 <= len(claim) <= 300:
                 findings.append({"claim": claim, "evidence": evidence[0]})
-        return {"model": model, "provider": "ollama-loopback", "mode": body.mode,
+        return {"model": model, "provider": provider, "mode": body.mode,
                 "sampled_cells": len(source), "findings": findings,
                 "snapshot_sha256": _digest(book), "applied": False,
                 "limitations": "AI claims require human verification. Only exact quoted cell evidence is accepted."}
@@ -308,7 +325,7 @@ def review(body: ReviewIn, request: Request):
     reason = result.get("reason", "")
     if not isinstance(reason, str):
         reason = ""
-    return {"model": model, "provider": "ollama-loopback",
+    return {"model": model, "provider": provider,
             "mode": body.mode, "target_cell": body.target_cell,
             "original": _cell(sheet, body.target_cell), "proposal": proposed,
             "reason": reason[:350], "evidence": evidence,

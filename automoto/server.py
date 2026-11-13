@@ -163,6 +163,7 @@ from automoto import developer_sql, developer_data, studio_agent_bridge
 app.include_router(developer_sql.router)  # V15 SQL read-only snapshots and migration preview
 app.include_router(developer_data.router)  # V15 SQL dialect and GraphQL static inspection
 app.include_router(studio_agent_bridge.router)  # shared central agent linkage across all five Studios
+from automoto import studio_queue as _studio_queue  # noqa: E402  # one queue shared by every studio
 from automoto import developer_php
 app.include_router(developer_php.router)  # V16 PHP/WordPress security inspection and explicitly approved local tooling
 from automoto import developer_python
@@ -861,6 +862,129 @@ def conv_chat(body: ChatConvIn, request: Request):
     return res
 
 
+@app.post("/api/conversations/chat/stream")
+def conv_chat_stream(body: ChatConvIn, request: Request):
+    """Chat tokens as they are produced. Used when Offline or the built-in engine is selected."""
+    import json
+
+    from fastapi.responses import StreamingResponse
+
+    _authorise(request)
+    convs = Conversations()
+    if not convs.get(body.conversation_id, with_messages=False):
+        raise HTTPException(404, "no such conversation")
+    _check_message(body.message)
+    meter = _hosted_gate(request)
+    convs.add_message(body.conversation_id, "user", body.message)
+    desktop = config.desktop_enabled() and _local(request) and body.client != "mobile"
+    history = convs.history(body.conversation_id)
+
+    def _text(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "\n".join(str(part.get("text") or "") for part in content if isinstance(part, dict))
+        return str(content or "")
+
+    def gen():
+        from automoto import gguf_runtime, local_llm
+
+        use_builtin = (local_llm.offline() or body.prefer in {"local", "gguf"}) and gguf_runtime.ready()
+        if use_builtin:
+            messages = [{"role": "system", "content":
+                         "You are a helpful assistant running on this computer. Answer directly and briefly."}]
+            for item in history:
+                if item.get("role") in {"user", "assistant"}:
+                    messages.append({"role": item["role"], "content": _text(item.get("content"))})
+            parts: list[str] = []
+            started = time.monotonic()
+            count = 0
+            try:
+                for token in gguf_runtime.iter_chat(messages):
+                    if gguf_runtime.generation_cancelled():
+                        yield "data: " + json.dumps({"cancelled": True}) + "\n\n"
+                        return
+                    parts.append(token)
+                    count += 1
+                    elapsed = max(time.monotonic() - started, 0.001)
+                    yield "data: " + json.dumps({"token": token, "tps": round(count / elapsed, 1)}) + "\n\n"
+            except ValueError as exc:
+                yield "data: " + json.dumps({"error": str(exc)[:300]}) + "\n\n"
+                return
+            full = "".join(parts).strip()
+            elapsed = max(time.monotonic() - started, 0.001)
+            tps = round(count / elapsed, 1)
+            model = gguf_runtime.active_filename() or "builtin"
+            convs.add_message(body.conversation_id, "assistant", full,
+                              {"provider": "local", "model": model, "mode": "chat", "tps": tps})
+            if meter:
+                meter.add(elapsed, requests=1, tokens=max(count, 1), kind="chat", detail=f"local/{model}")
+            yield "data: " + json.dumps({"done": True, "text": full, "tps": tps,
+                                        "provider": "local", "model": model}) + "\n\n"
+            return
+        res = _run_chat(history, prefer=body.prefer, need_vision=False, keys=None if meter else body.keys,
+                        client=body.client, desktop=desktop, meter=meter)
+        if isinstance(res, JSONResponse):
+            yield "data: " + json.dumps({"error": "The model did not answer."}) + "\n\n"
+            return
+        convs.add_message(body.conversation_id, "assistant", res["text"],
+                          {"provider": res["provider"], "model": res["model"], "tried": res["tried"], "mode": "chat",
+                           "actions": res.get("actions", [])})
+        yield "data: " + json.dumps({"done": True, "text": res["text"], "provider": res["provider"],
+                                    "model": res["model"], "tps": None, "actions": res.get("actions", [])}) + "\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/api/studio-queue")
+def studio_queue_list(request: Request) -> dict[str, Any]:
+    _authorise(request)
+    return {"jobs": _studio_queue.jobs()}
+
+
+@app.post("/api/studio-queue")
+def studio_queue_add(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request)
+    try:
+        job = _studio_queue.enqueue(str(body.get("studio") or ""), str(body.get("title") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return job
+
+
+@app.post("/api/studio-queue/cancel")
+def studio_queue_cancel(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request)
+    return {"jobs": _studio_queue.cancel(str(body.get("id") or ""))}
+
+
+@app.post("/api/studio-queue/reorder")
+def studio_queue_reorder(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request)
+    try:
+        rows = _studio_queue.reorder(str(body.get("id") or ""), str(body.get("direction") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return {"jobs": rows}
+
+
+@app.post("/api/studio-queue/progress")
+def studio_queue_progress(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request)
+    job = _studio_queue.update(str(body.get("id") or ""), str(body.get("progress") or ""))
+    if job is None:
+        raise HTTPException(404, "That task is not running.")
+    return job
+
+
+@app.post("/api/studio-queue/finish")
+def studio_queue_finish(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request)
+    rows = _studio_queue.finish(str(body.get("id") or ""), ok=bool(body.get("ok", True)),
+                                progress=str(body.get("progress") or ""))
+    return {"jobs": rows}
+
+
 # -- settings & skills (GUI) ----------------------------------------------------------
 @app.get("/api/settings")
 def settings_get(request: Request) -> dict[str, Any]:
@@ -881,12 +1005,15 @@ def settings_put(body: dict[str, Any], request: Request) -> dict[str, Any]:
 
 # -- offline / local AI (Ollama, llama.cpp) ---------------------------------------------
 @app.get("/api/local")
-def local_ai_status(request: Request) -> dict[str, Any]:
-    """Offline AI panel: hardware, recommended models, Ollama status, downloads in progress."""
+def local_ai_status(request: Request, fresh: int = 0) -> dict[str, Any]:
+    """Offline AI panel: hardware, recommended models, Ollama status, downloads in progress.
+
+    Hardware is cached after the first read. ``fresh=1`` probes Ollama again.
+    """
     _authorise(request, local_only=True)
     from automoto import local_llm
 
-    return local_llm.status()
+    return local_llm.status(fresh=bool(fresh))
 
 
 @app.post("/api/local/pull")
@@ -938,6 +1065,16 @@ def local_gguf_pull(body: dict[str, Any], request: Request) -> dict[str, Any]:
         return gguf_runtime.pull(str(body.get("model") or body.get("id") or ""))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/cancel")
+def local_gguf_cancel(request: Request) -> dict[str, Any]:
+    """Stop the current built-in generation. The loaded model stays in memory."""
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    gguf_runtime.cancel_generation()
+    return {"ok": True, "cancelled": True}
 
 
 @app.post("/api/local/gguf/use")
