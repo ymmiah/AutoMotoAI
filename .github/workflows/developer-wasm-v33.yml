@@ -1,0 +1,63 @@
+name: Developer Studio V33 WebAssembly and workbench acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_wasm.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-wasm.js"
+      - "automoto/web/static/developer-workbench.js"
+      - "automoto/web/static/developer-studio.js"
+      - "automoto/web/static/developer-studio.css"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_wasm.py"
+      - "docs/DEVELOPER-STUDIO-V33.md"
+      - ".github/workflows/developer-wasm-v33.yml"
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_wasm.py"
+      - ".github/workflows/developer-wasm-v33.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_wasm.py
+        automoto/web/static/developer-wasm.js
+        automoto/web/static/developer-workbench.js
+        automoto/web/static/developer-studio.css
+        tests/test_developer_wasm.py
+        docs/DEVELOPER-STUDIO-V33.md
+        .github/workflows/developer-wasm-v33.yml
+
+  wasm-inert:
+    needs: paths
+    name: V33 WASM source and workbench regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: WebAssembly security and source evidence tests
+        run: |
+          python -m compileall -q automoto/developer_wasm.py tests/test_developer_wasm.py
+          python -m pytest -q -rs tests/test_developer_wasm.py
+      - name: Workbench JavaScript syntax
+        run: |
+          node --check automoto/web/static/developer-workbench.js
+          node --check automoto/web/static/developer-wasm.js
+          node --check automoto/web/static/developer-studio.js
