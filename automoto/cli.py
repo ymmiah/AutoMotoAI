@@ -581,6 +581,8 @@ def _admin_parser(sub) -> None:
     c.add_argument("--role", choices=["admin", "user"], default=None,
                    help="default: admin if there is no admin yet, otherwise user")
     c.add_argument("--password-env", metavar="VAR", help="read the password from this env var instead of a prompt")
+    c.add_argument("--temporary", action="store_true",
+                   help="this password is temporary; they must choose a new one at next sign-in")
     asub.add_parser("list", help="users with their usage this period")
     q = asub.add_parser("quota", help="set a user's allowance")
     q.add_argument("username")
@@ -597,12 +599,13 @@ def _admin_parser(sub) -> None:
     b.add_argument("--note", default="")
     for name, hlp in (("reset", "reset a user's usage for this period"), ("suspend", "suspend a user"),
                       ("unsuspend", "re-activate a user"), ("delete", "delete a user and their files"),
-                      ("passwd", "set a user's password")):
+                      ("passwd", "set a temporary password (they must choose a new one at next sign-in)"),
+                      ("reset-password", "set a temporary password (they choose a new one at next sign-in)")):
         x = asub.add_parser(name, help=hlp)
         x.add_argument("username")
         if name == "delete":
             x.add_argument("--yes", action="store_true")
-        if name == "passwd":
+        if name in ("passwd", "reset-password"):
             x.add_argument("--password-env", metavar="VAR")
     st = asub.add_parser("settings", help="show or change defaults")
     st.add_argument("--default-minutes", type=float)
@@ -665,8 +668,15 @@ def cmd_admin(args) -> int:
     try:
         if cmd == "create":
             role = args.role or ("admin" if accounts.admin_count() == 0 else "user")
-            u = accounts.create_user(args.username, _read_password(args), role=role, actor=actor)
+            # The first admin typing a password at the prompt chose it. A password from the environment,
+            # --temporary, or an account created for someone else is temporary.
+            own_choice = (role == "admin" and accounts.admin_count() == 0
+                          and not getattr(args, "password_env", None) and not getattr(args, "temporary", False))
+            u = accounts.create_user(args.username, _read_password(args), role=role, actor=actor,
+                                     must_change=not own_choice)
             print(f"created {u.role} '{u.username}'")
+            if u.must_change_password:
+                print("they must choose a new password the next time they sign in")
         elif cmd == "list" or cmd is None:
             users = accounts.list_users()
             if not users:
@@ -709,10 +719,11 @@ def cmd_admin(args) -> int:
                 raise SystemExit("add --yes to delete the user and all their files")
             accounts.delete_user(u.id, actor)
             print(f"deleted {u.username}")
-        elif cmd == "passwd":
+        elif cmd in ("passwd", "reset-password"):
             u = need(args.username)
-            accounts.set_password(u.id, _read_password(args, "New password: "), actor)
+            accounts.set_password(u.id, _read_password(args, "New temporary password: "), actor, must_change=True)
             print("password changed; their sessions were signed out")
+            print("they must choose a new password the next time they sign in")
         elif cmd == "settings":
             st = accounts.set_settings(actor, default_quota_minutes=args.default_minutes, signup=args.signup,
                                        reset_hour=args.reset_hour, period_days=args.period_days,

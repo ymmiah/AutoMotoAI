@@ -1,0 +1,23 @@
+services:
+  xtool:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/xtool
+      - .build/linux:/xtool/.build
+    container_name: xtool
+    stdin_open: true
+    tty: true
+    cap_add:
+      - sys_ptrace
+    security_opt:
+      - seccomp:unconfined
+    extra_hosts:
+      # host.docker.internal doesn't exist by default on Linux hosts
+      - "host.docker.internal:host-gateway"
+  xtool-test:
+    extends:
+      service: xtool
+    build:
+      target: dev-test

@@ -5,3 +5,5 @@ automoto/web/static/vendor/monaco/** -text
 # Test modules embed source fixtures and compare approved SHA-256 bytes.
 # Check them out as LF so core.autocrlf cannot rewrite those fixtures on Windows.
 tests/** text eol=lf
+# The vendored iPhone toolchain is scanned and hashed as LF text.
+third_party/ios-toolchain/** text=auto eol=lf

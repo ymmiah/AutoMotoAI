@@ -10,10 +10,14 @@ services:
     envVars:
       - key: NVIDIA_API_KEY
         sync: false
-      - key: AUTOMOTO_ADMIN_USER
-        sync: false
-      - key: AUTOMOTO_ADMIN_PASSWORD
-        sync: false
+      # Admin password is optional. Leave it unset: the logs print a one-time setup code,
+      # then open /setup. There is no default password.
+      # If you set these, the password is temporary (change it at first sign-in) and, because
+      # the free plan wipes its disk, the admin is created again on every restart.
+      # - key: AUTOMOTO_ADMIN_USER
+      #   sync: false
+      # - key: AUTOMOTO_ADMIN_PASSWORD
+      #   sync: false
       - key: AUTOMOTO_ALLOWED_HOSTS
         sync: false   # e.g. automoto-ai.onrender.com
       - key: AUTOMOTO_FORWARDED_ALLOW_IPS

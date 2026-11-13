@@ -1,0 +1,113 @@
+# Note: We use 22.04 since AppImage recommends building on the
+# oldest configuration that you support
+
+ARG SWIFT_VERSION=6.4.2
+
+FROM swift:${SWIFT_VERSION}-jammy AS build-base
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    ca-certificates \
+    build-essential \
+    checkinstall \
+    git \
+    autoconf \
+    automake \
+    libtool-bin \
+    libssl-dev \
+    pkg-config \
+    libxml2 \
+    curl libcurl4-openssl-dev \
+    zip unzip \
+    liblzma-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+
+FROM build-base AS build-limd
+
+RUN mkdir -p /prefix
+
+ADD --keep-git-dir=true https://github.com/libimobiledevice/libplist.git#2.6.0 /libplist
+
+RUN cd libplist \
+    && ./autogen.sh --prefix /usr --without-cython \
+    && make \
+    && make install \
+    && make install DESTDIR=/prefix
+
+ADD --keep-git-dir=true https://github.com/libimobiledevice/libimobiledevice-glue.git#1.3.1 /libimobiledevice-glue
+
+RUN cd libimobiledevice-glue \
+    && ./autogen.sh --prefix /usr \
+    && make \
+    && make install \
+    && make install DESTDIR=/prefix
+
+ADD --keep-git-dir=true https://github.com/libimobiledevice/libusbmuxd.git#2.1.0 /libusbmuxd
+
+RUN cd libusbmuxd \
+    && ./autogen.sh --prefix /usr \
+    && make \
+    && make install \
+    && make install DESTDIR=/prefix
+
+ADD --keep-git-dir=true https://github.com/libimobiledevice/libtatsu.git#1.0.4 /libtatsu
+
+RUN cd libtatsu \
+    && ./autogen.sh --prefix /usr \
+    && make \
+    && make install \
+    && make install DESTDIR=/prefix
+
+ADD --keep-git-dir=true https://github.com/libimobiledevice/libimobiledevice.git#master /libimobiledevice
+
+RUN cd libimobiledevice \
+    && ./autogen.sh --prefix /usr --without-cython \
+    && make \
+    && make install \
+    && make install DESTDIR=/prefix
+
+
+FROM build-base AS build-xtool-base
+
+COPY --from=build-limd /prefix/usr /usr
+
+WORKDIR /xtool
+
+FROM build-xtool-base AS dev
+
+# Docker doesn't support FUSE
+ENV APPIMAGE_EXTRACT_AND_RUN=1
+
+# Use the host's usbmuxd.
+# You probably want to use socat on the host to forward this port to /var/run/usbmuxd:
+# socat -dd TCP-LISTEN:27015,range=127.0.0.1/32,reuseaddr,fork UNIX-CLIENT:/var/run/usbmuxd
+ENV USBMUXD_SOCKET_ADDRESS=host.docker.internal:27015
+
+CMD [ "/bin/bash" ]
+
+FROM dev AS dev-test
+
+ENV XTL_TEST_ENV=1
+
+COPY --from=bats/bats:latest /opt/bats /opt/bats
+COPY --from=bats/bats:latest /usr/lib/bats /usr/lib/bats
+RUN ln -s /opt/bats/bin/bats /usr/local/bin/bats
+
+FROM build-xtool-base AS build-xtool
+
+ARG XTL_CI
+
+ADD Package.swift Package.resolved /xtool/
+RUN swift package resolve
+
+ADD . /xtool
+RUN ./Linux/build.sh
+
+FROM swift:${SWIFT_VERSION} AS xtool
+
+COPY --from=build-xtool /xtool/Linux/packages/xtool-*.AppImage /xtool/xtool.AppImage
+RUN (cd /xtool && ./xtool.AppImage --appimage-extract) \
+    && mv /xtool/squashfs-root /usr/local/xtool \
+    && rm -rf /xtool \
+    && ln -s /usr/local/xtool/AppRun /usr/local/bin/xtool

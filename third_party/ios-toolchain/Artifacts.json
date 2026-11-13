@@ -1,0 +1,38 @@
+{
+  "base_url": "https://github.com/ymmiah/AutoMotoAI/releases/download/ios-sdk-support",
+  "device_libs_base_url": "https://github.com/ymmiah/AutoMotoAI/releases/download/ios-device-libs/1.0.0",
+  "artifacts": {
+    "darwin-tools-aarch64": {
+      "file": "darwin-tools-aarch64.tar.gz",
+      "sha256": ""
+    },
+    "darwin-tools-x86_64": {
+      "file": "darwin-tools-x86_64.tar.gz",
+      "sha256": ""
+    },
+    "open-apple-macros-aarch64": {
+      "file": "open-apple-macros-aarch64.tar.gz",
+      "sha256": ""
+    },
+    "open-apple-macros-x86_64": {
+      "file": "open-apple-macros-x86_64.tar.gz",
+      "sha256": ""
+    },
+    "plist.xcframework.zip": {
+      "file": "plist.xcframework.zip",
+      "sha256": "b71d1b2c86880cd2c8f353c6357c6d610849a2b461855ae782922720a0ecce3e"
+    },
+    "libimobiledeviceGlue.xcframework.zip": {
+      "file": "libimobiledeviceGlue.xcframework.zip",
+      "sha256": "227c43c1d7db213f3f75d8cdb0bba873321151ff80c2afd5217982642a2810e1"
+    },
+    "usbmuxd.xcframework.zip": {
+      "file": "usbmuxd.xcframework.zip",
+      "sha256": "9afdc82607c4339e19f31a487fe042ebee778040e805380704c5d89fb2a99081"
+    },
+    "libimobiledevice.xcframework.zip": {
+      "file": "libimobiledevice.xcframework.zip",
+      "sha256": "24c23d4ac43581e9bd6f3f198bade77d0ca928226b4a2230963162472828611f"
+    }
+  }
+}

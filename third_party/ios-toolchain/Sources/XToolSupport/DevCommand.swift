@@ -1,0 +1,317 @@
+import XCLIUtils
+import Foundation
+import ArgumentParser
+import PackLib
+import XKit
+import Dependencies
+import XUtils
+
+struct PackOperation {
+    struct BuildOptions: ParsableArguments {
+        @Option(
+            name: .shortAndLong,
+            help: "Build with configuration"
+        ) var configuration: BuildConfiguration = .debug
+
+        init() {}
+
+        init(configuration: BuildConfiguration) {
+            self.configuration = configuration
+        }
+    }
+
+    static let defaultTriple = "arm64-apple-ios"
+
+    var triple: String?
+    var buildOptions = BuildOptions(configuration: .debug)
+    var xcode = false
+
+    @discardableResult
+    func run() async throws -> URL {
+        // TODO: support running inside a child directory
+
+        let contents = try FileManager.default.contentsOfDirectory(atPath: ".")
+        guard contents.contains("Package.swift")
+            || contents.contains(where: { $0.hasPrefix("Package@") && $0.hasSuffix(".swift") })
+            else {
+            throw Console.Error("Could not find Package.swift in this directory.")
+        }
+
+        try await EnsureSDKOperation(quiet: true).run()
+
+        d.out.print("Planning...")
+
+        let schema: PackSchema
+        let preferred = URL(fileURLWithPath: "automoto-ios.yml")
+        let fallback = URL(fileURLWithPath: "xtool.yml")
+        let configPath = FileManager.default.fileExists(atPath: preferred.path) ? preferred : fallback
+        if FileManager.default.fileExists(atPath: configPath.path) {
+            schema = try await PackSchema(url: configPath)
+        } else {
+            schema = .default
+            d.out.print("""
+            warning: Could not locate configuration file '\(configPath.path)'. Using default \
+            configuration with 'com.example' organization ID.
+            """)
+        }
+
+        await LSPConfig.tryEnsure(using: schema)
+
+        let buildSettings = try await BuildSettings(
+            configuration: buildOptions.configuration,
+            triple: triple ?? Self.defaultTriple,
+            options: []
+        )
+
+        let planner = Planner(
+            buildSettings: buildSettings,
+            schema: schema
+        )
+        let plan = try await planner.createPlan()
+
+        if xcode {
+            return try await XcodePacker(plan: plan).createProject()
+        }
+
+        let packer = Packer(
+            buildSettings: buildSettings,
+            plan: plan
+        )
+        let bundle = try await packer.pack()
+
+        let productsWithEntitlements = plan
+            .allProducts
+            .compactMap { p in p.entitlementsPath.map { (p, $0) } }
+        if !productsWithEntitlements.isEmpty {
+            let mapping = try await withThrowingTaskGroup(of: (URL, Data).self) { group in
+                for (product, path) in productsWithEntitlements {
+                    group.addTask {
+                        let entitlements = try await Data(reading: URL(fileURLWithPath: path))
+                        return (product.directory(inApp: bundle), entitlements)
+                    }
+                }
+                return try await group.reduce(into: [:]) { $0[$1.0] = $1.1 }
+            }
+            d.out.print("Applying entitlements...")
+            try await d.signer.sign(
+                app: bundle,
+                identity: .adhoc,
+                entitlementMapping: mapping,
+                deep: true,
+                progress: { _ in }
+            )
+        }
+
+        return bundle
+    }
+}
+
+struct DevXcodeCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "generate-xcode-project",
+        abstract: "Generate Xcode project"
+    )
+
+    func run() async throws {
+        let result = try await PackOperation(xcode: true).run()
+        d.out.print("Wrote to \(result.path)")
+    }
+}
+
+struct DevBuildCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "build",
+        abstract: "Build app with SwiftPM",
+        discussion: """
+        This command builds the SwiftPM-based iOS app in the current directory
+        """
+    )
+
+    @OptionGroup var packOptions: PackOperation.BuildOptions
+
+    @Flag(
+        name: .shortAndLong,
+        help: "Codesign the built app",
+    ) var sign = false
+
+    @Flag(
+        name: .shortAndLong,
+        help: "Output a .ipa file instead of a .app"
+    ) var ipa = false
+
+    @Option(
+        help: ArgumentHelp(
+            "Custom target triple to build for",
+            discussion: "Defaults to '\(PackOperation.defaultTriple)'"
+        )
+    ) var triple: String?
+
+    func run() async throws {
+        let signingAuthToken: AuthToken?
+        if sign {
+            guard let token = try AuthToken.savedIfPresent() else {
+                throw Console.Error("`build --sign` requires logging in with `xtool auth`")
+            }
+            signingAuthToken = token
+        } else {
+            signingAuthToken = nil
+        }
+
+        let url = try await PackOperation(
+            triple: triple,
+            buildOptions: packOptions
+        ).run()
+
+        if let signingAuthToken {
+            let installDelegate = XToolInstallerDelegate()
+            let installer = IntegratedInstaller(
+                auth: signingAuthToken.authData(),
+                delegate: installDelegate
+            )
+            do {
+                defer { d.out.print() }
+                try await installer.signInPlace(app: url)
+            } catch let error as CancellationError {
+                throw error
+            } catch {
+                d.out.print("Error: \(error)")
+                throw ExitCode.failure
+            }
+        }
+
+        let finalURL: URL
+        if ipa {
+            @Dependency(\.zipCompressor) var compressor
+            finalURL = url.deletingPathExtension().appendingPathExtension("ipa")
+            let tmpDir = try TemporaryDirectory(name: "Payload")
+            let payloadDir = tmpDir.url
+            try FileManager.default.moveItem(at: url, to: payloadDir.appendingPathComponent(url.lastPathComponent))
+            let ipaURL = try await compressor.compress(directory: payloadDir) { progress in
+                if let progress {
+                    let percent = Int(progress * 100)
+                    d.out.print("\rPackaging... \(percent)%", terminator: "")
+                } else {
+                    d.out.print("\rPackaging...", terminator: "")
+                }
+            }
+            d.out.print()
+            try? FileManager.default.removeItem(at: finalURL)
+            try FileManager.default.moveItem(at: ipaURL, to: finalURL)
+        } else {
+            finalURL = url
+        }
+
+        d.out.print("Wrote to \(finalURL.path)")
+    }
+}
+
+struct DevRunCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "run",
+        abstract: "Build and run app with SwiftPM",
+        discussion: """
+        This command deploys the SwiftPM-based iOS app in the current directory
+        """
+    )
+
+    @OptionGroup var packOptions: PackOperation.BuildOptions
+
+    #if os(macOS)
+    @Flag(
+        name: .shortAndLong,
+        help: "Target the iOS Simulator"
+    ) var simulator = false
+
+    var triple: String? {
+        if simulator {
+            #if arch(arm64)
+            return "arm64-apple-ios-simulator"
+            #elseif arch(x86_64)
+            return "x86_64-apple-ios-simulator"
+            #else
+            #error("Unsupported architecture")
+            #endif
+        }
+        return nil
+    }
+    #else
+    var triple: String? { nil }
+    #endif
+
+    @OptionGroup var connectionOptions: ConnectionOptions
+
+    func run() async throws {
+        let output = try await PackOperation(triple: triple, buildOptions: packOptions).run()
+
+        #if os(macOS)
+        if simulator {
+            try await SimInstallOperation(path: output).run()
+            return
+        }
+        #endif
+
+        let token = try AuthToken.saved()
+
+        let client = try await connectionOptions.client()
+        d.out.print("Installing to device: \(client.deviceName) (udid: \(client.udid))")
+
+        let installDelegate = XToolInstallerDelegate()
+        let installer = IntegratedInstaller(
+            auth: token.authData(),
+            delegate: installDelegate
+        )
+
+        defer { d.out.print() }
+
+        do {
+            try await installer.install(
+                app: output,
+                udid: client.udid,
+                lookupMode: .only(client.connectionType),
+                configureDevice: false,
+            )
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            d.out.print("\nError: \(error)")
+            throw ExitCode.failure
+        }
+    }
+}
+
+struct DevCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "dev",
+        abstract: "Build and run an xtool SwiftPM project",
+        subcommands: [
+            DevXcodeCommand.self,
+            DevBuildCommand.self,
+            DevRunCommand.self,
+            DevBSPCommand.self,
+        ],
+        defaultSubcommand: DevRunCommand.self
+    )
+}
+
+extension BuildConfiguration: ExpressibleByArgument {}
+
+#if os(macOS)
+import Subprocess
+
+struct SimInstallOperation {
+    var path: URL
+
+    // TODO: allow customizing this
+    var simulator = "booted"
+
+    func run() async throws {
+        try await Subprocess.run(
+            .path("/usr/bin/xcrun"),
+            arguments: ["simctl", "install", simulator, path.path],
+            output: .discarded
+        )
+        .checkSuccess()
+        d.out.print("Installed to simulator")
+    }
+}
+#endif

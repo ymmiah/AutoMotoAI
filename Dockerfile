@@ -1,8 +1,11 @@
 # AutoMoto AI - hosted (multi-user) server image.
 #   docker build -t automoto .
 #   docker run -p 8765:8765 -v automoto-data:/data \
-#     -e NVIDIA_API_KEY=... -e AUTOMOTO_ADMIN_USER=you -e AUTOMOTO_ADMIN_PASSWORD='a long password' \
-#     -e AUTOMOTO_ALLOWED_HOSTS=your.domain automoto
+#     -e NVIDIA_API_KEY=... -e AUTOMOTO_ALLOWED_HOSTS=your.domain automoto
+# First login: read the setup code from `docker logs` and open /setup. No default password.
+# Optional: -e AUTOMOTO_ADMIN_USER=you -e AUTOMOTO_ADMIN_PASSWORD='a long password'
+# (temporary — change it at first sign-in; an existing admin is not overwritten).
+# Lost the password with no shell: -e AUTOMOTO_ADMIN_RESET=1 and read the new code from the logs.
 # See docs/HOSTING.md. Build with --build-arg WITH_OFFICE=1 to add LibreOffice (PDF export; ~600 MB more).
 FROM python:3.12-slim
 

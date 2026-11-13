@@ -195,6 +195,8 @@ from automoto import developer_beam
 app.include_router(developer_beam.router)  # V30 inert Elixir Erlang Gleam and SHA-pinned fixed BEAM tool tasks
 from automoto import developer_logic
 app.include_router(developer_logic.router)  # V31 static Haskell OCaml Lisp Scheme Prolog and approved local fixture tests
+from automoto import developer_ios
+app.include_router(developer_ios.router)  # iPhone toolchain, local-only, upload only after the on-screen button
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
@@ -413,7 +415,19 @@ def _authorise(request: Request, *, local_only: bool = False) -> None:
     if tenancy.multiuser():
         if local_only:
             raise HTTPException(403, "not available on a hosted AutoMoto server")
-        hosted.authenticate(request)
+        # Studio tools call endpoints with a synthetic request. Accept it only when this
+        # task already belongs to a signed-in tenant. HTTP clients cannot set the flag.
+        if getattr(request.state, "automoto_agent_call", False):
+            tenant = tenancy.current()
+            if tenant is None:
+                raise HTTPException(403, "hosted studio tools need a signed-in session")
+            request.state.user = tenant
+            account = accounts.get_user(tenant.id)
+            if account is not None:
+                hosted.block_until_password_changed(request, account)
+            return
+        user = hosted.authenticate(request)
+        hosted.block_until_password_changed(request, user)
         return
     if _is_loopback(request):
         if _session_ok(request) or _bearer_ok(request):
@@ -570,6 +584,8 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
         if not got:
             html = (WEB_DIR / "login.html").read_text(encoding="utf-8").replace("__AUTOMOTO_VERSION__", __version__)
             return HTMLResponse(brand.fill(html), headers=base_headers)
+        if got[0].must_change_password:
+            return _auth_page("password.html", base_headers, csrf=got[1])
         html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
         meta = (f'<meta name="automoto-csrf" content="{got[1]}" />\n'
                 '<meta name="automoto-mode" content="multiuser" />\n')
@@ -604,11 +620,25 @@ def index(request: Request, launch: str | None = None, device_launch: str | None
     return HTMLResponse(brand.fill(html), headers=base_headers)
 
 
+def _auth_page(name: str, headers: dict[str, str], *, csrf: str = "") -> HTMLResponse:
+    import html as html_mod
+
+    text = (WEB_DIR / name).read_text(encoding="utf-8").replace("__AUTOMOTO_VERSION__", __version__)
+    text = text.replace("__CSRF__", html_mod.escape(csrf, quote=True))
+    return HTMLResponse(brand.fill(text), headers=headers)
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     from fastapi.responses import RedirectResponse
 
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/setup", response_class=HTMLResponse)
+def setup_page(request: Request):
+    """First-admin page. The one-time code is in the server log, never on this page."""
+    return _auth_page("setup.html", {"Content-Security-Policy": CSP, "Cache-Control": "no-store"})
 
 
 @app.post("/api/session/launch")
@@ -617,8 +647,9 @@ def session_launch(request: Request) -> dict[str, Any]:
     _authorise(request, local_only=True)
     if not _is_loopback(request):
         raise HTTPException(403, "local only")
-    host = request.headers.get("host", "127.0.0.1")
-    return {"url": f"http://{host}/?launch={new_launch_token()}"}
+    # Built from the socket we listen on, not the Host header: the link carries a login token.
+    port = (request.scope.get("server") or (None, None))[1] or request.url.port or 8765
+    return {"url": f"http://127.0.0.1:{int(port)}/?launch={new_launch_token()}"}
 
 
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
@@ -1510,15 +1541,15 @@ def run_hosted(host: str, port: int) -> None:
     """Hosted mode: accounts and quotas, no launch link, no MCP servers, no routines, no desktop."""
     import uvicorn
 
-    made = accounts.bootstrap_admin_from_env()
     accounts.prune()
     hosts = sorted(_allowed_hosts() - LOCAL_HOSTS)
     print(f"{brand.name()} v{__version__} \"{CODENAME}\" - HOSTED (multi-user) mode on {host}:{port}", flush=True)
-    if made:
-        print(f"Created the first admin '{made}' from AUTOMOTO_ADMIN_USER / AUTOMOTO_ADMIN_PASSWORD.", flush=True)
-    if accounts.admin_count() == 0:
-        print("No admin yet: run `python -m automoto admin create <name>` (or set AUTOMOTO_ADMIN_USER and "
-              "AUTOMOTO_ADMIN_PASSWORD) before inviting people.", flush=True)
+    shown = "/setup"
+    if host not in ("0.0.0.0", "::"):  # nosec B104 - choosing a log URL, not binding
+        shown_host = "127.0.0.1" if host == "localhost" else host
+        shown = f"http://{shown_host}:{port}/setup"
+    for line in accounts.startup_admin_access(shown):
+        print(line, flush=True)
     st = accounts.settings()
     print(f"Sign-up: {st['signup']}  ·  default quota: {st['default_quota_minutes']:g} min per "
           f"{'day' if st['period_days'] == 1 else str(st['period_days']) + ' days'}  ·  allowed hosts: "

@@ -46,6 +46,8 @@ It checks your computer and shows recommended models **and models already downlo
 
 Untick it or click **Use cloud AI / server providers** to return to available cloud models. If `AUTOMOTO_OFFLINE=1` is defined in the environment, remove or change that server setting first; the UI cannot override it.
 
+**iPhone apps.** Creating a project from a description or a ZIP you already have does not need the internet. Building still needs the Xcode file you downloaded earlier and the iPhone tools on this computer. Sending the app to Apple is switched off until you leave Offline mode.
+
 That's it. Start a new chat and ask something.
 
 ## Which model should I pick?

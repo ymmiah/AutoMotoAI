@@ -58,6 +58,10 @@ the numbers the tools return and never makes numbers up.
 It reads the code, reproduces the problem (running the tests after you approve), makes the smallest fix and runs
 the tests again to prove it. In VS Code, use the AutoMoto panel's ideas or right-click a file.
 
+*make an iPhone app that counts taps* writes the project and, when this computer can, builds it and installs it
+on a real iPhone. You download Xcode.xip from Apple yourself. Windows uses WSL. The Microsoft Store app cannot
+do this. Nothing goes to App Store Connect until you press **Send to Apple**. Details: [iPhone apps](IOS.md).
+
 ## Web research
 
 *Research the latest news about renewable energy in the UK and give me 5 bullets with links* ·
@@ -86,6 +90,14 @@ Every command waits for your **Approve**; dangerous ones (like `rm -rf /`) are a
 * *list my open github issues* · *summarise my notion meeting notes page* (after you connect the service in
   **Settings → Connectors**; AutoMoto asks before every connector call)
 
+## Studios the assistant finishes for you
+
+You still type one request. The assistant now reaches the Document Assistant, Spreadsheet and invoice tools,
+Research Studio, Visual Studio and Developer Studio, and it keeps going until the file exists. Risky saves
+still wait for **Approve**. A layout repair or an offline AI review comes back as a proposal; nothing is
+applied until that approval. Hosted servers do not run programs on the host. Offline mode drops DOI lookup
+and other network tools. Details and examples: [Studios](STUDIO-ASSISTANT.md).
+
 ## Coming in the next beta
 
 These are on `main` and will be in the next beta build.
@@ -111,7 +123,8 @@ These are on `main` and will be in the next beta build.
 
 ## How this is tested
 
-Every example on this page is one of the **92 scenarios** in [`evals/scenarios.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/evals/scenarios.py).
+Every example on this page is one of the scenarios in [`evals/scenarios.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/evals/scenarios.py).
+Studio jobs (thesis export, invoice PDF, research evidence, promo GIF, a source diff) are the extra scenarios in [`evals/studio_scenarios.py`](https://github.com/ymmiah/AutoMotoAI/blob/main/evals/studio_scenarios.py).
 `python -m evals` runs each one through the real agent loop with real sample files (a real `.pptx`, `.docx`,
 `.xlsx`, PDF, CSV, SQLite database, WordPress plugin zip, buggy Python project…) and checks the result: the
 right kind of task was recognised, the AI was only offered tools that fit, files were created and open cleanly,

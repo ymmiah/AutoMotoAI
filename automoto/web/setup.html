@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<title>Set up the admin · __BRAND__</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2338f2a5'/%3E%3Cpath d='M9 22l7-13 7 13M12 17h8' stroke='%230b0f14' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/static/app.css?v=__AUTOMOTO_VERSION__" />
+<script src="/static/theme-boot.js?v=__AUTOMOTO_VERSION__"></script>
+</head>
+<body class="auth-body">
+<main class="auth" aria-labelledby="authTitle">
+  <div class="auth-brand"><span class="logo" aria-hidden="true">A</span><span>__BRAND__</span></div>
+  <h1 id="authTitle">Create the admin account</h1>
+  <p class="muted" id="authLead">Open this server's logs, copy the setup code, and paste it here. Then choose your username and password. There is no default password.</p>
+  <p class="muted small" id="authClosed" role="status" hidden></p>
+  <form id="setupForm" autocomplete="off" novalidate>
+    <label>Setup code<input class="input code" name="code" autocomplete="off" autocapitalize="off" spellcheck="false" required maxlength="200" placeholder="paste the code from the logs" /></label>
+    <label id="userRow">Username<input class="input" name="username" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{2,31}" /></label>
+    <label>Password<input class="input" name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="256" /></label>
+    <label>Password again<input class="input" name="again" type="password" autocomplete="new-password" required minlength="12" maxlength="256" /></label>
+    <p class="muted small" id="pwHint">At least 12 characters, not a common password, and not containing your username.</p>
+    <div class="auth-err" id="authErr" role="alert" hidden></div>
+    <button class="btn primary wide" id="authBtn" type="submit">Create admin account</button>
+  </form>
+  <p class="muted small">The code works once and expires 60 minutes after the server starts. Restart the server for a new code. A sign-in page is at <a href="/">/</a>.</p>
+  <p class="muted small">v__AUTOMOTO_VERSION__ · <a href="__SOURCE_URL__" target="_blank" rel="noopener">Source code</a> (AGPL-3.0)</p>
+</main>
+<script src="/static/chrome.js?v=__AUTOMOTO_VERSION__"></script>
+<script type="module" src="/static/setup.js?v=__AUTOMOTO_VERSION__"></script>
+</body>
+</html>

@@ -12,7 +12,7 @@ Everything here is free. Latest **stable** release: **v5.5.0** ([downloads](http
 [macOS](#4-macos-intel-and-apple-silicon) · [Linux](#5-linux-ubuntu--debian-fedora-arch-and-others) ·
 [Docker](#6-docker-and-docker-compose-any-os) · [Host it for others](#7-host-it-for-other-people) ·
 [VS Code, ChromeOS, Raspberry Pi, phones, BSD](#8-other-platforms) · [Update](#9-updating) ·
-[Uninstall](#10-uninstalling) · [Troubleshooting](#11-troubleshooting) · [What was tested](#12-what-was-tested-where)
+[Uninstall](#10-uninstalling) · [iPhone apps](#iphone-apps) · [Troubleshooting](#11-troubleshooting) · [What was tested](#12-what-was-tested-where)
 
 ---
 
@@ -331,8 +331,9 @@ Create a file called **`.env`** in that folder (it's git-ignored):
 
 ```ini
 NVIDIA_API_KEY=nvapi-...
-AUTOMOTO_ADMIN_USER=yourname
-AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
+# Optional. Leave these unset and use the setup code from the logs at /setup.
+# AUTOMOTO_ADMIN_USER=yourname
+# AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
 ```
 
 ### Option A — hosted mode for yourself (Windows, macOS, Linux)
@@ -341,7 +342,9 @@ AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
 docker compose up -d --build
 ```
 
-Open <http://127.0.0.1:8765> and sign in as `yourname`. Admins have no usage limit. In Docker you get the
+Open the logs (`docker compose logs automoto`), copy the setup code, and open <http://127.0.0.1:8765/setup>.
+If you set the admin env vars instead, sign in at <http://127.0.0.1:8765> and choose a new password.
+Admins have no usage limit. In Docker you get the
 **hosted tool set** (web research, Office, archives, data files — no shell or desktop control), which is the safe
 choice for a container. Manage it with `docker compose exec automoto python -m automoto admin list`.
 
@@ -370,6 +373,24 @@ give containers your `localhost` the same way — use option A there, or the nor
 
 Hosted mode gives every person an account, their own sandbox and a usage limit (**60 minutes a day** by default).
 You are the admin. Full reference: **[HOSTING.md](HOSTING.md)** (settings, honest free-host comparison, limits).
+
+### First login on any host
+
+This is the same on Render, Railway, Fly, Oracle, a VPS or Docker. There is no default password.
+
+1. Start the server.
+2. Open the logs.
+3. Copy the setup code.
+4. Open `/setup` (add it to the server address, for example `https://your-server/setup`).
+5. Paste the code, choose a username and a password, and submit.
+6. Sign in at `/`.
+
+The code works once. It lasts 60 minutes. Restart the server if you need a new one.
+
+A password set with `AUTOMOTO_ADMIN_USER` / `AUTOMOTO_ADMIN_PASSWORD` is temporary: sign in, then choose a new one.
+If the disk is wiped on restart, that admin is created again. Use a disk that keeps data, or the setup code.
+Forgot the password and cannot open a shell? Set `AUTOMOTO_ADMIN_RESET=1`, restart, copy the new code from the logs,
+open `/setup`, then sign in and choose a different password. Remove `AUTOMOTO_ADMIN_RESET` afterwards.
 
 ### Admin basics (any setup)
 
@@ -418,6 +439,7 @@ Your PC must stay on while people use it.
    git clone https://github.com/ymmiah/AutoMotoAI && cd AutoMotoAI
    cat > .env <<'ENV'
    NVIDIA_API_KEY=nvapi-...
+   # Optional. Leave unset and use the setup code from `docker compose logs` at /setup.
    AUTOMOTO_ADMIN_USER=yourname
    AUTOMOTO_ADMIN_PASSWORD=a-long-password-here
    AUTOMOTO_ALLOWED_HOSTS=automoto.example.com
@@ -437,9 +459,10 @@ Your PC must stay on while people use it.
 
 ### C. Render free (demo only — data is wiped)
 
-Fork the repo → <https://render.com> → *New → Blueprint* → your fork (uses `render.yaml`) → set `NVIDIA_API_KEY`,
-`AUTOMOTO_ADMIN_USER`, `AUTOMOTO_ADMIN_PASSWORD`. Free services sleep after 15 minutes and have **no disk**:
-every sleep/redeploy deletes all accounts except the admin from env, and all files. Good for a demo, not for users.
+Fork the repo → <https://render.com> → *New → Blueprint* → your fork (uses `render.yaml`) → set `NVIDIA_API_KEY`.
+Admin env vars are optional. Open the logs, copy the setup code, open `/setup`. Free services sleep after 15 minutes
+and have **no disk**: every sleep/redeploy deletes accounts and files. If you set `AUTOMOTO_ADMIN_PASSWORD`, that
+admin is created again after each wipe and must change the password again. Good for a demo, not for users.
 
 ### D. Phones and tablets on your home Wi-Fi
 
@@ -519,6 +542,23 @@ code --uninstall-extension ymmiah.automoto-ai
 | Behind a company proxy | Set `HTTPS_PROXY=http://proxy:port` (pip and the AI providers use it). The agent's own web tools (`web_search`, `fetch_url`) connect directly and **don't** use a proxy. If your DNS returns fake IPs (Clash/Surge `198.18.x.x`), set `AUTOMOTO_NET_ALLOW_CIDRS=198.18.0.0/15`. |
 | Checksum mismatch in the installer | Don't continue: download again or use `--from-source`. If it persists, open an issue. |
 | Hosted users see "limit reached" | That's the quota: give time with `automoto admin bonus <name> 30` or the Admin page. |
+
+## iPhone apps
+
+You describe the app, or you give a ZIP. The assistant writes it, builds it, and can put it on your iPhone.
+You do not have to look at the code. The full child-simple version is [iPhone apps](IOS.md). Short version:
+
+1. **This is not a simulator.** You need a real iPhone. Windows and Linux cannot pretend to be an iPhone.
+2. **Download Xcode.xip yourself**, once, from Apple's developer downloads. This app does not keep a copy of Xcode.
+3. On the iPhone: **Settings → Privacy & Security → Developer Mode**, turn it on, then plug the phone in and tap **Trust**.
+4. A **paid Apple Developer account** is needed for the App Store, and so a test copy does not expire after 7 days.
+5. In App Store Connect, create an **API key** once. Put the `.p8` file in `~/.automoto/secrets/` (on Windows, `C:\Users\<you>\.automoto\secrets\`). In the iPhone panel, store the path, the key id, and the issuer id. Do not paste the key into the chat.
+6. **Windows:** install WSL, then build the iPhone tools inside it. The **Microsoft Store** copy cannot do this. Use the engine from this guide instead.
+7. **Mac or Linux:** build the `automoto-ios` command from `third_party/ios-toolchain` with Swift 6.2. Support files for that build are not published yet, so setup will say so and will not download them.
+8. Ask for the app. Read the App Store page. Tick the box. Press **Send to Apple**. Nothing is uploaded before that button.
+9. The first time, create the app record yourself on the App Store Connect website. Apple does not let this step create that first record.
+
+Offline mode can still create the project from files you already have. Sending to Apple needs the internet.
 
 Still stuck? Run `automoto status` and open an issue at <https://github.com/ymmiah/AutoMotoAI/issues> (never paste keys).
 

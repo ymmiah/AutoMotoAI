@@ -29,6 +29,8 @@
 ## Unreleased (on `main`, after 5.6.0-beta.3) — one central assistant, memory, artifacts, your own server
 **Coming in the next beta.** Not in a tagged build yet.
 
+- **First admin on any host, with no shell and no default password.** If no admin exists, the server prints a one-time setup code in the log. Open `/setup`, enter the code, and choose the admin username and password. The code is stored only as a hash, works once, expires after 60 minutes, and a restart replaces it. `AUTOMOTO_SETUP_CODE` can set it. `AUTOMOTO_ADMIN_USER` / `AUTOMOTO_ADMIN_PASSWORD` still work, but that password is temporary and is not written over an admin that already exists. `AUTOMOTO_ADMIN_RESET=1` prints a one-time code to reset an admin password. A temporary password (env, an admin, or `admin reset-password`) must be changed before any other API will answer.
+
 - **Offline AI fixed: local models now load and work.** Four bugs made Ollama models fail or misbehave:
   (1) AutoMoto always asked Ollama for `qwen2.5:3b` (or the last picked model) even when only another model was
   downloaded, so Offline mode failed with "model not found" — it now uses the best downloaded model instead
