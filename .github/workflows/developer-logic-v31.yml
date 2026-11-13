@@ -64,8 +64,8 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
       - run: python -m pip install -e ".[dev]"
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install interpreters on disposable CI runner only
         timeout-minutes: 15
         # Ubuntu 26.04 dropped the ocaml-nox transitional package; "ocaml" is the real one.
@@ -93,7 +93,7 @@ jobs:
           sbcl --noinform --no-sysinit --no-userinit --script test/v31_fixture.lisp | grep -Fx "V31_LISP_PASS 42"
           guile --no-auto-compile -s test/v31_fixture.scm | grep -Fx "V31_SCHEME_PASS 42"
           swipl -q -f none -s test/v31_fixture.pl -g main -t halt | grep -Fx "V31_PROLOG_PASS 42"
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
       - run: python -m pip install -e ".[dev]"

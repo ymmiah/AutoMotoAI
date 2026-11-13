@@ -23,6 +23,7 @@ import tarfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import asdict, dataclass
@@ -422,11 +423,33 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _pinned_https(url: str) -> None:
+    """Only the pinned llama.cpp release and Hugging Face catalog files may be fetched."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443):
+        raise ValueError("Model downloads only use HTTPS.")
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    if ".." in path.split("/"):
+        raise ValueError("That download path is not allowed.")
+    github = host == "github.com" and path.startswith(f"/ggml-org/llama.cpp/releases/download/{RUNTIME_TAG}/")
+    hugging = host == "huggingface.co" and "/resolve/main/" in path
+    if not (github or hugging):
+        raise ValueError("That download is not from the pinned engine or model host.")
+
+
+def _loopback_http(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.username or parsed.password:
+        raise ValueError("The built-in engine only answers on this computer.")
+
+
 def _download(url: str, dest: Path, *, expected: str | None, job: str) -> None:
+    _pinned_https(url)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     request = urllib.request.Request(url, headers={"User-Agent": "AutoMotoAI"})
-    with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310 - pinned https host
+    with urllib.request.urlopen(request, timeout=60) as response:  # nosec B310 - HTTPS host checked above
         total = int(response.headers.get("Content-Length") or 0)
         done = 0
         digest = hashlib.sha256()
@@ -449,24 +472,45 @@ def _download(url: str, dest: Path, *, expected: str | None, job: str) -> None:
     tmp.replace(dest)
 
 
+def _member_target(dest: Path, name: str) -> Path:
+    if not name or name.startswith(("/", "\\")) or ".." in Path(name).parts:
+        raise ValueError("The engine archive contained an unsafe path.")
+    target = (dest / name).resolve()
+    if not _inside(target, dest):
+        raise ValueError("The engine archive contained an unsafe path.")
+    return target
+
+
 def _safe_extract(archive: Path, dest: Path) -> None:
+    """Write archive members one by one. Links and paths outside dest are refused."""
     dest.mkdir(parents=True, exist_ok=True)
     if archive.suffix == ".zip":
         with zipfile.ZipFile(archive) as zf:
             for info in zf.infolist():
-                target = (dest / info.filename).resolve()
-                if not _inside(target, dest) or info.filename.startswith(("/", "\\")):
-                    raise ValueError("The engine archive contained an unsafe path.")
-            zf.extractall(dest)
+                target = _member_target(dest, info.filename)
+                if info.is_dir() or info.filename.endswith("/"):
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info) as src, target.open("wb") as out:
+                    shutil.copyfileobj(src, out)
         return
     with tarfile.open(archive, "r:gz") as tf:
         for member in tf.getmembers():
-            target = (dest / member.name).resolve()
-            if not _inside(target, dest) or member.name.startswith(("/", "\\")):
-                raise ValueError("The engine archive contained an unsafe path.")
             if member.issym() or member.islnk():
                 raise ValueError("The engine archive contained a link, which was refused.")
-        tf.extractall(dest)
+            target = _member_target(dest, member.name)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            if not member.isfile():
+                raise ValueError("The engine archive contained an unexpected entry.")
+            src = tf.extractfile(member)
+            if src is None:
+                raise ValueError("The engine archive entry could not be read.")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with src, target.open("wb") as out:
+                shutil.copyfileobj(src, out)
 
 
 def ensure_runtime() -> dict[str, Any]:
@@ -737,7 +781,9 @@ def ensure_running() -> str:
             stop()
             raise ValueError("The built-in engine stopped while loading the model. Pick a smaller model.")
         try:
-            with urllib.request.urlopen(url + "/models", timeout=2) as response:  # noqa: S310 - loopback
+            health = url + "/models"
+            _loopback_http(health)
+            with urllib.request.urlopen(health, timeout=2) as response:  # nosec B310 - 127.0.0.1 checked above
                 if response.status == 200:
                     return url
         except (urllib.error.URLError, OSError, TimeoutError):
@@ -762,10 +808,12 @@ def test_model(model_id: str) -> dict[str, Any]:
         body = {"model": active_filename() or model_id,
                 "messages": [{"role": "user", "content": "Reply with the single word OK."}],
                 "max_tokens": 16, "temperature": 0}
-        request = urllib.request.Request(url.rstrip("/") + "/chat/completions",
+        chat = url.rstrip("/") + "/chat/completions"
+        _loopback_http(chat)
+        request = urllib.request.Request(chat,
                                          data=json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(request, timeout=180) as response:  # noqa: S310 - loopback
+        with urllib.request.urlopen(request, timeout=180) as response:  # nosec B310 - 127.0.0.1 checked above
             data = json.loads(response.read().decode("utf-8") or "{}")
     except ValueError:
         raise

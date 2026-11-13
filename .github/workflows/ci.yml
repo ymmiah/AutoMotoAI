@@ -192,7 +192,7 @@ jobs:
           npm run lint
           npm run test:unit
       - name: Cache downloaded VS Code test build
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: apps/vscode/.vscode-test
           key: vscode-test-${{ runner.os }}-${{ github.run_id }}

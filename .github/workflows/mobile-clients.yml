@@ -35,8 +35,8 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           cache: true
@@ -52,7 +52,7 @@ jobs:
           flutter build appbundle --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
           test -f build/app/outputs/bundle/debug/app-debug.aab
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: automoto-android-debug
           path: |
@@ -67,8 +67,8 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           cache: true
@@ -76,7 +76,7 @@ jobs:
         run: bash tool/bootstrap.sh
       - name: Simulator build without an Apple certificate
         run: flutter build ios --simulator --debug --no-codesign
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: automoto-ios-simulator
           path: apps/mobile/build/ios/iphonesimulator/*.app
