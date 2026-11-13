@@ -3,6 +3,10 @@ name: Windows app
 # on a clean runner (silent install, launch, local engine health, close, uninstall), and on a version tag
 # attaches them plus the signed updater manifest (latest.json) to that tag's GitHub Release.
 # Also builds the Microsoft Store package (.msixupload, unsigned: the Store signs it) and test-installs it.
+# Optional Azure Artifact Signing (formerly Trusted Signing) Authenticode-signs AutoMoto AI.exe, then the
+# .exe/.msi, then the Tauri updater .sig files and SHA256SUMS are written for those final files. Skipped
+# with a notice when the AZURE_* secrets / TRUSTED_SIGNING_* variables are absent (see
+# docs/signing/TRUSTED_SIGNING_SETUP.md). The Store MSIX is never signed here.
 # Optional: a manual run with "store_upload" ticked sends it to Partner Center as a DRAFT submission (needs the
 # AZURE_AD_* / SELLER_ID secrets and the MSSTORE_PRODUCT_ID variable; skipped with a notice otherwise).
 on:
@@ -33,6 +37,7 @@ jobs:
     timeout-minutes: 75
     permissions:
       contents: write   # only used on tags, to attach the installers to the release
+      id-token: write   # Azure Artifact Signing via OIDC (unused when those secrets are absent)
     env:
       AUTOMOTO_DEFAULT_SERVER: ${{ vars.AUTOMOTO_DEFAULT_SERVER }}
     steps:
@@ -83,30 +88,105 @@ jobs:
         run: |
           npm ci --no-fund --no-audit
           node --check dist/app.js
-      - name: Build the installers
+      - name: Azure Artifact Signing credentials present?
+        id: signing
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TRUSTED_SIGNING_ENDPOINT: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          TRUSTED_SIGNING_ACCOUNT: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          TRUSTED_SIGNING_PROFILE: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+        run: |
+          $need = @("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_SUBSCRIPTION_ID", "TRUSTED_SIGNING_ENDPOINT", "TRUSTED_SIGNING_ACCOUNT", "TRUSTED_SIGNING_PROFILE")
+          $missing = $need | Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
+          $allowed = ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") -or ($env:GITHUB_REF -eq "refs/heads/main") -or ($env:GITHUB_REF -like "refs/tags/v*")
+          if (-not $allowed) {
+            "::notice::Azure Artifact Signing skipped on $($env:GITHUB_EVENT_NAME) ($($env:GITHUB_REF)). Signing runs on main, version tags, and manual workflow_dispatch."
+            "go=false" >> $env:GITHUB_OUTPUT
+            "auth=" >> $env:GITHUB_OUTPUT
+          } elseif ($missing) {
+            "::notice::Azure Artifact Signing skipped - not set: $($missing -join ', '). Direct .exe/.msi stay unsigned until these are added (see docs/signing/TRUSTED_SIGNING_SETUP.md)."
+            "go=false" >> $env:GITHUB_OUTPUT
+            "auth=" >> $env:GITHUB_OUTPUT
+          } elseif ($env:AZURE_CLIENT_SECRET) {
+            "go=true" >> $env:GITHUB_OUTPUT
+            "auth=secret" >> $env:GITHUB_OUTPUT
+          } else {
+            "go=true" >> $env:GITHUB_OUTPUT
+            "auth=oidc" >> $env:GITHUB_OUTPUT
+          }
+      - name: Build the app executable
         working-directory: apps/desktop
         shell: pwsh
-        # The updater signing key signs every auto-update: only this step gets it, so a compromised
-        # action or npm install script in another step can't read it.
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           # Include the matching engine in the standalone installers as well as the Store MSIX.
+          # Updater .sig files are written later, after Authenticode signing, so they match the final files.
           $config = @{ bundle = @{ resources = @{
             "../../../scripts/install.ps1" = "resources/install.ps1"
             "../../../engine-wheel/" = "resources/"
-          } } }
-          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-            "::notice::No updater signing key - building without update signatures"
-            $config.bundle.createUpdaterArtifacts = $false
-          }
+          }; createUpdaterArtifacts = $false } }
           $config | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 engine-bundle.json
-          npx tauri build --bundles nsis,msi --config engine-bundle.json
-          if ($LASTEXITCODE) { exit 1 }
+          npx tauri build --no-bundle --config engine-bundle.json
+          if ($LASTEXITCODE) { throw "tauri build --no-bundle failed" }
+      - name: Sign in to Azure (OIDC)
+        if: steps.signing.outputs.go == 'true' && steps.signing.outputs.auth == 'oidc'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign in to Azure (client secret)
+        if: steps.signing.outputs.go == 'true' && steps.signing.outputs.auth == 'secret'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+      - name: Sign the app executable
+        if: steps.signing.outputs.go == 'true'
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+          files: "${{ github.workspace }}/apps/desktop/src-tauri/target/release/AutoMoto AI.exe"
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description-url: https://ymmiah.github.io/AutoMotoAI/
+      - name: Bundle the installers
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          npx tauri bundle --bundles nsis,msi --config engine-bundle.json
+          if ($LASTEXITCODE) { throw "tauri bundle failed" }
+      - name: Sign the Windows installers
+        if: steps.signing.outputs.go == 'true'
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}/apps/desktop/src-tauri/target/release/bundle
+          files-folder-filter: exe,msi
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description-url: https://ymmiah.github.io/AutoMotoAI/
       - name: Collect the installers
         shell: pwsh
         run: ./scripts/ci/collect-windows.ps1 -Out out
+      - name: Sign updater payloads for the final files
+        shell: pwsh
+        # The updater signing key signs every auto-update: only this step gets it, so a compromised
+        # action or npm install script in another step can't read it. Must run after Authenticode
+        # signing so the .sig files and SHA256SUMS match the files that are uploaded.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: ./scripts/ci/updater-sign.ps1 -Dir out
       - name: Branding check (version info and icons of the app and the installers)
         shell: pwsh
         run: |

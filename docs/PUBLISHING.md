@@ -23,22 +23,27 @@ The **Publish** workflow (`.github/workflows/publish.yml`) then:
 
 | Attach the `.vsix`, wheel and sdist to the tag's GitHub Release (a draft) and write the notes | every `v*` tag | — |
 
-The **Windows app** workflow (`.github/workflows/desktop.yml`) builds and smoke-tests the installers (not
-code-signed), builds the **Microsoft Store package** (`automoto-ai-msstore` artifact, see
-[Windows distribution](WINDOWS-DISTRIBUTION.md)), and on a tag attaches the installers plus `latest.json` and
-`SHA256SUMS.txt` to the release.
+The **Windows app** workflow (`.github/workflows/desktop.yml`) builds and smoke-tests the installers,
+optionally Authenticode-signs the app executable and the `.exe`/`.msi` with **Azure Artifact Signing**
+when those secrets are set (skipped with a notice otherwise; never signs the Store package — see
+[Trusted Signing setup](signing/TRUSTED_SIGNING_SETUP.md)), builds the **Microsoft Store package**
+(`automoto-ai-msstore` artifact, see [Windows distribution](WINDOWS-DISTRIBUTION.md)), and on a tag
+attaches the installers plus `latest.json` and `SHA256SUMS.txt` to the release. Updater `.sig` files
+and checksums are written after Authenticode signing so they match the files people download.
 
 **Release file names** (from 5.6.0 Beta 4 on; older releases keep their names):
 
 | File | For |
 |---|---|
-| `AutoMoto-AI-Setup-<version>-Windows-x64.exe` (+ `.sig`) | Windows, most people |
-| `AutoMoto-AI-<version>-Windows-x64.msi` (+ `.sig`) | Windows, IT / all users |
+| Microsoft Store ([Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)) | Windows, recommended |
+| `AutoMoto-AI-Setup-<version>-Windows-x64.exe` (+ `.sig`) | Advanced: direct installer (may show a SmartScreen warning until signed) |
+| `AutoMoto-AI-<version>-Windows-x64.msi` (+ `.sig`) | Advanced: direct installer for IT / all users (may show a SmartScreen warning until signed) |
 | `AutoMoto-AI-<version>-VSCode.vsix` | VS Code |
 | `automoto_ai-<pep440>-py3-none-any.whl`, `automoto_ai-<pep440>.tar.gz` | pip (names pip needs) |
 | `latest.json`, `SHA256SUMS.txt` | the app's updater; checksums |
 
-The notes start with a **"Which file do I need?"** table, then the CHANGELOG section and the SHA-256 of every
+The notes start with a **"Which file do I need?"** table that leads with the Microsoft Store link and
+labels the `.exe`/`.msi` as advanced direct installers, then the CHANGELOG section and the SHA-256 of every
 file (`scripts/ci/release_notes.py`; the names are defined there too). The release stays a **draft** until you
 publish it. For a beta, copy its `latest.json` to `packaging/updater/beta.json` afterwards.
 

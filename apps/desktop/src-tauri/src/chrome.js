@@ -23,6 +23,8 @@
     + '<button type="button" role="menuitem" data-chrome="act" data-action="signout">Sign out of this device</button>'
     + '<div role="separator"></div>'
     + '<button type="button" role="menuitem" data-chrome="act" data-action="guide">Step-by-step guide <span class="k">F1</span></button>'
+    + '<button type="button" role="menuitem" data-chrome="act" data-action="store">Get it from Microsoft</button>'
+    + '<button type="button" role="menuitem" data-chrome="act" data-action="releases">Advanced: GitHub installers</button>'
     + '<button type="button" role="menuitem" data-chrome="act" data-action="log">Open the local engine log</button>'
     + '<button type="button" role="menuitem" data-chrome="act" data-action="about">About AutoMoto AI</button>'
     + '<div role="separator"></div>'

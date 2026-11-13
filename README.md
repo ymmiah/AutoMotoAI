@@ -1,8 +1,8 @@
 > [!IMPORTANT]
-> 🎉 **AutoMoto AI for Windows is listed on the [Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB).** Prefer the Store listing for a straightforward installation. You can also download the [5.6.0 Beta 3 GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (`.exe` / `.msi`). Desktop sign-in can connect to a hosted AutoMoto account, while local mode keeps its own chats and workspace on the PC.
+> 🎉 **AutoMoto AI 5.6.0 for Windows:** [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8) (recommended). The Store copy is signed by Microsoft. Advanced: the [v5.6.0 GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0) has direct `.exe` / `.msi` installers, which may show a SmartScreen warning until they are signed. Desktop sign-in can connect to a hosted AutoMoto account, while local mode keeps its own chats and workspace on the PC.
 > ✨ **Beta 3: one smart assistant.** Just say what you need or attach a file: AutoMoto works out the steps and picks the right tools by itself, and shows progress in plain words. [What it can do](docs/CAPABILITIES.md)
 > 🔌 **Offline AI is built in.** Settings → Offline AI downloads a GGUF model and the llama.cpp engine for you. No Ollama install and no Python install. After the download, chat works with no internet. Kimi, Qwen, Llama, Mistral, Gemma, DeepSeek and Phi are in the catalog, and you can import your own `.gguf` file. Full Kimi K2 does not fit a normal PC; the smaller Kimi rows say so. [How](docs/OFFLINE.md)
-> 👉 New here? **[Start here: pick your device](https://ymmiah.github.io/AutoMotoAI/START.html)** · macOS and Linux apps are coming next. Beta means rough edges are possible; the stable version is [v5.5.0](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0).
+> 👉 New here? **[Start here: pick your device](https://ymmiah.github.io/AutoMotoAI/START.html)** · macOS and Linux apps are coming next. The current stable version is [v5.6.0](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0).
 
 <div align="center">
 
@@ -16,7 +16,7 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 
 **New here? 👉 [Step-by-step GUI guide](docs/GUI-GUIDE.md)** · [docs site with copy buttons](https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html)
 
-**🪟 Windows app:** [Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB) · [GitHub Beta 3 installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe`) —
+**🪟 Windows app:** [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8) (recommended) · [advanced: GitHub direct installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0) (`AutoMoto-AI-Setup-5.6.0-Windows-x64.exe`, may show a SmartScreen warning until signed) —
 sign in once and the same chats and files follow you to the app, the web and your phone. [How to](docs/GUI-GUIDE.md#0-the-windows-app)
 
 [![Version](https://img.shields.io/badge/version-5.6.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
@@ -53,9 +53,8 @@ sign in once and the same chats and files follow you to the app, the web and you
 
 > **👉 New? [Start here: pick your device](docs/START.md)** ([on the docs site](https://ymmiah.github.io/AutoMotoAI/START.html))
 > has short steps with pictures for a **Windows PC, Android phone, iPhone, Mac, Linux and VS Code**.
-> **5.6.0 Beta 3** ([pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)) adds the Windows app and one
-> account on every device. **5.5.0** stays the stable release; the scripts below install it unless you add
-> `-Version 5.6.0b3` / `--version 5.6.0b3`.
+> **5.6.0** is the current stable release. On Windows, [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8).
+> The scripts below install the engine; add `-Version 5.6.0` / `--version 5.6.0` to pin that release.
 
 For the scripts: Python 3.10+ and a free AI key ([NVIDIA NIM](https://build.nvidia.com), [Gemini](https://aistudio.google.com/apikey),
 [Groq](https://console.groq.com/keys) or [OpenRouter](https://openrouter.ai/keys)). The installers check the release's
@@ -64,13 +63,13 @@ SHA-256, install into a private virtualenv and create `~/.automoto/.env` for you
 
 | OS | Install | Then |
 |---|---|---|
-| **Windows app** (10/11, 64-bit) | **[Install from the Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB)** (Store listing ID `9N9J7FLSSFG8`), or download the [GitHub Beta 3 installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) directly. | Sign in to your account, or select **Start local mode** ([steps](docs/START.md#a-windows-pc)). Existing Store releases may not yet include the changes on this fix branch. |
+| **Windows app** (10/11, 64-bit) | **[Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)** (recommended, Store ID `9N9J7FLSSFG8`). **Advanced:** [direct installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0) (`.exe` / `.msi`, may show a SmartScreen warning until signed). | Sign in to your account, or select **Start local mode** ([steps](docs/START.md#a-windows-pc)). |
 | **Windows 10/11** (PowerShell) | `winget install -e --id Python.Python.3.12` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `powershell -ExecutionPolicy Bypass -File scripts\install.ps1` | `notepad $env:USERPROFILE\.automoto\.env` → add key · `automoto serve` |
 | **macOS** (Intel / Apple Silicon) | `brew install python@3.12 git` · `git clone https://github.com/ymmiah/AutoMotoAI` · `cd AutoMotoAI` · `./scripts/install.sh` | `open -e ~/.automoto/.env` → add key · `automoto serve` |
 | **Linux** (Ubuntu/Debian, Fedora, Arch…) | `sudo apt install python3 python3-venv git` (or dnf / pacman) · clone · `./scripts/install.sh` | `nano ~/.automoto/.env` → add key · `automoto serve` |
 | **Docker** (any OS) | clone · create `.env` with your key + admin name/password · `docker compose up -d --build` | open <http://127.0.0.1:8765> and sign in |
 | **Host for friends** (1 h/day limits) | Docker or `automoto serve --hosted` behind Cloudflare Tunnel / Caddy | [Admin guide](docs/INSTALL.md#7-host-it-for-other-people) |
-| **VS Code** | `code --install-extension automoto-ai-5.5.0.vsix` (stable, [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest)) or `automoto-ai-5.6.0-beta.3.vsix` ([beta](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)) | start `automoto serve` first ([steps](docs/START.md#d-vs-code)) |
+| **VS Code** | `code --install-extension AutoMoto-AI-5.6.0-VSCode.vsix` ([v5.6.0](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0)) | start `automoto serve` first ([steps](docs/START.md#d-vs-code)) |
 | **Phone / tablet** (Android, iPhone) | open your account server's address in Chrome / Safari, sign in, *Add to Home Screen* (no store app yet) | [steps](docs/START.md#b-phone-or-tablet-android-and-iphone) |
 
 Optional extras: `--system-deps` (`-SystemDeps` on Windows) installs LibreOffice, poppler, 7-Zip and PHP;
@@ -727,7 +726,7 @@ Auth: header `X-AutoMoto-Token: <token>` (from `session.json`) or the browser co
 | v5.4 archives, WordPress, data files | See the [archives status table](#-archives-wordpress-and-data-files) |
 | v5.5 hosted multi-user mode: accounts, sessions + CSRF, per-user quotas and bonus time, admin GUI + CLI, per-user sandboxes, Dockerfile | ✅ Unit-tested (23 tests) and live-tested on the box: an admin and two users, one user ran NIM agent tasks until her 1-minute limit stopped her, the admin gave the other 30 bonus minutes from the Admin page. Docker image built and smoke-tested. Not yet deployed to a public host |
 | Publishing: GitHub Release, Marketplace / Open VSX / PyPI workflow | ✅ Release assets built in CI. Store publishing is wired but waits for your tokens ([docs/PUBLISHING.md](docs/PUBLISHING.md)) |
-| Windows app (v5.6.0-beta.3, **Beta**): Tauri 2, `apps/desktop` — sign-in to an AutoMoto account with revocable device tokens, or Local mode; `.exe` + `.msi`, signed auto-updates | ✅ Built and smoke-tested in CI on windows-latest (silent install, launch, Local mode health, close, uninstall). Sign-in, two devices on one account and device revocation tested by hand on the Linux build. Not code-signed (SmartScreen warns); macOS/Linux builds not released |
+| Windows app (v5.6.0): Tauri 2, `apps/desktop` — sign-in to an AutoMoto account with revocable device tokens, or Local mode; Microsoft Store (recommended) plus GitHub `.exe` + `.msi`, signed auto-updates | ✅ Built and smoke-tested in CI on windows-latest (silent install, launch, Local mode health, close, uninstall). Sign-in, two devices on one account and device revocation tested by hand on the Linux build. Store copy is signed by Microsoft. GitHub installers are unsigned until Azure Artifact Signing is configured ([setup](docs/signing/TRUSTED_SIGNING_SETUP.md)); macOS/Linux builds not released |
 | Mobile app: Flutter for Android and iOS (`apps/mobile`) | 🧱 Scaffold. Still uses the plain-chat API (agent mode on mobile is next). iOS needs Xcode |
 | Browser automation (Playwright tool) | ⏭ Planned. Left out rather than shipped half-working |
 | Remote MCP, streaming tokens, per-routine approval rules | ⏭ Planned |

@@ -11,8 +11,9 @@ The **AutoMoto AI app** is a small native window (Tauri 2, the system WebView2 o
 * **Local mode** — no account: the app starts the AutoMoto engine installed on this PC on `127.0.0.1:8765`, opens
   it, and stops it when the window closes.
 
-Users: download the installer from [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest) — see
-[docs/INSTALL.md → Windows app](../../docs/INSTALL.md#windows-app) and
+Users: [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8) (recommended). Advanced: the
+direct installer on [Releases](https://github.com/ymmiah/AutoMotoAI/releases/latest) may show a SmartScreen
+warning until it is signed — see [docs/INSTALL.md → Windows app](../../docs/INSTALL.md#windows-app) and
 [the GUI guide § 0](../../docs/GUI-GUIDE.md#0-the-windows-app). The Windows build is what CI ships and tests; the
 same code builds on macOS and Linux (`npm run build`) but those builds aren't released or tested in CI.
 
@@ -74,17 +75,20 @@ Development: `npm run dev`. Rust checks: `cd src-tauri && cargo test && cargo cl
 ## CI and releases
 
 `.github/workflows/desktop.yml` (windows-latest) checks that all version numbers agree, runs the Rust tests and
-clippy, builds the `.exe` and `.msi`, then smoke-tests **each** installer on the runner: silent install (`/S`,
+clippy, builds the `.exe` and `.msi`, optionally Authenticode-signs them with Azure Artifact Signing when those
+secrets are set (skipped with a notice otherwise; the Store MSIX is never signed here), writes Tauri updater
+signatures after that, then smoke-tests **each** installer on the runner: silent install (`/S`,
 `msiexec /qn`), launch on the sign-in screen (screenshot), `--local` starts the engine and `/api/health` answers,
 closing the window stops the engine, silent uninstall. Installers and screenshots are uploaded as artifacts. On a
 `v*` tag it also writes the signed `latest.json` and attaches everything to that tag's GitHub Release (created as a
 draft if it doesn't exist yet).
 
 Signing, the Microsoft Store and winget: [docs/WINDOWS-DISTRIBUTION.md](../../docs/WINDOWS-DISTRIBUTION.md).
+Azure Artifact Signing setup: [docs/signing/TRUSTED_SIGNING_SETUP.md](../../docs/signing/TRUSTED_SIGNING_SETUP.md).
 
 ## Limits (honest list)
 
-* Not Authenticode-signed yet: SmartScreen warns on first run (*More info → Run anyway*).
+* The Microsoft Store copy is signed by Microsoft. The GitHub `.exe`/`.msi` stay unsigned, and may show a SmartScreen warning, until Azure Artifact Signing is configured.
 * Local mode needs the engine installed separately (one click, but it downloads Python packages).
 * The app shows the server's own web GUI; there is no offline copy of account chats.
 * macOS and Linux builds compile but are not released or tested in CI.

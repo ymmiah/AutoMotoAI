@@ -35,6 +35,9 @@ def test_table_and_checksums():
     files.append({"name": "AutoMoto-AI-Setup-5.6.0-beta.4-Windows-x64.exe.sig", "size": 1, "digest": "cd" * 32})
     t = rn.table("o/r", "v5.6.0-beta.4", files)
     assert t.startswith("## Which file do I need?")
+    assert "[Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)" in t
+    assert t.index("Get it from Microsoft") < t.index("Advanced")
+    assert "May show a SmartScreen warning until signed." in t
     assert "releases/download/v5.6.0-beta.4/AutoMoto-AI-Setup-5.6.0-beta.4-Windows-x64.exe" in t
     assert "Windows-x64.msi" in t and "VSCode.vsix" in t and "pip install" in t and "START.html" in t
     c = rn.checksums(files)
@@ -44,7 +47,9 @@ def test_table_and_checksums():
 
 def test_table_without_windows_app():
     t = rn.table("o/r", "v5.5.0", [{"name": "automoto_ai-5.5.0-py3-none-any.whl", "size": 1, "digest": ""}])
+    assert "[Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)" in t
     assert "no Windows app in this version" in t
+    assert "Advanced" not in t
 
 
 def test_changelog_section_found():

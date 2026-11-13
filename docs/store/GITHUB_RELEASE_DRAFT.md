@@ -8,19 +8,20 @@ Paste this into the GitHub release **after** you tag `v5.6.0`. Do not publish it
 
 AutoMoto AI 5.6.0 is the stable release after 5.6.0-beta.6.
 
-The Windows app is on the Microsoft Store: https://apps.microsoft.com/detail/9n9j7flssfg8
-(Store ID `9N9J7FLSSFG8`, identity `ymmiah.AutoMotoAI`). The Store package version is `5.6.99.0`.
-Upload of that package is a separate Partner Center step: `docs/store/RELEASE_STEPS.md`.
-
 ### Install
 
-- Windows setup: `AutoMoto-AI-Setup-5.6.0-Windows-x64.exe`
-- Windows MSI: `AutoMoto-AI-5.6.0-Windows-x64.msi`
-- Store upload (not a normal installer): `AutoMoto-AI-5.6.0-Windows-x64.msixupload`
+- **Windows (recommended):** [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)
+  (Store ID `9N9J7FLSSFG8`, identity `ymmiah.AutoMotoAI`). The Store package version is `5.6.99.0`.
+  Microsoft signs this copy, so Windows does not show an unknown-publisher warning.
+  Upload of that package is a separate Partner Center step: `docs/store/RELEASE_STEPS.md`.
+- **Advanced:** direct installer (may show a SmartScreen warning until signed):
+  `AutoMoto-AI-Setup-5.6.0-Windows-x64.exe` (per-user, no admin) or
+  `AutoMoto-AI-5.6.0-Windows-x64.msi` (IT / all users).
+- Store upload package (not a normal installer): `AutoMoto-AI-5.6.0-Windows-x64.msixupload`
 - Python wheel: `automoto_ai-5.6.0-py3-none-any.whl`
-- VS Code extension: `automoto-ai-5.6.0.vsix`
+- VS Code extension: `AutoMoto-AI-5.6.0-VSCode.vsix`
 
-Check `SHA256SUMS.txt` before you run an installer.
+Check `SHA256SUMS.txt` before you run a direct installer.
 
 ### What changed
 

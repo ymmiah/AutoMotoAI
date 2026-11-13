@@ -1,9 +1,8 @@
 # Start here: pick your device
 
-> **⚠️ Beta.** This guide is for **AutoMoto AI 5.6.0 Beta 3**, a test version
-> ([download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)). Things may still change or break.
-> Want the stable version instead? Use **5.5.0** ([release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0))
-> and the [install guide](INSTALL.md). 5.5.0 has no Windows app.
+> This guide is for **AutoMoto AI 5.6.0**, the current stable release
+> ([GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0)).
+> On Windows, the recommended install is the [Microsoft Store](https://apps.microsoft.com/detail/9N9J7FLSSFG8).
 
 Every code box has a **copy button** in its top-right corner. Click it, then paste with **Ctrl+V** (Mac: **⌘+V**).
 
@@ -34,41 +33,45 @@ Every code box has a **copy button** in its top-right corner. Click it, then pas
 
 You need Windows 10 or 11 (64-bit) and the internet.
 
-### A1. Download the app
+### A1. Install from the Microsoft Store (recommended)
 
-1. Open the **[5.6.0 Beta 3 download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)**.
+1. Open **[Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)**
+   (Store listing [AutoMoto AI](https://apps.microsoft.com/detail/9N9J7FLSSFG8), ID `9N9J7FLSSFG8`).
+2. Click **Get** or **Install**.
+3. Open **AutoMoto AI** from the Start menu. The window title says **AutoMoto AI**.
+
+Microsoft signs the Store copy, so Windows does not show an unknown-publisher warning. The Store also updates
+the app for you.
+
+### A2. Advanced: direct installer (may show a SmartScreen warning until signed)
+
+Use this only if you cannot use the Microsoft Store.
+
+1. Open the **[v5.6.0 GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0)**.
 2. Scroll down to **Assets**.
-3. Click **`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe`** to download it. This is the one most people want. It installs just for you
-   and doesn't need an admin password.
+3. Click **`AutoMoto-AI-Setup-5.6.0-Windows-x64.exe`** to download it. It installs just for you and doesn't
+   need an admin password.
 
-   *(The other installer, `AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi`, is for school or work IT and needs admin rights.)*
+   *(The other installer, `AutoMoto-AI-5.6.0-Windows-x64.msi`, is for school or work IT and needs admin rights.)*
 
    If **Edge** says the file *isn't commonly downloaded*, click **⋯ → Keep → Show more → Keep anyway**.
-   New programs get this message until enough people have downloaded them.
 
 4. **Optional safety check:** make sure the download wasn't changed on the way. Open **PowerShell** (Start menu → type
    *PowerShell* → open it) and paste:
 
    ```powershell
-   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe").Hash
+   (Get-FileHash "$HOME\Downloads\AutoMoto-AI-Setup-5.6.0-Windows-x64.exe").Hash
    ```
 
-   It should print `8DD3298AFF2F00D486B5C47FF12B1E764D40FDBD555BEBA2CC53A52EB6656DCA`
-   (the same as in `SHA256SUMS.txt` on the download page).
+   Compare the result with the line for that file in `SHA256SUMS.txt` on the same release page.
 
-### A2. Install it (and the blue "Windows protected your PC" box)
-
-1. Double-click the file you downloaded (in your **Downloads** folder).
-2. A blue box may say **"Windows protected your PC"**. This is expected:
-   * Click **More info**.
-   * Click **Run anyway**.
-
-   **Why does it say that?** Windows shows this for programs that aren't **code-signed** yet. Signing costs money
-   or needs an approval that this free beta doesn't have yet. It doesn't mean a virus was found. If you're not sure,
-   do the safety check in A1 first, or ask an adult or your IT person.
-3. The installer opens. Click **Next** / **Install**, then **Finish**. It takes a few seconds. If the PC doesn't
+5. Double-click the file in your **Downloads** folder. A blue box may say **"Windows protected your PC"**.
+   That can happen for a direct GitHub installer until it is Authenticode-signed. It does not mean a virus was
+   found. Click **More info**, then **Run anyway**. If you're not sure, use the Store instead, or do the safety
+   check above, or ask an adult or your IT person. ([Why](WINDOWS-DISTRIBUTION.md).)
+6. The installer opens. Click **Next** / **Install**, then **Finish**. It takes a few seconds. If the PC doesn't
    have **WebView2** (Windows 11 always has it), the installer downloads it for you.
-4. Open **AutoMoto AI** from the Start menu. The window title says **AutoMoto AI**.
+7. Open **AutoMoto AI** from the Start menu.
 
 ![The sign-in screen on Windows](gui-guide/66-windows-sign-in.png)
 
@@ -310,12 +313,12 @@ sign in to a shared account server.
 
 1. Install AutoMoto on the computer first: Windows → [A5](#a5-local-mode-no-account-just-this-pc) Steps 1–3 (or
    [INSTALL.md](INSTALL.md#3-windows-1011)), Mac/Linux → [C](#c-mac-or-linux).
-2. Download **`automoto-ai-5.6.0-beta.3.vsix`** from the
-   [beta download page](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (Assets).
+2. Download **`AutoMoto-AI-5.6.0-VSCode.vsix`** from the
+   [v5.6.0 release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0) (Assets).
 3. Install it. In a terminal, in your **Downloads** folder:
 
    ```bash
-   code --install-extension automoto-ai-5.6.0-beta.3.vsix
+   code --install-extension AutoMoto-AI-5.6.0-VSCode.vsix
    ```
 
    (Or in VS Code: **Extensions → ⋯ → Install from VSIX…** and pick the file.)
@@ -415,7 +418,7 @@ keep an empty box.
 
 | Problem | Fix |
 |---|---|
-| "Windows protected your PC" | **More info → Run anyway** ([why](#a2-install-it-and-the-blue-windows-protected-your-pc-box)). |
+| "Windows protected your PC" (GitHub `.exe`/`.msi` only) | Prefer the [Microsoft Store](https://apps.microsoft.com/detail/9N9J7FLSSFG8). Or **More info → Run anyway** ([why](#a2-advanced-direct-installer-may-show-a-smartscreen-warning-until-signed)). |
 | *"Use https:// - your password and device key must not travel unencrypted"* | The address starts with `http://`. Use the `https://` address from your admin (try it in a browser first). |
 | *"Network error …"* or *"the server answered …"* | Check the address and your internet. Open the address in a browser: you should see the AutoMoto sign-in page. |
 | *"wrong username or password"* | Check Caps Lock. Ask your admin to reset it (`automoto admin passwd <name>`). |

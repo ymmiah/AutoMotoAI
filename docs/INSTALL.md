@@ -1,12 +1,13 @@
 # Install, run and deploy AutoMoto AI — every OS
 
 This guide is for everyone, including first-timers. Copy the commands for **your** computer, top to bottom.
-Everything here is free. Latest **stable** release: **v5.5.0** ([downloads](https://github.com/ymmiah/AutoMotoAI/releases/latest)).
+Everything here is free. Latest **stable** release: **v5.6.0** ([downloads](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0)).
 
-> **Beta: 5.6.0 Beta 3** ([pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)) adds the
-> **Windows app** and **one account on every device**. New here? The simplest steps per device (Windows PC, phone,
-> Mac/Linux, VS Code) are in **[Start here: pick your device](START.md)**. To install the beta engine with the
-> scripts below, add `-Version 5.6.0b3` (Windows) or `--version 5.6.0b3` (macOS/Linux). Without it you get 5.5.0.
+> **Windows:** the recommended install is the [Microsoft Store](https://apps.microsoft.com/detail/9N9J7FLSSFG8)
+> ([Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)). New here? The simplest steps per
+> device (Windows PC, phone, Mac/Linux, VS Code) are in **[Start here: pick your device](START.md)**.
+> The scripts below install the engine (command line and web GUI). Use `-Version 5.6.0` / `--version 5.6.0`
+> to pin that release; without a version they follow the latest stable tag.
 
 **Contents:** [Pick a way](#1-pick-a-way) · [Get a free AI key](#2-get-a-free-ai-key) · [Windows](#3-windows-1011) ·
 [macOS](#4-macos-intel-and-apple-silicon) · [Linux](#5-linux-ubuntu--debian-fedora-arch-and-others) ·
@@ -20,7 +21,7 @@ Everything here is free. Latest **stable** release: **v5.5.0** ([downloads](http
 
 | You want… | Use | Time |
 |---|---|---|
-| The **Windows app (Beta)**: sign in to an AutoMoto account, or Local mode | The beta installer from Releases ([section 3](#windows-app)) | ~2 min |
+| The **Windows app**: sign in to an AutoMoto account, or Local mode | [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8), or the advanced GitHub installer ([section 3](#windows-app)) | ~2 min |
 | AutoMoto for **yourself** on Windows / macOS / Linux | The **installer script** for your OS (sections 3–5) | ~5 min |
 | An isolated setup, or the same steps on every OS | **Docker Compose** (section 6) | ~10 min |
 | Friends / classmates use it, with a **1-hour daily limit** | **Hosted mode** (section 7) | ~20 min |
@@ -59,36 +60,44 @@ Never share a key or paste it into a chat, an issue or a Git commit.
 
 ### Windows app
 
-**Beta** (5.6.0 Beta 3). The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an AutoMoto account.
+The easiest way on Windows 10/11 (64-bit). **No Python needed** to sign in to an AutoMoto account.
 
-1. Download from the [5.6.0 Beta 3 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3):
-   * `AutoMoto-AI_5.6.0-beta.3_x64-setup.exe` — installs for you only, no admin (recommended), or
-   * `AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi` — installs for all users (admin; good for school/work PCs and silent installs).
-2. Optional — check it against `SHA256SUMS.txt` from the same release:
+**Recommended — Microsoft Store.** Open [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)
+and click **Get** / **Install**. Microsoft signs this copy, so Windows does not show an unknown-publisher
+warning. The Store updates it for you.
 
-   ```powershell
-   (Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe").Hash
-   ```
+**Advanced — direct installer.** Only if you cannot use the Store. Download from the
+[v5.6.0 GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0):
 
-3. Run it. The app isn't code-signed yet, so SmartScreen says *"Windows protected your PC"* → **More info → Run anyway**
-   ([why](WINDOWS-DISTRIBUTION.md)). WebView2 is installed automatically if the PC doesn't have it (Windows 11 does).
-4. **Sign in** with the server address, username and password from your admin — or click **Start local mode**.
+* `AutoMoto-AI-Setup-5.6.0-Windows-x64.exe` — installs for you only, no admin, or
+* `AutoMoto-AI-5.6.0-Windows-x64.msi` — installs for all users (admin; good for school/work PCs and silent installs).
+
+These files may show a SmartScreen warning until they are Authenticode-signed
+([why](WINDOWS-DISTRIBUTION.md)). If they do: **More info → Run anyway**. Optional — check the download
+against `SHA256SUMS.txt` from the same release:
+
+```powershell
+(Get-FileHash "$HOME\Downloads\AutoMoto-AI-Setup-5.6.0-Windows-x64.exe").Hash
+```
+
+WebView2 is installed automatically if the PC doesn't have it (Windows 11 does). Then **Sign in** with the
+server address, username and password from your admin — or click **Start local mode**.
 
 Silent installs (IT, scripts):
 
 ```powershell
-.\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe /S                                       # per-user, no admin
-msiexec /i AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi /qn /norestart                  # all users, admin PowerShell
+.\AutoMoto-AI-Setup-5.6.0-Windows-x64.exe /S                                       # per-user, no admin
+msiexec /i AutoMoto-AI-5.6.0-Windows-x64.msi /qn /norestart                        # all users, admin PowerShell
 ```
 
-**Local mode** runs AutoMoto on this PC without an account. It needs the engine from step 2 below; the app's
+**Local mode** runs AutoMoto on this PC without an account. It needs the engine from the next section; the app's
 **Install the local engine** button runs the same official installer for you (it ships inside the app) and installs
-the matching beta engine (`-Version 5.6.0b3`). The app
+the matching engine (`-Version 5.6.0`). The app
 starts the engine when you pick Local mode and stops it when you close the window.
 
-**Updates:** the beta app checks the beta channel on start and asks before updating; updates are signature-checked.
-**Uninstall:** *Settings → Apps → AutoMoto AI → Uninstall* (your account and its chats stay on the server; Local mode
-data stays in `%USERPROFILE%\.automoto`).
+**Updates:** the Store copy is updated by the Store. The GitHub-installer copy checks for signed updates and asks
+before installing. **Uninstall:** *Settings → Apps → AutoMoto AI → Uninstall* (your account and its chats stay on
+the server; Local mode data stays in `%USERPROFILE%\.automoto`).
 
 Step-by-step with screenshots: [GUI guide § 0](GUI-GUIDE.md#0-the-windows-app).
 The rest of this section installs the **engine** (the command line, the web GUI and Local mode).

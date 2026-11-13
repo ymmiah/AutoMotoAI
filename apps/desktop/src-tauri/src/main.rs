@@ -26,15 +26,16 @@ use url::Url;
 
 /// Default account server baked in at build time (repository variable AUTOMOTO_DEFAULT_SERVER in CI).
 const DEFAULT_SERVER: Option<&str> = option_env!("AUTOMOTO_DEFAULT_SERVER");
-/// The Windows app is a beta while the account server, engine and web GUI are stable releases.
 const CHANNEL: &str = "Release";
 const TITLE: &str = "AutoMoto AI";
 const GUIDE: &str = "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html";
+const STORE: &str = "https://apps.microsoft.com/detail/9N9J7FLSSFG8";
 const LINKS: &[(&str, &str)] = &[
     ("guide", GUIDE),
     ("app-guide", "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html#0-the-windows-app"),
     ("install", "https://ymmiah.github.io/AutoMotoAI/INSTALL.html#windows-app"),
     ("hosting", "https://ymmiah.github.io/AutoMotoAI/HOSTING.html"),
+    ("store", STORE),
     ("releases", "https://github.com/ymmiah/AutoMotoAI/releases/latest"),
 ];
 
@@ -307,7 +308,7 @@ fn engine_version(app_version: &str) -> String {
 #[tauri::command]
 fn chrome_action(app: AppHandle, action: String) -> Result<(), String> {
     match action.as_str() {
-        "home" | "reload" | "updates" | "signout" | "quit" | "guide" | "log" | "about" => {
+        "home" | "reload" | "updates" | "signout" | "quit" | "guide" | "store" | "releases" | "log" | "about" => {
             on_menu(&app, &action);
             Ok(())
         }
@@ -415,6 +416,8 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     ])?;
     let help = Submenu::with_items(app, "Help", true, &[
         &MenuItem::with_id(app, "guide", "Step-by-step guide", true, Some("F1"))?,
+        &MenuItem::with_id(app, "store", "Get it from Microsoft", true, None::<&str>)?,
+        &MenuItem::with_id(app, "releases", "Advanced: GitHub installers", true, None::<&str>)?,
         &MenuItem::with_id(app, "log", "Open the local engine log", true, None::<&str>)?,
         &MenuItem::with_id(app, "about", "About AutoMoto AI", true, None::<&str>)?,
     ])?;
@@ -454,6 +457,11 @@ fn on_menu(app: &AppHandle, id: &str) {
             if let Ok(d) = app.path().app_log_dir() {
                 let _ = std::fs::create_dir_all(&d);
                 let _ = app.opener().open_path(d.display().to_string(), None::<&str>);
+            }
+        }
+        "store" | "releases" => {
+            if let Some((_, url)) = LINKS.iter().find(|(k, _)| *k == id) {
+                let _ = app.opener().open_url(*url, None::<&str>);
             }
         }
         "about" => {
