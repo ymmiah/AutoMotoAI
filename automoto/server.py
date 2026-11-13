@@ -195,6 +195,8 @@ from automoto import developer_beam
 app.include_router(developer_beam.router)  # V30 inert Elixir Erlang Gleam and SHA-pinned fixed BEAM tool tasks
 from automoto import developer_logic
 app.include_router(developer_logic.router)  # V31 static Haskell OCaml Lisp Scheme Prolog and approved local fixture tests
+from automoto import developer_legacy
+app.include_router(developer_legacy.router)  # V32 inert legacy source and approved compilation
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits
