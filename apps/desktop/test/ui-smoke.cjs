@@ -2939,6 +2939,30 @@ let browser;
     /Developer Studio V32 Fortran, COBOL, Ada, Pascal, Assembly/);
   await page.screenshot({path:path.join(output,'developer-studio-v32-legacy-specialist.png')});
 
+  // V33: workbench layout and one-prompt Agent UI are present without execution.
+  assert.equal(await page.locator('.ds-v33-title').count(),1);
+  assert.equal(await page.locator('#dsV33AgentPanel').count(),1);
+  assert.equal(await page.locator('#dsV33Send').isDisabled(),true);
+  assert.equal(await page.locator('#dsV33Stop').isDisabled(),true);
+  await page.locator('#dsV33Tools').click();
+  assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),true);
+  assert.equal(await page.locator('#dsWasmInspect').count(),1);
+  writeFileSync(path.join(devProject,'test','v33_fixture.wat'),
+    '(module (func (export "answer") (result i32) i32.const 42))');
+  writeFileSync(path.join(devProject,'test','v33_fixture.wasm'),
+    Buffer.from([0,97,115,109,1,0,0,0]));
+  await page.locator('#dsWasmInspect').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsWasmStatus')?.textContent?.includes('Inspection complete'));
+  const wasmText=await page.locator('#dsWasmResults').innerText();
+  assert.match(wasmText,/v33_fixture.wat/);
+  assert.match(wasmText,/v33_fixture.wasm/);
+  assert.match(wasmText,/"runtime_started": false/);
+  assert.match(wasmText,/"deployment_started": false/);
+  await page.locator('#dsV33CloseTools').click();
+  assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),false);
+  await page.screenshot({path:path.join(output,'developer-studio-v33-workbench.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
