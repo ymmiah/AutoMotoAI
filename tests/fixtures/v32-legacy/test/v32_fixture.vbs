@@ -1,0 +1,1 @@
+WScript.Echo "V32_VBSCRIPT_SAMPLE 42"

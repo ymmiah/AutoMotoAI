@@ -1,0 +1,70 @@
+name: Developer Studio V32 legacy and specialist systems acceptance
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_legacy.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-legacy.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_legacy.py"
+      - "tests/fixtures/v32-legacy/**"
+      - "docs/DEVELOPER-STUDIO-V32.md"
+      - ".github/workflows/developer-legacy-v32.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-static:
+    name: V32 static evidence and security (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Source, provenance, trust, link and compile policy tests
+        run: |
+          python -m compileall -q automoto/developer_legacy.py tests/test_developer_legacy.py
+          python -m pytest -q -rs tests/test_developer_legacy.py
+
+  legacy-real-linux:
+    name: Real Fortran COBOL Ada Pascal NASM compile acceptance (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install compilers on disposable CI runner only
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gfortran gnucobol gnat fpc nasm
+      - name: Compile five real sample languages without executing binaries
+        working-directory: tests/fixtures/v32-legacy
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/v32-compiler-acceptance
+          gfortran -c test/v32_fixture.f90 -o /tmp/v32-compiler-acceptance/fortran.o
+          cobc -c test/v32_fixture.cob -o /tmp/v32-compiler-acceptance/cobol.o
+          (cd /tmp/v32-compiler-acceptance && gnatmake -c "$GITHUB_WORKSPACE/tests/fixtures/v32-legacy/test/v32_fixture.adb")
+          (cd /tmp/v32-compiler-acceptance && fpc -Cn "$GITHUB_WORKSPACE/tests/fixtures/v32-legacy/test/v32_fixture.pas")
+          nasm -f elf64 test/v32_fixture.asm -o /tmp/v32-compiler-acceptance/assembly.o
+          test -s /tmp/v32-compiler-acceptance/fortran.o
+          test -s /tmp/v32-compiler-acceptance/cobol.o
+          test -s /tmp/v32-compiler-acceptance/assembly.o
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: SHA-pinned approved real compiler API
+        env:
+          AUTOMOTO_V32_REAL_TOOL_TESTS: "1"
+        run: python -m pytest -q -rs tests/test_developer_legacy.py
