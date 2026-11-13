@@ -153,6 +153,7 @@
         if (!item) return;
         var action = item.getAttribute("data-action");
         closeMenu(false);
+        if (action === "guide" && document.getElementById("view")) { location.hash = "#/help"; return; }
         call("chrome_action", { action: action });
       });
     }

@@ -1,136 +1,69 @@
-# Offline AI: use AutoMoto with no internet and no key
+# Offline AI: a model on this computer, with nothing else to install
 
-> **Beta.** Offline AI is in the desktop build from 5.6.0-beta.5 onward. If Settings has no **Offline AI** card, update the app.
+Open **Settings → Offline AI** at any time. AutoMoto downloads a model and a small inference
+engine (llama.cpp) into its own folder. You do not install Ollama, Python, or llama.cpp yourself.
 
-AutoMoto can use a free AI model that runs **on your own computer**. You don't need an AI key.
-Once the model is downloaded you don't need the internet either, and your chats and files never
-leave your computer.
+The first download needs the internet. After the model and the engine are on the computer,
+chat works with the network off. Prompts and files for that chat stay on the PC.
 
-It uses **[Ollama](https://ollama.com)**, a free local inference runtime. AutoMoto needs that runtime installed on the PC (a one-time dependency), but it can start an installed copy and download models through Settings. No paid API or cloud account is required for local inference.
+Phones can open the app, but they do not run these models. The model runs on the computer
+where AutoMoto is installed.
 
-## What you need
+## What you do
 
-* A Windows, Mac or Linux computer (phones can't do this).
-* At least **8 GB of memory** for a good experience. 4 GB works with a tiny model.
-* About **2–5 GB of free disk space** for the model.
-* The internet **once**, to download Ollama and the model.
+1. Open **Settings → Offline AI**.
+2. Read the memory and disk line on each model. A row marked **Won't fit** explains why this
+   computer cannot run it. Pick a row that fits, or the one marked **Best fit**.
+3. Click **Download**. The first time this also fetches the engine. Leave the app open until
+   the row says the file is ready.
+4. Click **Use**, then **Test**. Test sends one short prompt to the model on this computer.
+5. Optional: tick **Offline only**. Cloud models and web search stay off until you turn it off
+   or click **Use cloud providers**.
 
-Local models are smaller than online ones, so they are a bit **slower and less clever**. They
-are fine for everyday chats, writing, summing up your files and simple tasks.
+You can **Delete** a downloaded model. **Import** copies a `.gguf` file you already have, or
+you can upload one. AutoMoto checks that the file starts with the GGUF marker. It does not
+promise that a custom file will fit in memory.
 
-## Set it up in 4 steps
+## Which model
 
-**1. Install Ollama.** Go to [ollama.com/download](https://ollama.com/download), download it
-for your computer and install it like any other app.
+Full **Kimi K2** is about a trillion parameters. Even the Q4 copy is about **624 GB** and is
+split into many files. It is listed so that size is visible, and there is no download button
+for it.
 
-* **Windows / Mac:** open the installer and click through. Ollama then runs in the background
-  (look for the llama icon by the clock or in the menu bar).
-* **Linux:** copy this into a terminal:
+These are the sizes of the Q4 copies in the catalog. A graphics card is not required. The
+built-in engine uses the CPU, so larger models answer more slowly.
 
-  ```bash
-  curl -fsSL https://ollama.com/install.sh | sh
-  ```
+| Model | Disk | Memory | Notes |
+|---|---|---|---|
+| Kimi-VL A3B Thinking | about 10 GB | 16 GB, 24 GB comfortable | Moonshot's smaller open model. Text only in this download. |
+| Kimi K2 thinking distill, 32B | about 20 GB | 32 GB | A community distill, not the original trillion-parameter weights. |
+| Qwen 2.5 0.5B / 1.5B / 3B / 7B | 0.4–4.7 GB | 2–16 GB | 3B is the everyday laptop pick. 7B is tight on 8 GB. |
+| Llama 3.2 1B / 3B, Llama 3.1 8B | 0.8–4.9 GB | 4–16 GB | Llama community licence. |
+| Mistral 7B Instruct v0.3 | about 4.4 GB | 8 GB, 16 GB comfortable | Apache-2.0. |
+| Gemma 3 1B / 4B | 0.8–3.3 GB | 4–12 GB | Short chats. Tool steps use a slower text format. Gemma terms. |
+| DeepSeek R1 distill 1.5B / 8B | 1.1–4.9 GB | 4–16 GB | Reasoning models. Slower answers. MIT. |
+| Phi-3.5 mini / Phi-4 mini | about 2.5 GB | 6–8 GB | MIT. |
 
-**2. Open AutoMoto, then go to Settings → Offline AI (on this computer).**
-It checks your computer and shows recommended models **and models already downloaded**. If Ollama is installed but not running, click **Start local AI**. Choose a model marked **Recommended**, or download another supported Ollama model by name.
+If this computer does not have enough memory, the row stays disabled and says how much it
+needs. If the disk is too full, the download stays disabled and says how much free space is missing.
 
-<img src="gui-offline-ai.png" alt="Settings, Offline AI card: Ollama is running, Qwen 2.5 3B is marked Best for this computer with a Use this button, other models have Download buttons, and an Offline mode tick box" width="720">
+## Optional: Ollama
 
-**3. Click Download** next to a model. The size and time depend on the model and connection. After downloading, click **Use model**, then **Test** for a small real inference check. You can choose another installed model later without downloading it again.
+If Ollama is already installed, **Settings → Offline AI → Already using Ollama** can start it
+and keep using an Ollama model. New setups do not need it.
 
-**4. (Optional) Turn on Offline mode.** Tick **Offline mode** on the same card. Now AutoMoto:
+A separate OpenAI-compatible server on this computer still works with `LOCAL_LLM_URL`
+(for example `http://127.0.0.1:8080/v1`). AutoMoto will not call a server on the public internet.
 
-* uses **only** the AI on your computer (never an online AI, even if you added keys), and
-* switches off everything that needs the internet: web search, opening web pages,
-  downloading files, online services and connectors.
-
-Untick it or click **Use cloud AI / server providers** to return to available cloud models. If `AUTOMOTO_OFFLINE=1` is defined in the environment, remove or change that server setting first; the UI cannot override it.
-
-**iPhone apps.** Creating a project from a description or a ZIP you already have does not need the internet. Building still needs the Xcode file you downloaded earlier and the iPhone tools on this computer. Sending the app to Apple is switched off until you leave Offline mode.
-
-That's it. Start a new chat and ask something.
-
-## Which model should I pick?
-
-AutoMoto picks for you (Settings marks it **Recommended**). If the model you picked isn't downloaded, it uses the best one you *do* have instead of failing, and it **says so**. When that substitute is weaker, Settings shows a warning: long tasks will be less reliable until you download the recommended model. It never quietly pretends a tiny model is as capable as the one you chose, and Offline mode never falls through to a cloud model.
-
-A computer with about 4 GB of memory is marked **Limited**. It can chat and do short tasks. It is not as reliable as a cloud assistant on long, multi-step jobs. With 8 GB or more you get an everyday model; a strong computer gets the closest free local model that should still stay responsive.
-
-| Your computer | Good model | Download |
-|---|---|---|
-| 4 GB memory | `qwen2.5:1.5b` or `qwen3.5:0.8b` (Limited) | 1–1.3 GB |
-| 8 GB memory (most laptops) | `qwen2.5:3b` (fastest) or `llama3.2:3b` | About 2 GB |
-| 16 GB memory, or a graphics card with 6 GB | `qwen3.5:4b` (reads images too). A 7B model also fits but is slower on CPU | About 4 GB |
-| A graphics card with 8 GB | `qwen3:8b` (stronger tool use) | About 5 GB |
-| 32 GB memory, a graphics card with 12 GB+, or a 16 GB Mac | `qwen3.5:9b`, `gemma4:12b` or `deepseek-r1:8b` | 5–8 GB |
-| A graphics card with 16–24 GB | `gpt-oss:20b` or `qwen3.5:27b` | 14–20 GB |
-
-Qwen, Llama, Mistral, Gemma **4**, DeepSeek R1 and gpt-oss can call AutoMoto's tools directly. **Gemma 3** can't
-(Ollama lists no tool calling for it), so AutoMoto uses its slower text protocol with it automatically. You can
-also type any other Ollama model name into **Download by name**.
-
-**Thinking models** (Qwen 3 / 3.5, DeepSeek R1, gpt-oss) normally "think" for a long time before each step, which
-is very slow on a laptop CPU. AutoMoto turns thinking off (gpt-oss: down to *low*). Set `LOCAL_AI_THINK=1` to
-let them think.
-
-**Context window:** Ollama's own default (2–4 thousand tokens on most PCs) is smaller than AutoMoto's
-instructions and tool list, which made small models "forget" how to work. AutoMoto asks for **8,192 tokens**
-on a normal computer, and **16,384** when you have about 24 GB of memory, 8 GB of graphics memory, or a 16 GB
-Apple chip, so a multi-step task can keep its instructions and tool results. Set `LOCAL_AI_CONTEXT` to override
-(never more than the model supports). Tool calls use a low temperature so small models follow the schema.
-Thinking stays off unless you set `LOCAL_AI_THINK=1`.
-
-**How it stays on task:** with a local model, AutoMoto adds a short set of operating rules (one tool at a time,
-don't claim a file is done before a tool result says so, don't invent a web search while Offline mode is on).
-If the model says the work is finished before any tool has run, AutoMoto asks it to call the tool. Models that
-write the call as JSON in the reply, or prefix the name with `functions.`, are still run.
-
-## The same thing from the command line
-
-```bash
-automoto local                    # what fits this computer, and what Ollama has
-automoto local pull qwen2.5:3b    # download it and start using it
-automoto local offline            # Offline mode on   (automoto local online = off)
-automoto local off                # stop using Ollama
-```
-
-Or in your `.env` file:
-
-```bash
-OLLAMA_MODEL=qwen2.5:3b     # use this Ollama model
-AUTOMOTO_OFFLINE=1          # Offline mode
-# OLLAMA_HOST=http://127.0.0.1:11434   # only if Ollama runs somewhere else on your network
-```
-
-## Other local AI apps (llama.cpp, LM Studio, Jan…)
-
-Any app that offers an **OpenAI-compatible server** on your computer works too:
-
-```bash
-LOCAL_LLM_URL=http://127.0.0.1:8080/v1   # llama.cpp `llama-server` (LM Studio: http://127.0.0.1:1234/v1)
-LOCAL_LLM_MODEL=qwen2.5-3b-instruct       # the model name that app shows
-```
-
-For safety, AutoMoto only talks to local servers on **your computer or your home network**
-(addresses like `127.0.0.1`, `localhost` or `192.168.x.x`), never a server on the internet.
-
-## Something's not working?
+## Something's not working
 
 | What you see | What to do |
 |---|---|
-| "Ollama isn't running" | Click **Start local AI** if installed; otherwise install from [ollama.com/download](https://ollama.com/download). |
-| The Download button is greyed out | Start Ollama locally first. Network access is needed to download a new model, but not to use a downloaded model. |
-| "Offline mode is on, but no AI is set up" | Download a model in Settings → Offline AI, or untick Offline mode. |
-| "… is not downloaded on this computer yet" | Download it in Settings → Offline AI, or pick one with **Use model**. It works straight after the download finishes. |
-| "Ollama isn't running" in a chat | AutoMoto starts an installed Ollama by itself once; if that fails, click **Start local AI** or open Ollama from the Start menu. |
-| "timed out" | The model is too big for this computer. Pick a smaller one, or raise `LOCAL_AI_TIMEOUT` (seconds, default 600). |
-| Answers are very slow | Pick a smaller model (`qwen2.5:3b` or `qwen2.5:1.5b`). Close big apps. The first answer is always slowest while the model loads; **Test** loads it ahead of time. |
-| The Windows app has no **Offline AI** card | Your local engine is older than this feature. Update the app, then click **Install the local engine** again to update the engine too. |
-| It gives up halfway through a long task | Small models find long tasks hard. Split it into smaller steps, or use a bigger model. |
-| It says it can't search the web | That's Offline mode. Untick it if you want web search. |
+| Won't fit | Pick a smaller model. The text names the memory this computer has and the memory the model needs. |
+| Download stays off | Free some disk space, or pick a smaller file. |
+| The engine did not start | The model may be too large, or this CPU type has no published engine build. The page says which. |
+| Test sits there | The first load is the slow one. A smaller model finishes sooner. |
+| Offline only, and chat says nothing is set up | Download a model and press Use, or turn Offline only off. |
+| A studio review still mentions Ollama | That older review path uses Ollama when you have not selected a built-in model. Select one under Offline AI and try the chat. |
 
-**Switch between local PC mode and cloud/server accounts:** in the new Windows desktop build, use the top-bar **Local / Server** link or the app menu **Switch Local / Cloud / Server**. This returns to the mode-choice screen; it does not merge your local and hosted chat history automatically.
-
-**Microsoft Store:** [AutoMoto AI Windows listing](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB). Store releases may lag behind source changes.
-
-More help: [Start here](START.md) · [Install guide](INSTALL.md)
+More: [Start here](START.md) · [Help in the app](GUI-GUIDE.md) · [Store release steps](store/RELEASE_STEPS.md)

@@ -39,6 +39,7 @@ SERVER_COMMANDS = {
     "javascript": ("typescript-language-server", "--stdio"),
     "rust": ("rust-analyzer",),
     "go": ("gopls", "serve"),
+    "latex": ("texlab",),
     "c": ("clangd", "--background-index=false", "--clang-tidy=false"),
     "cpp": ("clangd", "--background-index=false", "--clang-tidy=false"),
 }

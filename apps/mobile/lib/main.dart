@@ -4,7 +4,7 @@
 // Phones don't get desktop automation. This app does chat, provider status,
 // BYOK key storage (Keychain / Android Keystore) and image/camera attach for
 // vision questions. The AutoMoto Python server does the AI routing.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'api.dart';
 import 'screens/chat_screen.dart';

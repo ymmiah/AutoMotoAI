@@ -1,7 +1,7 @@
 > [!IMPORTANT]
 > 🎉 **AutoMoto AI for Windows is listed on the [Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB).** Prefer the Store listing for a straightforward installation. You can also download the [5.6.0 Beta 3 GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (`.exe` / `.msi`). Desktop sign-in can connect to a hosted AutoMoto account, while local mode keeps its own chats and workspace on the PC.
 > ✨ **Beta 3: one smart assistant.** Just say what you need or attach a file: AutoMoto works out the steps and picks the right tools by itself, and shows progress in plain words. [What it can do](docs/CAPABILITIES.md)
-> 🔌 **Offline AI is available in newer source builds and still being tested for the next release.** Run free downloaded models locally through Ollama, including Qwen and Google Gemma, without an API key or internet *after the runtime and model are installed*. [How](docs/OFFLINE.md)
+> 🔌 **Offline AI is built in.** Settings → Offline AI downloads a GGUF model and the llama.cpp engine for you. No Ollama install and no Python install. After the download, chat works with no internet. Kimi, Qwen, Llama, Mistral, Gemma, DeepSeek and Phi are in the catalog, and you can import your own `.gguf` file. Full Kimi K2 does not fit a normal PC; the smaller Kimi rows say so. [How](docs/OFFLINE.md)
 > 👉 New here? **[Start here: pick your device](https://ymmiah.github.io/AutoMotoAI/START.html)** · macOS and Linux apps are coming next. Beta means rough edges are possible; the stable version is [v5.5.0](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.5.0).
 
 <div align="center">
@@ -19,7 +19,7 @@ job is done. If one AI is rate-limited or down, the next one carries on mid-task
 **🪟 Windows app:** [Microsoft Store](https://apps.microsoft.com/detail/9n9j7flssfg8?hl=en-GB&gl=GB) · [GitHub Beta 3 installer](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3) (`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe`) —
 sign in once and the same chats and files follow you to the app, the web and your phone. [How to](docs/GUI-GUIDE.md#0-the-windows-app)
 
-[![Version](https://img.shields.io/badge/version-5.6.0--beta.3_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.6.0_“Agent”-38f2a5?style=for-the-badge)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions)
 [![License](https://img.shields.io/badge/license-AGPL--3.0_·_commercial-blue?style=for-the-badge)](#-licence)
 ![Platforms](https://img.shields.io/badge/Windows_·_macOS_·_Linux-555?style=for-the-badge)

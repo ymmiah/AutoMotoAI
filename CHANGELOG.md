@@ -1,5 +1,14 @@
 # AutoMoto AI - Version History & Changelog
 
+## 5.6.0 — Store release
+
+- Merge the Developer Studio integration branch with the hotfixes already on `main` (iPhone toolchain, hosted admin setup, security review).
+- Offline AI no longer asks you to install Ollama. Settings → Offline AI downloads a curated GGUF model and a pinned llama.cpp engine, then runs it on this computer. You can switch, test, delete and import your own `.gguf` file. Full Kimi K2 stays listed as too large for a normal PC; smaller Kimi, Qwen, Llama, Mistral, Gemma, DeepSeek and Phi models show disk and memory needs.
+- Every setting, studio and tool has plain-language help, in the controls and on the in-app Help page.
+- The window stays chat-first: studios and chats in the sidebar, the conversation in the column, settings in their own panel. The Windows caption bar is unchanged.
+- The shared web UI is touch-friendly. Android debug APK/AAB and an iOS simulator build run in CI where the runners allow it.
+- Package version for the Microsoft Store is `5.6.99.0` (the stable slot above the 5.6.0 betas). Publishing the submission, the git tag and the GitHub release stays with the owner.
+
 ## 5.6.0-beta.6 — Visual Studio v1–v5 and editable image workflow
 
 - Add Visual Studio with editable design objects, safe local rendering, templates, drag-and-drop editing and export options.

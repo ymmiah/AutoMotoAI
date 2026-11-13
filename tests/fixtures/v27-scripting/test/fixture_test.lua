@@ -1,0 +1,5 @@
+local file = assert(io.open("lib/v27.lua", "r"))
+file:close()
+local m = dofile("lib/v27.lua")
+assert(m.combine(20, 22) == 42, "incorrect Lua arithmetic")
+print("V27_LUA_FIXTURE_PASS")

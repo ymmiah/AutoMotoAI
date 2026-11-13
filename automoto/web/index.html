@@ -63,28 +63,38 @@
       <a class="brand" href="#/new" aria-label="__BRAND__ home"><span class="logo" aria-hidden="true">A</span><span>__BRAND__</span></a>
       <button class="icon-btn only-mobile" id="closeSide" aria-label="Close sidebar" data-icon="x"></button>
     </div>
-    <button class="new-chat" id="newChat" title="New chat (Ctrl+N or Ctrl+Shift+O)"><span data-icon="plus"></span>New chat<kbd>⌘N</kbd></button>
-    <label class="search">
+    <button class="new-chat" id="newChat" title="Start a fresh conversation. The assistant does the steps; you approve anything risky."><span data-icon="plus"></span>New chat<kbd>⌘N</kbd></button>
+    <label class="search" title="Filter the chat list. Ctrl+K also searches commands.">
       <span data-icon="search"></span>
       <input id="convSearch" type="search" placeholder="Search chats" aria-label="Search conversations" autocomplete="off" />
       <kbd>⌘K</kbd>
     </label>
-    <button class="command-launch" id="commandLaunch"><span data-icon="sparkle"></span>Quick commands<kbd>⌘K</kbd></button>
-    <nav class="nav" aria-label="Pages">
-      <a href="#/tasks" data-page="tasks"><span data-icon="activity"></span>Tasks<span class="badge" id="taskBadge" hidden></span></a>
-      <a href="#/memory" data-page="memory"><span data-icon="brain"></span>Memory</a>
-      <a href="#/routines" data-page="routines"><span data-icon="clock"></span>Routines</a>
-      <a href="#/files" data-page="files"><span data-icon="folder"></span>Files</a>
-      <a href="#/documents" data-page="documents"><span data-icon="file"></span>Document Assistant</a>
-      <a href="#/research" data-page="research"><span data-icon="search"></span>Research Studio</a>
-      <a href="#/spreadsheets" data-page="spreadsheets"><span data-icon="sheet"></span>Invoices &amp; Spreadsheets</a>
-      <a href="#/visual" data-page="visual"><span data-icon="image"></span>Visual Studio</a>
-      <a href="#/developer" data-page="developer"><span data-icon="code"></span>Developer Studio</a>
-      <a href="#/settings" data-page="settings"><span data-icon="settings"></span>Settings</a>
-      <a href="https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html" id="helpLink" target="_blank" rel="noopener noreferrer" title="Step-by-step guide (opens in a new tab)"><span data-icon="info"></span>Help / Guide</a>
-    </nav>
+    <button class="command-launch" id="commandLaunch" title="Jump to a chat, a studio, or a setting"><span data-icon="sparkle"></span>Quick commands<kbd>⌘K</kbd></button>
+    <details class="side-group" open>
+      <summary title="Workspaces for documents, research, spreadsheets, images and code">Studios</summary>
+      <nav class="nav" aria-label="Studios">
+        <a href="#/documents" data-page="documents" title="Write and export documents. You keep the draft."><span data-icon="file"></span>Documents</a>
+        <a href="#/research" data-page="research" title="Collect sources and keep each quote next to the claim."><span data-icon="search"></span>Research</a>
+        <a href="#/spreadsheets" data-page="spreadsheets" title="Workbooks, calculations and invoices."><span data-icon="sheet"></span>Spreadsheets</a>
+        <a href="#/visual" data-page="visual" title="Images, layouts and exports such as PNG or PDF."><span data-icon="image"></span>Visual</a>
+        <a href="#/developer" data-page="developer" title="Open a local project. Edits check the file has not changed underneath you."><span data-icon="code"></span>Developer</a>
+      </nav>
+    </details>
+    <details class="side-group" open>
+      <summary title="Tasks, memories, schedules and files">Library</summary>
+      <nav class="nav" aria-label="Library">
+        <a href="#/tasks" data-page="tasks" title="Runs in progress, waiting for approval, or finished."><span data-icon="activity"></span>Tasks<span class="badge" id="taskBadge" hidden></span></a>
+        <a href="#/memory" data-page="memory" title="Facts saved for later chats. You can delete them."><span data-icon="brain"></span>Memory</a>
+        <a href="#/routines" data-page="routines" title="A saved request that can run while the app is open."><span data-icon="clock"></span>Routines</a>
+        <a href="#/files" data-page="files" title="Uploads and files the assistant made, in its own folder."><span data-icon="folder"></span>Files</a>
+      </nav>
+    </details>
     <div class="conv-head">Chats</div>
     <div class="conv-list" id="convList" role="list" aria-label="Saved conversations"></div>
+    <nav class="nav nav-foot" aria-label="App">
+      <a href="#/settings" data-page="settings" title="Assistant, offline models, appearance, folders and providers."><span data-icon="settings"></span>Settings</a>
+      <a href="#/help" id="helpLink" data-page="help" title="Plain-language guide to every setting, studio and tool. F1."><span data-icon="info"></span>Help</a>
+    </nav>
     <div class="side-foot">
       <span id="verLabel">v</span> · <a href="__SOURCE_URL__" id="sourceLink" target="_blank" rel="noopener" title="Source code (AGPL-3.0)">Source code</a> · <a href="https://github.com/ymmiah/AutoMotoAI/issues/new?template=report-content.yml" target="_blank" rel="noopener" title="Report harmful or inappropriate AI output">Report a problem</a>
     </div>

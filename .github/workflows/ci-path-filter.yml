@@ -1,0 +1,43 @@
+# Reusable helper: should this event run heavy macOS / real-toolchain jobs?
+# See scripts/ci/pr_self_changed.py. Not a required check on its own.
+name: CI path filter
+on:
+  workflow_call:
+    inputs:
+      patterns:
+        description: Version-specific path patterns (one per line). Shared files such as automoto/server.py must be omitted.
+        required: true
+        type: string
+    outputs:
+      self:
+        description: true when this is not a pull_request, or the pull request touches a version-specific path
+        value: ${{ jobs.filter.outputs.self }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  filter:
+    name: Own-file path filter
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      self: ${{ steps.filter.outputs.self }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+      - id: filter
+        name: Decide whether own files changed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PATTERNS: ${{ inputs.patterns }}
+        run: |
+          printf '%s\n' "$PATTERNS" > "$RUNNER_TEMP/own-patterns.txt"
+          python3 scripts/ci/pr_self_changed.py \
+            --event "${GITHUB_EVENT_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --patterns-file "$RUNNER_TEMP/own-patterns.txt" \
+            --github-output "$GITHUB_OUTPUT"

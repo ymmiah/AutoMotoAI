@@ -85,13 +85,16 @@ def ollama_url() -> str:
 
 def local_server_url() -> str | None:
     """OpenAI-compatible local server (llama.cpp ``llama-server``, LM Studio, vLLM…), e.g.
-    ``LOCAL_LLM_URL=http://127.0.0.1:8080/v1``."""
+    ``LOCAL_LLM_URL=http://127.0.0.1:8080/v1``. A selected built-in GGUF model uses its own
+    loopback server once that server is running."""
     raw = (config.env("LOCAL_LLM_URL") or "").rstrip("/")
-    if not raw:
-        return None
-    if not _is_local_url(raw):
-        return None
-    return raw if raw.endswith("/v1") else raw + "/v1"
+    if raw:
+        if not _is_local_url(raw):
+            return None
+        return raw if raw.endswith("/v1") else raw + "/v1"
+    from automoto import gguf_runtime
+
+    return gguf_runtime.server_url()
 
 
 def ollama_model() -> str:
@@ -104,7 +107,11 @@ def enabled(provider_id: str) -> bool:
         return bool(config.env("OLLAMA_MODEL") or _setting("local_model") or offline()
                     or (config.env("AUTOMOTO_OLLAMA") or "").lower() in ("1", "true", "yes", "on"))
     if provider_id == "local":
-        return local_server_url() is not None
+        if (config.env("LOCAL_LLM_URL") or "").strip():
+            return local_server_url() is not None
+        from automoto import gguf_runtime
+
+        return gguf_runtime.ready()
     return False
 
 
@@ -681,7 +688,19 @@ def status() -> dict[str, Any]:
             "tier": quality_tier(model), "context": options["options"]["num_ctx"],
             "think": options.get("think", False),
             "substitution": choice if choice["substituted"] else None,
-            "pulls": pull_progress()}
+            "pulls": pull_progress(), "gguf": _gguf_panel()}
+
+
+def _gguf_panel() -> dict[str, Any]:
+    """Built-in GGUF catalog. Never raises into the Settings page."""
+    try:
+        from automoto import gguf_runtime
+
+        return gguf_runtime.catalog_view()
+    except Exception as exc:  # noqa: BLE001 - the panel must still render
+        return {"models": [], "custom": [], "runtime": {"installed": False, "running": False,
+                                                        "message": str(exc)[:200]},
+                "why": "The built-in model list could not be read.", "jobs": {}}
 
 
 def serving_locally() -> bool:

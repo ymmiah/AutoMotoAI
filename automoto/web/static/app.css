@@ -512,6 +512,30 @@ html[data-chrome="custom"] .palette,
 html[data-chrome="custom"] .modal { top: var(--chrome-h); }
 html[data-chrome="custom"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
 
+/* Chat-first shell: studios and chats in the sidebar, the conversation in the column. */
+.side-group { border: 0; margin: 0; padding: 0; }
+.side-group > summary {
+  list-style: none; cursor: pointer; font-size: 11px; font-weight: 650; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--faint); padding: 10px 10px 4px; min-height: 32px;
+}
+.side-group > summary::-webkit-details-marker { display: none; }
+.nav-foot { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
+.model-family { margin: 18px 0 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.model-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.help-sec { margin: 0 0 26px; }
+.help-sec > h3 { margin: 0 0 8px; font-size: 16px; }
+.help-item { padding: 12px 0; border-top: 1px solid var(--line); }
+.help-item h4 { margin: 0 0 4px; font-size: 14px; font-weight: 650; }
+.help-item p { margin: 0; color: var(--dim); }
+.file-pick { cursor: pointer; }
+.adv-ollama { margin-top: 14px; color: var(--dim); font-size: 13px; }
+.adv-ollama summary { cursor: pointer; }
+.thread { max-width: 760px; }
+@media (pointer: coarse) {
+  .nav a, .set-nav button, .btn, .icon-btn, .new-chat, .side-group > summary { min-height: 44px; }
+  .composer textarea { font-size: 16px; }
+}
+
 .page-inner:has(.settings) { max-width: 1040px; }
 .settings { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 28px; align-items: start; }
 .set-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }
@@ -559,3 +583,16 @@ html[data-chrome="custom"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
 .vs-choice-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:17px 0; }
 .vs-choice-grid .btn {min-height:54px;padding:12px;line-height:1.4;text-align:center;white-space:normal;justify-content:center;}
 @media(max-width:570px){.vs-choice-grid{grid-template-columns:1fr}.vs-choice-grid .btn{min-height:44px}}
+
+
+/* Shared central AutoMoto Agent link: Document, Research, Spreadsheet, Visual and Developer Studios. */
+.studio-agent-bridge{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0 18px;background:var(--panel);display:grid;gap:9px}
+.studio-agent-title{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.studio-agent-title strong{font-size:14px;font-weight:700}
+.studio-agent-state{font-size:12px;color:var(--dim)}
+.studio-agent-bridge p{font-size:12px;margin:0;line-height:1.6}
+.studio-agent-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.studio-agent-controls label{font-size:12px;color:var(--dim)}
+.studio-agent-controls select{max-width:250px;flex:1 1 170px}
+.studio-agent-controls textarea{min-height:68px;max-width:520px;flex:2 1 250px;resize:vertical;font:13px/1.5 system-ui}
+@media(max-width:650px){.studio-agent-controls .input{min-width:0;max-width:100%;flex:1 1 100%}}

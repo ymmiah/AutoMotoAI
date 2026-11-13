@@ -211,16 +211,16 @@ def test_gui_assets_and_csp(c):
     assert "Student of BCU, BSc Computing Top-Up (Hons)" in js
 
 
-def test_help_guide_link_is_a_safe_external_link(c):
+def test_help_guide_link_opens_in_the_app(c):
     import re
     c.get("/?launch=" + server.new_launch_token())
     html = c.get("/").text
     m = re.search(r'<a href="([^"]+)" id="helpLink"([^>]*)>', html)
-    assert m, "Help / Guide link missing from the sidebar"
-    assert m.group(1) == "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html"
-    assert 'target="_blank"' in m.group(2) and "noopener" in m.group(2)
+    assert m, "Help link missing from the sidebar"
+    assert m.group(1) == "#/help"
     js = c.get("/static/app.js").text
-    assert 'const GUIDE_URL = "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html"' in js and '"_blank", "noopener"' in js
+    assert 'const GUIDE_URL = "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html"' in js
+    assert 'target="_blank" rel="noopener"' in js
 
 
 def test_gui_guide_images_exist():

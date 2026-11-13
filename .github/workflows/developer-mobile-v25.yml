@@ -1,0 +1,184 @@
+name: Developer Studio V25 Flutter React Native acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_mobile.py"
+      - "automoto/developer_index.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-mobile.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_mobile.py"
+      - "tests/fixtures/v25-*/**"
+      - "tests/scripts/v25_flutter_android_emulator.sh"
+      - ".github/workflows/developer-mobile-v25.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  pull_request:
+    paths:
+      - "automoto/developer_mobile.py"
+      - "automoto/developer_index.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-mobile.js"
+      - "automoto/web/static/developer-studio.js"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "tests/test_developer_mobile.py"
+      - "tests/fixtures/v25-*/**"
+      - "tests/scripts/v25_flutter_android_emulator.sh"
+      - ".github/workflows/developer-mobile-v25.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered so versions
+    # do not all queue macOS runners at the same minute.
+    - cron: "50 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_mobile.py
+        automoto/web/static/developer-mobile.js
+        tests/test_developer_mobile.py
+        tests/fixtures/v25-*/**
+        tests/scripts/v25_flutter_android_emulator.sh
+        .github/workflows/developer-mobile-v25.yml
+
+  static-security:
+    name: Static Flutter/RN security (${{ matrix.os }})
+    needs: paths
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-latest", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install AutoMoto Python development dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Inert and trust-gated Flutter/RN inspection, real Node test
+        run: python -m pytest -q tests/test_developer_mobile.py
+
+  flutter-web:
+    name: Real Flutter 3.47.9 widget/web on ${{ matrix.os }}
+    needs: paths
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.9"
+          channel: stable
+          cache: true
+      - name: Report installed Flutter/Dart versions
+        run: |
+          flutter --version
+          dart --version
+      - name: Warm Flutter SDK/packages and prove real widget/web compilation
+        working-directory: tests/fixtures/v25-flutter
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+          flutter build web --no-pub
+      - name: Install AutoMoto Python development dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Consent-gated offline Flutter pub/analyse/test/web build (real installed SDK)
+        env:
+          AUTOMOTO_V25_REAL_FLUTTER: "1"
+          AUTOMOTO_RATE_LIMIT: "10000"
+        run: python -m pytest -q tests/test_developer_mobile.py
+
+  react-native-metro:
+    name: React Native 0.88 Metro JS bundle and Node bridge (Node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install pinned RN/React/Metro dependencies in ephemeral CI
+        working-directory: tests/fixtures/v25-react-native
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Real RN bridge and syntax test
+        working-directory: tests/fixtures/v25-react-native
+        run: |
+          node --check index.js
+          node --test test/bridge.test.cjs
+      - name: Bundle real RN JSX/React with Metro for Android
+        working-directory: tests/fixtures/v25-react-native
+        run: |
+          mkdir -p "$RUNNER_TEMP/v25-rn-out"
+          npx --no-install metro build index.js --out "$RUNNER_TEMP/v25-rn-out/index.bundle.js"
+          test -s "$RUNNER_TEMP/v25-rn-out/index.bundle.js"
+          grep -q V25_RN_METRO_PASS "$RUNNER_TEMP/v25-rn-out/index.bundle.js"
+
+  flutter-android:
+    name: Flutter Android 35 APK and isolated emulator smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.9"
+          channel: stable
+          cache: true
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platform-tools'
+      - name: Install Android platform in isolated CI and generate mobile platform fixture
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          cd tests/fixtures/v25-flutter
+          flutter create . --platforms android --project-name automoto_v25_flutter
+          flutter pub get
+      - name: Build real debug APK
+        working-directory: tests/fixtures/v25-flutter
+        run: flutter build apk --debug
+      - name: Enable emulator KVM access if available
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: bash tests/scripts/v25_flutter_android_emulator.sh

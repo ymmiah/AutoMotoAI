@@ -41,7 +41,7 @@ EXCLUDED_DIRS = frozenset({
     "vendor", "target", "coverage", ".pytest_cache", ".mypy_cache",
     ".ruff_cache", ".tox", ".gradle", ".terraform", "bower_components",
     "__generated__", "generated", ".turbo", "out", ".venv", "node_modules",
-    "dist", "build", ".git", ".next",
+    "dist", "build", ".build", ".swiftpm", "deriveddata", ".dart_tool", ".pub-cache", ".symlinks", "pods", ".git", ".next",
 })
 EXCLUDED_FILES = frozenset({
     ".npmrc", ".pypirc", "id_rsa", "id_ed25519", "credentials",

@@ -28,7 +28,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -58,12 +58,27 @@ MCP_TOOLS: list[tools_mod.Tool] = []
 MCP_ERRORS: list[str] = []
 
 
+STUDIO_REVIEW_TOOLS = frozenset({"project_inspect", "list_dir", "search_files",
+                                  "web_search", "fetch_url"})
+
 def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | None = None,
-                   local_apps: bool = False, meter: Any = None) -> Agent:
-    if tenancy.current() is not None:  # hosted user: the safe tool set in their own sandbox, metered
-        return Agent(tools=hosted.hosted_tools(), desktop=False, client="web", workspace=None, meter=meter)
+                   local_apps: bool = False, meter: Any = None,
+                   review_only: bool = False) -> Agent:
+    if tenancy.current() is not None:  # hosted user: tenant-specific safe tool registry and quota
+        registry = hosted.hosted_tools()
+        if review_only:
+            registry = {n: t for n, t in registry.items()
+                        if n in STUDIO_REVIEW_TOOLS and t.level == "safe"}
+        return Agent(tools=registry, desktop=False, client="web", workspace=None, meter=meter)
     tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS, local_apps=local_apps)
-    return Agent(tools=tl, desktop=desktop, client=client, workspace=workspace, meter=meter)
+    if review_only:
+        # Do not rely on auto_deny alone: global approval_mode=auto may bypass
+        # the approval callback. Removing tools from the registry makes writes,
+        # shell access, publishing, deployment and installations unavailable.
+        tl = {n: t for n, t in tl.items()
+              if n in STUDIO_REVIEW_TOOLS and t.level == "safe"}
+    return Agent(tools=tl, desktop=desktop and not review_only, client=client,
+                 workspace=workspace, meter=meter)
 
 
 def _local(request: Request) -> bool:
@@ -131,6 +146,55 @@ from automoto import developer_index
 app.include_router(developer_index.router)  # V7 private bounded source symbol and lexical index
 from automoto import developer_adapters
 app.include_router(developer_adapters.router)  # V8 explicit permissioned external toolchain & DAP adapter SDK
+from automoto import developer_latex
+app.include_router(developer_latex.router)  # V9 read-only LaTeX thesis graph, completions and templates
+from automoto import developer_bibliography
+app.include_router(developer_bibliography.router)  # V10 local citation preflight and explicit DOI registry verification
+from automoto import developer_texbuild
+app.include_router(developer_texbuild.router)  # V11 consent-bound local TeX builds, ephemeral PDF previews and SyncTeX
+from automoto import developer_manuscripts, developer_research_transfer
+app.include_router(developer_manuscripts.router)  # V12 read-only Typst/Quarto project intelligence
+app.include_router(developer_research_transfer.router)  # V12 source-reverified review-only research manuscripts
+from automoto import developer_javascript
+app.include_router(developer_javascript.router)  # V13 explicit JS/TS testing, typechecks and project-script workflows
+from automoto import developer_frontend
+app.include_router(developer_frontend.router)  # V14 non-executing web UI, accessibility and sandboxed static preview
+from automoto import developer_sql, developer_data, studio_agent_bridge
+app.include_router(developer_sql.router)  # V15 SQL read-only snapshots and migration preview
+app.include_router(developer_data.router)  # V15 SQL dialect and GraphQL static inspection
+app.include_router(studio_agent_bridge.router)  # shared central agent linkage across all five Studios
+from automoto import developer_php
+app.include_router(developer_php.router)  # V16 PHP/WordPress security inspection and explicitly approved local tooling
+from automoto import developer_python
+app.include_router(developer_python.router)  # V17 Python/uv/type checking and approved virtualenv tests
+from automoto import developer_go
+app.include_router(developer_go.router)  # V18 Go workspaces, bounded build/test/vet/profile and gopls discovery
+from automoto import developer_rust
+app.include_router(developer_rust.router)  # V19 Rust Cargo, Clippy, frozen builds, formatter and existing LSP/DAP
+from automoto import developer_native
+app.include_router(developer_native.router)  # V20 C/C++ CMake, CTest, compiler and sanitiser evidence
+from automoto import developer_jvm
+app.include_router(developer_jvm.router)  # V21 JDK, Maven, Gradle, JUnit and source compatibility evidence
+from automoto import developer_dotnet
+app.include_router(developer_dotnet.router)  # V22 C#/.NET SDK, NuGet, MSBuild and tests
+from automoto import developer_android
+app.include_router(developer_android.router)  # V23 Kotlin/JVM Android SDK, Compose, Gradle and emulator evidence
+from automoto import developer_swift
+app.include_router(developer_swift.router)  # V24 Swift SwiftPM Xcode simulator build evidence and SourceKit-LSP discovery
+from automoto import developer_mobile
+app.include_router(developer_mobile.router)  # V25 Flutter/Dart, React Native, locked package evidence and consented offline tasks
+from automoto import developer_shell
+app.include_router(developer_shell.router)  # V26 Bash/Zsh/Fish/PowerShell/Batch inspection, syntax checks, literal fixtures
+from automoto import developer_scripting
+app.include_router(developer_scripting.router)  # V27 Ruby Lua Perl Groovy package and explicit toolchain adapters
+from automoto import developer_science
+app.include_router(developer_science.router)  # V28 inert scientific data/notebooks and SHA-pinned R Julia Octave reproduction
+from automoto import developer_functional
+app.include_router(developer_functional.router)  # V29 inert Scala F# Clojure projects and approved fixed fixtures
+from automoto import developer_beam
+app.include_router(developer_beam.router)  # V30 inert Elixir Erlang Gleam and SHA-pinned fixed BEAM tool tasks
+from automoto import developer_logic
+app.include_router(developer_logic.router)  # V31 static Haskell OCaml Lisp Scheme Prolog and approved local fixture tests
 from automoto import developer_ios
 app.include_router(developer_ios.router)  # iPhone toolchain, local-only, upload only after the on-screen button
 from automoto import visual_documents
@@ -853,12 +917,82 @@ def local_ai_start(request: Request) -> dict[str, Any]:
 def local_ai_test(request: Request, body: dict[str, Any]) -> dict[str, Any]:
     """Check that a downloaded local model can actually answer."""
     _authorise(request, local_only=True)
-    from automoto import local_llm
+    from automoto import gguf_runtime, local_llm
 
+    model = str(body.get("model") or "")
     try:
-        return local_llm.test_ollama(str(body.get("model") or ""))
+        if body.get("engine") == "gguf" or gguf_runtime.by_id(model) or model.startswith("custom-"):
+            return gguf_runtime.test_model(model)
+        return local_llm.test_ollama(model)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/pull")
+def local_gguf_pull(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Download one curated GGUF model. The built-in engine is fetched on first use."""
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.pull(str(body.get("model") or body.get("id") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/use")
+def local_gguf_use(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.use(str(body.get("model") or body.get("id") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/delete")
+def local_gguf_delete(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.delete(str(body.get("model") or body.get("id") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/import")
+def local_gguf_import(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Copy a GGUF file that is already on this computer into the model folder."""
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.import_file(Path(str(body.get("path") or "")))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/upload")
+def local_gguf_upload(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
+    """Accept a GGUF upload from the browser. The bytes are written to the model folder."""
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.import_stream(file.file, file.filename or "")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.get("/api/help")
+def help_guide(request: Request) -> dict[str, Any]:
+    """Plain-language guide for settings, studios and tools. No secrets."""
+    _authorise(request)
+    from automoto.help_guide import guide
+
+    return guide()
 
 
 @app.get("/api/skills")

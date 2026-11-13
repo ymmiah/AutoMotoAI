@@ -230,11 +230,12 @@ def _no_provider_message() -> str:
     from automoto import local_llm
 
     if local_llm.offline():
-        return ("Offline mode is on, but no AI is set up on this computer yet. Install Ollama and pick a model "
-                "in Settings > Offline AI (see docs/OFFLINE.md), or turn Offline mode off.")
+        return ("Offline mode is on, but no model is ready on this computer yet. Open Settings > Offline AI, "
+                "download a model that fits this PC, and press Test. You do not need to install Ollama. "
+                "Or turn Offline mode off.")
     return ("No AI provider key found. Add at least one key (e.g. NVIDIA_API_KEY, GEMINI_API_KEY, "
-            "GROQ_API_KEY or OPENROUTER_API_KEY) to .env - see .env.example - or use a free offline "
-            "model with Ollama (docs/OFFLINE.md).")
+            "GROQ_API_KEY or OPENROUTER_API_KEY) to .env - see .env.example - or download a free model "
+            "in Settings > Offline AI (docs/OFFLINE.md).")
 
 
 def plan_order(*, need_vision: bool, prefer: str | None, task: str,

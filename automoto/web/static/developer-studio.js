@@ -5,11 +5,34 @@ import {mountDeveloperLanguageIntelligence} from "./developer-language.js";
 import {mountDeveloperLSP} from "./developer-lsp.js";
 import {mountDeveloperIndex} from "./developer-index.js";
 import {mountDeveloperAdapters} from "./developer-adapters.js";
+import {mountDeveloperLatex} from "./developer-latex.js";
+import {mountDeveloperBibliography} from "./developer-bibliography.js";
+import {mountDeveloperTexBuild} from "./developer-texbuild.js";
+import {mountDeveloperManuscripts} from "./developer-manuscripts.js";
+import {mountDeveloperJavaScript} from "./developer-javascript.js";
+import {mountDeveloperFrontend} from "./developer-frontend.js";
+import {mountDeveloperData} from "./developer-data.js";
+import {mountDeveloperPHP} from "./developer-php.js";
+import {mountDeveloperPython} from "./developer-python.js";
+import {mountDeveloperGo} from "./developer-go.js";
+import {mountDeveloperRust} from "./developer-rust.js";
+import {mountDeveloperNative} from "./developer-native.js";
+import {mountDeveloperJvm} from "./developer-jvm.js";
+import {mountDeveloperDotnet} from "./developer-dotnet.js";
+import {mountDeveloperAndroid} from "./developer-android.js";
+import {mountDeveloperSwift} from "./developer-swift.js";
+import {mountDeveloperMobile} from "./developer-mobile.js";
+import {mountDeveloperShell} from "./developer-shell.js";
+import {mountDeveloperScripting} from "./developer-scripting.js";
+import {mountDeveloperScience} from "./developer-science.js";
+import {mountDeveloperFunctional} from "./developer-functional.js";
+import {mountDeveloperBeam} from "./developer-beam.js";
+import {mountDeveloperLogic} from "./developer-logic.js";
 import {mountDeveloperIos} from "./developer-ios.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V8 · External toolchain and debugger adapter SDK. Register SHA-256-pinned local tools and run only with separate approval.",
+    "V31 · Haskell, OCaml, Lisp, Scheme and Prolog alongside 30 earlier language milestones.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -26,6 +49,29 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsLspRoot" aria-label="Approved local language server controls"></div>'+ 
       '<div id="dsIndexRoot" aria-label="Source symbol index and file outline"></div>'+ 
       '<div id="dsAdaptersRoot" aria-label="Explicitly approved local toolchain and debugger adapters"></div>'+ 
+      '<div id="dsLatexRoot" aria-label="LaTeX multi-file thesis authoring"></div>'+ 
+      '<div id="dsBibliographyRoot" aria-label="Citation evidence and bibliography preflight"></div>'+ 
+      '<div id="dsTexBuildRoot" aria-label="Approved TeX build and ephemeral PDF preview"></div>'+ 
+      '<div id="dsManuscriptsRoot" aria-label="Typst Quarto and source-verified Research Studio review packages"></div>'+ 
+      '<div id="dsJavaScriptRoot" aria-label="Node.js JavaScript TypeScript project tasks"></div>'+ 
+      '<div id="dsFrontendRoot" aria-label="Frontend project inspection, accessibility and static responsive preview"></div>'+ 
+      '<div id="dsDataRoot" aria-label="Bounded SQLite and GraphQL read-only inspection"></div>'+ 
+      '<div id="dsPhpRoot" aria-label="PHP and WordPress security and approved tool workflows"></div>'+ 
+      '<div id="dsPythonRoot" aria-label="Python packaging, uv, type checking and approved tests"></div>'+ 
+      '<div id="dsGoRoot" aria-label="Go modules workspaces profiling and approved build test vet"></div>'+ 
+      '<div id="dsRustRoot" aria-label="Rust workspaces cargo clippy rustfmt and debugger review"></div>'+ 
+      '<div id="dsNativeRoot" aria-label="C and C++ CMake compiler CTest and sanitiser workflows"></div>'+
+      '<div id="dsJvmRoot" aria-label="Java JVM Maven Gradle JUnit and source compatibility workflows"></div>'+
+      '<div id="dsDotnetRoot" aria-label="C sharp dotnet SDK NuGet MSBuild test and debugger review"></div>'+
+      '<div id="dsAndroidRoot" aria-label="Kotlin Android SDK Gradle Compose and emulator inspection"></div>'+
+      '<div id="dsSwiftRoot" aria-label="Swift SwiftUI Objective C SwiftPM Xcode simulator and SourceKit LSP inspection"></div>'+
+      '<div id="dsMobileRoot" aria-label="Flutter Dart React Native package management device and bridge evidence"></div>'+
+      '<div id="dsShellRoot" aria-label="Bash Zsh Fish PowerShell Batch script analysis and fixed fixture diagnostics"></div>'+
+      '<div id="dsScriptingRoot" aria-label="Ruby Lua Perl Groovy package metadata source syntax lint and test evidence"></div>'+
+      '<div id="dsScienceRoot" aria-label="R Julia MATLAB Octave scientific plotting Jupyter notebooks and reproducibility evidence"></div>'+
+      '<div id="dsFunctionalRoot" aria-label="Scala F sharp Clojure source manifest and approved fixed tool evidence"></div>'+
+      '<div id="dsBeamRoot" aria-label="Elixir Erlang Gleam source and fixed local BEAM tool evidence"></div>'+
+      '<div id="dsLogicRoot" aria-label="Haskell OCaml Lisp Scheme Prolog source and fixed interpreter tools"></div>'+  
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -43,14 +89,37 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio,scriptingStudio,scienceStudio,functionalStudio,beamStudio,logicStudio;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);scriptingStudio?.fileChanged(path);scienceStudio?.fileChanged(path);functionalStudio?.fileChanged(path);beamStudio?.fileChanged(path);logicStudio?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
   index=mountDeveloperIndex({api,host,getProject:()=>project,editor,status});
   adapters=mountDeveloperAdapters({api,host,getProject:()=>project,status});
+  latex=mountDeveloperLatex({api,host,getProject:()=>project,editor,status});
+  bibliography=mountDeveloperBibliography({api,host,getProject:()=>project,editor,status});
+  texBuild=mountDeveloperTexBuild({api,host,getProject:()=>project,editor,status});
+  manuscripts=mountDeveloperManuscripts({api,host,getProject:()=>project,editor,status});
+  javascript=mountDeveloperJavaScript({api,host,getProject:()=>project,editor,status});
+  frontend=mountDeveloperFrontend({api,host,getProject:()=>project,editor,status});
+  dataStudio=mountDeveloperData({api,host,getProject:()=>project,editor,status});
+  phpStudio=mountDeveloperPHP({api,host,getProject:()=>project,editor,status});
+  pythonStudio=mountDeveloperPython({api,host,getProject:()=>project,status});
+  goStudio=mountDeveloperGo({api,host,getProject:()=>project,status});
+  rustStudio=mountDeveloperRust({api,host,getProject:()=>project,status});
+  nativeStudio=mountDeveloperNative({api,host,getProject:()=>project,status});
+  jvmStudio=mountDeveloperJvm({api,host,getProject:()=>project,status});
+  dotnetStudio=mountDeveloperDotnet({api,host,getProject:()=>project,status});
+  androidStudio=mountDeveloperAndroid({api,host,getProject:()=>project,status});
+  swiftStudio=mountDeveloperSwift({api,host,getProject:()=>project,status});
+  mobileStudio=mountDeveloperMobile({api,host,getProject:()=>project,status});
+  shellStudio=mountDeveloperShell({api,host,getProject:()=>project,status});
+  scriptingStudio=mountDeveloperScripting({api,host,getProject:()=>project,status});
+  scienceStudio=mountDeveloperScience({api,host,getProject:()=>project,status});
+  functionalStudio=mountDeveloperFunctional({api,host,getProject:()=>project,status});
+  beamStudio=mountDeveloperBeam({api,host,getProject:()=>project,status});
+  logicStudio=mountDeveloperLogic({api,host,getProject:()=>project,status});
   const iosStudio=mountDeveloperIos({api,host,getProject:()=>project});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
@@ -109,6 +178,29 @@ export async function mountDeveloperStudio({api,page,toast}) {
       languageIntelligence.reset();
       await index.projectChanged();
       await adapters.projectChanged();
+      latex.projectChanged();
+      bibliography.projectChanged();
+      texBuild.projectChanged();
+      manuscripts.projectChanged();
+      javascript.projectChanged();
+      frontend.projectChanged();
+      dataStudio.projectChanged();
+      phpStudio.projectChanged();
+      pythonStudio.projectChanged();
+      goStudio.projectChanged();
+      rustStudio.projectChanged();
+      nativeStudio.projectChanged();
+      jvmStudio.projectChanged();
+      dotnetStudio.projectChanged();
+      androidStudio.projectChanged();
+      swiftStudio.projectChanged();
+      mobileStudio.projectChanged();
+      shellStudio.projectChanged();
+      scriptingStudio.projectChanged();
+      scienceStudio.projectChanged();
+      functionalStudio.projectChanged();
+      beamStudio.projectChanged();
+      logicStudio.projectChanged();
       await iosStudio.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
@@ -256,7 +348,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();editor.trustChanged();await lsp.trustChanged();await adapters.trustChanged();await locations();
+      showTrust();editor.trustChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
       status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });

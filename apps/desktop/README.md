@@ -1,6 +1,6 @@
-# AutoMoto AI — Windows app (Tauri 2) — Beta
+# AutoMoto AI — Windows app (Tauri 2)
 
-> **Beta** (5.6.0-beta.5). The window title, sign-in screen, About and installer names say so.
+> **5.6.0.** The window keeps AutoMoto's own caption bar (minimize, maximize, close, drag). Store steps: [docs/store/RELEASE_STEPS.md](../../docs/store/RELEASE_STEPS.md).
 
 The **AutoMoto AI app** is a small native window (Tauri 2, the system WebView2 on Windows) that opens on a
 **sign-in screen** with two choices:

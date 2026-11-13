@@ -11,6 +11,7 @@ Settings that change behaviour:
   * ``offline`` - Offline mode: only AI on this computer (Ollama / local server), no web tools
   * ``auto_memory`` - learn lasting facts and preferences from your messages (default on)
   * ``local_model`` - the Ollama model to use, e.g. ``qwen2.5:3b`` (turns Ollama on)
+  * ``gguf_model`` - a built-in GGUF catalog id or an imported ``custom-...`` id
 UI-only: ``theme`` (dark | light | system), ``accent`` (#rrggbb), ``default_mode`` (agent | chat).
 """
 
@@ -27,7 +28,7 @@ from automoto import home
 _LOCK = threading.Lock()
 DEFAULTS: dict[str, Any] = {"theme": "dark", "accent": "#38f2a5", "default_mode": "agent",
                             "approval_mode": None, "provider_order": [], "allowed_roots": [],
-                            "offline": False, "local_model": None, "auto_memory": True}
+                            "offline": False, "local_model": None, "gguf_model": None, "auto_memory": True}
 SECRETISH = re.compile(r"(key|token|secret|password)", re.I)
 
 
@@ -81,6 +82,11 @@ def validate(patch: dict[str, Any]) -> dict[str, Any]:
 
             if not local_llm.valid_model_name(v):
                 raise SettingsError("local_model must be an Ollama model name like qwen2.5:3b")
+        if k == "gguf_model" and v is not None:
+            from automoto import gguf_runtime
+
+            if not isinstance(v, str) or not gguf_runtime.valid_id(v):
+                raise SettingsError("gguf_model must be a catalog id or an imported custom- id")
         out[k] = v
     return out
 
