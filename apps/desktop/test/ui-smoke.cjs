@@ -2963,6 +2963,17 @@ let browser;
   assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),false);
   await page.screenshot({path:path.join(output,'developer-studio-v33-workbench.png')});
 
+  // V34: guided onboarding and task shortcuts without triggering an agent run.
+  assert.equal(await page.locator('.ds-v34-guide').count(),1);
+  assert.equal(await page.locator('#dsV34Project').count(),1);
+  assert.equal(await page.locator('#dsV34Trust').count(),1);
+  assert.equal(await page.locator('#dsV34Prompt').count(),1);
+  await page.locator('.ds-v34-chip').filter({hasText:'Explain project'}).click();
+  assert.match(await page.locator('#dsV33Prompt').inputValue(),/Inspect this workspace/);
+  assert.equal(await page.locator('#dsV33Stop').isDisabled(),true);
+  assert.equal(await page.locator('#dsV33AgentTimeline .ds-v33-user').count(),0);
+  await page.screenshot({path:path.join(output,'developer-studio-v34-guided-workbench.png')});
+
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.
   for(const name of ['method.tex','references.bib']){
