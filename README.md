@@ -10,12 +10,14 @@ Give it a goal. It chooses the steps, works on your files in a sandbox, and
 asks before anything risky. After you download a model, it can run fully offline
 on this computer — no extra installs.
 
-[![Release](https://img.shields.io/github/v/release/ymmiah/AutoMotoAI?style=for-the-badge)](https://github.com/ymmiah/AutoMotoAI/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/ymmiah/AutoMotoAI/actions/workflows/ci.yml)
-[![Licence](https://img.shields.io/badge/license-AGPL--3.0--only-blue?style=for-the-badge)](#licence)
-[![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-Get_it-0078D4?style=for-the-badge&logo=microsoft&logoColor=white)](https://apps.microsoft.com/detail/9N9J7FLSSFG8)
-[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](#platforms-and-roadmap)
-[![Downloads](https://img.shields.io/github/downloads/ymmiah/AutoMotoAI/total?style=for-the-badge)](https://github.com/ymmiah/AutoMotoAI/releases)
+<p>
+  <a href="https://github.com/ymmiah/AutoMotoAI/releases/latest"><img src="https://img.shields.io/github/v/release/ymmiah/AutoMotoAI?style=for-the-badge" alt="Release"></a>
+  <a href="https://github.com/ymmiah/AutoMotoAI/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ymmiah/AutoMotoAI/ci.yml?branch=main&style=for-the-badge&label=tests" alt="CI"></a>
+  <a href="#licence"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue?style=for-the-badge" alt="Licence AGPL-3.0-only"></a>
+  <a href="https://apps.microsoft.com/detail/9N9J7FLSSFG8"><img src="https://img.shields.io/badge/Microsoft_Store-Get_it-0078D4?style=for-the-badge&logo=microsoft&logoColor=white" alt="Microsoft Store"></a>
+  <a href="#platforms-and-roadmap"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 10 / 11"></a>
+  <a href="https://github.com/ymmiah/AutoMotoAI/releases"><img src="https://img.shields.io/github/downloads/ymmiah/AutoMotoAI/total?style=for-the-badge" alt="Downloads"></a>
+</p>
 
 <a href="https://apps.microsoft.com/detail/9N9J7FLSSFG8" title="Get it from Microsoft">
   <picture>
@@ -107,8 +109,8 @@ These may show a SmartScreen warning until they are Authenticode-signed.
 | You have | Get | Notes |
 |---|---|---|
 | **Windows 10/11** | **[Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)** | Recommended |
-| **Advanced:** Windows `.exe` | [`AutoMoto-AI-Setup-5.6.0-Windows-x64.exe`](https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0/AutoMoto-AI-Setup-5.6.0-Windows-x64.exe) | Per-user, no admin |
-| **Advanced:** Windows `.msi` | [`AutoMoto-AI-5.6.0-Windows-x64.msi`](https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0/AutoMoto-AI-5.6.0-Windows-x64.msi) | IT / all users, `msiexec /i <file> /qn` |
+| **Advanced — exe** | [`AutoMoto-AI-Setup-5.6.0-Windows-x64.exe`](https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0/AutoMoto-AI-Setup-5.6.0-Windows-x64.exe) | Per-user, no admin |
+| **Advanced — msi** | [`AutoMoto-AI-5.6.0-Windows-x64.msi`](https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0/AutoMoto-AI-5.6.0-Windows-x64.msi) | IT / all users, `msiexec /i <file> /qn` |
 | **VS Code** | [`AutoMoto-AI-5.6.0-VSCode.vsix`](https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0/AutoMoto-AI-5.6.0-VSCode.vsix) | Extensions → ⋯ → Install from VSIX |
 | **Python 3.10+** (any OS) | [`automoto_ai-5.6.0-py3-none-any.whl`](https://github.com/ymmiah/AutoMotoAI/releases/download/v5.6.0/automoto_ai-5.6.0-py3-none-any.whl) | Command-line engine and web UI |
 | **Mac, Linux, phone or tablet** | [Start here: pick your device](docs/START.md) | Phones sign in from the browser; no store app yet |
@@ -230,6 +232,4 @@ licensing ([CONTRIBUTING.md](CONTRIBUTING.md#licence-of-contributions)).
 
 Built by **Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)**.
 
-[GitHub](https://github.com/ymmiah)
-· [LinkedIn](https://linkedin.com/in/ymmiah)
-· [ymmiah.com](https://ymmiah.com)
+[GitHub](https://github.com/ymmiah) · [LinkedIn](https://linkedin.com/in/ymmiah) · [ymmiah.com](https://ymmiah.com)
