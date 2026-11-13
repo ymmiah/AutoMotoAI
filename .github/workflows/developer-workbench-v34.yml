@@ -1,0 +1,30 @@
+name: Developer Studio V34 guided workbench
+
+on:
+  pull_request:
+    paths:
+      - "automoto/web/static/developer-workbench.js"
+      - "automoto/web/static/developer-studio.js"
+      - "automoto/web/static/developer-studio.css"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "docs/DEVELOPER-STUDIO-V34.md"
+      - ".github/workflows/developer-workbench-v34.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workbench-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check workbench and smoke syntax
+        run: |
+          node --check automoto/web/static/developer-workbench.js
+          node --check automoto/web/static/developer-studio.js
+          node --check apps/desktop/test/ui-smoke.cjs
