@@ -34,7 +34,7 @@ import {mountDeveloperWasm} from "./developer-wasm.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V33 · VS Code-inspired workbench, one-prompt autonomous coding Agent and WebAssembly tooling.",
+    "V34 · Guided workbench, simplified project setup and one-prompt AI coding workflow.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
