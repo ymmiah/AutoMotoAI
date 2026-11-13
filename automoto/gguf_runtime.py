@@ -58,6 +58,10 @@ _LOCK = threading.Lock()
 _PROC: subprocess.Popen[Any] | None = None
 _PROC_PORT: int | None = None
 _PROC_MODEL: str | None = None
+_LAST_USED = 0.0
+_WATCH_STARTED = False
+_GEN_CANCEL = threading.Event()
+_ACTIVE_RESP: Any = None
 
 
 @dataclass(frozen=True)
@@ -343,7 +347,7 @@ def assess(model: GGUFModel, hw: dict[str, Any], *, free_gb: float | None = None
 def recommend(hw: dict[str, Any] | None = None) -> dict[str, Any]:
     from automoto import local_llm
 
-    hw = hw or local_llm.hardware()
+    hw = hw or local_llm._hardware_cached()
     free = _free_gb()
     present = set(installed_ids())
     rows = []
@@ -372,7 +376,7 @@ def recommend(hw: dict[str, Any] | None = None) -> dict[str, Any]:
             "models": rows}
 
 
-def _asset() -> tuple[str, str]:
+def _machine_key() -> str:
     machine = platform.machine()
     if machine in ("AMD64", "x86_64", "x64"):
         machine = "AMD64" if sys.platform == "win32" else "x86_64"
@@ -380,7 +384,15 @@ def _asset() -> tuple[str, str]:
         machine = "ARM64"
     if machine == "arm64" and sys.platform == "linux":
         machine = "aarch64"
-    found = _ASSETS.get((sys.platform, machine))
+    return machine
+
+
+def _asset() -> tuple[str, str]:
+    from automoto.offline_tune import choose_asset_key, tune
+
+    machine = _machine_key()
+    key = choose_asset_key(sys.platform, machine, tune(_hw()), _ASSETS)
+    found = _ASSETS.get(key) or _ASSETS.get((sys.platform, machine))
     if not found:
         raise ValueError(
             f"No built-in engine build is published for {sys.platform} {platform.machine()}. "
@@ -581,7 +593,7 @@ def pull(model_id: str) -> dict[str, Any]:
 def _hw() -> dict[str, Any]:
     from automoto import local_llm
 
-    return local_llm.hardware()
+    return local_llm._hardware_cached()
 
 
 def _slug(name: str) -> str:
@@ -695,7 +707,12 @@ def catalog_view() -> dict[str, Any]:
                        "downloadable": False, "installed": True, "can_run": True, "can_download": False,
                        "reason": "Imported from this computer. AutoMoto cannot promise it will fit in memory.",
                        "bytes": path.stat().st_size if path else 0})
-    return {**rec, "custom": custom, "selected": _selected(), "runtime": runtime_status(), "jobs": jobs()}
+    from automoto.offline_tune import tune
+
+    for row in rec.get("models") or []:
+        row["recommended"] = row.get("id") == rec.get("best")
+    return {**rec, "custom": custom, "selected": _selected(), "runtime": runtime_status(),
+            "jobs": jobs(), "tune": tune(rec.get("hardware") or {})}
 
 
 def server_url() -> str | None:
@@ -714,15 +731,102 @@ def ready() -> bool:
     return _installed_path(_selected() or "") is not None
 
 
-def build_command(binary: Path, model: Path, port: int, ctx: int) -> list[str]:
-    threads = max(1, min(os.cpu_count() or 2, 8))
-    return [str(binary), "-m", str(model), "--host", "127.0.0.1", "--port", str(port),
-            "-c", str(ctx), "-t", str(threads)]
+def build_command(binary: Path, model: Path, port: int, ctx: int, *, spec: dict[str, Any] | None = None) -> list[str]:
+    """Loopback-only llama-server command, tuned for this PC. ``ctx`` is the context window."""
+    from automoto.offline_tune import command_flags, offload_with_binary, tune
+
+    tuned = dict(spec or tune(_hw()))
+    if not offload_with_binary(str(binary), tuned):
+        tuned["gpu_layers"] = 0
+    flags = command_flags(tuned, context=ctx)
+    return [str(binary), "-m", str(model), "--host", "127.0.0.1", "--port", str(port), *flags]
 
 
 def _context(hw: dict[str, Any]) -> int:
-    ram = hw.get("ram_gb") or 0
-    return 8192 if ram >= 16 else 4096
+    from automoto.offline_tune import tune
+
+    return int(tune(hw)["context"])
+
+
+def touch() -> None:
+    """Remember that the loaded model was just used, so idle unload waits."""
+    global _LAST_USED
+    _LAST_USED = time.monotonic()
+
+
+def idle_seconds() -> float:
+    raw = os.environ.get("AUTOMOTO_LLAMA_IDLE_S", "")
+    try:
+        return float(raw) if raw else 600.0
+    except ValueError:
+        return 600.0
+
+
+def unload_if_idle(now: float | None = None) -> bool:
+    """Stop llama-server after it has sat unused, so a 16 GB PC gets its memory back."""
+    moment = time.monotonic() if now is None else now
+    if _PROC is None or _PROC.poll() is not None or not _LAST_USED:
+        return False
+    if moment - _LAST_USED < idle_seconds():
+        return False
+    stop()
+    return True
+
+
+def _ensure_watcher() -> None:
+    global _WATCH_STARTED
+    if _WATCH_STARTED:
+        return
+    _WATCH_STARTED = True
+
+    def loop() -> None:
+        while True:
+            time.sleep(15)
+            try:
+                unload_if_idle()
+            except Exception:
+                continue
+
+    threading.Thread(target=loop, name="automoto-llama-idle", daemon=True).start()
+
+
+def begin_generation() -> None:
+    _GEN_CANCEL.clear()
+
+
+def cancel_generation() -> None:
+    """Stop the current token stream. The loaded model stays warm."""
+    _GEN_CANCEL.set()
+    response = _ACTIVE_RESP
+    if response is not None:
+        try:
+            response.close()
+        except Exception:
+            pass
+
+
+def generation_cancelled() -> bool:
+    return _GEN_CANCEL.is_set()
+
+
+def token_from_sse(line: str) -> str | None:
+    """One content token from an OpenAI-style server-sent event, or None."""
+    text = (line or "").strip()
+    if not text.startswith("data:"):
+        return None
+    data = text[5:].strip()
+    if not data or data == "[DONE]":
+        return None
+    try:
+        payload = json.loads(data)
+    except json.JSONDecodeError:
+        return None
+    choices = payload.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return None
+    delta = choices[0].get("delta") or choices[0].get("message") or {}
+    token = delta.get("content")
+    return token if isinstance(token, str) and token else None
 
 
 def _free_port() -> int:
@@ -774,6 +878,8 @@ def ensure_running() -> str:
     _PROC = subprocess.Popen(command, **options)
     _PROC_PORT = port
     _PROC_MODEL = str(model)
+    touch()
+    _ensure_watcher()
     url = f"http://127.0.0.1:{port}/v1"
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
@@ -790,6 +896,66 @@ def ensure_running() -> str:
             time.sleep(0.4)
     stop()
     raise ValueError("The model did not finish loading. It may be too large for this computer.")
+
+
+def complete(messages: list[dict[str, Any]], *, max_tokens: int = 512, temperature: float = 0.0,
+             json_mode: bool = False, timeout: float = 120) -> str:
+    """One reply from the warm built-in engine. Loads the model on the first call and keeps it."""
+    url = ensure_running().rstrip("/") + "/chat/completions"
+    _loopback_http(url)
+    body: dict[str, Any] = {"model": active_filename() or "local", "messages": messages,
+                            "max_tokens": max_tokens, "temperature": temperature, "stream": False}
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
+    request = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+    touch()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - 127.0.0.1 checked above
+            data = json.loads(response.read().decode("utf-8") or "{}")
+    except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ValueError(f"The built-in model did not answer: {exc}") from exc
+    finally:
+        touch()
+    choices = data.get("choices") or []
+    message = (choices[0].get("message") or {}) if choices else {}
+    reply = str(message.get("content") or "").strip()
+    if not reply:
+        raise ValueError("The built-in model returned an empty reply.")
+    return reply
+
+
+def iter_chat(messages: list[dict[str, Any]], *, max_tokens: int = 1024, temperature: float = 0.2,
+              timeout: float = 180):
+    """Yield text tokens from llama-server. Closing the response cancels the rest."""
+    global _ACTIVE_RESP
+    url = ensure_running().rstrip("/") + "/chat/completions"
+    _loopback_http(url)
+    body = {"model": active_filename() or "local", "messages": messages, "stream": True,
+            "temperature": temperature, "max_tokens": max_tokens}
+    request = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+    begin_generation()
+    touch()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - 127.0.0.1 checked above
+            _ACTIVE_RESP = response
+            try:
+                while not generation_cancelled():
+                    line = response.readline()
+                    if not line:
+                        break
+                    token = token_from_sse(line.decode("utf-8", "replace"))
+                    if token:
+                        yield token
+            finally:
+                _ACTIVE_RESP = None
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        if generation_cancelled():
+            return
+        raise ValueError(f"The built-in model stopped streaming: {exc}") from exc
+    finally:
+        touch()
 
 
 def test_model(model_id: str) -> dict[str, Any]:
@@ -828,5 +994,10 @@ def test_model(model_id: str) -> dict[str, Any]:
 
 def reset_for_tests() -> None:
     """Stop a server and forget in-memory jobs. Does not delete files."""
+    global _LAST_USED, _ACTIVE_RESP
+    cancel_generation()
     stop()
     _JOBS.clear()
+    _LAST_USED = 0.0
+    _ACTIVE_RESP = None
+    _GEN_CANCEL.clear()

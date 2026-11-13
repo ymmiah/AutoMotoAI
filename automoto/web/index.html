@@ -59,6 +59,7 @@
 </header>
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <div class="side-pin">
     <div class="side-head">
       <a class="brand" href="#/new" aria-label="__BRAND__ home"><span class="logo" aria-hidden="true">A</span><span>__BRAND__</span></a>
       <button class="icon-btn only-mobile" id="closeSide" aria-label="Close sidebar" data-icon="x"></button>
@@ -70,6 +71,8 @@
       <kbd>⌘K</kbd>
     </label>
     <button class="command-launch" id="commandLaunch" title="Jump to a chat, a studio, or a setting"><span data-icon="sparkle"></span>Quick commands<kbd>⌘K</kbd></button>
+    </div>
+    <div class="side-scroll" id="sideScroll">
     <details class="side-group" open>
       <summary title="Workspaces for documents, research, spreadsheets, images and code">Studios</summary>
       <nav class="nav" aria-label="Studios">
@@ -91,12 +94,15 @@
     </details>
     <div class="conv-head">Chats</div>
     <div class="conv-list" id="convList" role="list" aria-label="Saved conversations"></div>
+    </div>
+    <div class="side-dock">
     <nav class="nav nav-foot" aria-label="App">
       <a href="#/settings" data-page="settings" title="Assistant, offline models, appearance, folders and providers."><span data-icon="settings"></span>Settings</a>
       <a href="#/help" id="helpLink" data-page="help" title="Plain-language guide to every setting, studio and tool. F1."><span data-icon="info"></span>Help</a>
     </nav>
     <div class="side-foot">
       <span id="verLabel">v</span> · <a href="__SOURCE_URL__" id="sourceLink" target="_blank" rel="noopener" title="Source code (AGPL-3.0)">Source code</a> · <a href="https://github.com/ymmiah/AutoMotoAI/issues/new?template=report-content.yml" target="_blank" rel="noopener" title="Report harmful or inappropriate AI output">Report a problem</a>
+    </div>
     </div>
   </aside>
   <div class="scrim" id="scrim" hidden></div>
@@ -121,6 +127,7 @@
         <button class="icon-btn" id="toggleInfo" aria-label="Toggle info panel" title="Info panel" data-icon="panel"></button>
       </div>
     </header>
+    <div id="studioQueue" class="studio-queue" hidden aria-label="Studio task queue"></div>
     <section class="view" id="view" tabindex="-1"></section>
   </main>
 

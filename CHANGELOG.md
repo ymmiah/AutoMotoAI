@@ -1,5 +1,13 @@
 # AutoMoto AI - Version History & Changelog
 
+## 5.6.1 — Sidebar, Settings speed, offline tuning, studio queue
+
+- The sidebar keeps New chat, search and Quick commands pinned at the top, and Settings, Help and the version pinned at the bottom. Studios, Library and chats scroll in the middle with a thin scrollbar, including short windows and the phone-width layout. A long chat list only draws the rows on screen.
+- Settings opens from the last saved state. The offline model catalogue, hardware details and disk space load after the page is up, and the heavier tabs wait until you open them.
+- Offline AI tunes llama.cpp for this PC: threads follow physical cores, context and batch fit the memory, memory mapping stays on, flash attention is requested where the engine supports it, the KV cache is quantised on a 16 GB machine, and a Vulkan, CUDA or Metal build is chosen when one is published and a GPU is present. The model that fits is marked Recommended for this PC. The first reply loads it and later replies reuse it. Chat tokens stream with a tokens-per-second count. Stop cancels the reply. The model unloads after it has been idle.
+- Studios stay open while a task runs. A second task waits in a queue you can see, cancel and reorder, then starts when the previous one finishes. Switching studios does not cancel the running task. Drop a file on a studio to add it. Document, research, spreadsheet and visual reviews use the built-in engine when Offline is on.
+- Microsoft Store package version for 5.6.1 is 5.6.199.0, above 5.6.99.0.
+
 ## 5.6.0 — Store release
 
 - Merge the Developer Studio integration branch with the hotfixes already on `main` (iPhone toolchain, hosted admin setup, security review).

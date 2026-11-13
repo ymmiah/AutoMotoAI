@@ -3,7 +3,7 @@
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const { spawn, spawnSync } = require('node:child_process');
-const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } = require('node:fs');
+const { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, copyFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
@@ -3120,6 +3120,106 @@ let browser;
       'Every Studio must share one central Agent bridge: '+name);
   }
   await page.screenshot({path:path.join(output,'all-five-studios-central-agent.png')});
+
+  // 5.6.1: the middle of the sidebar scrolls; New chat stays up and Settings stays down.
+  async function sidebarFits(height) {
+    await page.setViewportSize({ width: 1280, height });
+    const box = await page.evaluate(() => {
+      const side = document.querySelector('#sidebar').getBoundingClientRect();
+      const top = document.querySelector('#newChat').getBoundingClientRect();
+      const help = document.querySelector('#helpLink').getBoundingClientRect();
+      const scroll = document.querySelector('#sideScroll');
+      return {
+        sideBottom: side.bottom, sideTop: side.top, top: top.top, helpBottom: help.bottom,
+        scrollable: scroll.scrollHeight > scroll.clientHeight + 4,
+        virtual: document.querySelector('#convList').dataset.virtual,
+        shown: document.querySelectorAll('#convList .conv').length,
+      };
+    });
+    assert.ok(box.top >= box.sideTop - 1, `New chat stays in the sidebar at ${height}: ${JSON.stringify(box)}`);
+    assert.ok(box.helpBottom <= box.sideBottom + 2, `Help stays in the sidebar at ${height}: ${JSON.stringify(box)}`);
+    assert.equal(box.virtual, '1', `long chat list is virtualised at ${height}`);
+    assert.ok(box.shown > 0 && box.shown < 50, `only visible chats are drawn at ${height}: ${box.shown}`);
+    assert.equal(box.scrollable, true, `the middle of the sidebar scrolls at ${height}`);
+    const before = await page.locator('#newChat').boundingBox();
+    await page.locator('#sideScroll').evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await page.waitForTimeout(50);
+    const after = await page.locator('#newChat').boundingBox();
+    assert.ok(Math.abs(before.y - after.y) < 2, 'scrolling chats does not move New chat');
+    await page.screenshot({ path: path.join(output, `sidebar-1280x${height}.png`) });
+  }
+  for (let i = 0; i < 50; i++) {
+    const status = await page.evaluate(async (n) => {
+      const response = await fetch('/api/conversations', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Scroll chat ' + n, mode: 'chat' }),
+      });
+      return response.status;
+    }, i);
+    assert.equal(status, 200, 'could not create a chat for the scroll test');
+  }
+  await page.locator('#convSearch').fill('Scroll chat');
+  await page.waitForFunction(() => document.querySelector('#convList').dataset.virtual === '1');
+  await sidebarFits(600);
+  await sidebarFits(400);
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.locator('#toggleSide').click();
+  await page.locator('#sidebar').waitFor();
+  const phone = await page.evaluate(() => {
+    const side = document.querySelector('#sidebar').getBoundingClientRect();
+    const help = document.querySelector('#helpLink').getBoundingClientRect();
+    const top = document.querySelector('#newChat').getBoundingClientRect();
+    return { side, help, top, open: document.querySelector('#app').classList.contains('side-open') };
+  });
+  assert.equal(phone.open, true);
+  assert.ok(phone.help.bottom <= phone.side.bottom + 2 && phone.help.top >= phone.side.top, JSON.stringify(phone));
+  assert.ok(phone.top.top >= phone.side.top && phone.top.bottom <= phone.help.top, 'phone layout keeps the pinned rows');
+  await page.screenshot({ path: path.join(output, 'sidebar-phone.png') });
+  await page.locator('#closeSide').click();
+
+  // Settings shell paints from cache. A slow catalogue must not hold the page closed.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const slow = async route => { await delay(2000); try { await route.continue(); } catch { /* the check already finished */ } };
+  await page.route('**/api/local**', slow);
+  await page.route('**/api/settings**', slow);
+  const opened = Date.now();
+  await page.locator('.nav [data-page="settings"]').click();
+  await page.locator('.set-nav').waitFor({ timeout: 1000 });
+  const wall = Date.now() - opened;
+  const shell = await page.evaluate(() => window.__automotoSettingsShellMs);
+  assert.ok(shell < 150, `settings shell render budget, measured ${shell} ms`);
+  assert.ok(wall < 1000, `settings became visible in ${wall} ms while catalogue calls were delayed`);
+  await page.screenshot({ path: path.join(output, 'settings-shell.png') });
+  await page.unroute('**/api/local**');
+  await page.unroute('**/api/settings**');
+  console.log(`settings shell ${shell} ms, visible in ${wall} ms`);
+
+  // The queue stays on screen when the studio changes, and a second task waits.
+  await page.locator('.nav [data-page="documents"]').click();
+  await page.locator('.studio-drop').waitFor();
+  await page.evaluate(() => window.automotoQueue.enqueue({
+    studio: 'documents', title: 'Summarise the draft',
+    run: () => new Promise(resolve => setTimeout(resolve, 1500)),
+  }));
+  await page.evaluate(() => window.automotoQueue.enqueue({
+    studio: 'research', title: 'Check the sources',
+    run: async () => 'ok',
+  }));
+  await page.locator('#studioQueue [data-status="running"]').waitFor();
+  await page.locator('#studioQueue [data-status="queued"]').waitFor();
+  await page.locator('.nav [data-page="visual"]').click();
+  assert.equal(await page.locator('#studioQueue [data-status="running"]').isVisible(), true, 'switching studios keeps the running task');
+  assert.match(await page.locator('#studioQueue').innerText(), /Summarise the draft/);
+  await page.screenshot({ path: path.join(output, 'studio-queue.png') });
+  await page.screenshot({ path: path.join(output, 'studio-visual.png') });
+  await page.locator('[data-sq-cancel]').last().click();
+  await page.waitForFunction(() => !document.querySelector('#studioQueue [data-status="queued"]'));
+  const shots = ['sidebar-1280x600.png', 'sidebar-1280x400.png', 'sidebar-phone.png', 'settings-shell.png', 'studio-queue.png', 'studio-visual.png'];
+  try {
+    const artifacts = '/opt/cursor/artifacts';
+    mkdirSync(artifacts, { recursive: true });
+    for (const name of shots) copyFileSync(path.join(output, name), path.join(artifacts, name));
+  } catch { /* the smoke directory still has the screenshots */ }
 
   // Serve the bundled launcher through a browser route; native commands are mocked.
   await page.setViewportSize({ width: 1200, height: 1050 });

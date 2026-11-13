@@ -152,7 +152,7 @@ def _evidence(report: dict) -> list[dict]:
 def _prompt(claim: str, evidence: list[dict]) -> dict:
     """Sources are JSON user data; no tool calls or role changes are exposed."""
     return {
-        "model": document_ai._selected_model(),
+        "model": "builtin" if local_llm.offline() else document_ai._selected_model(),
         "stream": False, "format": "json",
         "options": {"temperature": 0, "num_predict": 1000, "num_ctx": 4096},
         "messages": [
@@ -180,7 +180,26 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _model_and_provider() -> tuple[str, str]:
+    if local_llm.offline():
+        from automoto import offline_review
+
+        try:
+            return offline_review.builtin_model(), "llama.cpp"
+        except ValueError as exc:
+            raise HTTPException(503, str(exc)) from None
+    document_ai._loopback_ollama()
+    return document_ai._selected_model(), "ollama-loopback"
+
+
 def _ask_local(claim: str, evidence: list[dict]) -> dict:
+    if local_llm.offline():
+        from automoto import offline_review
+
+        try:
+            return offline_review.complete_json(_prompt(claim, evidence)["messages"], timeout=90, max_tokens=1200)
+        except ValueError as exc:
+            raise HTTPException(503, str(exc)[:240] or "The built-in offline model did not respond.") from None
     url = document_ai._loopback_ollama() + "/api/chat"
     payload = _prompt(claim, evidence)
     request = urllib.request.Request(url, method="POST",
@@ -301,6 +320,7 @@ def generate(body: GenerateIn, request: Request):
     _auth(request)
     entry, _, digest = _current(body)
     evidence = _evidence(entry["report"])
+    model, provider = _model_and_provider()
     answer = _ask_local(entry["report"]["claim"], evidence)
     # Avoid persisting output if files changed during the long local model call.
     _current(body)
@@ -308,13 +328,13 @@ def generate(body: GenerateIn, request: Request):
     path, data = _save("proposals", SCHEMA, {
         "comparison_path": body.comparison_path, "comparison_sha256": digest,
         "human_claim": entry["report"]["claim"], "evidence": evidence,
-        "points": points, "model": document_ai._selected_model(),
-        "provider": "ollama-loopback", "review_state": "unreviewed",
+        "points": points, "model": model,
+        "provider": provider, "review_state": "unreviewed",
     })
     return {
         "path": path.relative_to(document_workspace._root()).as_posix(),
         "sha256": hashlib.sha256(data).hexdigest(), "points": points, "evidence": evidence,
-        "model": document_ai._selected_model(), "provider": "ollama-loopback",
+        "model": model, "provider": provider,
         "human_review_required": True, "scientifically_verified": False,
         "source_files_modified": False, "comparison_modified": False,
         "published": False, "no_cloud_fallback": True,
