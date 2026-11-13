@@ -16,7 +16,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     "dsPythonRoot","dsGoRoot","dsRustRoot","dsNativeRoot","dsJvmRoot",
     "dsDotnetRoot","dsAndroidRoot","dsSwiftRoot","dsMobileRoot","dsShellRoot",
     "dsScriptingRoot","dsScienceRoot","dsFunctionalRoot","dsBeamRoot",
-    "dsLogicRoot","dsLegacyRoot"];
+    "dsLogicRoot","dsLegacyRoot","dsWasmRoot"];
   const title=document.createElement("header");
   title.className="ds-v33-title";
   title.innerHTML='<div class="ds-v33-brand"><span class="ds-v33-mark" aria-hidden="true">◇</span>'+
