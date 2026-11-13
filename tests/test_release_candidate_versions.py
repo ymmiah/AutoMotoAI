@@ -18,7 +18,7 @@ def _toml_version(path, prefix="version"):
 
 def test_release_desktop_engine_and_rust_lock_versions():
     app = json.loads(_read("apps/desktop/src-tauri/tauri.conf.json"))["version"]
-    assert re.fullmatch(r"\d+\.\d+\.\d+-beta\.\d+", app)
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:-beta\.\d+)?", app)
     assert json.loads(_read("apps/desktop/package.json"))["version"] == app
     assert json.loads(_read("apps/desktop/package-lock.json"))["version"] == app
     assert json.loads(_read("apps/desktop/package-lock.json"))["packages"][""]["version"] == app
@@ -34,12 +34,15 @@ def test_vs_code_manifest_keeps_valid_extension_version_and_beta_asset_name():
     app = json.loads(_read("apps/desktop/src-tauri/tauri.conf.json"))["version"]
     manifest = json.loads(_read("apps/vscode/package.json"))
     lock = json.loads(_read("apps/vscode/package-lock.json"))
-    # VS Code's manifest version stays stable semver; --pre-release marks beta.
+    # VS Code's manifest version stays plain semver. A beta app marks the VSIX pre-release.
     assert re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"])
     assert lock["version"] == manifest["version"]
     assert lock["packages"][""]["version"] == manifest["version"]
-    assert "--pre-release" in manifest["scripts"]["package"]
-    assert app in manifest["scripts"]["package"]
+    script = manifest["scripts"]["package"]
+    if "-beta." in app:
+        assert "--pre-release" in script and app in script
+    else:
+        assert "--pre-release" not in script and manifest["version"] in script
     assert lock["packages"][""]["license"] == manifest["license"]
 
 

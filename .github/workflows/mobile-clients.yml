@@ -1,0 +1,83 @@
+name: Mobile clients
+
+# Debug packages only. They prove the Flutter project still builds.
+# Store signing, Apple certificates and Play upload keys stay on the owner's machine.
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - "docs/mobile/**"
+      - "automoto/web/static/app.css"
+      - "automoto/web/index.html"
+      - ".github/workflows/mobile-clients.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "docs/mobile/**"
+      - "automoto/web/static/app.css"
+      - "automoto/web/index.html"
+      - ".github/workflows/mobile-clients.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-clients-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android and iOS project folders
+        run: bash tool/bootstrap.sh
+      - name: Analyse
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+      - name: Debug APK and app bundle
+        run: |
+          flutter build apk --debug
+          flutter build appbundle --debug
+          test -f build/app/outputs/flutter-apk/app-debug.apk
+          test -f build/app/outputs/bundle/debug/app-debug.aab
+      - uses: actions/upload-artifact@v4
+        with:
+          name: automoto-android-debug
+          path: |
+            apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+            apps/mobile/build/app/outputs/bundle/debug/app-debug.aab
+          if-no-files-found: error
+
+  ios-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android and iOS project folders
+        run: bash tool/bootstrap.sh
+      - name: Simulator build without an Apple certificate
+        run: flutter build ios --simulator --debug --no-codesign
+      - uses: actions/upload-artifact@v4
+        with:
+          name: automoto-ios-simulator
+          path: apps/mobile/build/ios/iphonesimulator/*.app
+          if-no-files-found: error

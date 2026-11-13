@@ -76,8 +76,10 @@ class ProviderSpec:
 
             return local_llm.ollama_url() + "/v1"
         if self.id == "local":
-            from automoto import local_llm
+            from automoto import gguf_runtime, local_llm
 
+            if not (config.env("LOCAL_LLM_URL") or "").strip() and gguf_runtime.ready():
+                return gguf_runtime.ensure_running()
             return local_llm.local_server_url()
         return self.base_url
 
@@ -86,6 +88,10 @@ class ProviderSpec:
             from automoto import local_llm
 
             return local_llm.active_model()
+        if self.id == "local" and not (config.env(self.model_env) if self.model_env else ""):
+            from automoto import gguf_runtime
+
+            return gguf_runtime.active_filename() or self.text_model
         if vision and self.supports_vision:
             return (config.env(self.vision_env) if self.vision_env else None) or self.vision_model or self.text_model
         if strong:

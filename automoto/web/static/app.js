@@ -1427,25 +1427,25 @@ PAGES.settings = async () => {
           <h3>Assistant</h3>
           <p class="set-lead">You write the request. AutoMoto does the files, research and steps, and asks before anything risky.</p>
           <div class="set-now"><span>Approval</span> ${statusPill(s.effective_approval_mode)}<span>New chats</span> <b>${s.default_mode === "chat" ? "Chat" : "Assistant"}</b></div>
-          <label class="field"><span>Approval</span><select class="input" id="apprSel">
+          <label class="field" data-help="approval" title="Ask stops before a risky step. Read-only looks but does not change files. Auto-approve skips the question. Passwords and system folders stay blocked."><span>Approval</span><select class="input" id="apprSel">
             ${[["", "Default (ask, unless AUTOMOTO_APPROVAL is set)"], ["ask", "Ask before risky steps"], ["readonly", "Read-only"], ["auto", "Auto-approve risky steps"]].map(([v, l]) => `<option value="${v}" ${(s.approval_mode || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select>
             <span class="set-hint">Blocked commands never run. Network tools refuse private and local addresses.</span></label>
-          <label class="field"><span>New chats</span><select class="input" id="modeSel">
+          <label class="field" data-help="new-chats" title="Assistant finishes the work. Chat only answers and does not change files or run tools."><span>New chats</span><select class="input" id="modeSel">
             <option value="agent" ${s.default_mode === "agent" ? "selected" : ""}>Assistant</option>
             <option value="chat" ${s.default_mode === "chat" ? "selected" : ""}>Chat</option></select>
             <span class="set-hint">Assistant finishes the work. Chat only answers, and does not change files or run tools.</span></label>
         </section>
         ${HOSTED ? "" : `<section class="set-panel" data-set-panel="offline" id="offlineCard" tabindex="-1" hidden>
           <h3>Offline AI</h3>
-          <p class="set-lead">A model on this computer, through <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>. No API key. With Offline only on, cloud models and web tools stay off. <a href="https://github.com/ymmiah/AutoMotoAI/blob/main/docs/OFFLINE.md" target="_blank" rel="noopener">How it works</a></p>
+          <p class="set-lead" data-help="offline-ai" title="Download a model once. After that it answers with no internet and no extra program to install.">A model on this computer, using the engine built into ${esc(BRAND_SHORT)}. No API key, and no Ollama or Python install. With Offline only on, cloud models and web tools stay off. <a href="#/help">How it works</a></p>
           <div id="offlineBody" aria-live="polite">Checking this computer…</div>
         </section>`}
         <section class="set-panel" data-set-panel="look" tabindex="-1" hidden>
           <h3>Appearance</h3>
           <p class="set-lead">Theme and accent for this computer.</p>
-          <div class="field"><span>Theme</span><div class="seg" role="radiogroup" aria-label="Theme" id="themeSeg">
+          <div class="field" data-help="theme" title="Dark, light, or the same theme as Windows."><span>Theme</span><div class="seg" role="radiogroup" aria-label="Theme" id="themeSeg">
             ${[["dark", "moon", "Dark"], ["light", "sun", "Light"], ["system", "monitor", "System"]].map(([v, i, l]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${theme === v}">${icon(i)}<span class="lbl">${l}</span></button>`).join("")}</div></div>
-          <div class="field"><span>Accent</span><div class="swatches" id="swatches">${ACCENTS.map((c) => `<button type="button" class="swatch" style="background:${c}" data-c="${c}" aria-label="Accent ${c}" aria-pressed="${c === accent}"></button>`).join("")}
+          <div class="field" data-help="accent" title="Highlight colour for buttons and the open chat."><span>Accent</span><div class="swatches" id="swatches">${ACCENTS.map((c) => `<button type="button" class="swatch" style="background:${c}" data-c="${c}" aria-label="Accent ${c}" aria-pressed="${c === accent}"></button>`).join("")}
             <input type="color" id="accentPick" value="${esc(accent)}" aria-label="Custom accent colour"></div></div>
         </section>
         <section class="set-panel" data-set-panel="folders" tabindex="-1" hidden>
@@ -1458,29 +1458,29 @@ PAGES.settings = async () => {
           <h3>Providers</h3>
           <p class="set-lead">Auto tries this list from the top and moves on when a provider errors.</p>
           <div class="set-block">
-            <h4>Order</h4>
+            <h4 data-help="provider-order" title="Auto tries this list from the top and moves on when a provider errors.">Order</h4>
             <div id="orderList"></div>
             <div class="row"><button type="button" class="btn primary sm" id="orderSave">Save order</button><button type="button" class="btn sm" id="orderReset">Use the recommended order</button></div>
           </div>
           <div class="set-block">
-            <h4>Keys for this tab</h4>
+            <h4 data-help="provider-keys" title="Used until you close this window. Not written to disk.">Keys for this tab</h4>
             <p class="set-lead">Kept in this tab only, sent with each request, and wiped when the tab closes. A key in <code>.env</code> works without this.</p>
             <form id="keyForm">${st.providers.filter((p) => !p.local).map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
             <div class="row"><button class="btn primary" type="submit">Use keys for this tab</button><button type="button" class="btn danger" id="forgetKeys">Forget keys</button></div></form>
           </div>
-          ${HOSTED ? "" : `<div class="set-block"><h4>Test keys</h4><p class="set-lead">One tiny request to every model ${BRAND_SHORT} may use. Models the key cannot see are skipped for an hour.</p>
+          ${HOSTED ? "" : `<div class="set-block" data-help="test-keys" title="One tiny request per model, so you can see which ones answer."><h4>Test keys</h4><p class="set-lead">One tiny request to every model ${BRAND_SHORT} may use. Models the key cannot see are skipped for an hour.</p>
             <div class="row"><button type="button" class="btn sm primary" id="doctorRun">Test keys</button></div><div id="doctorOut" aria-live="polite"></div></div>`}
         </section>
         <section class="set-panel" data-set-panel="more" tabindex="-1" hidden>
           <h3>More</h3>
           <div class="set-block">
-            <h4>Connectors</h4>
+            <h4 data-help="connectors" title="Optional sign-in to another service. Each action still asks first.">Connectors</h4>
             <p class="set-lead">Official servers where they exist. Remote ones sign in with OAuth in your browser on first use. Tokens stay in <code>.env</code> and are never shown here. Each connector tool asks before it runs.</p>
             <div id="connList" class="muted">Loading…</div>
             <div class="row"><button type="button" class="btn sm" id="connReload">Reconnect now</button></div>
           </div>
           <div class="set-block">
-            <h4>For developers</h4>
+            <h4 data-help="advanced-tools" title="The assistant picks tools. This list is only for looking under the hood.">For developers</h4>
             <p class="set-lead">${BRAND_SHORT} picks the tools and skills for each request. Open these only to look under the hood.</p>
             <div class="row"><a class="btn sm" href="#/tools">Tools</a><a class="btn sm" href="#/skills">Skills</a></div>
           </div>
@@ -1573,103 +1573,129 @@ PAGES.settings = async () => {
   try { d = await api("/api/local"); }
   catch (err) { if (box.isConnected) box.textContent = `Could not check local AI: ${err.message}`; return; }
   if (!box.isConnected) return;
-  const o = d.ollama, rec = d.recommend;
-  const present = new Set((o.models || []).map((m) => m.name));
-  const models = [...(rec.models || [])];
-  for (const m of o.models || []) {
-    if (!models.some((x) => x.name === m.name)) {
-      models.unshift({ name: m.name, label: m.name, download_gb: m.size_gb,
-                       note: "Installed model on this computer.", recommended: false });
-    }
+  const g = d.gguf || { models: [], custom: [], runtime: {}, jobs: {}, why: "" };
+  const runtime = g.runtime || {};
+  const jobs = g.jobs || {};
+  const stateName = runtime.running ? "running" : runtime.installed ? "installed" : "missing";
+  const stateLabel = runtime.running ? "Running on this computer" : runtime.installed ? "Installed" : "Not installed";
+  const families = [];
+  for (const model of g.models || []) {
+    if (!families.includes(model.family)) families.push(model.family);
   }
-  const progress = d.pulls || {};
-  const modelRow = (m) => {
-    const ready = present.has(m.name) || present.has(m.name + ":latest");
-    const pulling = progress[m.name]?.state === "downloading";
-    const error = progress[m.name]?.state === "error" ? progress[m.name].error : "";
-    const active = d.ollama_enabled && (d.model === m.name || d.model + ":latest" === m.name);
-    const limited = m.tier === "limited" ? '<span class="pill bad">Limited</span>' : "";
-    const recommended = m.recommended ? '<span class="pill">Recommended</span>' : "";
-    const action = ready
-      ? `<button type="button" class="btn sm ${active ? "" : "primary"}" data-use="${esc(m.name)}" ${active || d.model_from_env ? "disabled" : ""} aria-pressed="${active ? "true" : "false"}">${active ? "In use" : "Use"}</button><button type="button" class="btn sm" data-test="${esc(m.name)}">Test</button>`
-      : pulling
-        ? `<span class="muted" aria-live="polite">Downloading ${progress[m.name].percent || 0}%</span>`
-        : `<button type="button" class="btn sm" data-pull="${esc(m.name)}" ${o.running ? "" : "disabled"}>Download ${m.download_gb || "?"} GB</button>`;
-    return `<div class="model-row"><div><b>${esc(m.label)}</b> ${recommended} ${limited}<div class="muted small">${esc(m.name)}${m.note ? ` · ${esc(m.note)}` : ""}</div>${error ? `<div class="bad small">${esc(error)}</div>` : ""}</div><div class="model-actions">${action}</div></div>`;
+  const row = (m) => {
+    const job = jobs[m.id];
+    const pulling = job?.state === "downloading";
+    const error = job?.state === "error" ? job.error : "";
+    const active = g.selected === m.id;
+    const recommended = g.best === m.id ? '<span class="pill">Best fit</span>' : "";
+    const blocked = !m.can_run ? '<span class="pill bad">Won\'t fit</span>' : "";
+    let action = "";
+    if (!m.installed && !m.can_download) action = `<span class="muted small">${m.downloadable ? "Too big for this computer" : "Not downloaded here"}</span>`;
+    else if (m.installed) {
+      action = `<button type="button" class="btn sm ${active ? "" : "primary"}" data-gguf-use="${esc(m.id)}" ${!m.can_run || active ? "disabled" : ""}>${active ? "In use" : "Use"}</button>
+        <button type="button" class="btn sm" data-gguf-test="${esc(m.id)}" ${m.can_run ? "" : "disabled"}>Test</button>
+        <button type="button" class="btn sm" data-gguf-del="${esc(m.id)}">Delete</button>`;
+    } else if (pulling) action = `<span class="muted" aria-live="polite">Downloading ${job.percent || 0}%</span>`;
+    else action = `<button type="button" class="btn sm" data-gguf-pull="${esc(m.id)}" ${m.can_download ? "" : "disabled"}>Download ${m.download_gb || "?"} GB</button>`;
+    const needs = m.min_ram_gb ? `${m.download_gb || "?"} GB disk · about ${m.min_ram_gb} GB memory` : `${m.download_gb || "?"} GB disk`;
+    return `<div class="model-row"><div><b>${esc(m.label)}</b> ${recommended} ${blocked}<div class="muted small">${esc(m.family)} · ${esc(needs)}${m.params ? ` · ${esc(m.params)}` : ""}</div><div class="muted small">${esc(m.reason || m.note || "")}</div>${m.license ? `<div class="muted small">Licence: ${esc(m.license)}</div>` : ""}${error ? `<div class="bad small">${esc(error)}</div>` : ""}</div><div class="model-actions">${action}</div></div>`;
   };
+  const grouped = families.map((family) => `<h4 class="model-family">${esc(family)}</h4>` + (g.models || []).filter((m) => m.family === family).map(row).join("")).join("");
+  const custom = (g.custom || []).map(row).join("");
+  const o = d.ollama || { models: [], running: false, installed: false };
   box.classList.remove("muted");
-  const thinking = d.think === true ? "on" : (d.think ? String(d.think) : "off");
-  const stateName = o.running ? "running" : o.installed ? "installed" : "missing";
-  const stateLabel = o.running ? "Running on this computer" : o.installed ? "Installed, not running" : "Not installed";
-  const primary = o.running ? "" : o.installed
-    ? `<button type="button" class="btn primary sm" id="localStart">Start local AI</button>`
-    : `<a class="btn primary sm" href="https://ollama.com/download" target="_blank" rel="noopener">Get Ollama</a>`;
   box.innerHTML = `
     <div class="ai-status" data-state="${stateName}">
       <span class="ai-dot" aria-hidden="true"></span>
-      <div><b>${stateLabel}</b><div class="muted small">${esc(rec.why || "")}</div></div>
-      <div class="ai-status-act"><button type="button" class="btn sm" id="offlineCheck">Refresh</button>${primary}</div>
+      <div><b>Built-in engine: ${stateLabel}</b><div class="muted small">${esc(g.why || "")}${g.free_gb != null ? ` About ${esc(String(g.free_gb))} GB free.` : ""}</div></div>
+      <div class="ai-status-act"><button type="button" class="btn sm" id="offlineCheck">Refresh</button></div>
     </div>
-    ${d.substitution ? `<p class="small"><span class="pill bad">${esc(d.substitution.message)}</span></p>` : ""}
-    ${rec.upgrade ? `<p class="muted small">Stronger option: <b>${esc(rec.upgrade.name)}</b>. ${esc(rec.upgrade.note)}</p>` : ""}
-    <p class="muted small">Context ${esc(String(d.context || rec.context || "?"))} tokens · Thinking ${esc(thinking)}.${o.running && o.version ? ` Ollama ${esc(o.version)}.` : ""}</p>
-    <div class="model-head"><b>Models</b><span class="muted small">${present.size ? `${present.size} downloaded` : "None downloaded yet"}</span></div>
-    ${models.length ? models.map(modelRow).join("") : '<p class="muted small">No recommended model for this computer yet.</p>'}
-    ${o.running ? `<form id="localCustom" class="row"><input class="input" name="name" aria-label="Ollama library model name" placeholder="Other model, for example gemma3:4b" required><button class="btn sm" type="submit">Download by name</button></form>` : ""}
-    ${o.installed && !o.running ? '<p class="muted small">Starts Ollama on this computer. No cloud service is involved.</p>' : ""}
-    <label class="switch-row"><span><b>Offline only</b><span class="set-hint">Cloud models and web tools stay off. The assistant keeps working with the model on this PC.</span></span>
+    ${runtime.message ? `<p class="small">${esc(runtime.message)}</p>` : ""}
+    <p class="muted small">The first download also fetches the engine (llama.cpp). After that, the model answers with no internet. Full Kimi K2 is listed only to show why it does not fit a normal PC.</p>
+    ${grouped || '<p class="muted small">No models to show.</p>'}
+    ${custom ? `<h4 class="model-family">Imported</h4>${custom}` : ""}
+    <form id="ggufImport" class="row"><input class="input" name="path" aria-label="Path to a GGUF file on this computer" placeholder="Path to a .gguf file already on this computer"><button class="btn sm" type="submit">Import</button></form>
+    <label class="btn sm file-pick">Upload a GGUF<input id="ggufFile" type="file" accept=".gguf,application/octet-stream" hidden></label>
+    <label class="switch-row" data-help="offline-only" title="Cloud models and web search stay off."><span><b>Offline only</b><span class="set-hint">Cloud models and web tools stay off. Chat keeps working with the model on this PC.</span></span>
       <input type="checkbox" id="offlineSw" ${d.offline ? "checked" : ""} ${d.offline_from_env ? "disabled" : ""}></label>
-    <div class="row"><button type="button" class="btn sm" id="localCloud" ${d.offline_from_env ? "disabled" : ""}>Use cloud providers</button>${d.ollama_enabled ? '<button type="button" class="btn sm" id="offlineOff">Turn off the local model</button>' : ""}</div>
-    ${d.offline_from_env ? '<p class="muted small">AUTOMOTO_OFFLINE in .env controls offline mode. Change that setting to enable cloud mode.</p>' : ""}
-    ${d.model_from_env ? '<p class="muted small">OLLAMA_MODEL in .env locks the selected model. Remove it to change models here.</p>' : ""}`;
+    <div class="row"><button type="button" class="btn sm" id="localCloud" ${d.offline_from_env ? "disabled" : ""}>Use cloud providers</button></div>
+    ${d.offline_from_env ? '<p class="muted small">AUTOMOTO_OFFLINE in .env controls offline mode. Change that setting to use cloud models again.</p>' : ""}
+    <details class="adv-ollama"><summary>Already using Ollama? Optional.</summary>
+      <p class="muted small">${o.running ? "Ollama is running." : o.installed ? "Ollama is installed but not running." : "Ollama is not installed, and it does not need to be."} ${esc(d.model && d.ollama_enabled ? "In use: " + d.model : "")}</p>
+      <div class="row">${o.installed && !o.running ? '<button type="button" class="btn sm" id="localStart">Start Ollama</button>' : ""}${d.ollama_enabled ? '<button type="button" class="btn sm" id="offlineOff">Stop using the Ollama model</button>' : ""}</div>
+    </details>`;
   $("#offlineCheck").onclick = drawOffline;
-  if ($("#localStart")) $("#localStart").onclick = async (e) => {
-    const button = e.currentTarget;
-    button.disabled = true; button.textContent = "Starting…";
+  const setGguF = async (id) => {
     try {
-      const r = await api("/api/local/start", {});
-      toast(r.started ? "Local AI is running" : (r.message || "Local AI did not start"), r.started ? "" : "bad");
+      await api("/api/local/gguf/use", { id });
+      toast(`Using ${id}`);
+      await refreshStatus();
+      await drawOffline();
     } catch (err) { toast(err.message, "bad"); }
-    await drawOffline();
-    await refreshStatus();
   };
-  const setModel = async (name) => {
-    if (await saveSetting({ local_model: name })) {
-      toast(`Selected ${name}`);
-      await refreshStatus(); await drawOffline();
-    }
-  };
-  $$("[data-use]", box).forEach((b) => b.onclick = () => setModel(b.dataset.use));
-  $$("[data-test]", box).forEach((b) => b.onclick = async () => {
-    b.disabled = true; b.textContent = "Testing…";
+  $$("[data-gguf-use]", box).forEach((b) => b.onclick = () => setGguF(b.dataset.ggufUse));
+  $$("[data-gguf-test]", box).forEach((b) => b.onclick = async () => {
+    b.disabled = true; const label = b.textContent; b.textContent = "Testing…";
     try {
-      const test = await api("/api/local/test", { model: b.dataset.test });
-      toast(test.ok ? `${test.model} is ready (answered in ${test.seconds ?? "?"} s${test.tools === false ? "; no tool calling, so tasks run slower" : ""})` : "Model failed to respond", test.ok ? "" : "bad");
+      const test = await api("/api/local/test", { model: b.dataset.ggufTest, engine: "gguf" });
+      toast(test.ok ? `${test.model} answered in ${test.seconds ?? "?"} s` : "The model did not answer", test.ok ? "" : "bad");
     } catch (err) { toast(err.message, "bad"); }
-    finally { b.disabled = false; b.textContent = "Test"; }
+    finally { b.disabled = false; b.textContent = label; }
   });
-  const beginPull = async (name) => {
-    try {
-      await api("/api/local/pull", { model: name });
-      toast(`Downloading ${name} to this computer`);
-    } catch (err) { toast(err.message, "bad"); return; }
+  $$("[data-gguf-del]", box).forEach((b) => b.onclick = async () => {
+    if (!(await confirmDialog("Delete this model from this computer?", { ok: "Delete" }))) return;
+    try { await api("/api/local/gguf/delete", { id: b.dataset.ggufDel }); toast("Model deleted"); await drawOffline(); }
+    catch (err) { toast(err.message, "bad"); }
+  });
+  const beginPull = async (id) => {
+    try { await api("/api/local/gguf/pull", { id }); toast("Downloading. The first time also fetches the engine."); }
+    catch (err) { toast(err.message, "bad"); return; }
     for (let i = 0; i < 1800 && box.isConnected; i++) {
       await sleep(2000);
       if (!box.isConnected) return;
       let next;
       try { next = await api("/api/local"); } catch { continue; }
-      const job = next.pulls?.[name];
-      const progressItem = $$("[data-pull]", box).find((e) => e.dataset.pull === name);
+      const job = next.gguf?.jobs?.[id];
+      const progressItem = $$("[data-gguf-pull]", box).find((e) => e.dataset.ggufPull === id);
       if (progressItem) progressItem.textContent = `Downloading ${job?.percent || 0}%`;
-      if (job?.state === "done") { await setModel(name); return; }
+      if (job?.state === "done") { await setGguF(id); return; }
       if (job?.state === "error") { toast(job.error || "Download failed", "bad"); await drawOffline(); return; }
     }
   };
-  $$("[data-pull]", box).forEach((b) => b.onclick = () => { b.disabled = true; beginPull(b.dataset.pull); });
-  if ($("#localCustom")) $("#localCustom").onsubmit = (e) => {
+  $$("[data-gguf-pull]", box).forEach((b) => b.onclick = () => { b.disabled = true; beginPull(b.dataset.ggufPull); });
+  $("#ggufImport").onsubmit = async (e) => {
     e.preventDefault();
-    const name = new FormData(e.currentTarget).get("name")?.trim();
-    if (name) beginPull(name);
+    const path = new FormData(e.currentTarget).get("path")?.trim();
+    if (!path) return;
+    try {
+      const saved = await api("/api/local/gguf/import", { path });
+      toast(`Imported ${saved.label || saved.id}`);
+      await setGguF(saved.id);
+    } catch (err) { toast(err.message, "bad"); }
+  };
+  $("#ggufFile").onchange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    try {
+      const headers = { ...(TOKEN ? { "X-AutoMoto-Token": TOKEN } : {}), ...(CSRF ? { "X-CSRF-Token": CSRF } : {}) };
+      const response = await fetch("/api/local/gguf/upload", { method: "POST", body, credentials: "same-origin", headers });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Upload failed");
+      toast(`Imported ${data.label || file.name}`);
+      await setGguF(data.id);
+    } catch (err) { toast(err.message, "bad"); }
+  };
+  if ($("#localStart")) $("#localStart").onclick = async (e) => {
+    const button = e.currentTarget;
+    button.disabled = true; button.textContent = "Starting…";
+    try {
+      const r = await api("/api/local/start", {});
+      toast(r.started ? "Ollama is running" : (r.message || "Ollama did not start"), r.started ? "" : "bad");
+    } catch (err) { toast(err.message, "bad"); }
+    await drawOffline();
   };
   $("#offlineSw").onchange = async (e) => {
     const checked = e.target.checked;
@@ -1683,17 +1709,18 @@ PAGES.settings = async () => {
     if (await saveSetting({ offline: false })) {
       localStorage.setItem("automoto_prefer", "auto");
       await refreshStatus(); await drawOffline();
-      toast("Cloud providers available. Choose an AI from the top of chat.");
+      toast("Cloud providers are available again.");
     }
   };
   if ($("#offlineOff")) $("#offlineOff").onclick = async () => {
     if (await saveSetting({ offline: false, local_model: null })) {
       localStorage.setItem("automoto_prefer", "auto");
       await refreshStatus(); await drawOffline();
-      toast("Local model disabled; cloud providers are available.");
+      toast("Ollama model turned off. A built-in model stays selected if you chose one.");
     }
   };
 };
+
   drawOffline();
   const drawConns = async () => {
     try {
@@ -1735,7 +1762,7 @@ const COMMANDS = [
   { t: "Theme: system", i: "monitor", run: () => { applyTheme("system"); saveSetting({ theme: "system" }); } },
   { t: "Toggle sidebar", i: "menu", k: "mod+B", run: () => toggleSidebar() },
   { t: "Toggle info panel", i: "panel", run: () => $("#toggleInfo").click() },
-  { t: "Help / Guide (opens the step-by-step guide)", i: "info", run: () => window.open(GUIDE_URL, "_blank", "noopener") },
+  { t: "Help / Guide", i: "info", run: () => (location.hash = "#/help") },
   { t: "Forget BYOK keys in this tab", i: "key", run: () => { sessionStorage.removeItem("automoto_keys"); refreshStatus(); toast("Keys forgotten"); } },
 ];
 let palItems = [], palSel = 0;
@@ -1796,6 +1823,7 @@ document.addEventListener("keydown", (e) => {
   if (mod && k === "k") { e.preventDefault(); $("#palette").hidden ? openPalette() : closePalette(); return; }
   if (mod && (k === "n" || (e.shiftKey && k === "o"))) { e.preventDefault(); newChat(); return; }
   if (mod && k === "b") { e.preventDefault(); toggleSidebar(); return; }
+  if (e.key === "F1") { e.preventDefault(); location.hash = "#/help"; return; }
   if (e.key === "Escape") {
     if (!$("#palette").hidden) return closePalette();
     if (!$("#modal").hidden) return;
@@ -1808,6 +1836,23 @@ document.addEventListener("keydown", (e) => {
     if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
   }
 });
+
+PAGES.help = async () => {
+  let guide;
+  try { guide = await api("/api/help"); }
+  catch (e) { page("Help", "The guide could not be loaded.", `<p class="bad">${esc(e.message)}</p>`); return; }
+  const cards = (items) => items.map((item) => `<article class="help-item"><h4>${esc(item.title || item.name)}</h4><p>${esc(item.text || item.description || "")}</p></article>`).join("");
+  const tools = guide.tools.map((tool) => `<article class="help-item"><h4><code>${esc(tool.name)}</code> <span class="pill">${esc(tool.level)}</span></h4><p>${esc(tool.description)}</p></article>`).join("");
+  page("Help", guide.intro, `
+    <section class="help-sec"><h3>Around the app</h3>${cards(guide.pages)}</section>
+    <section class="help-sec"><h3>Settings</h3>${cards(guide.settings)}</section>
+    <section class="help-sec"><h3>Studios</h3>${cards(guide.studios)}</section>
+    <section class="help-sec"><h3>Keyboard</h3><dl class="kv">${guide.shortcuts.map((s) => `<dt><kbd>${esc(s.keys)}</kbd></dt><dd>${esc(s.text)}</dd>`).join("")}</dl></section>
+    <section class="help-sec"><h3>Tools, for anyone who wants the detail</h3>
+      <p class="set-lead">You do not pick these. The assistant does. They stay out of the chat sidebar. Open Settings, then More, for the raw list.</p>
+      ${tools}</section>
+    <p class="muted small"><a href="${GUIDE_URL}" target="_blank" rel="noopener">Longer guide on the web</a> · <a href="https://github.com/ymmiah/AutoMotoAI/blob/main/docs/OFFLINE.md" target="_blank" rel="noopener">Offline AI</a></p>`);
+};
 
 PAGES.documents = async () => {
   const { mountDocuments } = await import("./document-assistant.js?v=" + encodeURIComponent(VERSION));

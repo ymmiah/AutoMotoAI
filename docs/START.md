@@ -68,7 +68,7 @@ You need Windows 10 or 11 (64-bit) and the internet.
    do the safety check in A1 first, or ask an adult or your IT person.
 3. The installer opens. Click **Next** / **Install**, then **Finish**. It takes a few seconds. If the PC doesn't
    have **WebView2** (Windows 11 always has it), the installer downloads it for you.
-4. Open **AutoMoto AI** from the Start menu. The window title says **AutoMoto AI (Beta)**.
+4. Open **AutoMoto AI** from the Start menu. The window title says **AutoMoto AI**.
 
 ![The sign-in screen on Windows](gui-guide/66-windows-sign-in.png)
 

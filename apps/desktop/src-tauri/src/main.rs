@@ -27,8 +27,8 @@ use url::Url;
 /// Default account server baked in at build time (repository variable AUTOMOTO_DEFAULT_SERVER in CI).
 const DEFAULT_SERVER: Option<&str> = option_env!("AUTOMOTO_DEFAULT_SERVER");
 /// The Windows app is a beta while the account server, engine and web GUI are stable releases.
-const CHANNEL: &str = "Beta";
-const TITLE: &str = "AutoMoto AI (Beta)";
+const CHANNEL: &str = "Release";
+const TITLE: &str = "AutoMoto AI";
 const GUIDE: &str = "https://ymmiah.github.io/AutoMotoAI/GUI-GUIDE.html";
 const LINKS: &[(&str, &str)] = &[
     ("guide", GUIDE),
@@ -416,7 +416,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let help = Submenu::with_items(app, "Help", true, &[
         &MenuItem::with_id(app, "guide", "Step-by-step guide", true, Some("F1"))?,
         &MenuItem::with_id(app, "log", "Open the local engine log", true, None::<&str>)?,
-        &MenuItem::with_id(app, "about", "About AutoMoto AI (Beta)", true, None::<&str>)?,
+        &MenuItem::with_id(app, "about", "About AutoMoto AI", true, None::<&str>)?,
     ])?;
     Menu::with_items(app, &[&file, &edit, &help])
 }
@@ -442,7 +442,13 @@ fn on_menu(app: &AppHandle, id: &str) {
             });
         }
         "guide" => {
-            let _ = app.opener().open_url(GUIDE, None::<&str>);
+            if let Some(window) = app.get_webview_window("main") {
+                let script = format!(
+                    "if (document.getElementById('view')) {{ location.hash = '#/help'; }} else {{ location.assign({}); }}",
+                    serde_json::to_string(GUIDE).unwrap_or_else(|_| "\"about:blank\"".into())
+                );
+                let _ = window.eval(script);
+            }
         }
         "log" => {
             if let Ok(d) = app.path().app_log_dir() {
@@ -455,7 +461,7 @@ fn on_menu(app: &AppHandle, id: &str) {
                 .message(format!("AutoMoto AI app {} - {CHANNEL}\n\nYour AI cousin - an agent that actually does the work.\n\n\
                                   Yasin Mohammed Miah, Student of BCU, BSc Computing Top-Up (Hons)\nAGPL-3.0-only, with a commercial licence available\ngithub.com/ymmiah/AutoMotoAI",
                                  env!("CARGO_PKG_VERSION")))
-                .title("About AutoMoto AI (Beta)")
+                .title("About AutoMoto AI")
                 .show(|_| {});
         }
         _ => {}

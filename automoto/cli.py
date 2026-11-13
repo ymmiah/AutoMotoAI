@@ -552,6 +552,11 @@ def cmd_local(args) -> int:
         print(st["substitution"]["message"])
     if rec.get("upgrade"):
         print("Stronger option: " + rec["upgrade"]["note"])
+    gguf = st.get("gguf") or {}
+    if gguf.get("best"):
+        runtime = (gguf.get("runtime") or {})
+        state = "ready" if runtime.get("installed") else "downloads with the first model"
+        print(f"Built-in engine ({state}): suggested model {gguf['best']}. No Ollama install is required.")
     if st["local_server"]:
         print(f"Local OpenAI-compatible server: {st['local_server']}")
     have = {m["name"] for m in o["models"]}

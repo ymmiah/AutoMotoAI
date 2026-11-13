@@ -512,6 +512,30 @@ html[data-chrome="custom"] .palette,
 html[data-chrome="custom"] .modal { top: var(--chrome-h); }
 html[data-chrome="custom"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
 
+/* Chat-first shell: studios and chats in the sidebar, the conversation in the column. */
+.side-group { border: 0; margin: 0; padding: 0; }
+.side-group > summary {
+  list-style: none; cursor: pointer; font-size: 11px; font-weight: 650; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--faint); padding: 10px 10px 4px; min-height: 32px;
+}
+.side-group > summary::-webkit-details-marker { display: none; }
+.nav-foot { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
+.model-family { margin: 18px 0 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.model-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.help-sec { margin: 0 0 26px; }
+.help-sec > h3 { margin: 0 0 8px; font-size: 16px; }
+.help-item { padding: 12px 0; border-top: 1px solid var(--line); }
+.help-item h4 { margin: 0 0 4px; font-size: 14px; font-weight: 650; }
+.help-item p { margin: 0; color: var(--dim); }
+.file-pick { cursor: pointer; }
+.adv-ollama { margin-top: 14px; color: var(--dim); font-size: 13px; }
+.adv-ollama summary { cursor: pointer; }
+.thread { max-width: 760px; }
+@media (pointer: coarse) {
+  .nav a, .set-nav button, .btn, .icon-btn, .new-chat, .side-group > summary { min-height: 44px; }
+  .composer textarea { font-size: 16px; }
+}
+
 .page-inner:has(.settings) { max-width: 1040px; }
 .settings { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 28px; align-items: start; }
 .set-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }

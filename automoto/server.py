@@ -28,7 +28,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -917,12 +917,82 @@ def local_ai_start(request: Request) -> dict[str, Any]:
 def local_ai_test(request: Request, body: dict[str, Any]) -> dict[str, Any]:
     """Check that a downloaded local model can actually answer."""
     _authorise(request, local_only=True)
-    from automoto import local_llm
+    from automoto import gguf_runtime, local_llm
 
+    model = str(body.get("model") or "")
     try:
-        return local_llm.test_ollama(str(body.get("model") or ""))
+        if body.get("engine") == "gguf" or gguf_runtime.by_id(model) or model.startswith("custom-"):
+            return gguf_runtime.test_model(model)
+        return local_llm.test_ollama(model)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/pull")
+def local_gguf_pull(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Download one curated GGUF model. The built-in engine is fetched on first use."""
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.pull(str(body.get("model") or body.get("id") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/use")
+def local_gguf_use(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.use(str(body.get("model") or body.get("id") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/delete")
+def local_gguf_delete(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.delete(str(body.get("model") or body.get("id") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/import")
+def local_gguf_import(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Copy a GGUF file that is already on this computer into the model folder."""
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.import_file(Path(str(body.get("path") or "")))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.post("/api/local/gguf/upload")
+def local_gguf_upload(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
+    """Accept a GGUF upload from the browser. The bytes are written to the model folder."""
+    _authorise(request, local_only=True)
+    from automoto import gguf_runtime
+
+    try:
+        return gguf_runtime.import_stream(file.file, file.filename or "")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.get("/api/help")
+def help_guide(request: Request) -> dict[str, Any]:
+    """Plain-language guide for settings, studios and tools. No secrets."""
+    _authorise(request)
+    from automoto.help_guide import guide
+
+    return guide()
 
 
 @app.get("/api/skills")

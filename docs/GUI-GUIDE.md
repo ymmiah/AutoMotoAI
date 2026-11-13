@@ -486,7 +486,7 @@ Click **Settings**.
 | Section | What you can do |
 |---|---|
 | **Assistant** | How new chats start, and **Approval**: *Ask* (recommended), *Read-only*, or *Auto* (no questions — only in a throwaway sandbox). You write the request; AutoMoto does the steps. |
-| **Offline AI** | Status of Ollama on this PC, the model in use, download, and **Offline only**. |
+| **Offline AI** | Built-in models on this PC: download, switch, test, delete, import a GGUF file, disk and memory needs, and **Offline only**. Ollama is optional and tucked away. |
 | **Appearance** | Dark / Light / System theme and an accent colour. |
 | **Folders** | Add project folders the assistant may also use (it still asks before touching them). |
 | **Providers** | Which AI *Auto* tries first, keys for this tab only, and **Test keys**. |
