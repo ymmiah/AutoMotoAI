@@ -234,3 +234,25 @@ def test_v23_script_still_requires_status_ok_and_ui_marker():
     assert "V23_ANDROID_RUNNING" in text
     assert "cat /sdcard/v23-window.xml | grep" not in text
     assert "| grep -q V23_ANDROID_RUNNING" not in text
+
+
+def test_desktop_workflow_signs_before_updater_and_skips_msix():
+    """Authenticode signing must run before updater .sig / SHA256SUMS, and must not sign Store packages."""
+    text = (WORKFLOWS / "desktop.yml").read_text(encoding="utf-8")
+    assert "azure/trusted-signing-action@" in text
+    assert "Azure Artifact Signing skipped" in text
+    assert "TRUSTED_SIGNING_ENDPOINT" in text
+    assert "TRUSTED_SIGNING_ACCOUNT" in text
+    assert "TRUSTED_SIGNING_PROFILE" in text
+    assert "AZURE_TENANT_ID" in text and "AZURE_CLIENT_ID" in text
+    sign_app = text.find("Sign the app executable")
+    sign_inst = text.find("Sign the Windows installers")
+    script_call = text.find("updater-sign.ps1")
+    msix = text.find("Microsoft Store package (MSIX)")
+    assert -1 not in (sign_app, sign_inst, script_call, msix), (sign_app, sign_inst, script_call, msix)
+    assert sign_app < sign_inst < script_call < msix
+    # The Store package is built after signing and is not in the installer file filter.
+    sign_block = text[sign_inst:script_call]
+    assert "files-folder-filter: exe,msi" in sign_block
+    assert "msix" not in sign_block.lower()
+    assert "docs/signing/TRUSTED_SIGNING_SETUP.md" in text

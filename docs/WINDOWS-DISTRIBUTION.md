@@ -1,31 +1,40 @@
 # Shipping the Windows app: SmartScreen, signing, winget and the Microsoft Store
 
-Status for **5.6.0 Beta 3** (checked 31 October 2026): the app is a **beta**, published **free as a GitHub
-pre-release** (`v5.6.0-beta.3`; 5.5.0 stays the latest stable release), as an NSIS
-`.exe` and an `.msi`, **not code-signed**. Updates are signed with the Tauri updater key, so the app only installs
-updates that came from this repository's release workflow. A winget manifest is ready in `packaging/winget/` but
-**has not been submitted**. A Microsoft Store (MSIX) edition is prepared (below); nothing has been signed up for.
+Status for **5.6.0** (13 November 2026): the stable app is on the
+[Microsoft Store](https://apps.microsoft.com/detail/9N9J7FLSSFG8) (package version `5.6.99.0`; the 5.6.0
+update is in certification). That is the **recommended** Windows install; Microsoft signs the Store copy, so
+it does not show an unknown-publisher warning. The GitHub release also has an NSIS `.exe` and an `.msi` as
+**advanced direct installers**. Those stay unsigned, and may show a SmartScreen warning, until Azure Artifact
+Signing is set up ([setup](signing/TRUSTED_SIGNING_SETUP.md)). Updates of the GitHub copy are signed with the
+Tauri updater key, so the app only installs updates that came from this repository's release workflow. A
+winget manifest is ready in `packaging/winget/` but **has not been submitted**.
 
-## What users see today (SmartScreen)
+## What users see (SmartScreen)
 
 Windows SmartScreen checks downloaded programs. An **unsigned** program, or a new one without download reputation,
-shows **"Windows protected your PC"**. Users click **More info → Run anyway**. That's expected for the 5.6.0 beta.
+shows **"Windows protected your PC"** or **Unknown publisher**. Users of the GitHub `.exe`/`.msi` click
+**More info → Run anyway**. The **Microsoft Store** copy does not show that warning.
 
 * Reputation is built per signing certificate (or per file for unsigned files), over time and downloads.
   **EV certificates no longer skip this**: Microsoft says paying for EV just to avoid the warning "is no longer justified".
   — [Microsoft Learn: SmartScreen reputation for Windows app developers](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)
-* Microsoft's own signing service (**Azure Artifact Signing**, formerly Trusted Signing, about US$9.99/month) is
-  open to organisations in the USA, Canada, the EU and the UK, but to **individual developers only in the USA and
-  Canada** — so not to an individual in the UK, who would need an OV certificate from a certificate authority.
-  — same page, and [Code signing options for Windows app developers](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options)
+* Microsoft's own signing service (**Azure Artifact Signing**, formerly Trusted Signing, US$9.99/month on the
+  Basic SKU) is wired in CI and ready to sign the GitHub `.exe` and `.msi` once the Azure account and GitHub
+  secrets are in place. Public Trust certificates are available to **organisations** in the UK, but to
+  **individual developers only in the USA and Canada** — so an individual in the UK cannot complete individual
+  identity validation today. Full owner steps, current prices and this eligibility rule:
+  [TRUSTED_SIGNING_SETUP.md](signing/TRUSTED_SIGNING_SETUP.md).
+  — [Quickstart: Set up Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart),
+  [Code signing options for Windows app developers](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options)
 
 The Windows app draws its own caption (Menu, minimize, maximize, close) instead of the system title-bar buttons. How that is wired, including MSIX notes: [WINDOWS-CHROME.md](WINDOWS-CHROME.md).
 
-## Chosen route: the Microsoft Store (MSIX)
+## Chosen route: the Microsoft Store (MSIX) as the main download
 
-Checked 31 October 2026. The plan is a **Microsoft Store edition** packaged as **MSIX**: Microsoft signs MSIX packages
-when they pass certification, so it needs **no certificate** and Store installs don't show the SmartScreen warning.
-The GitHub `.exe`/`.msi` stay as they are (unsigned) for people who don't use the Store.
+The **Microsoft Store edition** (MSIX) is the primary Windows download. Microsoft signs MSIX packages when they
+pass certification, so Store installs don't show the SmartScreen warning. The GitHub `.exe`/`.msi` stay as
+advanced direct installers for people who can't use the Store, and will be Authenticode-signed once Azure
+Artifact Signing is configured.
 
 * **Free individual developer account** (no fee, also in the UK): start at <https://storedeveloper.microsoft.com>,
   choose *Individual developer*, verify with a government ID and a selfie on your phone. That page is the only entry
@@ -80,11 +89,12 @@ The GitHub `.exe`/`.msi` stay as they are (unsigned) for people who don't use th
   Center, and offer a way to report bad output (the app's *Report a problem* link and the *Report content* issue form).
 * **runFullTrust** is a restricted capability; explain in the submission notes that it's a desktop (Win32) app.
 
-### Not applicable: SignPath Foundation
+### Not used: SignPath Foundation
 
 SignPath Foundation's free certificates require "an OSI-approved Open Source license **without commercial
-dual-licensing**". AutoMoto AI is AGPL-3.0 **plus** a paid commercial licence, so it doesn't qualify; the SignPath
-steps were removed from the workflow. — [SignPath terms](https://signpath.org/terms.html)
+dual-licensing**". AutoMoto AI is AGPL-3.0 **plus** a paid commercial licence, so it does not qualify. The
+SignPath steps were removed from the workflow. GitHub-installer signing uses Azure Artifact Signing instead.
+— [SignPath terms](https://signpath.org/terms.html), [setup](signing/TRUSTED_SIGNING_SETUP.md)
 
 ## winget (Windows Package Manager)
 
@@ -105,7 +115,7 @@ wingetcreate submit packaging\winget\manifests\y\ymmiah\AutoMotoAI\Beta\5.6.0-be
 ```
 
 For later versions: `wingetcreate update ymmiah.AutoMotoAI.Beta --version <new> --urls <setup.exe URL> --submit`.
-Unsigned installers can be flagged by the SmartScreen part of the validation.
+Unsigned installers can be flagged by the SmartScreen part of the validation. Wait until the GitHub installers are Authenticode-signed before submitting.
 
 ## Update channel
 

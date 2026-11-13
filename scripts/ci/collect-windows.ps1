@@ -4,7 +4,7 @@
 # The names use the app version, so a beta is called a beta even where Windows needs a plain number (the MSI
 # product version is 5.6.0 for 5.6.0-beta.4). Releases up to 5.6.0-beta.3 used AutoMoto-AI_<ver>_x64-setup.exe
 # and AutoMoto-AI_<ver>_x64_en-US.msi; those stay as they are. The names come from scripts/ci/release_notes.py.
-#   -HashOnly   only rewrite SHA256SUMS.txt (after the files were replaced by Authenticode-signed ones)
+#   -HashOnly   only rewrite SHA256SUMS.txt (after Authenticode signing and/or updater .sig files)
 param([string]$Out = "out", [switch]$HashOnly)
 $ErrorActionPreference = "Stop"
 function Write-Sums {

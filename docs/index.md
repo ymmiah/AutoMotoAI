@@ -4,8 +4,9 @@ AutoMoto AI is a free AI agent that runs on your own computer: it researches the
 PowerPoint, PDF, CSV and ZIP files in a sandbox, remembers what matters and asks before every risky step.
 Every command on this site has a **copy button** in the top-right corner of its box.
 
-> **New: 5.6.0 Beta 3** with the **Windows app** and **one account on every device**
-> ([download](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3)). It's a beta; 5.5.0 stays the stable version.
+> **Current stable: 5.6.0.** On Windows, [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8)
+> (recommended). The [GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0) also has
+> advanced direct `.exe` / `.msi` installers, which may show a SmartScreen warning until they are signed.
 
 **👉 [Start here: pick your device](START.md)** has easy steps for a Windows PC, an Android phone or iPhone, a Mac,
 Linux or VS Code.
@@ -16,7 +17,7 @@ Linux or VS Code.
 | **[GUI guide](GUI-GUIDE.md)** | Step by step with screenshots: install, add a free key, open the app, every page, VS Code, hosted mode and the admin panel. |
 | **[Install](INSTALL.md)** | Every OS in detail: Windows, macOS, Linux, Docker, Raspberry Pi, ChromeOS, phones. |
 | **[iPhone apps](IOS.md)** | Describe an app, build it, put it on a real iPhone, and send it to Apple only when you press the button. |
-| **[Windows app distribution](WINDOWS-DISTRIBUTION.md)** | SmartScreen, code signing, Microsoft Store and winget (for maintainers). |
+| **[Windows app distribution](WINDOWS-DISTRIBUTION.md)** | SmartScreen, Azure Artifact Signing, Microsoft Store and winget (for maintainers). |
 | **[Privacy policy](PRIVACY.md)** | No telemetry. Everything the app connects to, and when. |
 | **[Hosting](HOSTING.md)** | Let other people use it with a daily limit; honest free-hosting comparison. |
 | **[Publishing](PUBLISHING.md)** | How releases reach GitHub, the VS Code Marketplace, Open VSX and PyPI. |

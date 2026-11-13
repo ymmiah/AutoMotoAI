@@ -60,4 +60,4 @@ def test_updater_signing_key_is_only_given_to_the_signing_step():
     job = wf["jobs"]["windows"]
     assert "TAURI_SIGNING_PRIVATE_KEY" not in (job.get("env") or {})
     with_key = [s.get("name") for s in job["steps"] if "TAURI_SIGNING_PRIVATE_KEY" in (s.get("env") or {})]
-    assert with_key == ["Build the installers"]
+    assert with_key == ["Sign updater payloads for the final files"]

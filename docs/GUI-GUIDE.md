@@ -6,8 +6,8 @@ hosted (multi-user) mode. Every command sits in its own box. On GitHub and on th
 top-right corner, then paste it into your terminal.
 
 > **Quickest start for your device** (Windows app, phone, Mac/Linux, VS Code): [Start here: pick your device](START.md).
-> This guide is the long version, page by page. 5.6.0 Beta 3 is a
-> [pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3); 5.5.0 is the stable version.
+> This guide is the long version, page by page. **5.6.0** is the current stable release. On Windows,
+> [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8).
 
 **Contents:** [0 The Windows app](#0-the-windows-app) · [1 Install](#1-install) · [2 Add a free AI key](#2-add-a-free-ai-key) · [3 Start AutoMoto](#3-start-automoto) ·
 [4 Open the app](#4-open-the-app-one-time-sign-in-link) · [5 The screen](#5-a-quick-tour-of-the-screen) ·
@@ -27,24 +27,27 @@ top-right corner, then paste it into your terminal.
 
 ## 0. The Windows app
 
-The **AutoMoto AI app for Windows** (new in 5.6.0, **Beta**) installs like any other program and opens in **its own window frame**: Menu, the AutoMoto name, and minimize, maximize and close. It is not the standard Windows title bar. Drag that bar to move the window; **Win+Z** snaps it. It opens
+The **AutoMoto AI app for Windows** installs like any other program and opens in **its own window frame**: Menu, the AutoMoto name, and minimize, maximize and close. It is not the standard Windows title bar. Drag that bar to move the window; **Win+Z** snaps it. It opens
 on a sign-in screen with two choices: **your AutoMoto account** (the same chats, files and usage time on every
-device) or **Local mode** (just this PC, no account).
+device) or **Local mode** (just this PC, no account). Please report problems at <https://github.com/ymmiah/AutoMotoAI/issues>.
 
-**Step 0.1** — download the installer from the [5.6.0 Beta 3 pre-release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0-beta.3):
-`AutoMoto-AI_5.6.0-beta.3_x64-setup.exe` (recommended, installs just for you, no admin) or
-`AutoMoto-AI_5.6.0-beta.3_x64_en-US.msi` (for all users; needs admin). (A `winget` package is prepared but not
-published yet.) It's a **beta**: please report problems at <https://github.com/ymmiah/AutoMotoAI/issues>.
+**Step 0.1 (recommended)** — install from the Microsoft Store: [Get it from Microsoft](https://apps.microsoft.com/detail/9N9J7FLSSFG8).
+Click **Get** / **Install**. Microsoft signs this copy, so Windows does not show an unknown-publisher warning,
+and the Store updates the app for you.
 
-**Step 0.2** — run it. The app is **not code-signed yet**, so Windows SmartScreen shows *"Windows protected your PC"*.
-Click **More info → Run anyway**. (Why, and how that will go away: [WINDOWS-DISTRIBUTION.md](WINDOWS-DISTRIBUTION.md).)
-You can check the download first against `SHA256SUMS.txt` on the release page:
+**Step 0.1b (advanced)** — if you cannot use the Store, download the direct installer from the
+[v5.6.0 GitHub release](https://github.com/ymmiah/AutoMotoAI/releases/tag/v5.6.0):
+`AutoMoto-AI-Setup-5.6.0-Windows-x64.exe` (installs just for you, no admin) or
+`AutoMoto-AI-5.6.0-Windows-x64.msi` (for all users; needs admin). These files may show a SmartScreen
+warning until they are signed. If they do, click **More info → Run anyway**.
+(Why: [WINDOWS-DISTRIBUTION.md](WINDOWS-DISTRIBUTION.md).) You can check the download first against
+`SHA256SUMS.txt` on the release page:
 
 ```powershell
-(Get-FileHash "$HOME\Downloads\AutoMoto-AI_5.6.0-beta.3_x64-setup.exe").Hash
+(Get-FileHash "$HOME\Downloads\AutoMoto-AI-Setup-5.6.0-Windows-x64.exe").Hash
 ```
 
-**Step 0.3** — sign in. Type the **server address** your admin gave you (for example
+**Step 0.2** — open **AutoMoto AI** from the Start menu, then **sign in**. Type the **server address** your admin gave you (for example
 `https://automoto.example.org`; it must start with `https://` unless it's on this PC), your **username** and
 **password**. Open *This device's name* to call it something you'll recognise, like *Amira's Windows PC*, then
 click **Sign in**.

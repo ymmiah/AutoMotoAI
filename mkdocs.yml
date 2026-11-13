@@ -20,6 +20,7 @@ nav:
   - Your own server (easy guide): SERVER-SETUP.md
   - Hosting: HOSTING.md
   - Windows app distribution: WINDOWS-DISTRIBUTION.md
+  - Azure Artifact Signing setup: signing/TRUSTED_SIGNING_SETUP.md
   - Privacy policy: PRIVACY.md
   - Publishing: PUBLISHING.md
 theme:

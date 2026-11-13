@@ -65,13 +65,18 @@ def table(repo: str, tag: str, files: list[dict]) -> str:
     url = lambda n: f"https://github.com/{repo}/releases/download/{tag}/{n}"  # noqa: E731
     link = lambda k: f"[`{by[k]}`]({url(by[k])})" if k in by else None  # noqa: E731
     rows = []
-    rows.append(("**Windows 10/11** (most people)", link("setup") or
-                 f"no Windows app in this version: see the [newer releases](https://github.com/{repo}/releases)",
-                 "Double-click it. Installs just for you, no admin rights." if "setup" in by else
-                 "Or use the Python file below with `scripts/install.ps1`."))
+    rows.append(("**Windows 10/11** (recommended)", f"[Get it from Microsoft]({brand.STORE_URL})",
+                 "Install from the Microsoft Store. Microsoft signs this copy, so Windows does not show an unknown-publisher warning."))
+    if "setup" in by:
+        rows.append(("**Advanced:** direct installer (`.exe`)", link("setup"),
+                     "Double-click it. Installs just for you, no admin rights. May show a SmartScreen warning until signed."))
+    elif "msi" not in by:
+        rows.append(("**Windows direct installers**",
+                     f"no Windows app in this version: see the [newer releases](https://github.com/{repo}/releases)",
+                     "Or use the Python file below with `scripts/install.ps1`."))
     if "msi" in by:
-        rows.append(("**Windows, IT / company PCs** (Intune, Group Policy, all users)", link("msi"),
-                     "`msiexec /i <file> /qn` for a silent install."))
+        rows.append(("**Advanced:** direct installer (`.msi`, IT / company PCs)", link("msi"),
+                     "`msiexec /i <file> /qn` for a silent install. May show a SmartScreen warning until signed."))
     if "vsix" in by:
         rows.append(("**VS Code**", link("vsix"), "Extensions panel → `…` → *Install from VSIX…*"))
     if "wheel" in by:
