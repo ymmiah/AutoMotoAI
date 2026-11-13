@@ -29,10 +29,11 @@ import {mountDeveloperFunctional} from "./developer-functional.js";
 import {mountDeveloperBeam} from "./developer-beam.js";
 import {mountDeveloperLogic} from "./developer-logic.js";
 import {mountDeveloperLegacy} from "./developer-legacy.js";
+import {mountDeveloperWorkbench} from "./developer-workbench.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V32 · Fortran, COBOL, Ada, Pascal, Assembly and Visual Basic alongside 31 prior milestones.",
+    "V33 · VS Code-inspired workbench, one-prompt autonomous coding Agent and WebAssembly tooling.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -89,9 +90,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     '</div>');
   const byId=id=>host.querySelector("#"+id);
   let project=null,directory=".",sequence=0;
-  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio,scriptingStudio,scienceStudio,functionalStudio,beamStudio,logicStudio,legacyStudio;
+  let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio,scriptingStudio,scienceStudio,functionalStudio,beamStudio,logicStudio,legacyStudio,workbench;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
-    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);scriptingStudio?.fileChanged(path);scienceStudio?.fileChanged(path);functionalStudio?.fileChanged(path);beamStudio?.fileChanged(path);logicStudio?.fileChanged(path);legacyStudio?.fileChanged(path);}});
+    onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);scriptingStudio?.fileChanged(path);scienceStudio?.fileChanged(path);functionalStudio?.fileChanged(path);beamStudio?.fileChanged(path);logicStudio?.fileChanged(path);legacyStudio?.fileChanged(path);workbench?.fileChanged(path);}});
   languageIntelligence=mountDeveloperLanguageIntelligence({api,host,
     getProject:()=>project,editor,status});
   lsp=mountDeveloperLSP({api,host,getProject:()=>project,editor,status});
@@ -121,6 +122,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   beamStudio=mountDeveloperBeam({api,host,getProject:()=>project,status});
   logicStudio=mountDeveloperLogic({api,host,getProject:()=>project,status});
   legacyStudio=mountDeveloperLegacy({api,host,getProject:()=>project,status});
+  workbench=mountDeveloperWorkbench({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
     openProject,list,status
@@ -202,6 +204,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       beamStudio.projectChanged();
       logicStudio.projectChanged();
       legacyStudio.projectChanged();
+      workbench.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
