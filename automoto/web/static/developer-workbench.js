@@ -106,7 +106,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   let taskId=null,conversationId=null,taskProject=null,pollHandle=null;
   let busy=false,closed=false,seen=0,lastStatus="",approvalIds=new Set();
   let activeConversationProject=null,pollErrors=0;
-  const terminal=new Set(["completed","failed","cancelled","error","stopped"]);
+  const terminal=new Set(["done","completed","failed","cancelled","error","stopped"]);
   function append(label,text,kind="note"){
     const item=document.createElement("div");item.className="ds-v33-entry ds-v33-"+kind;
     const strong=document.createElement("strong");strong.textContent=label;
@@ -209,7 +209,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
             answer=msgs.filter(x=>x.role==="assistant").at(-1)?.content||"";
           }catch(_){}
         }
-        finish(answer||"Task "+current,current==="completed"?"note":"error");
+        finish(answer||"Task "+current,(current==="done"||current==="completed")?"note":"error");
         return;
       }
     }catch(e){
