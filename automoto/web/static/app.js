@@ -165,7 +165,7 @@ async function refreshStatus() {
   const pick = $("#providerPick");
   const saved = localStorage.getItem("automoto_prefer") || "auto";
   pick.innerHTML = `<option value="auto">Auto · best available</option>` + st.providers.map((p) =>
-    `<option value="${p.id}" ${p.configured ? "" : "disabled"}>${esc(p.label)}${p.supports_vision ? " 👁" : ""}${p.configured ? "" : " (no key)"}</option>`).join("");
+    `<option value="${p.id}" ${p.configured ? "" : "disabled"}>${esc(p.label)}${p.recommended ? " · Recommended" : ""}${p.supports_vision ? " 👁" : ""}${p.configured ? "" : " (no key)"}</option>`).join("");
   pick.value = st.providers.some((p) => p.id === saved && p.configured) ? saved : "auto";
   pick.title = st.providers.filter((p) => p.configured).map((p) => `${p.label}: ${p.agent_model}`).join("\n") || "No keys yet";
   shell.syncComposerChips();
@@ -1060,6 +1060,8 @@ function page(title, lead, inner) {
   return host;
 }
 const statusPill = (s) => `<span class="pill ${esc(s)}">${esc(String(s).replace("_", " "))}</span>`;
+// Small "Recommended" badge; the pick and its one-line why come from the provider registry (providers.py).
+const recPill = (p) => p && p.recommended ? `<span class="pill rec" title="${esc(p.recommended_why || "")}">Recommended</span>` : "";
 const PAGES = {};
 
 // ---------------------------------------------------------------- hosted mode: usage meter, account, admin
@@ -1624,7 +1626,7 @@ PAGES.settings = async () => {
           <div class="set-block">
             <h4 data-help="provider-keys" title="Used until you close this window. Not written to disk.">Keys for this tab</h4>
             <p class="set-lead">Kept in this tab only, sent with each request, and wiped when the tab closes. A key in <code>.env</code> works without this.</p>
-            <form id="keyForm">${st.providers.filter((p) => !p.local).map((p) => `<label class="field"><span>${esc(p.label)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
+            <form id="keyForm">${st.providers.filter((p) => !p.local).map((p) => `<label class="field"><span>${esc(p.label)} ${recPill(p)} ${p.configured ? statusPill("on") : ""}</span><input class="input" type="password" name="${p.id}" autocomplete="off" placeholder="${p.configured ? "configured (leave blank)" : "paste key"}" value="${esc(k[p.id] || "")}"></label>`).join("")}
             <div class="row"><button class="btn primary" type="submit">Use keys for this tab</button><button type="button" class="btn danger" id="forgetKeys">Forget keys</button></div></form>
           </div>
           ${HOSTED ? "" : `<div class="set-block" data-help="test-keys" title="One tiny request per model, so you can see which ones answer."><h4>Test keys</h4><p class="set-lead">One tiny request to every model ${BRAND_SHORT} may use. Models the key cannot see are skipped for an hour.</p>
@@ -1692,7 +1694,7 @@ PAGES.settings = async () => {
   order = [...order.filter((x) => all.includes(x)), ...all.filter((x) => !order.includes(x))];
   const drawOrder = () => {
     $("#orderList").innerHTML = order.map((id, i) => { const p = st.providers.find((x) => x.id === id);
-      return `<div class="order-item"><span class="n">${i + 1}</span><span class="nm">${esc(p.label)} ${p.configured ? "" : '<span class="muted">(no key)</span>'}</span>
+      return `<div class="order-item"><span class="n">${i + 1}</span><span class="nm">${esc(p.label)} ${recPill(p)} ${p.configured ? "" : '<span class="muted">(no key)</span>'}</span>
         <button class="icon-btn sm" data-u="${i}" aria-label="Move ${esc(p.label)} up" ${i === 0 ? "disabled" : ""}>${icon("up")}</button><button class="icon-btn sm" data-d="${i}" aria-label="Move ${esc(p.label)} down" ${i === order.length - 1 ? "disabled" : ""}>${icon("down")}</button></div>`; }).join("");
     $$("#orderList [data-u]").forEach((b) => b.onclick = () => { const i = +b.dataset.u; [order[i - 1], order[i]] = [order[i], order[i - 1]]; drawOrder(); });
     $$("#orderList [data-d]").forEach((b) => b.onclick = () => { const i = +b.dataset.d; [order[i + 1], order[i]] = [order[i], order[i + 1]]; drawOrder(); });

@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from automoto import config
+from automoto import brand, config
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,9 @@ class ProviderSpec:
     # order, after the (env-overridable) default when a model is missing for this key (404/410).
     fallbacks: dict[str, tuple[str, ...]] = field(default_factory=dict)
     local: bool = False  # runs on this computer (Ollama / llama.cpp): no key, works offline
+    # Settings shows a small "Recommended" badge when this is set; the text is the one-line why (tooltip).
+    # ``__BRAND_SHORT__`` is filled from automoto/brand.py. Change the pick here, nowhere else.
+    recommended: str = ""
 
     # -- resolved (env-overridable) values ---------------------------------
     def key(self, overrides: dict[str, str] | None = None) -> str | None:
@@ -154,6 +157,8 @@ class ProviderSpec:
             "signup_url": self.signup_url,
             "notes": self.notes,
             "local": self.local,
+            "recommended": bool(self.recommended),
+            "recommended_why": brand.fill(self.recommended, escape=False) if self.recommended else "",
         }
 
 
@@ -184,6 +189,8 @@ REGISTRY: dict[str, ProviderSpec] = {
             review_model="nvidia/nemotron-3.5-super-vl-120b-a12b",
             review_env="NIM_REVIEW_MODEL",
             signup_url="https://build.nvidia.com",
+            recommended="Best tested: the only cloud provider __BRAND_SHORT__'s agent has been run live with "
+                        "(documents, spreadsheets, archives). Free developer credits, tool calling and images.",
             notes="Free dev credits. Default Llama 3.2 11B Vision is verified live; it takes 1 image per request. "
                   "Which models a key may call varies, so 404s fall back through the lists below.",
             # From the public catalogue (GET https://integrate.api.nvidia.com/v1/models, Oct 2026);
@@ -404,7 +411,7 @@ REGISTRY: dict[str, ProviderSpec] = {
         ),
         ProviderSpec(
             id="local",
-            label="Local server (llama.cpp / LM Studio)",
+            label="Offline AI (built-in, or llama.cpp / LM Studio)",
             env_keys=(),
             kind="openai_compat",
             base_url=None,
@@ -420,6 +427,8 @@ REGISTRY: dict[str, ProviderSpec] = {
             strength=2,
             model_env="LOCAL_LLM_MODEL",
             signup_url="https://github.com/ggml-org/llama.cpp",
+            recommended="Best offline: __BRAND_SHORT__'s built-in engine. Download a model in Settings, Offline AI. "
+                        "No install, no key, private.",
             notes="Any OpenAI-compatible server on this computer. Set LOCAL_LLM_URL (and LOCAL_LLM_MODEL).",
             local=True,
         ),
