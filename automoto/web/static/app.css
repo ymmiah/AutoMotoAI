@@ -518,6 +518,25 @@ html[data-chrome="custom"] .palette,
 html[data-chrome="custom"] .modal { top: var(--chrome-h); }
 html[data-chrome="custom"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
 
+/* In-page top bar for the browser, server mode and the macOS / Linux apps (native frame):
+   the same menus and navigation, no window controls, no app-menu button. macOS traffic lights
+   stay in the native title bar above the page, so nothing overlaps them. */
+html[data-chrome="bar"] { --chrome-h: 40px; }
+html[data-chrome="bar"] .am-chrome { display: flex; }
+html[data-chrome="bar"] .am-controls,
+html[data-chrome="bar"] .am-chrome .am-logo,
+html[data-chrome="bar"] #amAppMenu { display: none; }
+html[data-chrome="bar"] .am-chrome-app { padding-left: 6px; }
+html[data-chrome="bar"][data-native] .am-caption { display: none; }
+html[data-chrome="bar"] .palette,
+html[data-chrome="bar"] .modal { top: var(--chrome-h); }
+html[data-chrome="bar"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
+/* Phones and narrow windows keep the mobile layout: no top bar. */
+@media (max-width: 640px) {
+  html[data-chrome="bar"] { --chrome-h: 0px; }
+  html[data-chrome="bar"] .am-chrome { display: none; }
+}
+
 /* Chat-first shell: studios and chats in the sidebar, the conversation in the column. */
 .side-group { border: 0; margin: 0; padding: 0; }
 .side-group > summary {

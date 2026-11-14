@@ -507,7 +507,8 @@ fn main() {
             let start = if local_flag { "index.html?auto=local" } else { "index.html" };
             let menu = build_menu(&handle)?;
             // Windows drops the system caption (decorations: false) and draws AutoMoto's own bar
-            // in the page. macOS and Linux keep the native frame; the page hides #amChrome there.
+            // in the page. macOS and Linux keep the native frame (traffic lights stay native); the page
+            // shows the same three-pane layout with its in-page menu bar and no window controls there.
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(start.into()))
                 .title(TITLE)
                 .inner_size(1200.0, 820.0)

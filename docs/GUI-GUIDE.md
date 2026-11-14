@@ -27,7 +27,7 @@ top-right corner, then paste it into your terminal.
 
 ## 0. The Windows app
 
-The **AutoMoto AI app for Windows** installs like any other program and opens in **its own window frame**: Menu, the AutoMoto name, and minimize, maximize and close. It is not the standard Windows title bar. Drag that bar to move the window; **Win+Z** snaps it. It opens
+The **AutoMoto AI app for Windows** installs like any other program and opens in **its own window frame**: Menu, the AutoMoto name, and minimize, maximize and close. It is not the standard Windows title bar. Drag that bar to move the window; **Win+Z** snaps it. The same three-pane layout and **File / Edit / View / Help** menus also appear in the browser and in the macOS and Linux apps, which keep their native window buttons. It opens
 on a sign-in screen with two choices: **your AutoMoto account** (the same chats, files and usage time on every
 device) or **Local mode** (just this PC, no account). Please report problems at <https://github.com/ymmiah/AutoMotoAI/issues>.
 

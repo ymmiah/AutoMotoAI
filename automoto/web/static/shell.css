@@ -1,4 +1,4 @@
-/* Desktop shell in the style of a Windows chat app: title bar menus, icon rail,
+/* Three-pane desktop shell, the same on Windows, macOS, Linux and the browser: title bar menus, icon rail,
    sidebar with projects and recents, centred chat and a resizable preview panel.
    Loaded after the studio stylesheets so it can restyle the shared frame. */
 :root { --side-w: 260px; --rail-w: 52px; --info-w: 440px; --chat-w: 720px; }
@@ -15,8 +15,8 @@
 
 /* View > Zoom scales the workspace, never the caption (chrome.rs measures it). */
 .app { zoom: var(--zoom, 1); height: calc(100dvh / var(--zoom, 1)); }
-html[data-chrome="custom"] .app { height: calc((100dvh - var(--chrome-h)) / var(--zoom, 1)); margin-top: calc(var(--chrome-h) / var(--zoom, 1)); }
-html[data-chrome="custom"] .sidebar, html[data-chrome="custom"] .info, html[data-chrome="custom"] .scrim { top: calc(var(--chrome-h) / var(--zoom, 1)); }
+html:is([data-chrome="custom"], [data-chrome="bar"]) .app { height: calc((100dvh - var(--chrome-h)) / var(--zoom, 1)); margin-top: calc(var(--chrome-h) / var(--zoom, 1)); }
+html:is([data-chrome="custom"], [data-chrome="bar"]) :is(.sidebar, .info, .scrim) { top: calc(var(--chrome-h) / var(--zoom, 1)); }
 
 /* ---------------------------------------------------------------- title bar */
 /* Menu, navigation and File / Edit / View / Help must end before 360px:
@@ -210,7 +210,7 @@ html[data-chrome="custom"] .sidebar, html[data-chrome="custom"] .info, html[data
 
 /* ---------------------------------------------------------------- responsive */
 @media (min-width: 1101px) {
-  html[data-chrome="custom"] .info { top: 0; }
+  html:is([data-chrome="custom"], [data-chrome="bar"]) .info { top: 0; }
 }
 @media (max-width: 1100px) {
   .info { position: fixed; right: 0; top: 0; bottom: 0; z-index: 40; box-shadow: var(--shadow); width: min(92vw, var(--info-w)); }

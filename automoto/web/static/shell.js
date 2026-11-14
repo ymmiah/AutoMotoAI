@@ -697,6 +697,16 @@ function wireKeys() {
   });
 }
 
+// macOS shows Command / Option shortcuts; the key handler already accepts Cmd as Ctrl.
+function macLabels(root) {
+  if (!root) return;
+  const mac = (t) => t.replace(/Ctrl\+/g, "\u2318").replace(/Alt\+/g, "\u2325").replace(/Shift\+/g, "\u21e7");
+  $$(".k", root).forEach((el) => { el.textContent = mac(el.textContent); });
+  $$("[title]", root).forEach((el) => { el.title = mac(el.title); });
+  const quit = $('[data-do="quit"]', root);
+  if (quit && quit.firstChild) quit.firstChild.textContent = "Quit ";
+}
+
 // ---------------------------------------------------------------- init
 export function initShell(context) {
   ctx = context;
@@ -705,6 +715,7 @@ export function initShell(context) {
   const z = store.get("automoto.zoom", 1);
   if (z && z !== 1) setZoom(z);
   wireMenubar(); wireRail(); wireConvMenu(); wirePanel(); wireKeys();
+  if (document.documentElement.dataset.os === "mac") macLabels($("#amChrome"));
   const brandBtn = $("#brandPick"), brandMenu = $("#brandMenu");
   if (brandBtn && brandMenu) {
     wireDDKeys(brandMenu);

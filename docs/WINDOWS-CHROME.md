@@ -14,6 +14,21 @@ macOS and Linux builds keep the native frame. The bar stays in the page and is h
 | Hit-testing | `apps/desktop/src-tauri/src/chrome.rs` | `WM_NCHITTEST` subclass |
 | Who may call it | `apps/desktop/src-tauri/capabilities/chrome.json` | Drag, min, max, close, and Menu actions only |
 
+## Other platforms: the same layout
+
+The three-pane workspace (icon bar, sidebar, chat, preview panel) and the **File / Edit / View / Help** menus are the
+same everywhere. Only the window frame differs:
+
+| Where | `html[data-chrome]` | Top of the window |
+|---|---|---|
+| Windows app | `custom` (set by `chrome.js`) | AutoMoto's own 40px caption with menus and minimize / maximize / close |
+| Browser, server mode | `bar` (set by `theme-boot.js` from `data-chrome-fallback` on `index.html`) | The same 40px bar with back / forward, sidebar toggle and the menus, but no window controls and no Menu button |
+| macOS and Linux apps | `bar` | The native frame stays (traffic lights on macOS stay in the system title bar, so nothing overlaps them). The in-page bar sits under it without window controls or a second title (`data-native`) |
+| Phones and windows 640px wide or less | `bar` | No top bar: the mobile layout keeps the sidebar and preview toggles in the chat header |
+
+On macOS (`html[data-os="mac"]`) the menu shortcuts read ⌘ / ⌥ / ⇧ and **Exit** reads **Quit**. The keyboard handler
+already accepts Cmd as Ctrl. View > Zoom scales the workspace only, so the bar stays 40px in every mode.
+
 The native **AutoMoto / Edit / Help** menu stays attached so Ctrl+Shift+H, Ctrl+R, Ctrl+Q and F1 keep working. **Menu** in the caption opens the same actions. Copy and paste stay on Ctrl+C / Ctrl+V inside the page.
 
 ### Hit-testing
