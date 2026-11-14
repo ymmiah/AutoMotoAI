@@ -28,16 +28,70 @@
 <link rel="stylesheet" href="/static/spreadsheet-ai-studio.css?v=__AUTOMOTO_VERSION__" />
 <link rel="stylesheet" href="/static/business-workflows.css?v=__AUTOMOTO_VERSION__" />
 <link rel="stylesheet" href="/static/spreadsheet-release.css?v=__AUTOMOTO_VERSION__" />
+<link rel="stylesheet" href="/static/shell.css?v=__AUTOMOTO_VERSION__" />
 <link rel="stylesheet" id="hljsTheme" href="/static/vendor/hljs-dark.css" />
 <script src="/static/theme-boot.js?v=__AUTOMOTO_VERSION__"></script>
 </head>
 <body>
 <a class="skip" href="#composerInput">Skip to message box</a>
-<header class="am-chrome" id="amChrome">
-  <button type="button" class="am-menu" data-chrome="menu" aria-haspopup="menu" aria-expanded="false" aria-controls="amAppMenu">Menu</button>
+<header class="am-chrome am-chrome-app" id="amChrome">
+  <button type="button" class="am-menu am-logo" data-chrome="menu" aria-label="Menu" title="App menu" aria-haspopup="menu" aria-expanded="false" aria-controls="amAppMenu"><span class="am-mark" aria-hidden="true">A</span></button>
+  <div class="am-nav" role="toolbar" aria-label="Navigation">
+    <button type="button" class="am-ico" id="navBack" aria-label="Back" title="Back (Alt+Left)" data-icon="back"></button>
+    <button type="button" class="am-ico" id="navForward" aria-label="Forward" title="Forward (Alt+Right)" data-icon="forward"></button>
+    <button type="button" class="am-ico" id="chromeSide" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+B)" data-icon="sidebar"></button>
+  </div>
+  <nav class="am-menubar" id="amMenubar" role="menubar" aria-label="Application">
+    <div class="am-mb"><button type="button" role="menuitem" class="am-mb-btn" data-menu="file" aria-haspopup="menu" aria-expanded="false">File</button>
+      <div class="am-dd" role="menu" data-menu-panel="file" aria-label="File" hidden>
+        <button type="button" role="menuitem" data-do="new-chat">New chat <span class="k">Ctrl+N</span></button>
+        <button type="button" role="menuitem" data-do="new-project">New project…</button>
+        <button type="button" role="menuitem" data-do="open-file">Open file… <span class="k">Ctrl+O</span></button>
+        <button type="button" role="menuitem" data-do="files">Browse files</button>
+        <div role="separator"></div>
+        <button type="button" role="menuitem" data-do="settings">Settings <span class="k">Ctrl+,</span></button>
+        <div role="separator"></div>
+        <button type="button" role="menuitem" data-do="quit">Exit <span class="k">Ctrl+Q</span></button>
+      </div></div>
+    <div class="am-mb"><button type="button" role="menuitem" class="am-mb-btn" data-menu="edit" aria-haspopup="menu" aria-expanded="false">Edit</button>
+      <div class="am-dd" role="menu" data-menu-panel="edit" aria-label="Edit" hidden>
+        <button type="button" role="menuitem" data-do="undo">Undo <span class="k">Ctrl+Z</span></button>
+        <button type="button" role="menuitem" data-do="redo">Redo <span class="k">Ctrl+Y</span></button>
+        <div role="separator"></div>
+        <button type="button" role="menuitem" data-do="cut">Cut <span class="k">Ctrl+X</span></button>
+        <button type="button" role="menuitem" data-do="copy">Copy <span class="k">Ctrl+C</span></button>
+        <button type="button" role="menuitem" data-do="paste">Paste <span class="k">Ctrl+V</span></button>
+        <button type="button" role="menuitem" data-do="select-all">Select all <span class="k">Ctrl+A</span></button>
+        <div role="separator"></div>
+        <button type="button" role="menuitem" data-do="find">Search chats <span class="k">Ctrl+Shift+F</span></button>
+        <button type="button" role="menuitem" data-do="palette">Quick commands <span class="k">Ctrl+K</span></button>
+      </div></div>
+    <div class="am-mb"><button type="button" role="menuitem" class="am-mb-btn" data-menu="view" aria-haspopup="menu" aria-expanded="false">View</button>
+      <div class="am-dd" role="menu" data-menu-panel="view" aria-label="View" hidden>
+        <button type="button" role="menuitem" data-do="toggle-sidebar">Toggle sidebar <span class="k">Ctrl+B</span></button>
+        <button type="button" role="menuitem" data-do="toggle-panel">Toggle preview panel <span class="k">Ctrl+.</span></button>
+        <button type="button" role="menuitem" data-do="toggle-rail">Toggle icon bar</button>
+        <div role="separator"></div>
+        <button type="button" role="menuitem" data-do="zoom-in">Zoom in <span class="k">Ctrl+=</span></button>
+        <button type="button" role="menuitem" data-do="zoom-out">Zoom out <span class="k">Ctrl+-</span></button>
+        <button type="button" role="menuitem" data-do="zoom-reset">Actual size <span class="k">Ctrl+0</span></button>
+        <div role="separator"></div>
+        <button type="button" role="menuitem" data-do="theme">Switch light / dark</button>
+        <button type="button" role="menuitem" data-do="reload">Reload <span class="k">Ctrl+R</span></button>
+      </div></div>
+    <div class="am-mb"><button type="button" role="menuitem" class="am-mb-btn" data-menu="help" aria-haspopup="menu" aria-expanded="false">Help</button>
+      <div class="am-dd" role="menu" data-menu-panel="help" aria-label="Help" hidden>
+        <button type="button" role="menuitem" data-do="guide">Step-by-step guide <span class="k">F1</span></button>
+        <button type="button" role="menuitem" data-do="shortcuts">Keyboard shortcuts</button>
+        <button type="button" role="menuitem" data-do="updates">Check for updates</button>
+        <button type="button" role="menuitem" data-do="report">Report a problem</button>
+        <button type="button" role="menuitem" data-do="source">Source code</button>
+        <div role="separator"></div>
+        <button type="button" role="menuitem" data-do="about">About __BRAND__</button>
+      </div></div>
+  </nav>
   <div class="am-drag" data-tauri-drag-region>
-    <span class="am-mark" aria-hidden="true">A</span>
-    <span class="am-caption" id="amChromeTitle" data-tauri-drag-region>AutoMoto AI</span>
+    <span class="am-caption" id="amChromeTitle" data-tauri-drag-region>__BRAND__</span>
   </div>
   <div class="am-controls" role="toolbar" aria-label="Window">
     <button type="button" data-chrome="min" aria-label="Minimize"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5h10"/></svg></button>
@@ -52,29 +106,65 @@
     <div role="separator"></div>
     <button type="button" role="menuitem" data-chrome="act" data-action="guide">Step-by-step guide <span class="k">F1</span></button>
     <button type="button" role="menuitem" data-chrome="act" data-action="log">Open the local engine log</button>
-    <button type="button" role="menuitem" data-chrome="act" data-action="about">About AutoMoto AI</button>
+    <button type="button" role="menuitem" data-chrome="act" data-action="about">About __BRAND__</button>
     <div role="separator"></div>
     <button type="button" role="menuitem" data-chrome="act" data-action="quit">Quit <span class="k">Ctrl+Q</span></button>
   </div>
 </header>
 <div class="app" id="app">
+  <nav class="rail" id="rail" aria-label="Main">
+    <a class="rail-btn rail-logo" href="#/new" data-rail="chat" aria-label="Chat" title="Chat"><span class="rail-mark" aria-hidden="true">A</span></a>
+    <a class="rail-btn" href="#/new" data-rail="new" aria-label="Start a new chat" title="New chat" data-icon="edit"></a>
+    <button type="button" class="rail-btn" data-rail="studios" data-rail-menu="studios" aria-label="Studios" title="Studios" aria-haspopup="menu" aria-expanded="false" data-icon="grid"></button>
+    <a class="rail-btn" href="#/tasks" data-rail="tasks" aria-label="Task history" title="Task history" data-icon="history"></a>
+    <a class="rail-btn" href="#/files" data-rail="files" aria-label="Library" title="Library (files)" data-icon="library"></a>
+    <a class="rail-btn" href="#/memory" data-rail="memory" aria-label="Memory" title="Memory" data-icon="brain"></a>
+    <a class="rail-btn" href="#/routines" data-rail="routines" aria-label="Routines" title="Routines" data-icon="clock"></a>
+    <span class="rail-gap"></span>
+    <button type="button" class="rail-btn" data-rail="more" data-rail-menu="more" aria-label="More" title="More" aria-haspopup="menu" aria-expanded="false" data-icon="more"></button>
+    <a class="rail-btn" href="#/settings" data-rail="settings" aria-label="Open settings" title="Settings" data-icon="settings"></a>
+    <button type="button" class="rail-avatar" id="railAvatar" aria-label="Your account" title="Your account"><span id="railAvatarText" aria-hidden="true"></span></button>
+    <div class="am-dd rail-dd" role="menu" data-rail-panel="studios" aria-label="Studios" hidden>
+      <a role="menuitem" href="#/documents"><span data-icon="file"></span>Documents</a>
+      <a role="menuitem" href="#/research"><span data-icon="search"></span>Research</a>
+      <a role="menuitem" href="#/spreadsheets"><span data-icon="sheet"></span>Spreadsheets</a>
+      <a role="menuitem" href="#/visual"><span data-icon="image"></span>Visual</a>
+      <a role="menuitem" href="#/developer"><span data-icon="code"></span>Developer</a>
+    </div>
+    <div class="am-dd rail-dd" role="menu" data-rail-panel="more" aria-label="More" hidden>
+      <button type="button" role="menuitem" data-do="palette"><span data-icon="sparkle"></span>Quick commands</button>
+      <button type="button" role="menuitem" data-do="theme"><span data-icon="sun"></span>Switch light / dark</button>
+      <button type="button" role="menuitem" data-do="toggle-panel"><span data-icon="panel"></span>Toggle preview panel</button>
+      <button type="button" role="menuitem" data-do="guide"><span data-icon="info"></span>Help</button>
+      <button type="button" role="menuitem" data-do="report"><span data-icon="alert"></span>Report a problem</button>
+    </div>
+  </nav>
   <aside class="sidebar" id="sidebar" aria-label="Sidebar">
     <div class="side-pin">
     <div class="side-head">
-      <a class="brand" href="#/new" aria-label="__BRAND__ home"><span class="logo" aria-hidden="true">A</span><span>__BRAND__</span></a>
-      <button class="icon-btn only-mobile" id="closeSide" aria-label="Close sidebar" data-icon="x"></button>
+      <button type="button" class="brand brand-pick" id="brandPick" aria-haspopup="menu" aria-expanded="false" title="Switch workspace or open settings"><span class="logo" aria-hidden="true">A</span><span class="brand-name">__BRAND__</span><span class="brand-chev" data-icon="chev_down"></span></button>
+      <span class="side-head-acts">
+        <button type="button" class="icon-btn sm" id="sideNew" aria-label="Start a new chat" title="New chat (Ctrl+N)" data-icon="edit"></button>
+        <button type="button" class="icon-btn sm" id="sideSearch" aria-label="Search chats" title="Search chats" data-icon="search"></button>
+        <button class="icon-btn only-mobile" id="closeSide" aria-label="Close sidebar" data-icon="x"></button>
+      </span>
+      <div class="am-dd brand-dd" role="menu" id="brandMenu" aria-label="Workspace" hidden>
+        <a role="menuitem" href="#/settings"><span data-icon="settings"></span>Settings</a>
+        <a role="menuitem" href="automoto://switch-mode" id="brandSwitch" hidden><span data-icon="monitor"></span>Switch Local / Server</a>
+        <a role="menuitem" href="#/help"><span data-icon="info"></span>Help &amp; guide</a>
+        <button type="button" role="menuitem" data-do="about"><span data-icon="sparkle"></span>About __BRAND__</button>
+      </div>
     </div>
-    <button class="new-chat" id="newChat" title="Start a fresh conversation. The assistant does the steps; you approve anything risky."><span data-icon="plus"></span>New chat<kbd>⌘N</kbd></button>
+    <button class="new-chat" id="newChat" title="Start a fresh conversation. The assistant does the steps; you approve anything risky."><span data-icon="edit"></span>New chat<kbd>Ctrl+N</kbd></button>
     <label class="search" title="Filter the chat list. Ctrl+K also searches commands.">
       <span data-icon="search"></span>
       <input id="convSearch" type="search" placeholder="Search chats" aria-label="Search conversations" autocomplete="off" />
-      <kbd>⌘K</kbd>
     </label>
-    <button class="command-launch" id="commandLaunch" title="Jump to a chat, a studio, or a setting"><span data-icon="sparkle"></span>Quick commands<kbd>⌘K</kbd></button>
+    <button class="command-launch" id="commandLaunch" title="Jump to a chat, a studio, or a setting"><span data-icon="sparkle"></span>Quick commands<kbd>Ctrl+K</kbd></button>
     </div>
     <div class="side-scroll" id="sideScroll">
     <details class="side-group" open>
-      <summary title="Workspaces for documents, research, spreadsheets, images and code">Studios</summary>
+      <summary title="Workspaces for documents, research, spreadsheets, images and code">Pinned studios</summary>
       <nav class="nav" aria-label="Studios">
         <a href="#/documents" data-page="documents" title="Write and export documents. You keep the draft."><span data-icon="file"></span>Documents</a>
         <a href="#/research" data-page="research" title="Collect sources and keep each quote next to the claim."><span data-icon="search"></span>Research</a>
@@ -92,7 +182,12 @@
         <a href="#/files" data-page="files" title="Uploads and files the assistant made, in its own folder."><span data-icon="folder"></span>Files</a>
       </nav>
     </details>
-    <div class="conv-head">Chats</div>
+    <details class="side-group" id="projectsGroup" open>
+      <summary title="Folders that keep related chats together on this device">Projects</summary>
+      <div class="project-list" id="projectList" role="list" aria-label="Projects"></div>
+      <button type="button" class="side-row" id="newProject" data-do="new-project" title="Make a folder for related chats"><span data-icon="folder_plus"></span>New project</button>
+    </details>
+    <div class="conv-head">Recents</div>
     <div class="conv-list" id="convList" role="list" aria-label="Saved conversations"></div>
     </div>
     <div class="side-dock">
@@ -101,7 +196,7 @@
       <a href="#/help" id="helpLink" data-page="help" title="Plain-language guide to every setting, studio and tool. F1."><span data-icon="info"></span>Help</a>
     </nav>
     <div class="side-foot">
-      <span id="verLabel">v</span> · <a href="__SOURCE_URL__" id="sourceLink" target="_blank" rel="noopener" title="Source code (AGPL-3.0)">Source code</a> · <a href="https://github.com/ymmiah/AutoMotoAI/issues/new?template=report-content.yml" target="_blank" rel="noopener" title="Report harmful or inappropriate AI output">Report a problem</a>
+      <span id="verLabel">v</span> · <a href="__SOURCE_URL__" id="sourceLink" target="_blank" rel="noopener" title="Source code (AGPL-3.0)">Source code</a> · <a href="https://github.com/ymmiah/AutoMotoAI/issues/new?template=report-content.yml" id="reportLink" target="_blank" rel="noopener" title="Report harmful or inappropriate AI output">Report a problem</a>
     </div>
     </div>
   </aside>
@@ -109,31 +204,52 @@
 
   <main class="main" id="main">
     <header class="topbar">
-      <button class="icon-btn" id="toggleSide" aria-label="Toggle sidebar (Ctrl+B)" title="Toggle sidebar (Ctrl+B)" data-icon="menu"></button>
+      <button class="icon-btn" id="toggleSide" aria-label="Toggle sidebar (Ctrl+B)" title="Toggle sidebar (Ctrl+B)" data-icon="sidebar"></button>
       <h1 class="title" id="pageTitle">New chat</h1>
       <div class="top-actions">
-        <button class="icon-btn" id="quickTheme" aria-label="Toggle light or dark theme" title="Toggle theme" data-icon="sun"></button>
         <a class="top-quick" id="switchLocation" href="automoto://switch-mode" title="Switch between local mode and cloud/server account" hidden><span data-icon="monitor"></span><span class="top-label">Local / Server</span></a>
-        <a class="top-quick" href="#/files" title="Browse exported and workspace files"><span data-icon="folder"></span><span class="top-label">Files</span></a>
-        <a class="top-quick" href="#/memory" title="Find saved memories"><span data-icon="brain"></span><span class="top-label">Memory</span></a>
-        <div class="seg" role="radiogroup" aria-label="Mode" id="modeSeg">
+        <div class="seg legacy-ctl" role="radiogroup" aria-label="Mode" id="modeSeg">
           <button role="radio" data-mode="agent" aria-checked="true" title="Assistant: you write the request, it finishes the files and steps"><span data-icon="bolt"></span><span class="lbl">Assistant</span></button>
           <button role="radio" data-mode="chat" aria-checked="false" title="Chat: an answer only, no files or tools"><span data-icon="chat"></span><span class="lbl">Chat</span></button>
         </div>
-        <label class="picker" title="Which AI answers first">
+        <label class="picker legacy-ctl" title="Which AI answers first">
           <span class="sr">AI provider</span>
           <select id="providerPick" aria-label="AI provider"><option value="auto">Auto</option></select>
         </label>
-        <button class="icon-btn" id="toggleInfo" aria-label="Toggle info panel" title="Info panel" data-icon="panel"></button>
+        <button class="icon-btn" id="quickTheme" aria-label="Toggle light or dark theme" title="Toggle theme" data-icon="sun"></button>
+        <button class="icon-btn" id="convMore" aria-label="Chat options" title="Chat options" aria-haspopup="menu" aria-expanded="false" data-icon="more"></button>
+        <button class="icon-btn" id="toggleInfo" aria-label="Toggle preview panel (Ctrl+.)" title="Preview panel (Ctrl+.)" aria-pressed="false" data-icon="panel"></button>
+        <div class="am-dd conv-dd" role="menu" id="convMenu" aria-label="Chat options" hidden></div>
       </div>
     </header>
     <div id="studioQueue" class="studio-queue" hidden aria-label="Studio task queue"></div>
     <section class="view" id="view" tabindex="-1"></section>
   </main>
 
-  <aside class="info" id="info" aria-label="Task info" hidden>
-    <div class="info-head"><b>Run info</b><button class="icon-btn" id="closeInfo" aria-label="Close info panel" data-icon="x"></button></div>
-    <div class="info-body" id="infoBody"><p class="muted">Send a request to see progress here, in plain language.</p></div>
+  <aside class="info" id="info" aria-label="Preview panel" hidden>
+    <div class="pv-resize" id="pvResize" role="separator" aria-orientation="vertical" aria-label="Resize preview panel" tabindex="0"></div>
+    <div class="pv-tabs" role="tablist" aria-label="Preview tabs" id="pvTabs">
+      <button type="button" role="tab" class="pv-tab active" data-pv-tab-run="run" aria-selected="true" id="pvTabRun"><span data-icon="activity"></span><span class="pv-tab-t">Run info</span></button>
+      <span id="pvTabList" class="pv-tab-list"></span>
+      <button type="button" class="pv-add" id="pvAdd" aria-label="Open a file in a new tab" title="New tab" aria-haspopup="menu" data-icon="plus"></button>
+      <span class="pv-tabs-gap"></span>
+      <button class="icon-btn sm" id="closeInfo" aria-label="Close info panel" title="Hide panel" data-icon="x"></button>
+      <div class="am-dd pv-add-dd" role="menu" id="pvAddMenu" aria-label="Open in a new tab" hidden></div>
+    </div>
+    <div class="pv-pane" data-pane="run">
+      <div class="info-head"><b>Run info</b></div>
+      <div class="info-body" id="infoBody"><p class="muted">Send a request to see progress here, in plain language.</p></div>
+    </div>
+    <div class="pv-pane" data-pane="file" id="pvFilePane" hidden>
+      <div class="pv-toolbar">
+        <span data-icon="file"></span><b class="pv-name" id="pvName"></b><span class="pv-size muted" id="pvSize"></span>
+        <span class="pv-gap"></span>
+        <button type="button" class="btn ghost sm" id="pvSource" aria-pressed="false" title="Show the raw text"><span data-icon="source"></span>View source</button>
+        <div class="pv-open"><button type="button" class="btn sm" id="pvOpenWith" aria-haspopup="menu" aria-expanded="false">Open with <span data-icon="chev_down"></span></button>
+          <div class="am-dd pv-open-dd" role="menu" id="pvOpenMenu" aria-label="Open with" hidden></div></div>
+      </div>
+      <div class="pv-body" id="pvBody"></div>
+    </div>
   </aside>
 </div>
 

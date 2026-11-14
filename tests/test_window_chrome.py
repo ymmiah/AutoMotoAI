@@ -8,6 +8,7 @@ def test_caption_metrics_match():
     rust = (ROOT / "apps/desktop/src-tauri/src/chrome.rs").read_text(encoding="utf-8")
     assert "CHROME_HEIGHT_PX: f32 = 40.0" in rust
     assert "CHROME_MENU_PX: f32 = 64.0" in rust
+    assert "CHROME_LEFT_TOOLS_PX: f32 = 360.0" in rust
     assert "CHROME_BUTTON_PX: f32 = 46.0" in rust
     for css in (ROOT / "automoto/web/static/app.css", ROOT / "apps/desktop/dist/app.css"):
         text = css.read_text(encoding="utf-8")

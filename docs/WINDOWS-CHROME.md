@@ -21,7 +21,7 @@ The native **AutoMoto / Edit / Help** menu stays attached so Ctrl+Shift+H, Ctrl+
 tao (the window library Tauri uses) already treats the outer edge of an undecorated window as a resize border, including corners, and keeps the drop shadow. `chrome.rs` subclasses the HWND and:
 
 1. Leaves those resize hits alone (`HTLEFT` through `HTBOTTOMRIGHT`).
-2. Marks the top band, under the resize strip, from the CSS contract: **40px** tall, **64px** Menu on the left (still a normal click), then a drag caption (`HTCAPTION`), then **46px** minimize, maximize and close.
+2. Marks the top band, under the resize strip, from the CSS contract: **40px** tall, **64px** Menu on the left (still a normal click; the engine UI keeps the first **360px** as normal clicks for back / forward, the sidebar toggle and File / Edit / View / Help), then a drag caption (`HTCAPTION`), then **46px** minimize, maximize and close.
 3. Scales those sizes with `GetDpiForWindow` so they match CSS pixels.
 
 Dragging the caption uses Tauri's drag region (`data-tauri-drag-region`), which starts a real window move, so dragging to a screen edge snaps. Double-click on that region toggles maximize. **Win+Left / Win+Right** and **Win+Z** snap as well. The page buttons call Tauri `minimize`, `toggle_maximize` and `close`.

@@ -1,5 +1,6 @@
 // AutoMoto AI GUI - vanilla ES module, no build step, no CDN.
 import { icon, hydrateIcons, TOOL_ICONS } from "./icons.js";
+import * as shell from "./shell.js";
 import { mountStudioAgentBridge } from "./studio-agent-bridge.js";
 import { attachStudioDrop, bindStudioQueue, enqueueStudioTask } from "./studio-queue.js";
 
@@ -167,6 +168,7 @@ async function refreshStatus() {
     `<option value="${p.id}" ${p.configured ? "" : "disabled"}>${esc(p.label)}${p.supports_vision ? " 👁" : ""}${p.configured ? "" : " (no key)"}</option>`).join("");
   pick.value = st.providers.some((p) => p.id === saved && p.configured) ? saved : "auto";
   pick.title = st.providers.filter((p) => p.configured).map((p) => `${p.label}: ${p.agent_model}`).join("\n") || "No keys yet";
+  shell.syncComposerChips();
   return st;
 }
 $("#providerPick").addEventListener("change", (e) => localStorage.setItem("automoto_prefer", e.target.value));
@@ -199,18 +201,22 @@ function convRow(c) {
   const active = state.cur?.id === c.id ? " active" : "";
   return `<div class="conv${active}" role="listitem" tabindex="0" data-id="${esc(c.id)}" title="${esc(c.title)}">
       ${state.running.has(c.id) ? '<span class="running" aria-label="running"></span>' : icon(c.mode === "chat" ? "chat" : "bolt")}
-      <span class="t">${esc(c.title)}</span>
-      <span class="acts"><button class="icon-btn sm" data-act="rename" aria-label="Rename chat">${icon("edit")}</button><button class="icon-btn sm" data-act="delete" aria-label="Delete chat">${icon("trash")}</button></span></div>`;
+      <span class="t">${esc(c.title)}</span>${shell.isUnread(c) ? '<span class="unread" aria-label="new reply"></span>' : ""}
+      <span class="acts"><button class="icon-btn sm" data-act="project" aria-label="Move chat to a project" title="Move to project">${icon("folder")}</button><button class="icon-btn sm" data-act="rename" aria-label="Rename chat">${icon("edit")}</button><button class="icon-btn sm" data-act="delete" aria-label="Delete chat">${icon("trash")}</button></span></div>`;
 }
-function renderConvs() {
+function renderConvs(scrollOnly = false) {
   const list = $("#convList");
   if (!list) return;
-  if (!state.convs.length) {
+  if (!scrollOnly) { shell.noteConvs(state.convs); shell.renderProjects(convRow); }
+  // Chats filed in a project live under that project; a search shows every match.
+  const inProject = $("#convSearch").value.trim() ? new Set() : shell.projectChatIds();
+  const convs = state.convs.filter((c) => !inProject.has(c.id));
+  if (!convs.length) {
     list.dataset.virtual = "0";
     list.innerHTML = `<div class="empty-list">${$("#convSearch").value ? "No chats match." : "No chats yet. Start one!"}</div>`;
     return;
   }
-  const items = convEntries(state.convs);
+  const items = convEntries(convs);
   const scroll = $("#sideScroll");
   const virtual = items.length > CONV_VIRTUAL && scroll;
   const row = (it) => it.kind === "group" ? `<div class="group-label">${esc(it.label)}</div>` : convRow(it.conv);
@@ -237,17 +243,18 @@ function renderConvs() {
 $("#sideScroll")?.addEventListener("scroll", () => {
   if ((state.convs?.length || 0) <= CONV_VIRTUAL) return;
   if (convFrame) return;
-  convFrame = requestAnimationFrame(() => { convFrame = 0; renderConvs(); });
+  convFrame = requestAnimationFrame(() => { convFrame = 0; renderConvs(true); });
 }, { passive: true });
-$("#convList").addEventListener("click", (e) => {
+$("#sideScroll").addEventListener("click", (e) => {
   const row = e.target.closest(".conv"); if (!row) return;
   const id = row.dataset.id, act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "project") return shell.pickProject(state.convs.find((c) => c.id === id) || { id, title: row.title || "Chat" });
   if (act === "rename") return renameConv(id);
   if (act === "delete") return deleteConv(id);
   location.hash = `#/c/${id}`;
   closeSidebarMobile();
 });
-$("#convList").addEventListener("keydown", (e) => {
+$("#sideScroll").addEventListener("keydown", (e) => {
   const row = e.target.closest(".conv");
   if (!row || e.target !== row) return;
   if (e.key === "Enter") { location.hash = `#/c/${row.dataset.id}`; closeSidebarMobile(); }
@@ -269,6 +276,7 @@ async function deleteConv(id) {
   if (!(await confirmDialog("Delete this chat?"))) return;
   try {
     await api(`/api/conversations/${id}`, undefined, "DELETE");
+    shell.forgetConv(id);
     if (state.cur?.id === id) location.hash = "#/new";
     loadConvs(); toast("Chat deleted");
   } catch (e) { toast(e.message, "bad"); }
@@ -281,14 +289,14 @@ function toggleSidebar() {
     const open = !app.classList.contains("side-open");
     app.classList.toggle("side-open", open); $("#scrim").hidden = !open;
     if (open) $("#convSearch").focus();
-  } else app.classList.toggle("side-collapsed");
+  } else localStorage.setItem("automoto_side_collapsed", app.classList.toggle("side-collapsed") ? "1" : "0");
 }
 function closeSidebarMobile() { app.classList.remove("side-open"); $("#scrim").hidden = true; }
 $("#toggleSide").onclick = toggleSidebar;
 $("#closeSide").onclick = closeSidebarMobile;
 $("#scrim").onclick = closeSidebarMobile;
-$("#toggleInfo").onclick = () => { $("#info").hidden = !$("#info").hidden; localStorage.setItem("automoto_info", $("#info").hidden ? "0" : "1"); };
-$("#closeInfo").onclick = () => { $("#info").hidden = true; localStorage.setItem("automoto_info", "0"); };
+$("#toggleInfo").onclick = () => shell.togglePanel();
+$("#closeInfo").onclick = () => shell.togglePanel(false);
 $("#newChat").onclick = () => newChat();
 let developerLeaveApproved = false;
 function newChat() {
@@ -310,6 +318,7 @@ function setMode(m, persist = true) {
   const ta = $("#composerInput");
   if (ta) ta.placeholder = m === "agent" ? `Tell ${BRAND_SHORT} what to finish…` : `Message ${BRAND_SHORT}…`;
   if (persist && state.cur?.id) api(`/api/conversations/${state.cur.id}`, { mode: m }, "PATCH").catch(() => {});
+  shell.syncComposerChips();
 }
 $("#modeSeg").addEventListener("click", (e) => { const b = e.target.closest("button[data-mode]"); if (b) setMode(b.dataset.mode); });
 $("#modeSeg").addEventListener("keydown", (e) => {
@@ -392,6 +401,7 @@ async function openConv(id) {
   try {
     const conv = await api(`/api/conversations/${id}`);
     state.cur = conv;
+    shell.markSeen(conv);
     setMode(conv.mode || state.mode, false);
     renderConvs();
     renderChat(conv);
@@ -421,10 +431,15 @@ function renderChat(conv) {
         <textarea id="composerInput" rows="1" placeholder="${state.mode === "agent" ? `Tell ${BRAND_SHORT} what to finish…` : `Message ${BRAND_SHORT}…`}"></textarea>
         <div class="bar">
           <input type="file" id="fileInput" accept="image/*,.docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.tsv,.pptx,.ppt,.odp,.pdf,.md,.txt,.log,.json,.jsonl,.yaml,.yml,.toml,.xml,.parquet,.sqlite,.db,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z,.rar" multiple hidden>
-          <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach image or file" title="Attach an image, Word, Excel, PowerPoint or PDF file (or paste / drop)">${icon("clip")}</button>
+          <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach image or file" title="Attach an image, Word, Excel, PowerPoint or PDF file (or paste / drop)">${icon("plus")}</button>
+          <button type="button" class="cmp-chip" id="approvalChip" aria-haspopup="menu" aria-expanded="false" title="How the assistant works and when it asks you">${icon("shield")}<span class="cmp-label">Assistant</span>${icon("chev_down")}</button>
+          <div class="am-dd cmp-dd" role="menu" id="approvalMenu" aria-label="Mode and approvals" hidden></div>
           <span class="hint">Enter to send · Shift+Enter new line · ${isMac ? "⌘" : "Ctrl"}+K commands</span>
           <span class="spacer"></span>
-          <button class="send" id="sendBtn" aria-label="Send message" title="Send">${icon("send")}</button>
+          <label class="sr" for="modelPick">Model</label>
+          <select class="cmp-model" id="modelPick" title="Which AI answers first"></select>
+          <button type="button" class="icon-btn" id="micBtn" aria-label="Dictate" title="Voice typing" aria-pressed="false">${icon("mic")}</button>
+          <button class="send" id="sendBtn" aria-label="Send message" title="Send">${icon("arrow_up")}</button>
         </div>
       </form>
       <div class="footer-note"><a href="#/files">Browse files</a> · <a href="#/memory">Saved memory</a> · ${BRAND_SHORT} can make mistakes. Risky actions always ask you first.</div>
@@ -447,10 +462,14 @@ function renderChat(conv) {
     drawHeroIdeas(); loadIdeas();
     $("#infoBody").innerHTML = '<p class="muted">Send a request to see progress here, in plain language.</p>';
   } else {
-    for (const m of conv.messages) m.role === "user" ? addUser(m.content, thread) : renderSavedBot(m, thread);
+    let userCreated = null;
+    for (const m of conv.messages) {
+      if (m.role === "user") { userCreated = m.created; addUser(m.content, thread); } else renderSavedBot(m, thread, userCreated);
+    }
     updateInfoFromConv(conv);
   }
   wireComposer();
+  shell.wireComposerExtras();
   $("#composerInput").value = state.drafts.get(conv?.id || "new") || "";
   autosize();
   initChatScroll();
@@ -522,6 +541,7 @@ function addUser(content, thread = ensureThread()) {
 function addBot(thread = ensureThread()) {
   const d = document.createElement("div");
   d.className = "msg bot";
+  d.dataset.started = String(Date.now());
   d.innerHTML = `<div class="avatar" aria-hidden="true">A</div><div class="content"><div class="steps"></div><div class="answer"><div class="status-line"><span class="typing" aria-label="working"><i></i><i></i><i></i></span><span class="st-text">Thinking…</span></div></div><div class="meta"></div></div>`;
   thread.appendChild(d);
   scrollDown(true);
@@ -640,9 +660,10 @@ function renderEvent(ctx, ev) {
       if (!ev.files?.length) break;
       const n = document.createElement("div"); n.className = "note artifacts";
       const kb = (b) => b == null ? "" : b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
-      n.innerHTML = `${icon("file")} <b>Files made</b><ul>${ev.files.slice(0, 30).map((f) => `<li><button type="button" class="linkish" data-open-file="${esc(f.path)}">Open ${esc(f.name || f.path)}</button> · <a href="/api/files/download?path=${encodeURIComponent(f.path)}" download>Download</a><span class="muted"> · ${esc(f.path)} · ${kb(f.bytes)}</span></li>`).join("")}</ul>`;
+      n.innerHTML = `${icon("file")} <b>Files made</b><ul>${ev.files.slice(0, 30).map((f) => `<li><button type="button" class="linkish" data-open-file="${esc(f.path)}" data-bytes="${f.bytes ?? ""}">Open ${esc(f.name || f.path)}</button> · <a href="/api/files/download?path=${encodeURIComponent(f.path)}" download>Download</a><span class="muted"> · ${esc(f.path)} · ${kb(f.bytes)}</span></li>`).join("")}</ul>`;
       steps.appendChild(n);
-      n.querySelectorAll("[data-open-file]").forEach((b) => { b.onclick = () => openWorkspaceFile(b.dataset.openFile); }); break;
+      shell.noteFiles(ev.files);
+      n.querySelectorAll("[data-open-file]").forEach((b) => { b.onclick = () => shell.openPreview(b.dataset.openFile, { bytes: b.dataset.bytes ? Number(b.dataset.bytes) : null }); }); break;
     }
     case "error": ctx.error = ev.error; break;
   }
@@ -659,23 +680,58 @@ function metaHtml(m) {
   if (m.mode) bits.push(`<span>${m.mode === "chat" ? "chat" : "agent"}</span>`);
   return bits.join('<span class="sep">·</span>');
 }
+const fmtWorked = (s) => s < 60 ? `${Math.max(1, Math.round(s))}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+function retryFrom(el) {
+  let prev = el.previousElementSibling;
+  while (prev && !prev.classList.contains("user")) prev = prev.previousElementSibling;
+  const text = prev ? $(".bubble", prev)?.textContent || "" : "";
+  if (!text.trim()) { toast("Nothing to retry here.", "warn"); return; }
+  if (state.busy) { toast("Wait for the current reply to finish, or stop it first.", "warn"); return; }
+  const ta = $("#composerInput"); if (!ta) return;
+  ta.value = text; autosize(); send();
+}
 function finishBot(el, text, meta = {}, { error = false } = {}) {
   const ans = $(".answer", el);
   ans.innerHTML = "";
   ans.appendChild(renderMarkdown(text || "(no answer)"));
   if (error) el.classList.add("error");
+  const worked = meta.worked !== undefined ? meta.worked : (Date.now() - Number(el.dataset.started || Date.now())) / 1000;
+  $(".msg-worked", el)?.remove();
+  if (meta.mode === "agent" && worked >= 1 && !error) {
+    const w = document.createElement("button");
+    w.type = "button"; w.className = "msg-worked linkish";
+    w.setAttribute("aria-expanded", "true");
+    w.innerHTML = `${icon("clock")}<span>Worked for ${fmtWorked(worked)}</span>${icon("chev_down")}`;
+    w.onclick = () => { const steps = $(".steps", el); const open = steps.hidden; steps.hidden = !open; w.setAttribute("aria-expanded", String(open)); };
+    $(".content", el).insertBefore(w, $(".steps", el));
+  }
+  const when = meta.created ? new Date(meta.created * 1000) : new Date();
   const m = $(".meta", el);
-  m.innerHTML = metaHtml(meta) + `<span class="msg-actions"><button class="icon-btn sm" aria-label="Copy answer" title="Copy">${icon("copy")}</button></span>`;
-  $(".msg-actions button", m).onclick = (e) => copyText(text || "", e.currentTarget);
+  m.innerHTML = `<span class="msg-actions">
+      <button class="icon-btn sm" data-ma="copy" aria-label="Copy answer" title="Copy">${icon("copy")}</button>
+      <button class="icon-btn sm" data-ma="retry" aria-label="Try again" title="Try again">${icon("refresh")}</button>
+      <button class="icon-btn sm" data-ma="speak" aria-label="Read aloud" title="Read aloud" aria-pressed="false">${icon("volume")}</button>
+      <span class="msg-more"><button class="icon-btn sm" data-ma="more" aria-label="More actions" title="More" aria-haspopup="menu" aria-expanded="false">${icon("more")}</button></span>
+      <time class="msg-time" datetime="${when.toISOString()}" title="${esc(when.toLocaleString())}">${esc(when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</time>
+    </span>` + metaHtml(meta);
+  $('[data-ma="copy"]', m).onclick = (e) => copyText(text || "", e.currentTarget);
+  $('[data-ma="retry"]', m).onclick = () => retryFrom(el);
+  $('[data-ma="speak"]', m).onclick = (e) => shell.speak(text || "", e.currentTarget);
+  $('[data-ma="more"]', m).onclick = (e) => shell.moreMenu(e.currentTarget, [
+    { icon: "copy", label: "Copy as Markdown", run: () => copyText(text || "") },
+    { icon: "panel", label: "Show run info", run: () => shell.togglePanel(true) },
+    { icon: "list_dir", label: $(".steps", el).hidden ? "Show steps" : "Hide steps", run: () => { $(".steps", el).hidden = !$(".steps", el).hidden; } },
+  ]);
   scrollDown();
 }
-function renderSavedBot(msg, thread) {
+function renderSavedBot(msg, thread, userCreated) {
   const el = addBot(thread);
   const meta = msg.meta || {};
   const ctx = { el, live: false, steps: [], switched: [] };
   for (const ev of meta.events || []) if (ev.type !== "approval_needed" || (meta.events || []).some((x) => x.type === "approval" && x.id === ev.id)) renderEvent(ctx, ev);
   const text = typeof msg.content === "string" ? msg.content : (msg.content || []).map((p) => p.text || "").join("\n");
-  finishBot(el, text, { ...meta, switched: ctx.switched.length ? ctx.switched : undefined }, { error: meta.stopped === "error" });
+  const worked = msg.created && userCreated ? msg.created - userCreated : null;
+  finishBot(el, text, { ...meta, created: msg.created, worked, switched: ctx.switched.length ? ctx.switched : undefined }, { error: meta.stopped === "error" });
   if (meta.actions?.length) renderActions(el, meta.actions);
   $$(".step", el).forEach((d) => d.open = false);
   return el;
@@ -764,7 +820,7 @@ function setBusy(b) {
   state.busy = b;
   const btn = $("#sendBtn"); if (!btn) return;
   btn.classList.toggle("stop", b);
-  btn.innerHTML = icon(b ? "stop" : "send");
+  btn.innerHTML = icon(b ? "stop" : "arrow_up");
   btn.setAttribute("aria-label", b ? "Stop" : "Send message");
   btn.title = b ? "Stop (Esc)" : "Send";
   btn.disabled = false;
@@ -1025,6 +1081,7 @@ function limitCard(detail) {
 async function refreshMe() {
   if (!HOSTED) return;
   try { const d = await api("/api/me"); state.me = d.user; state.quota = d.quota; state.limits = d.limits; } catch { return; }
+  shell.setAvatar(state.me?.display_name || state.me?.username || "");
   drawMeter();
 }
 function drawMeter() {
@@ -2029,6 +2086,13 @@ async function refreshBadge() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = BRAND; });
 
 async function boot() {
+  shell.initShell({
+    state, api, toast, openModal, confirmDialog, promptDialog, renderMarkdown, copyText, uploadFile,
+    newChat, toggleSidebar, openPalette, renderConvs, renameConv, deleteConv, setMode, saveSetting, openWorkspaceFile,
+    askAbout: (path) => { state.files = [path]; location.hash = "#/new"; setTimeout(renderAttachments, 50); },
+    authHeaders: () => ({ ...(TOKEN ? { "X-AutoMoto-Token": TOKEN } : {}) }),
+    BRAND, BRAND_SHORT, HOSTED,
+  });
   if (HOSTED) {
     await refreshMe();
     if (state.me?.must_change_password) { location.replace("/"); return; }
@@ -2047,7 +2111,8 @@ async function boot() {
     if (!localStorage.getItem("automoto_mode")) state.mode = s.default_mode || "agent";
   } catch { applyTheme(localStorage.getItem("automoto_theme") || "dark"); }
   setMode(state.mode, false);
-  if (localStorage.getItem("automoto_info") === "1" && !mobile()) $("#info").hidden = false;
+  if (localStorage.getItem("automoto_info") === "1" && !mobile()) shell.togglePanel(true);
+  if (localStorage.getItem("automoto_side_collapsed") === "1" && !mobile()) app.classList.add("side-collapsed");
   try { await refreshStatus(); } catch (e) { toast(`Couldn't reach the server: ${e.message}`, "bad"); }
   await loadConvs();
   await renderRoute();

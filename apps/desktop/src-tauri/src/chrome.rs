@@ -2,7 +2,9 @@
 //!
 //! The web caption uses a fixed contract (also in `app.css` / `dist/app.css`):
 //! a 40px bar, a 64px Menu control on the left, and three 46px caption buttons
-//! on the right. tao/wry already returns resize-border hits for an undecorated
+//! on the right. The engine UI also puts back / forward, the sidebar toggle and
+//! the File / Edit / View / Help menus next to Menu, so the first 360px stay
+//! normal clicks; the web drag region still moves the window there. tao/wry already returns resize-border hits for an undecorated
 //! window. This subclass leaves those alone and marks the caption band so a
 //! drag or double-click can be handled as a caption. Snap layouts on the
 //! maximize control are best-effort; Win+Z and dragging to a screen edge
@@ -10,6 +12,8 @@
 
 pub(crate) const CHROME_HEIGHT_PX: f32 = 40.0;
 pub(crate) const CHROME_MENU_PX: f32 = 64.0;
+/// Left band that stays a client click: Menu, navigation and the menu bar.
+pub(crate) const CHROME_LEFT_TOOLS_PX: f32 = 360.0;
 pub(crate) const CHROME_BUTTON_PX: f32 = 46.0;
 
 const HTCAPTION: i32 = 2;
@@ -30,7 +34,7 @@ pub(crate) fn caption_hit(x: i32, y: i32, width: i32, dpi: u32) -> Option<i32> {
         return None;
     }
     let button = (CHROME_BUTTON_PX * scale).round().max(1.0) as i32;
-    let menu = (CHROME_MENU_PX * scale).round().max(1.0) as i32;
+    let menu = (CHROME_MENU_PX.max(CHROME_LEFT_TOOLS_PX) * scale).round().max(1.0) as i32;
     // Caption buttons win on a narrow window so minimize / maximize / close stay hittable.
     if x >= width.saturating_sub(button) {
         Some(HTCLOSE)
@@ -167,7 +171,9 @@ mod tests {
             "menu stays a client click"
         );
         assert_eq!(caption_hit(63, 8, 1000, 96), None);
-        assert_eq!(caption_hit(64, 8, 1000, 96), Some(HTCAPTION));
+        assert_eq!(caption_hit(64, 8, 1000, 96), None, "menu bar stays a client click");
+        assert_eq!(caption_hit(359, 8, 1000, 96), None);
+        assert_eq!(caption_hit(360, 8, 1000, 96), Some(HTCAPTION));
         assert_eq!(caption_hit(861, 39, 1000, 96), Some(HTCAPTION));
         assert_eq!(caption_hit(862, 8, 1000, 96), Some(HTMINBUTTON));
         assert_eq!(caption_hit(907, 8, 1000, 96), Some(HTMINBUTTON));
@@ -188,7 +194,8 @@ mod tests {
             None,
             "menu is 128px at 200%"
         );
-        assert_eq!(caption_hit(128, 79, 2000, 192), Some(HTCAPTION));
+        assert_eq!(caption_hit(719, 79, 2000, 192), None, "menu bar is 720px at 200%");
+        assert_eq!(caption_hit(720, 79, 2000, 192), Some(HTCAPTION));
         assert_eq!(caption_hit(1724, 10, 2000, 192), Some(HTMINBUTTON));
         assert_eq!(caption_hit(1816, 10, 2000, 192), Some(HTMAXBUTTON));
         assert_eq!(caption_hit(1908, 10, 2000, 192), Some(HTCLOSE));
