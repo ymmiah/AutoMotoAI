@@ -176,3 +176,15 @@ def test_anthropic_image_conversion():
     ])
     assert system == "be nice"
     assert msgs[0]["content"][1]["source"]["type"] == "base64"
+
+
+def test_recommended_provider_flags_come_from_the_registry():
+    from automoto.providers import REGISTRY
+
+    picks = {p.id for p in REGISTRY.values() if p.recommended}
+    assert picks == {"nim", "local"}  # one cloud, one offline; change in providers.py only
+    for pid in picks:
+        pub = REGISTRY[pid].public()
+        assert pub["recommended"] is True and pub["recommended_why"]
+        assert "__BRAND" not in pub["recommended_why"]
+    assert REGISTRY["groq"].public()["recommended"] is False

@@ -3083,6 +3083,18 @@ let browser;
   await page.locator('#quickTheme').click();
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
   await page.screenshot({ path: path.join(output, 'workspace-light.png') });
+  // Every platform gets the same layout: a plain browser shows the in-page bar with menus, no window controls.
+  assert.equal(await page.locator('html').getAttribute('data-chrome'), 'bar');
+  if ((page.viewportSize()?.width || 0) > 640) {
+    assert.equal(await page.locator('#amMenubar').isVisible(), true, 'browser must show File/Edit/View/Help');
+    assert.equal(await page.locator('#amChrome .am-controls').isVisible(), false, 'browser must not draw window controls');
+    assert.equal(await page.locator('#amChrome .am-logo').isVisible(), false);
+    const barTop = await page.evaluate(() => document.querySelector('#app').getBoundingClientRect().top);
+    assert.ok(barTop >= 39, 'workspace must start below the in-page bar');
+    await page.locator('#amMenubar [data-menu="view"]').click();
+    await page.getByRole('menuitem', { name: /Toggle preview panel/ }).waitFor();
+    await page.keyboard.press('Escape');
+  }
   await page.evaluate(() => { document.documentElement.dataset.chrome = 'custom'; window.__automotoChromeBoot(); });
   await page.locator('#amChrome').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Minimize' }).isVisible(), true);
@@ -3099,9 +3111,10 @@ let browser;
   await page.locator('#quickTheme').click();
   await page.screenshot({ path: path.join(output, 'chrome-home-dark.png') });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'custom chrome must not overflow');
-  await page.evaluate(() => { delete document.documentElement.dataset.chrome; });
+  await page.evaluate(() => { document.documentElement.dataset.chrome = 'bar'; });
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
+    assert.equal(await page.locator('#amChrome').isVisible(), false, 'phones keep the mobile layout without the top bar');
     await page.reload();
     await page.locator('.hero h2').waitFor();
     assert.match(await page.locator('.hero p').innerText(), /don't pick the tools/);

@@ -121,6 +121,7 @@ textarea.input { resize: vertical; min-height: 90px; font-family: var(--mono); f
 .pill.safe, .pill.done, .pill.on { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); border-color: transparent; }
 .pill.risky, .pill.running, .pill.waiting_approval { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); border-color: transparent; }
 .pill.blocked, .pill.error, .pill.off { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); border-color: transparent; }
+.pill.rec { text-transform: none; font-weight: 600; font-size: 10.5px; padding: 0 7px; margin-left: 4px; vertical-align: 1px; background: color-mix(in srgb, var(--ok) 13%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 32%, transparent); cursor: help; }
 .timeline { border-left: 2px solid var(--line2); margin-left: 6px; padding-left: 16px; }
 .timeline .ev { position: relative; margin-bottom: 12px; }
 .timeline .ev::before { content: ""; position: absolute; left: -22px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
@@ -516,6 +517,25 @@ html[data-chrome="custom"] .scrim,
 html[data-chrome="custom"] .palette,
 html[data-chrome="custom"] .modal { top: var(--chrome-h); }
 html[data-chrome="custom"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
+
+/* In-page top bar for the browser, server mode and the macOS / Linux apps (native frame):
+   the same menus and navigation, no window controls, no app-menu button. macOS traffic lights
+   stay in the native title bar above the page, so nothing overlaps them. */
+html[data-chrome="bar"] { --chrome-h: 40px; }
+html[data-chrome="bar"] .am-chrome { display: flex; }
+html[data-chrome="bar"] .am-controls,
+html[data-chrome="bar"] .am-chrome .am-logo,
+html[data-chrome="bar"] #amAppMenu { display: none; }
+html[data-chrome="bar"] .am-chrome-app { padding-left: 6px; }
+html[data-chrome="bar"][data-native] .am-caption { display: none; }
+html[data-chrome="bar"] .palette,
+html[data-chrome="bar"] .modal { top: var(--chrome-h); }
+html[data-chrome="bar"] .skip:focus { top: calc(var(--chrome-h) + 8px); }
+/* Phones and narrow windows keep the mobile layout: no top bar. */
+@media (max-width: 640px) {
+  html[data-chrome="bar"] { --chrome-h: 0px; }
+  html[data-chrome="bar"] .am-chrome { display: none; }
+}
 
 /* Chat-first shell: studios and chats in the sidebar, the conversation in the column. */
 .side-group { border: 0; margin: 0; padding: 0; }

@@ -14,6 +14,21 @@ macOS and Linux builds keep the native frame. The bar stays in the page and is h
 | Hit-testing | `apps/desktop/src-tauri/src/chrome.rs` | `WM_NCHITTEST` subclass |
 | Who may call it | `apps/desktop/src-tauri/capabilities/chrome.json` | Drag, min, max, close, and Menu actions only |
 
+## Other platforms: the same layout
+
+The three-pane workspace (icon bar, sidebar, chat, preview panel) and the **File / Edit / View / Help** menus are the
+same everywhere. Only the window frame differs:
+
+| Where | `html[data-chrome]` | Top of the window |
+|---|---|---|
+| Windows app | `custom` (set by `chrome.js`) | AutoMoto's own 40px caption with menus and minimize / maximize / close |
+| Browser, server mode | `bar` (set by `theme-boot.js` from `data-chrome-fallback` on `index.html`) | The same 40px bar with back / forward, sidebar toggle and the menus, but no window controls and no Menu button |
+| macOS and Linux apps | `bar` | The native frame stays (traffic lights on macOS stay in the system title bar, so nothing overlaps them). The in-page bar sits under it without window controls or a second title (`data-native`) |
+| Phones and windows 640px wide or less | `bar` | No top bar: the mobile layout keeps the sidebar and preview toggles in the chat header |
+
+On macOS (`html[data-os="mac"]`) the menu shortcuts read ⌘ / ⌥ / ⇧ and **Exit** reads **Quit**. The keyboard handler
+already accepts Cmd as Ctrl. View > Zoom scales the workspace only, so the bar stays 40px in every mode.
+
 The native **AutoMoto / Edit / Help** menu stays attached so Ctrl+Shift+H, Ctrl+R, Ctrl+Q and F1 keep working. **Menu** in the caption opens the same actions. Copy and paste stay on Ctrl+C / Ctrl+V inside the page.
 
 ### Hit-testing
@@ -21,7 +36,7 @@ The native **AutoMoto / Edit / Help** menu stays attached so Ctrl+Shift+H, Ctrl+
 tao (the window library Tauri uses) already treats the outer edge of an undecorated window as a resize border, including corners, and keeps the drop shadow. `chrome.rs` subclasses the HWND and:
 
 1. Leaves those resize hits alone (`HTLEFT` through `HTBOTTOMRIGHT`).
-2. Marks the top band, under the resize strip, from the CSS contract: **40px** tall, **64px** Menu on the left (still a normal click), then a drag caption (`HTCAPTION`), then **46px** minimize, maximize and close.
+2. Marks the top band, under the resize strip, from the CSS contract: **40px** tall, **64px** Menu on the left (still a normal click; the engine UI keeps the first **360px** as normal clicks for back / forward, the sidebar toggle and File / Edit / View / Help), then a drag caption (`HTCAPTION`), then **46px** minimize, maximize and close.
 3. Scales those sizes with `GetDpiForWindow` so they match CSS pixels.
 
 Dragging the caption uses Tauri's drag region (`data-tauri-drag-region`), which starts a real window move, so dragging to a screen edge snaps. Double-click on that region toggles maximize. **Win+Left / Win+Right** and **Win+Z** snap as well. The page buttons call Tauri `minimize`, `toggle_maximize` and `close`.
