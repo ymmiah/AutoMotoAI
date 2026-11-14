@@ -20,7 +20,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   const title=document.createElement("header");
   title.className="ds-v33-title";
   title.innerHTML='<div class="ds-v33-brand"><span class="ds-v33-mark" aria-hidden="true">◇</span>'+
-    '<div><strong>AutoMoto Developer</strong><small>WORKBENCH · V33</small></div></div>'+
+    '<div><strong>AutoMoto Developer</strong><small>WORKBENCH · V34</small></div></div>'+
     '<div class="ds-v33-title-actions">'+
     '<span class="ds-v33-badge" id="dsV33WorkspaceState">No workspace</span>'+
     '<button type="button" class="btn sm" id="dsV33Tools" aria-expanded="false" aria-controls="dsV33ToolsDrawer">Extensions &amp; tools</button>'+
@@ -57,6 +57,32 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     '<button id="dsV33Send" type="submit" class="btn primary" disabled>Run task</button>'+
     '<button id="dsV33Stop" type="button" class="btn" disabled>Stop</button></div>'+
     '<p class="ds-v33-footnote">No unattended follow-up, auto-merge, publish or deployment. Approve risky actions individually.</p></form>';
+  // V34: visible, keyboard-accessible onboarding and shortcuts.
+  const guide=document.createElement("section");
+  guide.className="ds-v34-guide";
+  guide.setAttribute("aria-label","Quick start");
+  guide.innerHTML='<div class="ds-v34-guide-head"><strong>Start here</strong>'+
+    '<span id="dsV34Step" role="status" aria-live="polite">1 of 3 · Open a project</span></div>'+
+    '<p id="dsV34Hint">Choose a local project in the toolbar. You can browse without trusting it.</p>'+
+    '<div class="ds-v34-guide-actions">'+
+    '<button id="dsV34Project" type="button" class="btn sm">1 · Choose project</button>'+
+    '<button id="dsV34Trust" type="button" class="btn sm">2 · Trust project</button>'+
+    '<button id="dsV34Prompt" type="button" class="btn sm">3 · Ask AI to code</button></div>';
+  centre.insertBefore(guide,editorTop.nextSibling);
+  const starters=document.createElement("div");
+  starters.className="ds-v34-starters";
+  starters.setAttribute("aria-label","Suggested coding tasks");
+  const examples=[
+    ["Explain project","Inspect this workspace and explain its architecture and how to run it. Do not edit files."],
+    ["Find and fix a bug","Investigate the most relevant failing test, fix the root cause and rerun focused tests. Summarise changes."],
+    ["Improve code quality","Review this project for maintainability and accessibility improvements. Make a focused change and run tests."],
+    ["Add tests","Identify an important untested behaviour, add focused regression tests and run them."]
+  ];
+  for(const [label,value] of examples){
+    const b=document.createElement("button");b.type="button";b.className="ds-v34-chip";
+    b.textContent=label;b.dataset.prompt=value;starters.append(b);
+  }
+  panel.querySelector(".ds-v33-composer").prepend(starters);
   layout.append(left,centre,panel);
   const drawer=document.createElement("section");
   drawer.className="ds-v33-drawer";
@@ -79,7 +105,8 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   const prompt=el("dsV33Prompt"),send=el("dsV33Send"),stop=el("dsV33Stop");
   let taskId=null,conversationId=null,taskProject=null,pollHandle=null;
   let busy=false,closed=false,seen=0,lastStatus="",approvalIds=new Set();
-  const terminal=new Set(["completed","failed","cancelled","error","stopped"]);
+  let activeConversationProject=null,pollErrors=0;
+  const terminal=new Set(["done","completed","failed","cancelled","error","stopped"]);
   function append(label,text,kind="note"){
     const item=document.createElement("div");item.className="ds-v33-entry ds-v33-"+kind;
     const strong=document.createElement("strong");strong.textContent=label;
@@ -93,6 +120,22 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     el("dsV33WorkspaceState").textContent=p?(p.trusted?"Trusted workspace":"Read-only workspace"):"No workspace";
     el("dsV33Scope").textContent=p?.trusted?"Workspace: "+p.project:"Trust a local workspace first";
     send.disabled=busy||!trusted()||prompt.value.trim().length<5;
+    const step=el("dsV34Step"),hint=el("dsV34Hint");
+    if(!p?.project){
+      step.textContent="1 of 3 · Open a project";
+      hint.textContent="Choose a local project from the existing project toolbar. Browse files safely before trusting it.";
+    }else if(!p.trusted){
+      step.textContent="2 of 3 · Trust your project";
+      hint.textContent="Inspect the files first. Trust only a workspace you own or have reviewed; this allows the agent to edit it.";
+    }else if(busy){
+      step.textContent="Agent working · follow progress";
+      hint.textContent="The agent is handling your task. Approve sensitive actions individually or stop the task.";
+    }else{
+      step.textContent="3 of 3 · Describe your task";
+      hint.textContent="Type a request or choose an example. The agent stops when finished and waits for your next prompt.";
+    }
+    el("dsV34Trust").disabled=!p?.project||!!p?.trusted;
+    el("dsV34Prompt").disabled=!p?.trusted;
     stop.disabled=!busy||!taskId;
   }
   function showTools(value){
@@ -106,7 +149,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   }
   function finish(message,kind="note"){
     if(!busy)return;
-    busy=false;taskId=null;taskProject=null;
+    busy=false;taskId=null;taskProject=null;pollErrors=0;
     if(pollHandle){clearTimeout(pollHandle);pollHandle=null;}
     state.textContent="Waiting for next prompt";
     append("Task finished",message,kind);
@@ -145,6 +188,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     const id=taskId;
     try{
       const result=await api("/api/tasks/"+encodeURIComponent(id)+"?since="+seen);
+      pollErrors=0;
       if(id!==taskId||!busy)return;
       for(const event of result.events||[]){
         const type=String(event.type||event.kind||"progress");
@@ -165,10 +209,17 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
             answer=msgs.filter(x=>x.role==="assistant").at(-1)?.content||"";
           }catch(_){}
         }
-        finish(answer||"Task "+current,current==="completed"?"note":"error");
+        finish(answer||"Task "+current,(current==="done"||current==="completed")?"note":"error");
         return;
       }
-    }catch(e){append("Connection",e.message+" · retrying","error");}
+    }catch(e){
+      pollErrors++;
+      if(pollErrors===1||pollErrors===5)append("Connection",e.message+" · retrying","error");
+      if(pollErrors>=10){
+        finish("Lost task monitoring after repeated connection errors. Check task history before starting another task.","error");
+        return;
+      }
+    }
     if(busy&&taskId===id)pollHandle=setTimeout(()=>void poll(),1400);
   }
   async function run(){
@@ -181,13 +232,14 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     busy=true;seen=0;approvalIds.clear();lastStatus="";
     taskProject=p.project;refresh();state.textContent="Starting";
     append("You",note,"user");
-    prompt.value="";
     try{
+      if(conversationId&&activeConversationProject!==taskProject)conversationId=null;
       if(!conversationId){
         const conv=await api("/api/conversations",
           {title:"Developer Studio · "+note.slice(0,70),mode:"agent"});
         if(!conv.id)throw Error("Conversation not created");
         conversationId=conv.id;
+        activeConversationProject=taskProject;
       }
       const result=await api("/api/agent",{
         conversation_id:conversationId,message:note,workspace:taskProject,
@@ -195,9 +247,32 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       });
       if(!result.task_id)throw Error("Agent did not start");
       taskId=result.task_id;
+      prompt.value="";
       state.textContent="Working";refresh();void poll();
-    }catch(e){finish("Unable to start: "+e.message,"error");}
+    }catch(e){
+      // Preserve the original prompt when the API rejects or fails to start the task.
+      prompt.value=note;
+      finish("Unable to start: "+e.message,"error");
+    }
   }
+  el("dsV34Project").addEventListener("click",()=>{
+    const control=el("dsPath")||el("dsRoots")||el("dsOpen");
+    if(control){control.focus();control.scrollIntoView({block:"center"});}
+    else toolbar?.scrollIntoView({block:"center"});
+  });
+  el("dsV34Trust").addEventListener("click",()=>{
+    const control=el("dsTrust");
+    if(control){control.focus();control.scrollIntoView({block:"center"});}
+    else toolbar?.scrollIntoView({block:"center"});
+  });
+  el("dsV34Prompt").addEventListener("click",()=>{
+    showAgent(true);prompt.focus();
+  });
+  starters.addEventListener("click",event=>{
+    const b=event.target.closest("button[data-prompt]");
+    if(!b||busy)return;
+    prompt.value=b.dataset.prompt;showAgent(true);refresh();
+  });
   el("dsV33Tools").addEventListener("click",()=>showTools(drawer.hidden));
   el("dsV33CloseTools").addEventListener("click",()=>showTools(false));
   el("dsV33Extensions").addEventListener("click",()=>showTools(true));

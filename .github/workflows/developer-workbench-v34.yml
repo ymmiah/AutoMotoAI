@@ -1,0 +1,58 @@
+name: Developer Studio V34 guided workbench
+
+on:
+  pull_request:
+    paths:
+      - "automoto/server.py"
+      - "automoto/web/static/developer-workbench.js"
+      - "automoto/web/static/developer-studio.js"
+      - "automoto/web/static/developer-studio.css"
+      - "apps/desktop/test/ui-smoke.cjs"
+      - "docs/DEVELOPER-STUDIO-V34.md"
+      - ".github/workflows/developer-workbench-v34.yml"
+  push:
+    branches: [main]
+    paths:
+      - "automoto/web/static/developer-workbench.js"
+      - ".github/workflows/developer-workbench-v34.yml"
+  schedule:
+    # Weekly cross-platform syntax coverage, staggered.
+    - cron: "45 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/web/static/developer-workbench.js
+        docs/DEVELOPER-STUDIO-V34.md
+        .github/workflows/developer-workbench-v34.yml
+
+  workbench-syntax:
+    needs: paths
+    name: V34 workbench syntax (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check workbench and smoke syntax
+        run: |
+          node --check automoto/web/static/developer-workbench.js
+          node --check automoto/web/static/developer-studio.js
+          node --check apps/desktop/test/ui-smoke.cjs

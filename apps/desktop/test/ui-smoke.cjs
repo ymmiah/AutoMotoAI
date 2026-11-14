@@ -1816,6 +1816,9 @@ let browser;
   await page.locator('#dsPath').waitFor();
   await page.locator('#dsMonaco .monaco-editor').waitFor({state:'visible'});
   assert.equal(await page.locator('#dsMonaco').isVisible(),true,'Must load Monaco locally');
+  // V33+: language and toolchain panels live in the Extensions & tools drawer.
+  if(!(await page.locator('#dsV33ToolsDrawer').isVisible()))await page.locator('#dsV33Tools').click();
+  await page.locator('#dsV33ToolsDrawer').waitFor({state:'visible'});
   await page.locator('#dsPath').fill(devProject);
   await page.locator('#dsOpen').click();
   await page.waitForFunction(() => document.querySelector('#dsProject')?.textContent?.includes('developer-studio-v2'));
@@ -2944,6 +2947,8 @@ let browser;
   assert.equal(await page.locator('#dsV33AgentPanel').count(),1);
   assert.equal(await page.locator('#dsV33Prompt').inputValue(),'');
   assert.equal(await page.locator('#dsV33Stop').isDisabled(),true);
+  if(await page.locator('#dsV33ToolsDrawer').isVisible())await page.locator('#dsV33CloseTools').click();
+  await page.locator('#dsV33ToolsDrawer').waitFor({state:'hidden'});
   await page.locator('#dsV33Tools').click();
   assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),true);
   assert.equal(await page.locator('#dsWasmInspect').count(),1);
@@ -2962,6 +2967,17 @@ let browser;
   await page.locator('#dsV33CloseTools').click();
   assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),false);
   await page.screenshot({path:path.join(output,'developer-studio-v33-workbench.png')});
+
+  // V34: guided onboarding and task shortcuts without triggering an agent run.
+  assert.equal(await page.locator('.ds-v34-guide').count(),1);
+  assert.equal(await page.locator('#dsV34Project').count(),1);
+  assert.equal(await page.locator('#dsV34Trust').count(),1);
+  assert.equal(await page.locator('#dsV34Prompt').count(),1);
+  await page.locator('.ds-v34-chip').filter({hasText:'Explain project'}).click();
+  assert.match(await page.locator('#dsV33Prompt').inputValue(),/Inspect this workspace/);
+  assert.equal(await page.locator('#dsV33Stop').isDisabled(),true);
+  assert.equal(await page.locator('#dsV33AgentTimeline .ds-v33-user').count(),0);
+  await page.screenshot({path:path.join(output,'developer-studio-v34-guided-workbench.png')});
 
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.

@@ -434,3 +434,19 @@
 @media(max-width:860px){.ds-v33-layout{grid-template-columns:44px minmax(0,1fr)}.ds-v33-agent{grid-column:2;min-height:480px;border-left:0;border-top:1px solid #30384a}.ds-v33 .ds-columns{min-height:360px}.ds-v33 .ds-panel{min-height:350px}.ds-v33-timeline{max-height:340px}}
 @media(max-width:540px){.ds-v33 .ds-v33-title{align-items:flex-start;flex-direction:column}.ds-v33 .ds-toolbar{padding:12px}.ds-v33-layout{grid-template-columns:40px minmax(0,1fr)}.ds-v33 .ds-columns{display:block}.ds-v33 .ds-panel-handle{display:none}.ds-v33 .ds-panel{min-height:260px}.ds-v33 .ds-v33-title-actions{width:100%}.ds-v33 .ds-v33-badge{display:none}}
 @media(prefers-reduced-motion:reduce){.ds-v33 *{scroll-behavior:auto!important;transition:none!important}}
+
+
+/* V34 guided, low-friction Developer Studio experience. */
+.ds-v33 .ds-v34-guide{padding:14px 18px;background:linear-gradient(125deg,#1c3048,#1c2536);border-bottom:1px solid #40516b;display:grid;gap:9px}
+.ds-v33 .ds-v34-guide-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.ds-v33 .ds-v34-guide-head strong{font-size:14px;color:#f0f5ff}
+.ds-v33 #dsV34Step{font-size:11px;color:#a7d3ff}
+.ds-v33 #dsV34Hint{margin:0;font-size:12px;line-height:1.55;color:#d1def0}
+.ds-v33 .ds-v34-guide-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ds-v33 .ds-v34-guide-actions button{min-height:38px;border-radius:8px}
+.ds-v33 .ds-v34-guide-actions button:disabled{opacity:.48;cursor:not-allowed}
+.ds-v33 .ds-v34-starters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:4px}
+.ds-v33 .ds-v34-chip{background:#25334b;border:1px solid #476080;color:#dce9fc;border-radius:9px;min-height:42px;padding:9px 10px;text-align:left;font-size:12px;cursor:pointer;line-height:1.4}
+.ds-v33 .ds-v34-chip:hover{background:#344b70;border-color:#91b9ed}
+.ds-v33 .ds-v34-chip:focus-visible{outline:2px solid #9ccaff;outline-offset:2px}
+@media(max-width:540px){.ds-v33 .ds-v34-guide{padding:12px}.ds-v33 .ds-v34-guide-actions button{flex:1 1 120px}.ds-v33 .ds-v34-starters{grid-template-columns:1fr}}
