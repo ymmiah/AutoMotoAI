@@ -117,19 +117,33 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
         '</div>'+
       '</section>'+
       '<aside class="dsx-review" id="dsxReview" aria-label="Review changes" hidden>'+
+        '<div class="dsx-sheet-handle" aria-hidden="true"></div>'+
         '<div class="dsx-rtabs" role="tablist"><button type="button" role="tab" data-rtab="changes" class="on" aria-selected="true">Changes</button><button type="button" role="tab" data-rtab="files" aria-selected="false">Files</button><button type="button" role="tab" data-rtab="tests" aria-selected="false">Tests</button><span class="dsx-gap"></span><button type="button" class="dsx-x" id="dsxReviewClose" aria-label="Close review panel">✕</button></div>'+
         '<div class="dsx-rbody" id="dsxReviewBody"></div>'+
         '<div class="dsx-rfoot"><button type="button" class="btn sm primary" id="dsxRKeep">Keep</button><button type="button" class="btn sm" id="dsxRUndo">Undo</button><span class="dsx-gap"></span><button type="button" class="btn sm" id="dsxROpen">Open in editor</button></div>'+
       '</aside>'+
     '</div>'+
     '<section class="dsx-tools" id="dsxToolsPage" aria-label="Tools and languages" hidden>'+
+      '<div class="dsx-sheet-handle" aria-hidden="true"></div>'+
       '<div class="dsx-tools-head"><div><h2>Tools &amp; languages</h2><p>Open a language when you need it. The assistant picks what it needs on its own.</p></div><span class="dsx-gap"></span><button type="button" class="btn sm" id="dsxToolsBack">Back</button></div>'+
       '<div class="dsx-tools-bar"><input type="search" class="input" id="dsxToolSearch" placeholder="Search languages and tools…" aria-label="Search languages and tools"><div class="dsx-cats" id="dsxCats" role="group" aria-label="Filter"></div></div>'+
       '<div class="dsx-detected" id="dsxDetected" hidden></div>'+
       '<div class="dsx-grid" id="dsxToolGrid"></div>'+
       '<div class="dsx-detail" id="dsxToolDetail" hidden><div class="dsx-detail-head"><button type="button" class="btn sm" id="dsxDetailBack">← All tools</button><h3 id="dsxDetailTitle"></h3></div><div id="dsxDetailBody"></div></div>'+
       '<div class="dsx-tools-foot"><span>Prefer every panel on one page?</span><button type="button" class="btn sm" id="dsxClassic">Show all panels (classic layout)</button></div>'+
-    '</section>';
+    '</section>'+
+    '<aside class="dsx-files-sheet" id="dsxFilesSheet" aria-label="Project files" hidden>'+
+      '<div class="dsx-sheet-handle" aria-hidden="true"></div>'+
+      '<div class="dsx-sheet-head"><h2>Files</h2><span class="dsx-gap"></span><button type="button" class="dsx-x" id="dsxFilesClose" aria-label="Close files">✕</button></div>'+
+      '<div class="dsx-sheet-body" id="dsxFilesBody"></div>'+
+    '</aside>'+
+    '<div class="dsx-backdrop" id="dsxBackdrop" hidden></div>'+
+    '<nav class="dsx-nav" id="dsxNav" aria-label="Studio sections">'+
+      '<button type="button" id="dsxNavChat" data-nav="chat" class="on" aria-current="page"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4.2A2.5 2.5 0 0 1 4 13.5z"/></svg></span><span>Chat</span></button>'+
+      '<button type="button" id="dsxNavFiles" data-nav="files"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/></svg></span><span>Files</span></button>'+
+      '<button type="button" id="dsxNavReview" data-nav="review"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14M5 12h14M5 18h8"/><path d="m15 16 2 2 3-3"/></svg></span><span>Review</span><span class="dsx-nav-badge" id="dsxNavReviewBadge" hidden></span></button>'+
+      '<button type="button" id="dsxNavTools" data-nav="tools"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .1 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 3.3 17l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.1-1 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.3-1.8L4.2 6.1A2 2 0 1 1 7 3.3l.1.1A1.7 1.7 0 0 0 8 4.6a1.7 1.7 0 0 0 1-.1 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 16 4.6a1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 20.7 7l-.1.1A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 .1 1 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1 1.7 1.7 0 0 0-.1 1z"/></svg></span><span>Tools</span></button>'+
+    '</nav>';
   const classicBar=el("div","dsx-classic-bar");
   classicBar.innerHTML='<span>Classic layout · every panel on one page.</span><button type="button" class="btn sm" id="dsxBackSimple">Back to simple view</button>';
   shell.before(root);shell.before(classicBar);
@@ -170,6 +184,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       toolsOpen=false;
     }else{
       place(q(".ds-toolbar"),$("dsxProjectPop"));place(q("#dsRootStrip"),$("dsxProjectPop"));
+      if(isCompact()&&currentSheet==="files")closeFilesSheet({silent:true,moved:next==="editor"});
       if(next==="editor"){place(q(".ds-mobile-switch"),$("dsxEditor"));place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
       else{restore(q(".ds-mobile-switch"));restore(q(".ds-columns"));restore(statusLine);}
       $("dsxView").textContent=next==="editor"?"Back to chat":"Open in editor";
@@ -260,11 +275,18 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
   }
   function showTools(open){
     toolsOpen=open;
-    $("dsxToolsPage").hidden=!open;$("dsxBody").hidden=open;
+    $("dsxToolsPage").hidden=!open;
+    if(!isCompact())$("dsxBody").hidden=open;else $("dsxBody").hidden=false;
     $("dsxTools").setAttribute("aria-expanded",String(open));
+    $("dsxNavTools")?.setAttribute("aria-expanded",String(open));
     if(!open)closeDetail();
+    if(isCompact()){
+      if(open)armSheet("tools");
+      else if(currentSheet==="tools")disarmSheet();
+    }
+    syncNav();
   }
-  $("dsxTools").addEventListener("click",()=>{showTools(!toolsOpen);if(toolsOpen){drawTools();void loadToolInfo();$("dsxToolSearch").focus();}});
+  $("dsxTools").addEventListener("click",()=>{showTools(!toolsOpen);if(toolsOpen){drawTools();void loadToolInfo();if(!isCompact())$("dsxToolSearch").focus();}});
   $("dsxToolsBack").addEventListener("click",()=>{showTools(false);$("dsxTools").focus();});
 
   // ---------------------------------------------------------------- composer
@@ -434,13 +456,15 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     afterFilesChanged?.();
     if(n)openReview("changes");
     recordAssistant(t);saveChat();
-    refresh();scrollDown();prompt.focus();
+    refresh();scrollDown();
+    if(isCompact()&&n)$("dsxRKeep")?.focus();else prompt.focus();
   }
   function checkItem(mark,text){const li=el("li");li.append(el("span","dsx-ck "+(mark==="✗"?"bad":""),mark),el("span",null,text));return li;}
   function resolveTurn(t,text){
     t.resolved=true;t.resolveText=text;t.actions.replaceChildren(el("span","dsx-muted",text));
     if(review.turn===t)drawReview();
     recordAssistant(t);saveChat();
+    if(isCompact())closeReview();
     refresh();
   }
   async function keepTurn(t){
@@ -494,9 +518,15 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     if(!t)return;
     review.turn=t;review.tab=tab;review.focus=focus;
     $("dsxReview").hidden=false;root.classList.add("reviewing");drawReview();
+    if(isCompact())armSheet("review");
+    syncNav();
   }
   function turnRef(){return turn;}
-  function closeReview(){$("dsxReview").hidden=true;root.classList.remove("reviewing");}
+  function closeReview(){
+    $("dsxReview").hidden=true;root.classList.remove("reviewing");
+    if(isCompact()&&currentSheet==="review")disarmSheet();
+    syncNav();
+  }
   $("dsxReviewClose").addEventListener("click",closeReview);
   root.querySelector(".dsx-rtabs").addEventListener("click",e=>{const b=e.target.closest("[data-rtab]");if(!b)return;review.tab=b.dataset.rtab;drawReview();});
   $("dsxRKeep").addEventListener("click",()=>review.turn&&void keepTurn(review.turn));
@@ -567,6 +597,159 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     else if(type==="approval")onApproval(data);
     else if(type==="finish")void finishTurn(data);
     refresh();
+  });
+
+
+  // ---------------------------------------------------------------- compact sheets and tab bar (900px and below)
+  let currentSheet=null,sheetCtl=null,sheetReturnFocus=null;
+  const sheetEl=name=>name==="review"?$("dsxReview"):name==="files"?$("dsxFilesSheet"):name==="tools"?$("dsxToolsPage"):null;
+  const focusables=node=>[...node.querySelectorAll('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(n=>!n.hidden&&n.offsetParent!==null);
+  function disarmSheet(){
+    sheetCtl?.abort();sheetCtl=null;
+    const prev=currentSheet;currentSheet=null;delete root.dataset.sheet;
+    $("dsxBackdrop").hidden=true;
+    if(prev){const p=sheetEl(prev);p?.removeAttribute("role");p?.removeAttribute("aria-modal");}
+  }
+  function closeCompactSheet(){
+    const name=currentSheet,back=sheetReturnFocus;
+    if(name==="review")closeReview();
+    else if(name==="files")closeFilesSheet();
+    else if(name==="tools")showTools(false);
+    else disarmSheet();
+    sheetReturnFocus=null;
+    if(back&&typeof back.focus==="function")try{back.focus();}catch(_){ }
+    syncNav();
+  }
+  function trapFocus(e,panel){
+    const list=focusables(panel);if(!list.length)return;
+    const first=list[0],last=list[list.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  }
+  function bindSwipe(panel,signal){
+    const handle=panel.querySelector(".dsx-sheet-handle")||panel;
+    let startY=null,startX=null;
+    const down=e=>{startY=e.clientY;startX=e.clientX;};
+    const move=e=>{
+      if(startY==null)return;
+      const dy=e.clientY-startY,dx=e.clientX-startX;
+      if(dy>24&&Math.abs(dy)>=Math.abs(dx))e.preventDefault();
+    };
+    const up=e=>{
+      if(startY==null)return;
+      const dy=e.clientY-startY,dx=e.clientX-startX;
+      startY=startX=null;
+      if(dy>72&&Math.abs(dy)>=Math.abs(dx))closeCompactSheet();
+    };
+    handle.addEventListener("pointerdown",down,{signal});
+    window.addEventListener("pointermove",move,{signal,passive:false});
+    window.addEventListener("pointerup",up,{signal});
+    window.addEventListener("pointercancel",()=>{startY=null;},{signal});
+  }
+  function armSheet(name){
+    if(!isCompact())return;
+    if(currentSheet&&currentSheet!==name){
+      const prev=currentSheet;
+      if(prev==="review"){$("dsxReview").hidden=true;root.classList.remove("reviewing");}
+      else if(prev==="files")closeFilesSheet({silent:true});
+      else if(prev==="tools"){toolsOpen=false;$("dsxToolsPage").hidden=true;$("dsxTools").setAttribute("aria-expanded","false");closeDetail();}
+      sheetCtl?.abort();sheetCtl=null;
+    }
+    currentSheet=name;root.dataset.sheet=name;
+    const panel=sheetEl(name);if(!panel)return;
+    panel.hidden=false;
+    panel.setAttribute("role","dialog");panel.setAttribute("aria-modal","true");
+    $("dsxBackdrop").hidden=false;
+    sheetReturnFocus=sheetReturnFocus||document.activeElement;
+    sheetCtl=new AbortController();
+    const sig=sheetCtl.signal;
+    $("dsxBackdrop").addEventListener("click",()=>closeCompactSheet(),{signal:sig});
+    document.addEventListener("keydown",e=>{
+      if(!isCompact()||currentSheet!==name)return;
+      if(e.key==="Escape"){e.preventDefault();closeCompactSheet();}
+      if(e.key==="Tab")trapFocus(e,panel);
+    },{signal:sig});
+    bindSwipe(panel,sig);
+    const list=focusables(panel);
+    (name==="review"?$("dsxRKeep"):list[0]||panel)?.focus?.();
+    syncNav();
+  }
+  function openFilesSheet(){
+    if(toolsOpen)showTools(false);
+    if(!$("dsxReview").hidden)closeReview();
+    if(view==="editor"){/* keep columns available */ }
+    const cols=q(".ds-columns");
+    place(cols,$("dsxFilesBody"));
+    host.dataset.mobilePanel="explorer";
+    document.getElementById("dsShowExplorer")?.click();
+    $("dsxFilesSheet").hidden=false;
+    armSheet("files");
+    if(!getProject())status("Open a project to browse its files.");
+  }
+  function closeFilesSheet({silent,moved}={}){
+    const cols=$("dsxFilesBody")?.querySelector(".ds-columns");
+    if(cols&&!moved){
+      if(view==="editor")place(cols,$("dsxEditor"));
+      else restore(cols);
+    }
+    $("dsxFilesSheet").hidden=true;
+    if(!silent){if(currentSheet==="files")disarmSheet();syncNav();}
+  }
+  $("dsxFilesClose").addEventListener("click",()=>closeCompactSheet());
+  $("dsxFilesBody").addEventListener("click",e=>{
+    if(!isCompact()||currentSheet!=="files")return;
+    const btn=e.target.closest(".ds-entry");if(!btn)return;
+    if((btn.querySelector(".ds-file-icon")?.textContent||"")==="▸")return;
+    queueMicrotask(()=>{
+      if(view!=="editor")setView("editor");
+      else place(q(".ds-columns"),$("dsxEditor"));
+      closeFilesSheet({moved:true});
+      document.getElementById("dsShowEditor")?.click();
+      syncNav();
+    });
+  });
+  function pendingReview(){
+    const t=turn;if(!t||t.resolved)return false;
+    const files=t.reviewFiles||t.changes?.changes||[];
+    return files.some(c=>!t.fileDecisions?.[c.path]);
+  }
+  function syncNav(){
+    if(!$("dsxNav"))return;
+    const badge=$("dsxNavReviewBadge");
+    const waiting=pendingReview();
+    badge.hidden=!isCompact()||!waiting;
+    badge.textContent=waiting?"1":"";
+    const active=currentSheet||(view==="editor"?"files":"chat");
+    for(const btn of $("dsxNav").querySelectorAll("[data-nav]")){
+      const on=isCompact()&&btn.dataset.nav===active&&(btn.dataset.nav!=="review"||waiting||currentSheet==="review");
+      btn.classList.toggle("on",on);
+      btn.setAttribute("aria-current",on?"page":"false");
+    }
+    $("dsxRKeep").textContent=isCompact()?"Keep changes":"Keep";
+    $("dsxRUndo").textContent=isCompact()?"Undo all":"Undo";
+  }
+  $("dsxNav").addEventListener("click",e=>{
+    const btn=e.target.closest("[data-nav]");if(!btn||!isCompact())return;
+    const go=btn.dataset.nav;
+    if(go==="chat"){
+      closeCompactSheet();
+      if(view==="editor")setView("chat");
+      syncNav();return;
+    }
+    if(go==="files"){openFilesSheet();return;}
+    if(go==="review"){
+      if(turn){openReview(review.tab||"changes");return;}
+      $("dsxReview").hidden=false;root.classList.add("reviewing");
+      $("dsxReviewBody").replaceChildren(el("p","dsx-muted dsx-pad","No changes to review yet. After a task, Keep or Undo will appear here."));
+      $("dsxRKeep").disabled=true;$("dsxRUndo").disabled=true;
+      armSheet("review");
+      return;
+    }
+    if(go==="tools"){
+      showTools(true);drawTools();void loadToolInfo();
+      $("dsxToolSearch").placeholder="Search for a language, like Python…";
+      $("dsxToolSearch").focus();
+    }
   });
 
   // ---------------------------------------------------------------- chat history (per project, local only)
@@ -664,6 +847,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     $("dsxHero").hidden=!empty||view==="editor";
     $("dsxStarters").hidden=!empty;
     $("dsxClear").hidden=empty||!isCompact();
+    syncNav();
     root.classList.toggle("has-thread",!empty);
     $("dsxFoot").textContent=!p?"Open a project to begin. Nothing runs until you press send."
       :!trusted?"Read-only: allow changes (step 2) before the assistant can work here."
@@ -674,7 +858,15 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     $("dsxRunTests").disabled=$("dsxRunApp").disabled=busy||!trusted;
     for(const b of $("dsxStarters").children)b.disabled=busy;
   }
-  COMPACT_MQ.addEventListener?.("change",()=>{syncReviewOpen();if(review.turn)drawReview();refresh();});
+  COMPACT_MQ.addEventListener?.("change",()=>{
+    if(!isCompact()&&currentSheet){
+      const name=currentSheet;
+      if(name==="files")closeFilesSheet();
+      else if(name==="tools")showTools(false);
+      else disarmSheet();
+    }else if(isCompact()&&!$("dsxReview").hidden&&currentSheet!=="review")armSheet("review");
+    syncReviewOpen();if(review.turn)drawReview();refresh();
+  });
   setView(view,{save:false});
   return {
     projectChanged(){loadChat();refresh();if(toolsOpen)void loadToolInfo();},

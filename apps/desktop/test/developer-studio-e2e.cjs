@@ -220,16 +220,23 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   await page.waitForFunction(() => /Changes kept/.test([...document.querySelectorAll('.dsx-actions')].pop()?.textContent || ''));
   assert.match(readFileSync(counter, 'utf8'), /aria-label="Increase count"/, 'Keep leaves the change in place');
   step('Keep leaves the change and closes the checkpoint');
-  // Narrow: the review panel becomes a bottom sheet.
+  // Tablet: the review panel opens as a side panel above the tab bar, chat stays visible.
   await page.setViewportSize({ width: 820, height: 1000 }); await delay(300);
   if (!(await page.locator('#dsxReview').isVisible())) await page.locator('.dsx-link').last().click();
   await page.locator('#dsxReview').waitFor();
-  const sheet = await page.locator('#dsxReview').evaluate(e => { const r = e.getBoundingClientRect(); return { left: r.left, bottom: Math.round(r.bottom), w: r.width, vw: innerWidth }; });
-  assert.ok(sheet.bottom >= 990 && sheet.w > 400, 'review panel is a bottom sheet: ' + JSON.stringify(sheet));
+  const sheet = await page.locator('#dsxReview').evaluate(e => {
+    const r = e.getBoundingClientRect();
+    const nav = document.querySelector('#dsxNav')?.getBoundingClientRect();
+    const chat = document.querySelector('#dsxChat')?.getBoundingClientRect();
+    return { left: Math.round(r.left), bottom: Math.round(r.bottom), w: Math.round(r.width), vw: innerWidth, navTop: nav ? Math.round(nav.top) : null, chatW: chat ? Math.round(chat.width) : 0, chatH: chat ? Math.round(chat.height) : 0 };
+  });
+  assert.ok(sheet.left > 300 && sheet.w < sheet.vw && sheet.bottom <= (sheet.navTop ?? 1000) + 2, 'review is a tablet side panel: ' + JSON.stringify(sheet));
+  assert.ok(sheet.chatW > 300 && sheet.chatH > 200, 'chat stays visible beside the review panel: ' + JSON.stringify(sheet));
+  assert.equal(await page.locator('#dsxNav').isVisible(), true, 'tab bar stays at the bottom on a tablet');
   await page.evaluate(() => document.activeElement?.blur());
   await shot('08-narrow-review-sheet.png');
   await page.setViewportSize({ width: 1600, height: 1000 }); await delay(300);
-  step('narrow width: review panel opens as a bottom sheet');
+  step('tablet width: review panel opens as a side panel beside chat');
   // Editor view and back; the choice is remembered.
   await page.locator('#dsxReviewClose').click();
   await page.locator('#dsxView').click();
@@ -322,6 +329,124 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   await page.locator('#dsxView').click();
   await page.locator('#dsxRoot[data-view="chat"]').waitFor();
   step('light theme and narrow widths render without overflow; editor stays visible');
+
+  // Hybrid phone (390) and tablet (820) nav: tab bar + sheets.
+  const tabBar = async () => page.evaluate(() => {
+    const nav = document.querySelector('#dsxNav');
+    const st = nav ? getComputedStyle(nav) : null;
+    const r = nav?.getBoundingClientRect();
+    const buttons = [...(nav?.querySelectorAll('[data-nav]') || [])].map(b => {
+      const br = b.getBoundingClientRect();
+      return { id: b.id, label: (b.textContent || '').replace(/\d+$/, '').trim(), w: Math.round(br.width), h: Math.round(br.height) };
+    });
+    return { visible: !!(nav && st.display !== 'none' && r.height > 0), top: r ? Math.round(r.top) : 0, bottom: r ? Math.round(r.bottom) : 0, h: r ? Math.round(r.height) : 0, vh: innerHeight, buttons };
+  });
+  const sheetBox = (sel) => page.locator(sel).evaluate((e) => {
+    const r = e.getBoundingClientRect();
+    const nav = document.querySelector('#dsxNav')?.getBoundingClientRect();
+    const chat = document.querySelector('#dsxChat')?.getBoundingClientRect();
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height), vw: innerWidth, vh: innerHeight, navTop: nav ? Math.round(nav.top) : null, chatW: chat ? Math.round(chat.width) : 0, chatH: chat ? Math.round(chat.height) : 0 };
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 }); await delay(300);
+  let nav = await tabBar();
+  assert.ok(nav.visible, 'tab bar shows on a phone: ' + JSON.stringify(nav));
+  assert.ok(nav.bottom >= 840, 'tab bar sits at the bottom: ' + JSON.stringify(nav));
+  assert.deepEqual(nav.buttons.map(b => b.label), ['Chat', 'Files', 'Review', 'Tools']);
+  for (const b of nav.buttons) assert.ok(b.h >= 44 && b.w >= 44, 'thumb target 44px+: ' + JSON.stringify(b));
+
+  await runOnce('Tweaked the count button label again.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Count"')));
+  await page.locator('#dsxPrompt').fill('Tweak the count button label again');
+  accept();
+  await page.locator('#dsxSend').click();
+  await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
+  release();
+  await page.locator('#dsxReview').waitFor({ timeout: 15000 });
+  const phoneSheet = await sheetBox('#dsxReview');
+  assert.ok(phoneSheet.bottom <= (phoneSheet.navTop ?? 844) + 2, 'review sheet sits above the tab bar: ' + JSON.stringify(phoneSheet));
+  assert.ok(phoneSheet.left <= 2 && phoneSheet.w >= 300 && phoneSheet.w >= phoneSheet.vw - 4, 'review is a full-width bottom sheet: ' + JSON.stringify(phoneSheet));
+  assert.equal(await page.locator('#dsxNavReviewBadge').isVisible(), true, 'Review tab shows a badge when changes are waiting');
+  assert.match(await page.locator('#dsxRKeep').innerText(), /Keep changes/);
+  assert.match(await page.locator('#dsxRUndo').innerText(), /Undo all/);
+  await page.locator('#dsxReviewClose').click();
+  assert.equal(await page.locator('#dsxReview').isVisible(), false);
+  await page.locator('#dsxNavReview').click();
+  await page.locator('#dsxReview').waitFor();
+  step('phone tab bar; review sheet opens on its own and from the Review tab');
+  await page.locator('#dsxRKeep').click();
+  await page.waitForFunction(() => /Changes kept/.test([...document.querySelectorAll('.dsx-actions')].pop()?.textContent || ''));
+  assert.equal(await page.locator('#dsxReview').isVisible(), false, 'Keep closes the review sheet');
+  step('phone Keep / Undo closes the review sheet');
+
+  await page.locator('#dsxNavFiles').click();
+  await page.locator('#dsxFilesSheet').waitFor();
+  const filesSheet = await sheetBox('#dsxFilesSheet');
+  assert.ok(filesSheet.bottom <= (filesSheet.navTop ?? 844) + 2 && filesSheet.w >= 300, 'Files opens as a bottom sheet: ' + JSON.stringify(filesSheet));
+  await page.locator('#dsxFilesSheet .ds-entry').first().waitFor({ timeout: 15000 });
+  if (await page.locator('#dsxFilesSheet .ds-entry', { hasText: 'components' }).count()) {
+    await page.locator('#dsxFilesSheet .ds-entry', { hasText: 'components' }).first().click();
+  }
+  await page.locator('#dsxFilesSheet .ds-entry', { hasText: 'Counter.tsx' }).first().click();
+  await page.locator('#dsxRoot[data-view="editor"]').waitFor();
+  assert.equal(await page.locator('#dsxFilesSheet').isVisible(), false, 'opening a file closes the files sheet');
+  assert.equal(await page.locator('#dsShowEditor').isVisible(), true, 'Files / Code toggle stays in the editor');
+  if (await page.locator('#dsShowEditor').isVisible()) await page.locator('#dsShowEditor').click();
+  await delay(400);
+  monaco = await monacoVisible();
+  assert.ok(monaco.ok, 'Files tab opens the editor: ' + JSON.stringify(monaco));
+  await page.locator('#dsxNavChat').click();
+  await page.locator('#dsxRoot[data-view="chat"]').waitFor();
+  step('phone Files tab opens a file in the full-width editor');
+
+  await page.locator('#dsxNavTools').click();
+  await page.locator('#dsxToolsPage').waitFor();
+  const toolsSheet = await sheetBox('#dsxToolsPage');
+  assert.ok(toolsSheet.bottom <= (toolsSheet.navTop ?? 844) + 2, 'Tools opens as a bottom sheet: ' + JSON.stringify(toolsSheet));
+  await page.locator('#dsxToolSearch').fill('Python');
+  await delay(200);
+  const toolNames = await page.locator('#dsxToolGrid .dsx-card b').allTextContents();
+  assert.ok(toolNames.some(n => /python/i.test(n)), 'Tools search finds Python: ' + toolNames.join(', '));
+  assert.ok(toolNames.length < 15, 'Tools search narrows the list: ' + toolNames.join(', '));
+  await page.locator('#dsxToolGrid .dsx-card', { hasText: 'Python' }).first().click();
+  await page.locator('#dsxToolDetail:not([hidden])').waitFor();
+  assert.equal(await page.locator('#dsxDetailBack').isVisible(), true, 'a tool opens full-screen with a back button');
+  await page.locator('#dsxDetailBack').click();
+  await page.locator('#dsxToolGrid').waitFor();
+  await page.locator('#dsxNavChat').click();
+  assert.equal(await page.locator('#dsxToolsPage').isVisible(), false, 'Chat tab closes the tools sheet');
+  step('phone Tools tab is searchable and opens a tool full-screen');
+
+  await page.setViewportSize({ width: 820, height: 1180 }); await delay(300);
+  nav = await tabBar();
+  assert.ok(nav.visible && nav.bottom >= 1170, 'tab bar sits at the bottom on a tablet: ' + JSON.stringify(nav));
+  for (const b of nav.buttons) assert.ok(b.h >= 44 && b.w >= 44, 'tablet thumb target 44px+: ' + JSON.stringify(b));
+  await runOnce('Reviewed the change on a tablet.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Tablet count"')));
+  await page.locator('#dsxPrompt').fill('Review the change on a tablet');
+  accept();
+  await page.locator('#dsxSend').click();
+  await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
+  release();
+  await page.locator('#dsxReview').waitFor({ timeout: 15000 });
+  const tabSheet = await sheetBox('#dsxReview');
+  assert.ok(tabSheet.left > 300 && tabSheet.w < tabSheet.vw && tabSheet.bottom <= (tabSheet.navTop ?? 1180) + 2, 'tablet review is a side panel: ' + JSON.stringify(tabSheet));
+  assert.ok(tabSheet.chatW > 300 && tabSheet.chatH > 200, 'chat stays visible beside the tablet review panel: ' + JSON.stringify(tabSheet));
+  assert.equal(await page.locator('#dsxNavReviewBadge').isVisible(), true, 'Review badge shows on a tablet');
+  await page.locator('#dsxRKeep').click();
+  await page.waitForFunction(() => /Changes kept/.test([...document.querySelectorAll('.dsx-actions')].pop()?.textContent || ''));
+  await page.locator('#dsxNavFiles').click();
+  await page.locator('#dsxFilesSheet').waitFor();
+  const tabFiles = await sheetBox('#dsxFilesSheet');
+  assert.ok(tabFiles.left > 300 && tabFiles.chatW > 300, 'tablet Files is a side panel beside chat: ' + JSON.stringify(tabFiles));
+  await page.locator('#dsxNavTools').click();
+  await page.locator('#dsxToolsPage').waitFor();
+  await page.locator('#dsxToolSearch').fill('Rust');
+  await delay(200);
+  const rustNames = await page.locator('#dsxToolGrid .dsx-card b').allTextContents();
+  assert.ok(rustNames.some(n => /rust/i.test(n)), 'tablet Tools search finds Rust: ' + rustNames.join(', '));
+  await page.locator('#dsxNavChat').click();
+  assert.equal(await page.locator('#dsxToolsPage').isVisible(), false);
+  step('tablet tab bar; review and files open as a side panel; Tools search works');
+
   assert.deepEqual(errors, [], 'page errors: ' + errors.join('; '));
   console.log('E2E passed:', findings.length, 'steps');
   await browser.close(); server.kill();
