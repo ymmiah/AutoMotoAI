@@ -359,7 +359,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();editor.trustChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
+      showTrust();editor.trustChanged();workbench?.projectChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
       status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });

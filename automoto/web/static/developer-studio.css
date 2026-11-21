@@ -36,8 +36,8 @@
 .ds-footnote{color:var(--dim);font-size:12px;margin:0;padding:9px 14px;overflow-wrap:anywhere}
 .ds-status{margin:0;min-height:24px;color:var(--dim);font-size:13px}
 .ds-status.ds-error{color:var(--bad)}
-@media(max-width:1040px){.ds-toolbar{grid-template-columns:1fr 1fr}.ds-toolbar label{grid-row:auto}.ds-toolbar #dsRoots,.ds-toolbar #dsPath,.ds-toolbar .btn{grid-row:auto;grid-column:auto}}
-@media(max-width:720px){.ds-toolbar{grid-template-columns:1fr}.ds-toolbar label,.ds-toolbar #dsRoots,.ds-toolbar #dsPath,.ds-toolbar .btn{grid-column:1}.ds-columns{grid-template-columns:1fr}.ds-summary{align-items:flex-start;flex-direction:column}.ds-panel{min-height:240px}.ds-preview{max-height:320px}}
+@container devstudio (max-width:1040px){.ds-toolbar{grid-template-columns:1fr 1fr}.ds-toolbar label{grid-row:auto}.ds-toolbar #dsRoots,.ds-toolbar #dsPath,.ds-toolbar .btn{grid-row:auto;grid-column:auto}}
+@container devstudio (max-width:720px){.ds-toolbar{grid-template-columns:1fr}.ds-toolbar label,.ds-toolbar #dsRoots,.ds-toolbar #dsPath,.ds-toolbar .btn{grid-column:1}.ds-columns{grid-template-columns:1fr}.ds-summary{align-items:flex-start;flex-direction:column}.ds-panel{min-height:240px}.ds-preview{max-height:320px}}
 @media(prefers-reduced-motion:reduce){.ds-shell *{scroll-behavior:auto}}
 
 
@@ -437,9 +437,9 @@
 .ds-v33 .ds-status{padding:8px 14px;background:#171d29;border-top:1px solid #30384a}
 .ds-v33 .ds-mobile-switch{margin:8px}
 .ds-v33 .btn:focus-visible{outline:2px solid #9ac4ff;outline-offset:2px}
-@media(max-width:1150px){.ds-v33-layout{grid-template-columns:45px minmax(0,1fr) minmax(280px,35%)}.ds-v33 .ds-columns{grid-template-columns:minmax(160px,34%) 7px minmax(0,1fr)}}
-@media(max-width:860px){.ds-v33-layout{grid-template-columns:44px minmax(0,1fr)}.ds-v33-agent{grid-column:2;min-height:480px;border-left:0;border-top:1px solid #30384a}.ds-v33 .ds-columns{min-height:360px}.ds-v33 .ds-panel{min-height:350px}.ds-v33-timeline{max-height:340px}}
-@media(max-width:540px){.ds-v33 .ds-v33-title{align-items:flex-start;flex-direction:column}.ds-v33 .ds-toolbar{padding:12px}.ds-v33-layout{grid-template-columns:40px minmax(0,1fr)}.ds-v33 .ds-columns{display:block}.ds-v33 .ds-panel-handle{display:none}.ds-v33 .ds-panel{min-height:260px}.ds-v33 .ds-v33-title-actions{width:100%}.ds-v33 .ds-v33-badge{display:none}}
+@container devstudio (max-width:1150px){.ds-v33-layout{grid-template-columns:45px minmax(0,1fr) minmax(280px,35%)}.ds-v33 .ds-columns{grid-template-columns:minmax(160px,34%) 7px minmax(0,1fr)}}
+@container devstudio (max-width:860px){.ds-v33-layout{grid-template-columns:44px minmax(0,1fr)}.ds-v33-agent{grid-column:2;min-height:480px;border-left:0;border-top:1px solid #30384a}.ds-v33 .ds-columns{min-height:360px}.ds-v33 .ds-panel{min-height:350px}.ds-v33-timeline{max-height:340px}}
+@container devstudio (max-width:540px){.ds-v33 .ds-v33-title{align-items:flex-start;flex-direction:column}.ds-v33 .ds-toolbar{padding:12px}.ds-v33-layout{grid-template-columns:40px minmax(0,1fr)}.ds-v33 .ds-columns{display:block}.ds-v33 .ds-panel-handle{display:none}.ds-v33 .ds-panel{min-height:260px}.ds-v33 .ds-v33-title-actions{width:100%}.ds-v33 .ds-v33-badge{display:none}}
 @media(prefers-reduced-motion:reduce){.ds-v33 *{scroll-behavior:auto!important;transition:none!important}}
 
 
@@ -456,4 +456,11 @@
 .ds-v33 .ds-v34-chip{background:#25334b;border:1px solid #476080;color:#dce9fc;border-radius:9px;min-height:42px;padding:9px 10px;text-align:left;font-size:12px;cursor:pointer;line-height:1.4}
 .ds-v33 .ds-v34-chip:hover{background:#344b70;border-color:#91b9ed}
 .ds-v33 .ds-v34-chip:focus-visible{outline:2px solid #9ccaff;outline-offset:2px}
-@media(max-width:540px){.ds-v33 .ds-v34-guide{padding:12px}.ds-v33 .ds-v34-guide-actions button{flex:1 1 120px}.ds-v33 .ds-v34-starters{grid-template-columns:1fr}}
+@container devstudio (max-width:540px){.ds-v33 .ds-v34-guide{padding:12px}.ds-v33 .ds-v34-guide-actions button{flex:1 1 120px}.ds-v33 .ds-v34-starters{grid-template-columns:1fr}}
+
+/* Three-pane layout: the studio lives in the centre pane, whose width is not the window width.
+   Use the full centre pane and size the workbench from its own width (container queries). */
+.page-inner:has(.ds-v33){max-width:none}
+.ds-shell{container:devstudio/inline-size}
+.ds-v33 .ds-panel-header{flex-wrap:wrap}
+.ds-v33 .ds-panel-header h3{overflow-wrap:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%}

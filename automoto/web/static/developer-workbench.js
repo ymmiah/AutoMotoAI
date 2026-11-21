@@ -1,5 +1,8 @@
 /* Developer Studio V33: VS Code-style workbench and task-scoped AutoMoto Agent.
    One prompt = one task. Never automatically issue a follow-up prompt. */
+// Brand name comes from automoto/brand.py through the page meta tag, so a rename needs no JS edit.
+const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 export function mountDeveloperWorkbench({api,host,getProject,status}){
   const shell=host.querySelector(".ds-shell");
   if(!shell)throw Error("Developer Studio shell unavailable");
@@ -20,7 +23,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   const title=document.createElement("header");
   title.className="ds-v33-title";
   title.innerHTML='<div class="ds-v33-brand"><span class="ds-v33-mark" aria-hidden="true">◇</span>'+
-    '<div><strong>AutoMoto Developer</strong><small>WORKBENCH · V34</small></div></div>'+
+    '<div><strong>'+esc(BRAND)+' Developer</strong><small>WORKBENCH · V34</small></div></div>'+
     '<div class="ds-v33-title-actions">'+
     '<span class="ds-v33-badge" id="dsV33WorkspaceState">No workspace</span>'+
     '<button type="button" class="btn sm" id="dsV33Tools" aria-expanded="false" aria-controls="dsV33ToolsDrawer">Extensions &amp; tools</button>'+
@@ -44,8 +47,8 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   const panel=document.createElement("aside");
   panel.className="ds-v33-agent";
   panel.id="dsV33AgentPanel";
-  panel.setAttribute("aria-label","AutoMoto coding agent");
-  panel.innerHTML='<header class="ds-v33-agent-head"><div><strong>AutoMoto Agent</strong>'+
+  panel.setAttribute("aria-label",BRAND+" coding agent");
+  panel.innerHTML='<header class="ds-v33-agent-head"><div><strong>'+esc(BRAND)+' Agent</strong>'+
     '<small>One task at a time · stops after each request</small></div>'+
     '<span id="dsV33AgentState" role="status" aria-live="polite">Ready</span></header>'+
     '<div id="dsV33AgentTimeline" class="ds-v33-timeline" role="log" aria-live="polite" aria-relevant="additions">'+
@@ -225,7 +228,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   async function run(){
     const note=prompt.value.trim(),p=getProject();
     if(busy||!p?.trusted||!p.project||note.length<5)return;
-    if(!window.confirm("Run one AutoMoto Agent coding task in this trusted workspace? "+
+    if(!window.confirm("Run one "+BRAND+" Agent coding task in this trusted workspace? "+
       "The agent may inspect, edit and test using its configured tools. "+
       "Risky actions still require separate approval. No automatic next prompt, "+
       "deployment or publication is authorised."))return;
@@ -289,7 +292,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   });
   stop.addEventListener("click",async()=>{
     if(!taskId||!busy)return;
-    if(!window.confirm("Stop the current AutoMoto Agent task?"))return;
+    if(!window.confirm("Stop the current "+BRAND+" Agent task?"))return;
     try{await api("/api/tasks/"+encodeURIComponent(taskId)+"/cancel",{});}
     catch(e){append("Stop failed",e.message,"error");}
   });
