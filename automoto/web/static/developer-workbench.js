@@ -110,6 +110,9 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   let busy=false,closed=false,seen=0,lastStatus="",approvalIds=new Set();
   let activeConversationProject=null,pollErrors=0;
   const terminal=new Set(["done","completed","failed","cancelled","error","stopped"]);
+  // Listeners let the simple chat and editor views show the same task without a second runner.
+  const listeners=new Set();
+  function emit(type,data){for(const fn of listeners){try{fn(type,data);}catch(e){console.error(e);}}}
   function append(label,text,kind="note"){
     const item=document.createElement("div");item.className="ds-v33-entry ds-v33-"+kind;
     const strong=document.createElement("strong");strong.textContent=label;
@@ -157,8 +160,9 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     state.textContent="Waiting for next prompt";
     append("Task finished",message,kind);
     refresh();
+    emit("finish",{message,kind});
   }
-  async function approve(callId,allow,buttons){
+  async function approve(callId,allow,buttons=[]){
     if(!taskId||!busy)return;
     for(const b of buttons)b.disabled=true;
     try{
@@ -184,6 +188,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       yes.addEventListener("click",()=>void approve(callId,true,[yes,no]));
       no.addEventListener("click",()=>void approve(callId,false,[yes,no]));
       row.append(desc,yes,no);log.append(row);
+      emit("approval",{callId,entry});
     }
   }
   async function poll(){
@@ -198,11 +203,12 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
         const detail=event.message||event.text||event.detail||event.content||
           (event.tool?String(event.tool):JSON.stringify(event));
         append(type,typeof detail==="string"?detail:JSON.stringify(detail),"event");
+        emit("event",event);
       }
       seen=Number.isInteger(result.next)?result.next:seen+(result.events||[]).length;
       approvals(result);
       const current=String(result.status||"running").toLowerCase();
-      if(current!==lastStatus){state.textContent=current;lastStatus=current;}
+      if(current!==lastStatus){state.textContent=current;lastStatus=current;emit("status",current);}
       if(terminal.has(current)){
         let answer=result.result?.text||result.result?.message||"";
         if(!answer&&conversationId){
@@ -225,16 +231,17 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     }
     if(busy&&taskId===id)pollHandle=setTimeout(()=>void poll(),1400);
   }
-  async function run(){
-    const note=prompt.value.trim(),p=getProject();
-    if(busy||!p?.trusted||!p.project||note.length<5)return;
-    if(!window.confirm("Run one "+BRAND+" Agent coding task in this trusted workspace? "+
+  async function run(override,confirmed=false){
+    const note=(typeof override==="string"?override:prompt.value).trim(),p=getProject();
+    if(busy||!p?.trusted||!p.project||note.length<5)return false;
+    if(!confirmed&&!window.confirm("Run one "+BRAND+" Agent coding task in this trusted workspace? "+
       "The agent may inspect, edit and test using its configured tools. "+
       "Risky actions still require separate approval. No automatic next prompt, "+
-      "deployment or publication is authorised."))return;
+      "deployment or publication is authorised."))return false;
     busy=true;seen=0;approvalIds.clear();lastStatus="";
     taskProject=p.project;refresh();state.textContent="Starting";
     append("You",note,"user");
+    emit("start",{note,project:taskProject});
     try{
       if(conversationId&&activeConversationProject!==taskProject)conversationId=null;
       if(!conversationId){
@@ -251,11 +258,13 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       if(!result.task_id)throw Error("Agent did not start");
       taskId=result.task_id;
       prompt.value="";
-      state.textContent="Working";refresh();void poll();
+      state.textContent="Working";refresh();emit("status","working");void poll();
+      return true;
     }catch(e){
       // Preserve the original prompt when the API rejects or fails to start the task.
       prompt.value=note;
       finish("Unable to start: "+e.message,"error");
+      return false;
     }
   }
   el("dsV34Project").addEventListener("click",()=>{
@@ -301,7 +310,13 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   }});
   observer.observe(document.body,{childList:true,subtree:true});
   refresh();
-  return {projectChanged(){
+  return {
+    runTask:(note,{confirmed=false}={})=>run(note,confirmed),
+    async cancelTask(){if(taskId&&busy)await api("/api/tasks/"+encodeURIComponent(taskId)+"/cancel",{});},
+    approve:(callId,allow)=>approve(callId,allow),
+    subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},
+    isBusy:()=>busy,
+    projectChanged(){
     if(taskId&&getProject()?.project!==taskProject)
       append("Workspace changed","The running task remains bound to its original workspace.");
     refresh();

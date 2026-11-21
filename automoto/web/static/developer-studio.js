@@ -32,10 +32,11 @@ import {mountDeveloperIos} from "./developer-ios.js";
 import {mountDeveloperLegacy} from "./developer-legacy.js";
 import {mountDeveloperWorkbench} from "./developer-workbench.js";
 import {mountDeveloperWasm} from "./developer-wasm.js";
+import {mountDeveloperSimple} from "./developer-simple.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
-    "V34 · Guided workbench, simplified project setup and one-prompt AI coding workflow.",
+    "Build and fix code with the assistant. Nothing runs until you press send, and you keep or undo every change.",
     '<div class="ds-shell">'+
       '<section class="ds-toolbar" aria-label="Choose project">'+
         '<label for="dsRoots">Approved locations</label><select id="dsRoots" class="input"><option value="">Choose a location</option></select>'+
@@ -93,7 +94,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<p class="ds-status" id="dsStatus" role="status" aria-live="polite">Developer Studio V1 is ready to open an approved local project.</p>'+
     '</div>');
   const byId=id=>host.querySelector("#"+id);
-  let project=null,directory=".",sequence=0;
+  let project=null,directory=".",sequence=0,simple=null;
   let languageIntelligence,lsp,index,adapters,latex,bibliography,texBuild,manuscripts,javascript,frontend,dataStudio,phpStudio,pythonStudio,goStudio,rustStudio,nativeStudio,jvmStudio,dotnetStudio,androidStudio,swiftStudio,mobileStudio,shellStudio,scriptingStudio,scienceStudio,functionalStudio,beamStudio,logicStudio,legacyStudio,workbench,wasmStudio;
   const editor=mountDeveloperEditor({api,host,project:()=>project,status,
     onFileOpened(path){languageIntelligence?.inspect(path);lsp?.fileChanged(path);index?.fileChanged(path);latex?.fileChanged(path);bibliography?.fileChanged(path);texBuild?.fileChanged(path);manuscripts?.fileChanged(path);javascript?.fileChanged(path);frontend?.fileChanged(path);dataStudio?.fileChanged(path);phpStudio?.fileChanged(path);pythonStudio?.fileChanged(path);goStudio?.fileChanged(path);rustStudio?.fileChanged(path);nativeStudio?.fileChanged(path);jvmStudio?.fileChanged(path);dotnetStudio?.fileChanged(path);androidStudio?.fileChanged(path);swiftStudio?.fileChanged(path);mobileStudio?.fileChanged(path);shellStudio?.fileChanged(path);scriptingStudio?.fileChanged(path);scienceStudio?.fileChanged(path);functionalStudio?.fileChanged(path);beamStudio?.fileChanged(path);logicStudio?.fileChanged(path);legacyStudio?.fileChanged(path);wasmStudio?.fileChanged(path);workbench?.fileChanged(path);}});
@@ -213,6 +214,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       workbench.projectChanged();
       wasmStudio.projectChanged();
       await iosStudio.projectChanged();
+      simple?.projectChanged();
       byId("dsPath").value=data.project;
       directory=".";
       showTrust();
@@ -359,7 +361,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();editor.trustChanged();workbench?.projectChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
+      showTrust();editor.trustChanged();workbench?.projectChanged();simple?.projectChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
       status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });
@@ -369,6 +371,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
     void lsp.stop();
   };
   window.addEventListener("hashchange",lspCleanup);
+  // Simple chat-first and editor views on top of the same panels (classic layout stays available).
+  simple=mountDeveloperSimple({api,host,workbench,getProject:()=>project,openFile:preview,status,
+    afterFilesChanged(){if(project&&!editor.hasUnsaved()){editor.reset();void list(directory);}}});
   try {
     await locations();
   }catch(error) {
