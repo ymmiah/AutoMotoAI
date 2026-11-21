@@ -86,6 +86,12 @@ def _write_adb(bin_dir: Path, python: str) -> None:
             if args[:2] == ["shell", "cat"] and len(args) == 3:
                 stream()
                 raise SystemExit(0)
+            if args[:2] == ["shell", "input"] or args[:3] == ["shell", "am", "start"]:
+                log = os.environ.get("V23_FAKE_ACTIONS")
+                if log:
+                    with open(log, "a", encoding="utf-8") as fh:
+                        fh.write(" ".join(args) + "\\n")
+                raise SystemExit(0)
             if args[:2] == ["logcat", "-d"]:
                 print("I/ActivityTaskManager: Displayed com.automoto.v23/.MainActivity")
                 raise SystemExit(0)
@@ -219,3 +225,37 @@ def test_script_still_builds_installs_and_requires_the_marker():
     assert "V23_ANDROID_RUNNING" in text
     assert "cat /sdcard/v23-window.xml | grep" not in text
     assert "| grep -q V23_ANDROID_RUNNING" not in text
+
+
+ANR_XML = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n<hierarchy rotation="0">\n'
+    '<node package="android" text="Pixel Launcher isn\'t responding" bounds="[100,300][980,400]"/>\n'
+    '<node package="android" text="Close app" bounds="[100,500][980,600]"/>\n'
+    '<node package="android" text="Wait" resource-id="android:id/aerr_wait" bounds="[100,600][980,700]"/>\n'
+    "</hierarchy>\n"
+)
+
+
+def test_system_anr_dialog_is_dismissed_with_wait_then_marker_required(tmp_path):
+    good = _xml(with_marker=True, pad_nodes=20)
+    env = _env(tmp_path, good, miss="1", attempts="3", pause="0")
+    (tmp_path / "bad.xml").write_text(ANR_XML, encoding="utf-8")
+    env["V23_FAKE_ACTIONS"] = str(tmp_path / "actions.txt")
+    checked = _bash(tmp_path, env, f'source "{SCRIPT}"; v23_wait_for_ui_marker')
+    assert checked.returncode == 0, (checked.returncode, checked.stdout, checked.stderr)
+    assert "attempt 2," in checked.stdout
+    assert "dismissing it with Wait" in checked.stderr
+    actions = (tmp_path / "actions.txt").read_text(encoding="utf-8").splitlines()
+    assert actions[0] == "shell input tap 540 650"
+    assert actions[1] == "shell am start -n com.automoto.v23/.MainActivity"
+
+
+def test_system_anr_dialog_alone_still_fails_closed(tmp_path):
+    env = _env(tmp_path, ANR_XML, miss="0", attempts="2", pause="0")
+    checked = _bash(
+        tmp_path,
+        env,
+        f'source "{SCRIPT}"; set +e; v23_wait_for_ui_marker; printf "EXIT:%s\\n" "$?"',
+    )
+    assert "EXIT:1" in checked.stdout
+    assert "missing from UI hierarchy after 2 dumps" in checked.stderr

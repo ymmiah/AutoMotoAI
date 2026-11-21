@@ -1813,9 +1813,19 @@ let browser;
   writeFileSync(path.join(devProject,'.env'),'PRIVATE_KEY=never-disclose');
   const devBefore=readFileSync(path.join(devProject,'main.ts'));
   await page.locator('.nav [data-page="developer"]').click();
+  // The chat-first view is the default; this suite drives every expert panel, so it uses the classic layout.
+  await page.locator('#dsxRoot').waitFor();
+  assert.equal(await page.locator('#dsxRoot').getAttribute('data-view'),'chat');
+  assert.equal(await page.locator('#dsxStarters .dsx-starter').count(),4);
+  await page.locator('#dsxTools').click();
+  await page.locator('#dsxClassic').click();
+  await page.waitForFunction(()=>document.querySelector('#dsxRoot')?.dataset.view==='classic');
   await page.locator('#dsPath').waitFor();
   await page.locator('#dsMonaco .monaco-editor').waitFor({state:'visible'});
   assert.equal(await page.locator('#dsMonaco').isVisible(),true,'Must load Monaco locally');
+  // V33+: language and toolchain panels live in the Extensions & tools drawer.
+  if(!(await page.locator('#dsV33ToolsDrawer').isVisible()))await page.locator('#dsV33Tools').click();
+  await page.locator('#dsV33ToolsDrawer').waitFor({state:'visible'});
   await page.locator('#dsPath').fill(devProject);
   await page.locator('#dsOpen').click();
   await page.waitForFunction(() => document.querySelector('#dsProject')?.textContent?.includes('developer-studio-v2'));
@@ -2900,6 +2910,81 @@ let browser;
   assert.match(await page.locator('#studioAgentMessage').inputValue(),
     /V31 Haskell, OCaml, Common Lisp, Scheme and Prolog/);
   await page.screenshot({path:path.join(output,'developer-studio-v31-functional-logic.png')});
+
+  // V32: static Fortran/COBOL/Ada/Pascal/Assembly/Visual Basic discovery.
+  const v32Source=[
+    ['v32_fixture.f90','program v32_fixture\n print *, "V32_FORTRAN_PASS 42"\nend program\n'],
+    ['v32_fixture.cob','       identification division.\n       program-id. v32fixture.\n'],
+    ['v32_fixture.adb','procedure V32_Fixture is\nbegin\n null;\nend V32_Fixture;\n'],
+    ['v32_fixture.pas','program V32Fixture;\nbegin\nend.\n'],
+    ['v32_fixture.asm','bits 64\nsection .text\nglobal v32_answer\n'],
+    ['v32_fixture.vb','Module V32Fixture\nEnd Module\n'],
+    ['v32_fixture.vbs','WScript.Echo "V32_SAMPLE"\n']
+  ];
+  for(const [filename,source] of v32Source)
+    writeFileSync(path.join(devProject,'test',filename),source);
+  writeFileSync(path.join(devProject,'fpm.toml'),'name = "v32_fixture"\n');
+  writeFileSync(path.join(devProject,'alire.toml'),'name = "v32_fixture"\n');
+  writeFileSync(path.join(devProject,'legacy.gpr'),'project Legacy is end Legacy;\n');
+  writeFileSync(path.join(devProject,'legacy.vbproj'),'<Project />\n');
+  writeFileSync(path.join(devProject,'Makefile'),
+    'all:\n\ttouch V32_DANGER\n');
+  await page.locator('#dsLegacyInspect').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsLegacyStatus')?.textContent?.includes('Inspection complete'));
+  const v32Text=await page.locator('#dsLegacyResults').innerText();
+  for(const [filename,source] of v32Source){
+    assert.ok(v32Text.includes(filename),'V32 file in source evidence: '+filename);
+    assert.equal(readFileSync(path.join(devProject,'test',filename),'utf8'),source);
+  }
+  for(const filename of ['fpm.toml','alire.toml','legacy.gpr','legacy.vbproj','Makefile'])
+    assert.ok(v32Text.includes(filename),'V32 manifest: '+filename);
+  assert.match(v32Text,/Source executed: false/);
+  assert.match(v32Text,/dependencies resolved: false/);
+  assert.equal(existsSync(path.join(devProject,'V32_DANGER')),false);
+  assert.equal(await page.locator('#dsLegacyCompile').isEnabled(),false);
+  await page.locator('#dsLegacyAgent').click();
+  assert.equal(await page.locator('#studioAgentAction').inputValue(),'deployment_readiness');
+  assert.match(await page.locator('#studioAgentMessage').inputValue(),
+    /Developer Studio V32 Fortran, COBOL, Ada, Pascal, Assembly/);
+  await page.screenshot({path:path.join(output,'developer-studio-v32-legacy-specialist.png')});
+
+  // V33: workbench layout and one-prompt Agent UI are present without execution.
+  assert.equal(await page.locator('.ds-v33-title').count(),1);
+  assert.equal(await page.locator('#dsV33AgentPanel').count(),1);
+  assert.equal(await page.locator('#dsV33Prompt').inputValue(),'');
+  assert.equal(await page.locator('#dsV33Stop').isDisabled(),true);
+  if(await page.locator('#dsV33ToolsDrawer').isVisible())await page.locator('#dsV33CloseTools').click();
+  await page.locator('#dsV33ToolsDrawer').waitFor({state:'hidden'});
+  await page.locator('#dsV33Tools').click();
+  assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),true);
+  assert.equal(await page.locator('#dsWasmInspect').count(),1);
+  writeFileSync(path.join(devProject,'test','v33_fixture.wat'),
+    '(module (func (export "answer") (result i32) i32.const 42))');
+  writeFileSync(path.join(devProject,'test','v33_fixture.wasm'),
+    Buffer.from([0,97,115,109,1,0,0,0]));
+  await page.locator('#dsWasmInspect').click();
+  await page.waitForFunction(() =>
+    document.querySelector('#dsWasmStatus')?.textContent?.includes('Inspection complete'));
+  const wasmText=await page.locator('#dsWasmResults').innerText();
+  assert.match(wasmText,/v33_fixture.wat/);
+  assert.match(wasmText,/v33_fixture.wasm/);
+  assert.match(wasmText,/"runtime_started": false/);
+  assert.match(wasmText,/"deployment_started": false/);
+  await page.locator('#dsV33CloseTools').click();
+  assert.equal(await page.locator('#dsV33ToolsDrawer').isVisible(),false);
+  await page.screenshot({path:path.join(output,'developer-studio-v33-workbench.png')});
+
+  // V34: guided onboarding and task shortcuts without triggering an agent run.
+  assert.equal(await page.locator('.ds-v34-guide').count(),1);
+  assert.equal(await page.locator('#dsV34Project').count(),1);
+  assert.equal(await page.locator('#dsV34Trust').count(),1);
+  assert.equal(await page.locator('#dsV34Prompt').count(),1);
+  await page.locator('.ds-v34-chip').filter({hasText:'Explain project'}).click();
+  assert.match(await page.locator('#dsV33Prompt').inputValue(),/Inspect this workspace/);
+  assert.equal(await page.locator('#dsV33Stop').isDisabled(),true);
+  assert.equal(await page.locator('#dsV33AgentTimeline .ds-v33-user').count(),0);
+  await page.screenshot({path:path.join(output,'developer-studio-v34-guided-workbench.png')});
 
   // Restore the editor to its pre-V11 single-source context before the
   // original V2/V3 save/lifecycle regression assertions run.

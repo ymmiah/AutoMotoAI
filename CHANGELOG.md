@@ -1,5 +1,17 @@
 # AutoMoto AI - Version History & Changelog
 
+## Unreleased — Developer Studio V32–V34 on main
+
+- Developer Studio V32 (Fortran, COBOL, Ada, Pascal, Assembly: inert inspection and approved compilation), V33 (WebAssembly source and component evidence, the workbench layout) and V34 (guided "Start here" steps and starter tasks) join `main`, alongside the iPhone toolchain panel. See `docs/DEVELOPER-STUDIO-V32.md` to `V34.md`.
+- The workbench uses the whole centre pane of the three-pane layout and sizes itself from that pane, not the window, so it no longer squeezes beside the sidebar and preview panel. The iPhone panel moves into the Extensions & tools drawer with the other specialist tools.
+- Trusting or revoking a project now updates the "Start here" guide and the Run task button straight away. Before, they changed only after the next keystroke.
+- Opening the tools drawer or jumping to a guide step no longer scrolls the whole window and hides the top bar.
+- New browser test `apps/desktop/test/developer-studio-e2e.cjs` walks the studio from the rail and sidebar through read-only browsing, trust, starters, the tools drawer, Monaco and a stubbed agent task. It makes no model request.
+- Developer Studio opens to a simpler, chat-first view. You see one prompt, "What do you want to build or fix?", with four starter cards that only fill the prompt in. Three setup steps (open a project, allow changes, ask) disappear once they are done. A task shows plain-language progress (Planning, Editing files, Running tests, Ready for your review) with a progress bar and Stop. When it finishes you get a checklist of what changed.
+- Keep or Undo every task. Before a task starts, the studio saves a copy of the project's files (up to 3,000 files and 64 MB, skipping `.env`, `.git`, `node_modules`, other excluded folders and symlinks). Undo puts edited and deleted files back and removes new ones. Keep discards the copy. The review panel shows the diff under Changes, Files and Tests tabs. On narrow windows it becomes a bottom sheet. New local-only API: `/api/developer/studio/review/*`.
+- "Open in editor" switches to a two-pane view with the file tree and editor on the left and chat on the right, plus an Allow AI to edit switch, Run app and Run tests. Run app and Run tests send a request to the assistant and still ask before running anything. "Back to chat" returns to the chat view, and the studio remembers which view you used last.
+- One searchable "Tools & languages" page replaces the long column of panels. It shows a detected-stack banner and cards marked Installed or Not installed (based on the tool being on PATH). Each card opens the existing panel. "Show all panels (classic layout)" keeps the full expert layout. The separate drop zone is gone; use Attach in the prompt instead.
+
 ## 5.6.1 — Sidebar, Settings speed, offline tuning, studio queue
 
 - The sidebar keeps New chat, search and Quick commands pinned at the top, and Settings, Help and the version pinned at the bottom. Studios, Library and chats scroll in the middle with a thin scrollbar, including short windows and the phone-width layout. A long chat list only draws the rows on screen.

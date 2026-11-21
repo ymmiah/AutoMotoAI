@@ -198,6 +198,12 @@ from automoto import developer_logic
 app.include_router(developer_logic.router)  # V31 static Haskell OCaml Lisp Scheme Prolog and approved local fixture tests
 from automoto import developer_ios
 app.include_router(developer_ios.router)  # iPhone toolchain, local-only, upload only after the on-screen button
+from automoto import developer_legacy
+app.include_router(developer_legacy.router)  # V32 inert legacy source and approved compilation
+from automoto import developer_wasm
+from automoto import developer_review
+app.include_router(developer_wasm.router)  # V33 inert WebAssembly source and component evidence
+app.include_router(developer_review.router)  # Keep or Undo what one coding task changed
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

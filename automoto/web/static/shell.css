@@ -13,6 +13,14 @@
   --code: #f7f7f8; --user: #f1f1f1; --rail: #f1f1f1;
 }
 
+/* Keep .app's top margin inside <body>. Without a new formatting context the margin collapses
+   through body, the page becomes taller than the window, and scrollIntoView() inside a studio
+   scrolls the whole window (hiding the top bar). */
+body { display: flow-root; }
+/* Make the scrolling page the containing block, so off-screen helpers such as .sr labels
+   stay inside it instead of stretching the window. */
+.page { position: relative; }
+
 /* View > Zoom scales the workspace, never the caption (chrome.rs measures it). */
 .app { zoom: var(--zoom, 1); height: calc(100dvh / var(--zoom, 1)); }
 html:is([data-chrome="custom"], [data-chrome="bar"]) .app { height: calc((100dvh - var(--chrome-h)) / var(--zoom, 1)); margin-top: calc(var(--chrome-h) / var(--zoom, 1)); }

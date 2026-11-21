@@ -1,0 +1,254 @@
+// End-to-end Developer Studio flow in the simple views: rail/sidebar entry, setup steps, read-only
+// gating, starter cards that never run, Tools & languages page, stubbed agent runs with real
+// Keep / Undo checkpoints, the editor view and back, classic layout, light theme and narrow widths.
+// No provider keys: the agent endpoints are stubbed, so no model request is made.
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const { spawn } = require('node:child_process');
+const { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const path = require('node:path');
+const { randomBytes } = require('node:crypto');
+const root = path.resolve(__dirname, '../../..');
+const data = mkdtempSync(path.join(tmpdir(), 'automoto-e2e-'));
+const out = process.env.UI_SHOTS || path.join(data, 'screenshots');
+mkdirSync(out, { recursive: true });
+const token = randomBytes(32).toString('hex');
+const base = 'http://127.0.0.1:8877';
+const server = spawn(process.env.PYTHON || 'python', ['-m', 'automoto', 'serve', '--no-browser', '--port', '8877'], {
+  cwd: root, env: { ...process.env, AUTOMOTO_DATA_DIR: data, AUTOMOTO_LAUNCH_TOKEN: token, AUTOMOTO_SANDBOX: 'local', AUTOMOTO_RATE_LIMIT: '10000' },
+  stdio: ['ignore', 'pipe', 'pipe'] });
+let log = ''; server.stdout.on('data', d => log += d); server.stderr.on('data', d => log += d);
+const delay = ms => new Promise(r => setTimeout(r, ms));
+const findings = [];
+const step = (name) => { findings.push(name); console.log('✓', name); };
+(async () => {
+  for (let i = 0; i < 150; i++) { if (await fetch(base + '/api/health').then(r => r.ok).catch(() => false)) break; await delay(100); }
+  // Small React/Next style sample project.
+  const proj = path.join(data, 'workspace', 'projects', 'next-sample');
+  mkdirSync(path.join(proj, 'app'), { recursive: true }); mkdirSync(path.join(proj, 'components'), { recursive: true }); mkdirSync(path.join(proj, 'test'), { recursive: true });
+  writeFileSync(path.join(proj, 'package.json'), JSON.stringify({ name: 'next-sample', private: true, scripts: { dev: 'next dev', test: 'node --test' }, dependencies: { next: '15.0.0', react: '19.0.0', 'react-dom': '19.0.0' } }, null, 2));
+  writeFileSync(path.join(proj, 'app', 'page.tsx'), "import Counter from '../components/Counter';\nexport default function Page() {\n  return <main><h1>Hello</h1><Counter start={1} /></main>;\n}\n");
+  writeFileSync(path.join(proj, 'components', 'Counter.tsx'), "'use client';\nimport { useState } from 'react';\nexport default function Counter({ start }: { start: number }) {\n  const [n, setN] = useState(start);\n  return <button onClick={() => setN(n + 1)}>Count {n}</button>;\n}\n");
+  writeFileSync(path.join(proj, 'test', 'sum.test.js'), "const test=require('node:test');const assert=require('node:assert');\ntest('sum',()=>assert.equal(1+1,2));\n");
+  writeFileSync(path.join(proj, 'README.md'), '# next-sample\n');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, colorScheme: 'dark', reducedMotion: 'reduce' });
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  const agentCalls = [];
+  page.on('request', r => { if (/\/api\/(agent|conversations)$/.test(new URL(r.url()).pathname) && r.method() === 'POST') agentCalls.push(r.url()); });
+  const shot = async name => { await page.evaluate(() => document.activeElement?.blur()); await page.screenshot({ path: path.join(out, name) }); };
+  const accept = () => page.once('dialog', d => d.accept());
+  await page.goto(base + '/?launch=' + token);
+  await page.locator('.hero h2').waitFor();
+  await page.locator('.rail [data-rail-menu="studios"]').click();
+  await page.locator('[data-rail-panel="studios"] a[href="#/developer"]').click();
+  await page.locator('#dsxRoot').waitFor();
+  assert.equal(await page.locator('.rail [data-rail="studios"]').evaluate(e => e.classList.contains('active')), true);
+  step('rail Studios menu opens Developer Studio');
+  await page.goto(base + '/#/new'); await page.locator('.hero h2').waitFor();
+  await page.locator('.nav [data-page="developer"]').click();
+  await page.locator('#dsxRoot').waitFor();
+  assert.equal(await page.locator('#dsxRoot').getAttribute('data-view'), 'chat');
+  assert.equal(await page.locator('.ds-shell').isVisible(), false, 'the classic wall of panels is hidden by default');
+  assert.equal(await page.locator('.studio-drop').isVisible(), false, 'no big drop zone');
+  assert.equal(await page.locator('.dsx-page > .studio-agent-bridge').isVisible(), false, 'agent box is folded away');
+  assert.match(await page.locator('#dsxHero').innerText(), /What do you want to build or fix\?/);
+  assert.equal(await page.locator('.dsx-starter').count(), 4);
+  assert.match(await page.locator('#dsxStep1').getAttribute('class'), /now/);
+  assert.equal(await page.locator('#dsxSend').isDisabled(), true);
+  assert.equal(await page.locator('#dsxTrust').isVisible(), false);
+  const geo = await page.evaluate(() => { const v = document.querySelector('#view .page'); return [v.scrollWidth, v.clientWidth]; });
+  assert.ok(geo[0] <= geo[1] + 2, 'no horizontal overflow');
+  step('chat-first start: hero, 4 starters, setup step 1, Send disabled, no clutter');
+  await page.locator('.dsx-starter', { hasText: 'Add tests' }).click();
+  assert.match(await page.locator('#dsxPrompt').inputValue(), /regression tests/);
+  assert.equal(await page.locator('#dsxSend').isDisabled(), true);
+  step('starter card before a project fills the prompt only');
+  await page.locator('#dsxPrompt').fill('');
+  await shot('01-start-screen.png');
+  await page.locator('#dsxStepProject').click();
+  await page.locator('#dsxProjectPop').waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'dsPath');
+  await page.locator('#dsPath').fill(proj);
+  await page.locator('#dsOpen').click();
+  await page.waitForFunction(() => /next-sample/.test(document.querySelector('#dsxProjectName')?.textContent || ''));
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#dsxTrust').innerText(), 'Read-only');
+  assert.match(await page.locator('#dsxStep2').getAttribute('class'), /now/);
+  await page.locator('.dsx-starter', { hasText: 'Explain project' }).click();
+  assert.equal(await page.locator('#dsxSend').isDisabled(), true, 'read-only projects cannot run tasks');
+  assert.match(await page.locator('#dsxFoot').innerText(), /Read-only/);
+  step('project opens read-only: step 2, Send disabled');
+  await page.locator('#dsxPrompt').fill('');
+  await shot('02-setup-steps.png');
+  // Tools & languages page.
+  await page.locator('#dsxTools').click();
+  await page.locator('#dsxToolsPage').waitFor();
+  await page.waitForFunction(() => /TypeScript/.test(document.querySelector('#dsxDetected')?.textContent || ''));
+  assert.ok(await page.locator('.dsx-card').count() >= 25);
+  await page.waitForFunction(() => !/Checking/.test(document.querySelector('#dsxToolGrid')?.textContent || ''));
+  assert.ok(await page.locator('.dsx-card .dsx-badge', { hasText: /^(Installed|Not installed)$/ }).count() >= 20);
+  assert.match(await page.locator('.dsx-card').first().innerText(), /TypeScript|Web pages/, 'detected stack is suggested first');
+  await shot('06-tools-page.png');
+  await page.locator('#dsxToolSearch').fill('rust');
+  assert.equal(await page.locator('.dsx-card').count(), 1);
+  await page.locator('#dsxToolSearch').fill('');
+  for (const [tool, rootId] of [['typescript', 'dsJavaScriptRoot'], ['ios', 'dsIosRoot'], ['legacy', 'dsLegacyRoot'], ['wasm', 'dsWasmRoot'], ['lsp', 'dsLspRoot'], ['language', 'dsLanguageRoot'], ['agent', null]]) {
+    await page.locator(`.dsx-card[data-tool="${tool}"]`).click();
+    await page.locator('#dsxToolDetail').waitFor();
+    if (rootId) assert.equal(await page.locator(`#dsxDetailBody #${rootId}`).isVisible(), true, tool);
+    else assert.equal(await page.locator('#dsxDetailBody .studio-agent-bridge').isVisible(), true);
+    await page.locator('#dsxDetailBack').click();
+  }
+  assert.equal(await page.locator('#dsxDetailBody').evaluate(e => e.children.length), 0, 'panels go back where they came from');
+  await page.locator('#dsxToolsBack').click();
+  await page.locator('#dsxToolsPage').waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#dsxBody').isVisible(), true);
+  step('Tools & languages: detected banner, badges, search, each card opens its panel, back');
+  // Allow changes.
+  accept();
+  await page.locator('#dsxTrust').click();
+  await page.waitForFunction(() => document.querySelector('#dsxTrust')?.textContent === 'Changes allowed');
+  assert.equal(await page.locator('#dsxSetup').isVisible(), false, 'setup disappears once done');
+  for (const [label, re] of [['Explain project', /architecture/], ['Find & fix a bug', /failing test/], ['Improve code', /maintainability/], ['Add tests', /regression tests/]]) {
+    await page.locator('.dsx-starter', { hasText: label }).click();
+    assert.match(await page.locator('#dsxPrompt').inputValue(), re);
+    assert.equal(await page.locator('#dsxSend').isDisabled(), false);
+  }
+  await delay(400);
+  assert.equal(agentCalls.length, 0, 'starter cards never start a task');
+  page.once('dialog', d => d.dismiss());
+  await page.locator('#dsxSend').click(); await delay(400);
+  assert.equal(agentCalls.length, 0, 'dismissing the confirmation starts nothing');
+  assert.equal(await page.locator('.dsx-msg').count(), 0);
+  step('trust: setup hides; starters fill only; dismissed confirmation runs nothing');
+  // Stubbed agent task, real checkpoint: the "agent" edits files while the task runs.
+  const counter = path.join(proj, 'components', 'Counter.tsx');
+  const original = readFileSync(counter, 'utf8');
+  let release = null, polls = 0;
+  const gate = () => new Promise(r => { release = r; });
+  await page.route('**/api/conversations', r => r.request().method() === 'POST' ? r.fulfill({ json: { id: 'conv-e2e' } }) : r.continue());
+  await page.route('**/api/agent', r => r.fulfill({ json: { task_id: 'task-e2e' } }));
+  let script = [];
+  await page.route('**/api/tasks/task-e2e?**', async r => {
+    polls++;
+    const next = script.shift();
+    if (next?.wait) await next.wait;
+    if (next?.before) next.before();
+    r.fulfill({ json: next?.json || { status: 'running', events: [], next: 99 } });
+  });
+  const runOnce = async (finalText, edit) => {
+    const hold = gate();
+    script = [
+      { json: { status: 'running', next: 3, events: [
+        { type: 'tool_call', id: 'r1', name: 'read_file', args: { path: 'app/page.tsx' } },
+        { type: 'tool_call', id: 'e1', name: 'edit_file', args: { path: 'components/Counter.tsx' } },
+        { type: 'tool_call', id: 't1', name: 'run_command', args: { command: 'npm test' } }] } },
+      { wait: hold, before: edit, json: { status: 'running', next: 4, events: [{ type: 'tool_result', id: 't1', name: 'run_command', ok: true, output: '4 passed' }] } },
+      { json: { status: 'done', next: 4, events: [], result: { text: finalText } } }];
+    return null;
+  };
+  await runOnce('Fixed the counter: it now uses the updater form.', () => {
+    writeFileSync(counter, original.replace('setN(n + 1)', 'setN(c => c + 1)'));
+    writeFileSync(path.join(proj, 'components', 'Counter.test.tsx'), "test('counts', () => {});\n");
+  });
+  await page.locator('.dsx-starter', { hasText: 'Find & fix a bug' }).click();
+  accept();
+  await page.locator('#dsxSend').click();
+  await page.waitForFunction(() => /Running tests 0 of 1/.test(document.querySelector('.dsx-progress')?.textContent || ''), null, { timeout: 15000 });
+  assert.match(await page.locator('.dsx-progress').innerText(), /Planning[\s\S]*Editing 1 file[\s\S]*Ready for your review/);
+  assert.equal(await page.locator('#dsxStop').isVisible(), true);
+  assert.equal(await page.locator('#dsxSend').isDisabled(), true, 'one task at a time');
+  await shot('03-run-in-progress.png');
+  step('run in progress: plain-language phases, progress bar, Stop, Send locked');
+  release();
+  await page.locator('.dsx-actions [data-act="undo"]').waitFor({ timeout: 15000 });
+  assert.equal(await page.locator('#dsxReview').isVisible(), true, 'changes open in the review panel');
+  const diff = await page.locator('#dsxReviewBody').innerText();
+  assert.match(diff, /components\/Counter\.tsx/); assert.match(diff, /\+.*setN\(c => c \+ 1\)/); assert.match(diff, /Counter\.test\.tsx/);
+  assert.match(await page.locator('.dsx-check').innerText(), /Edited[\s\S]*Counter\.tsx[\s\S]*Ran tests/);
+  assert.equal(await page.locator('#dsxPrompt').inputValue(), '');
+  assert.equal(await page.locator('#dsxStop').isVisible(), false);
+  assert.match(await page.locator('#dsxFoot').innerText(), /keep or undo/);
+  await page.locator('[data-rtab="tests"]').click();
+  assert.match(await page.locator('#dsxReviewBody').innerText(), /npm test[\s\S]*passed/);
+  await page.locator('[data-rtab="files"]').click();
+  assert.match(await page.locator('#dsxReviewBody').innerText(), /Counter\.test\.tsx/);
+  await page.locator('[data-rtab="changes"]').click();
+  await shot('04-review-preview-panel.png');
+  step('task finished: answer, checklist, review panel with Changes / Files / Tests, back to next prompt');
+  accept();
+  await page.locator('.dsx-actions [data-act="undo"]').click();
+  await page.waitForFunction(() => /Changes undone/.test(document.querySelector('.dsx-actions')?.textContent || ''));
+  assert.equal(readFileSync(counter, 'utf8'), original, 'Undo restores the edited file');
+  assert.equal(existsSync(path.join(proj, 'components', 'Counter.test.tsx')), false, 'Undo removes the new file');
+  assert.equal(await page.locator('#dsxRUndo').isDisabled(), true);
+  step('Undo restores edited files and removes new ones on disk');
+  await runOnce('Added a label.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Increase count"')));
+  await page.locator('#dsxPrompt').fill('Add an accessible label to the counter button');
+  accept();
+  await page.locator('#dsxSend').click();
+  await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
+  release();
+  await page.waitForFunction(() => document.querySelectorAll('.dsx-actions [data-act="keep"]').length === 1, null, { timeout: 15000 });
+  await page.locator('.dsx-actions [data-act="keep"]').click();
+  await page.waitForFunction(() => /Changes kept/.test([...document.querySelectorAll('.dsx-actions')].pop()?.textContent || ''));
+  assert.match(readFileSync(counter, 'utf8'), /aria-label="Increase count"/, 'Keep leaves the change in place');
+  step('Keep leaves the change and closes the checkpoint');
+  // Narrow: the review panel becomes a bottom sheet.
+  await page.setViewportSize({ width: 820, height: 1000 }); await delay(300);
+  if (!(await page.locator('#dsxReview').isVisible())) await page.locator('.dsx-link').last().click();
+  await page.locator('#dsxReview').waitFor();
+  const sheet = await page.locator('#dsxReview').evaluate(e => { const r = e.getBoundingClientRect(); return { left: r.left, bottom: Math.round(r.bottom), w: r.width, vw: innerWidth }; });
+  assert.ok(sheet.bottom >= 990 && sheet.w > 400, 'review panel is a bottom sheet: ' + JSON.stringify(sheet));
+  await page.evaluate(() => document.activeElement?.blur());
+  await shot('08-narrow-review-sheet.png');
+  await page.setViewportSize({ width: 1600, height: 1000 }); await delay(300);
+  step('narrow width: review panel opens as a bottom sheet');
+  // Editor view and back; the choice is remembered.
+  await page.locator('#dsxReviewClose').click();
+  await page.locator('#dsxView').click();
+  assert.equal(await page.locator('#dsxRoot').getAttribute('data-view'), 'editor');
+  assert.equal(await page.locator('#dsxEditor .ds-columns').isVisible(), true);
+  assert.equal(await page.locator('#dsxAllow').getAttribute('aria-checked'), 'true');
+  assert.equal(await page.locator('#dsxRunTests').isEnabled(), true);
+  await page.locator('.ds-entry', { hasText: 'components' }).first().click();
+  await page.locator('.ds-entry', { hasText: 'Counter.tsx' }).first().click();
+  await page.waitForFunction(() => /aria-label/.test(document.querySelector('#dsEditorRoot .view-lines')?.innerText || ''), null, { timeout: 15000 });
+  await shot('05-editor-view.png');
+  await page.reload();
+  await page.locator('#dsxRoot').waitFor();
+  assert.equal(await page.locator('#dsxRoot').getAttribute('data-view'), 'editor', 'view choice is remembered');
+  await page.locator('#dsxView').click();
+  assert.equal(await page.locator('#dsxRoot').getAttribute('data-view'), 'chat');
+  assert.equal(await page.locator('#dsxEditor .ds-columns').count(), 0);
+  step('Open in editor shows files, Monaco and chat; Back to chat; choice remembered');
+  // Classic layout keeps every panel reachable.
+  await page.locator('#dsxTools').click();
+  await page.locator('#dsxClassic').click();
+  assert.equal(await page.locator('.ds-shell').isVisible(), true);
+  assert.equal(await page.locator('#dsxRoot').isVisible(), false);
+  await page.locator('#dsxBackSimple').click();
+  assert.equal(await page.locator('#dsxRoot').isVisible(), true);
+  step('classic all-panels layout and back');
+  // Light theme and narrow widths.
+  await page.locator('#dsPath').evaluate(() => 0);
+  await page.locator('#dsxProject').click(); await page.locator('#dsPath').fill(proj); await page.locator('#dsOpen').click();
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => /next-sample/.test(document.querySelector('#dsxProjectName')?.textContent || ''));
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await delay(200);
+  await shot('07-light-theme.png');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await page.setViewportSize({ width: 820, height: 1000 }); await delay(300);
+  const ov = await page.evaluate(() => { const v = document.querySelector('#view .page'); return [v.scrollWidth, v.clientWidth]; });
+  assert.ok(ov[0] <= ov[1] + 2, 'narrow: no horizontal overflow');
+  await shot('09-narrow-820.png');
+  await page.setViewportSize({ width: 420, height: 900 }); await delay(300);
+  await shot('10-phone-420.png');
+  step('light theme and narrow widths render without overflow');
+  assert.deepEqual(errors, [], 'page errors: ' + errors.join('; '));
+  console.log('E2E passed:', findings.length, 'steps');
+  await browser.close(); server.kill();
+})().catch(async e => { console.error(e); console.error(log.slice(-2000)); server.kill(); process.exit(1); });
