@@ -1,5 +1,13 @@
 # AutoMoto AI - Version History & Changelog
 
+## Unreleased — Developer Studio V32–V34 on main
+
+- Developer Studio V32 (Fortran, COBOL, Ada, Pascal, Assembly: inert inspection and approved compilation), V33 (WebAssembly source and component evidence, the workbench layout) and V34 (guided "Start here" steps and starter tasks) join `main`, alongside the iPhone toolchain panel. See `docs/DEVELOPER-STUDIO-V32.md` to `V34.md`.
+- The workbench uses the whole centre pane of the three-pane layout and sizes itself from that pane, not the window, so it no longer squeezes beside the sidebar and preview panel. The iPhone panel moves into the Extensions & tools drawer with the other specialist tools.
+- Trusting or revoking a project now updates the "Start here" guide and the Run task button straight away. Before, they changed only after the next keystroke.
+- Opening the tools drawer or jumping to a guide step no longer scrolls the whole window and hides the top bar.
+- New browser test `apps/desktop/test/developer-studio-e2e.cjs` walks the studio from the rail and sidebar through read-only browsing, trust, starters, the tools drawer, Monaco and a stubbed agent task. It makes no model request.
+
 ## 5.6.1 — Sidebar, Settings speed, offline tuning, studio queue
 
 - The sidebar keeps New chat, search and Quick commands pinned at the top, and Settings, Help and the version pinned at the bottom. Studios, Library and chats scroll in the middle with a thin scrollbar, including short windows and the phone-width layout. A long chat list only draws the rows on screen.

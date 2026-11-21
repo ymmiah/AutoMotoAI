@@ -8,6 +8,7 @@ on:
       - "automoto/web/static/developer-studio.js"
       - "automoto/web/static/developer-studio.css"
       - "apps/desktop/test/ui-smoke.cjs"
+      - "apps/desktop/test/developer-studio-e2e.cjs"
       - "docs/DEVELOPER-STUDIO-V34.md"
       - ".github/workflows/developer-workbench-v34.yml"
   push:
@@ -47,8 +48,8 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15"]' || '["ubuntu-latest"]') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
       - name: Check workbench and smoke syntax
@@ -56,3 +57,4 @@ jobs:
           node --check automoto/web/static/developer-workbench.js
           node --check automoto/web/static/developer-studio.js
           node --check apps/desktop/test/ui-smoke.cjs
+          node --check apps/desktop/test/developer-studio-e2e.cjs
