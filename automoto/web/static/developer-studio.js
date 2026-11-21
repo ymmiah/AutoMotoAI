@@ -79,7 +79,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsLegacyRoot" aria-label="Fortran COBOL Ada Pascal Assembly and Visual Basic source and fixed compiler evidence"></div>'+
       '<div id="dsWasmRoot" aria-label="WebAssembly WAT WASM WIT WASI component source evidence"></div>'+  
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
-      '<div class="ds-mobile-switch" role="group" aria-label="Editor panels"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Explorer</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Editor</button></div>'+
+      '<div class="ds-mobile-switch" role="group" aria-label="Files or code"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Files</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Code</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
         '<section class="ds-panel" aria-label="Project files"><div class="ds-panel-header"><h3>Explorer</h3><div class="ds-explorer-actions"><button class="btn sm" type="button" id="dsCreate" disabled>New</button><button class="btn sm" type="button" id="dsRename" disabled>Rename</button><button class="btn sm" type="button" id="dsTrash" disabled>Archive</button><button class="btn sm" type="button" id="dsRestore" disabled>Restore</button><button class="btn sm" type="button" id="dsParent" disabled>Up</button></div></div>'+
           '<p class="ds-breadcrumb" id="dsBreadcrumb">No folder selected</p>'+

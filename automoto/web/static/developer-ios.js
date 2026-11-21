@@ -65,9 +65,15 @@ export function mountDeveloperIos({api, host, getProject}) {
       byId("iosIntro").textContent = data.deployment?.message || "";
       const list = byId("iosSteps");
       list.replaceChildren();
+      const intro = data.deployment?.message || "";
+      const compact = window.matchMedia("(max-width: 900px)").matches;
       for (const step of data.steps || []) {
         const item = document.createElement("li");
-        item.textContent = step.title + ". " + step.text;
+        let text = step.text || "";
+        if (compact && step.n === "1" && intro && text === intro) {
+          text = "Read the status at the top of this page first. If the tools are not ready, finish the later steps before you send anything to Apple.";
+        }
+        item.textContent = step.title + ". " + text;
         list.appendChild(item);
       }
     } catch (error) {

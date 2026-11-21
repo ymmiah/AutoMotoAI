@@ -4,6 +4,11 @@
    the trusted project and a confirmation, and Keep / Undo use the review checkpoint API. */
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const VIEW_KEY="automoto.developer.view";
+const CHAT_KEY="automoto.developer.chat.";
+const CHAT_MAX=24;
+const CHAT_BYTES=120000;
+const COMPACT_MQ=typeof window!=="undefined"?window.matchMedia("(max-width: 900px)"):{matches:false,addEventListener(){}};
+const isCompact=()=>COMPACT_MQ.matches;
 const VIEWS=new Set(["chat","editor","classic"]);
 const READ=new Set(["read_file","list_dir","grep","search_files","project_inspect"]);
 const WRITE=new Set(["write_file","edit_file"]);
@@ -80,6 +85,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       '<button type="button" class="btn sm dsx-only-editor" id="dsxRunTests">✓ Run tests</button>'+
       '<button type="button" class="btn sm" id="dsxView" aria-pressed="false">Open in editor</button>'+
       '<button type="button" class="btn sm" id="dsxTools" aria-expanded="false" aria-controls="dsxToolsPage">⚙ Tools</button>'+
+      '<button type="button" class="btn sm" id="dsxClear" hidden>Clear chat</button>'+
     '</header>'+
     '<div class="dsx-body" id="dsxBody">'+
       '<div class="dsx-editor" id="dsxEditor" aria-label="Files and editor"></div>'+
@@ -111,19 +117,33 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
         '</div>'+
       '</section>'+
       '<aside class="dsx-review" id="dsxReview" aria-label="Review changes" hidden>'+
+        '<div class="dsx-sheet-handle" aria-hidden="true"></div>'+
         '<div class="dsx-rtabs" role="tablist"><button type="button" role="tab" data-rtab="changes" class="on" aria-selected="true">Changes</button><button type="button" role="tab" data-rtab="files" aria-selected="false">Files</button><button type="button" role="tab" data-rtab="tests" aria-selected="false">Tests</button><span class="dsx-gap"></span><button type="button" class="dsx-x" id="dsxReviewClose" aria-label="Close review panel">✕</button></div>'+
         '<div class="dsx-rbody" id="dsxReviewBody"></div>'+
         '<div class="dsx-rfoot"><button type="button" class="btn sm primary" id="dsxRKeep">Keep</button><button type="button" class="btn sm" id="dsxRUndo">Undo</button><span class="dsx-gap"></span><button type="button" class="btn sm" id="dsxROpen">Open in editor</button></div>'+
       '</aside>'+
     '</div>'+
     '<section class="dsx-tools" id="dsxToolsPage" aria-label="Tools and languages" hidden>'+
+      '<div class="dsx-sheet-handle" aria-hidden="true"></div>'+
       '<div class="dsx-tools-head"><div><h2>Tools &amp; languages</h2><p>Open a language when you need it. The assistant picks what it needs on its own.</p></div><span class="dsx-gap"></span><button type="button" class="btn sm" id="dsxToolsBack">Back</button></div>'+
       '<div class="dsx-tools-bar"><input type="search" class="input" id="dsxToolSearch" placeholder="Search languages and tools…" aria-label="Search languages and tools"><div class="dsx-cats" id="dsxCats" role="group" aria-label="Filter"></div></div>'+
       '<div class="dsx-detected" id="dsxDetected" hidden></div>'+
       '<div class="dsx-grid" id="dsxToolGrid"></div>'+
       '<div class="dsx-detail" id="dsxToolDetail" hidden><div class="dsx-detail-head"><button type="button" class="btn sm" id="dsxDetailBack">← All tools</button><h3 id="dsxDetailTitle"></h3></div><div id="dsxDetailBody"></div></div>'+
       '<div class="dsx-tools-foot"><span>Prefer every panel on one page?</span><button type="button" class="btn sm" id="dsxClassic">Show all panels (classic layout)</button></div>'+
-    '</section>';
+    '</section>'+
+    '<aside class="dsx-files-sheet" id="dsxFilesSheet" aria-label="Project files" hidden>'+
+      '<div class="dsx-sheet-handle" aria-hidden="true"></div>'+
+      '<div class="dsx-sheet-head"><h2>Files</h2><span class="dsx-gap"></span><button type="button" class="dsx-x" id="dsxFilesClose" aria-label="Close files">✕</button></div>'+
+      '<div class="dsx-sheet-body" id="dsxFilesBody"></div>'+
+    '</aside>'+
+    '<div class="dsx-backdrop" id="dsxBackdrop" hidden></div>'+
+    '<nav class="dsx-nav" id="dsxNav" aria-label="Studio sections">'+
+      '<button type="button" id="dsxNavChat" data-nav="chat" class="on" aria-current="page"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4.2A2.5 2.5 0 0 1 4 13.5z"/></svg></span><span>Chat</span></button>'+
+      '<button type="button" id="dsxNavFiles" data-nav="files"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/></svg></span><span>Files</span></button>'+
+      '<button type="button" id="dsxNavReview" data-nav="review"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14M5 12h14M5 18h8"/><path d="m15 16 2 2 3-3"/></svg></span><span>Review</span><span class="dsx-nav-badge" id="dsxNavReviewBadge" hidden></span></button>'+
+      '<button type="button" id="dsxNavTools" data-nav="tools"><span class="dsx-nav-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .1 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 3.3 17l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.1-1 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.3-1.8L4.2 6.1A2 2 0 1 1 7 3.3l.1.1A1.7 1.7 0 0 0 8 4.6a1.7 1.7 0 0 0 1-.1 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 16 4.6a1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 20.7 7l-.1.1A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 .1 1 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1 1.7 1.7 0 0 0-.1 1z"/></svg></span><span>Tools</span></button>'+
+    '</nav>';
   const classicBar=el("div","dsx-classic-bar");
   classicBar.innerHTML='<span>Classic layout · every panel on one page.</span><button type="button" class="btn sm" id="dsxBackSimple">Back to simple view</button>';
   shell.before(root);shell.before(classicBar);
@@ -164,12 +184,14 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       toolsOpen=false;
     }else{
       place(q(".ds-toolbar"),$("dsxProjectPop"));place(q("#dsRootStrip"),$("dsxProjectPop"));
-      if(next==="editor"){place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
-      else{restore(q(".ds-columns"));restore(statusLine);}
+      if(isCompact()&&currentSheet==="files")closeFilesSheet({silent:true,moved:next==="editor"});
+      if(next==="editor"){place(q(".ds-mobile-switch"),$("dsxEditor"));place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
+      else{restore(q(".ds-mobile-switch"));restore(q(".ds-columns"));restore(statusLine);}
       $("dsxView").textContent=next==="editor"?"Back to chat":"Open in editor";
       $("dsxView").setAttribute("aria-pressed",String(next==="editor"));
       showTools(toolsOpen);
     }
+    syncReviewOpen();
     refresh();
   }
   $("dsxView").addEventListener("click",()=>setView(view==="editor"?"chat":"editor"));
@@ -253,11 +275,18 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
   }
   function showTools(open){
     toolsOpen=open;
-    $("dsxToolsPage").hidden=!open;$("dsxBody").hidden=open;
+    $("dsxToolsPage").hidden=!open;
+    if(!isCompact())$("dsxBody").hidden=open;else $("dsxBody").hidden=false;
     $("dsxTools").setAttribute("aria-expanded",String(open));
+    $("dsxNavTools")?.setAttribute("aria-expanded",String(open));
     if(!open)closeDetail();
+    if(isCompact()){
+      if(open)armSheet("tools");
+      else if(currentSheet==="tools")disarmSheet();
+    }
+    syncNav();
   }
-  $("dsxTools").addEventListener("click",()=>{showTools(!toolsOpen);if(toolsOpen){drawTools();void loadToolInfo();$("dsxToolSearch").focus();}});
+  $("dsxTools").addEventListener("click",()=>{showTools(!toolsOpen);if(toolsOpen){drawTools();void loadToolInfo();if(!isCompact())$("dsxToolSearch").focus();}});
   $("dsxToolsBack").addEventListener("click",()=>{showTools(false);$("dsxTools").focus();});
 
   // ---------------------------------------------------------------- composer
@@ -326,6 +355,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     const card=el("div","dsx-progress");card.innerHTML='<div class="dsx-prog-head"><b>Working on it</b><span class="dsx-gap"></span><button type="button" class="btn sm dsx-prog-stop">Stop</button></div><div class="dsx-bar"><span></span></div><ol class="dsx-phases"></ol>';
     card.querySelector(".dsx-prog-stop").addEventListener("click",()=>$("dsxStop").click());
     body.append(card);thread.append(user,bot);
+    recordUser(note);saveChat();
     turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false};
     drawProgress();refresh();scrollDown();
   }
@@ -385,7 +415,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     if(!turn||turn.done)return;
     const t=turn;t.done=true;drawProgress();
     t.card.querySelector(".dsx-prog-head b").textContent=kind==="error"?"Stopped":"Done";
-    t.card.querySelector(".dsx-prog-stop").remove();
+    t.card.querySelector(".dsx-prog-stop")?.remove();
     t.card.classList.add("finished");
     const answer=el("div","dsx-answer");
     for(const para of String(message||"").split(/\n{2,}/))if(para.trim())answer.append(el("p",null,para.trim()));
@@ -408,6 +438,8 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     if(list.children.length)t.body.insertBefore(list,t.card);
     const actions=el("div","dsx-actions");t.actions=actions;
     const n=t.changes?.changes?.length||0;
+    t.reviewFiles=n?(t.changes.changes||[]).map(c=>({...c})):[]
+    t.fileDecisions=t.fileDecisions||{};
     if(n){
       const keep=el("button","btn sm primary","Keep changes"),undo=el("button","btn sm","Undo"),rev=el("button","btn sm","Review changes");
       keep.type=undo.type=rev.type="button";keep.dataset.act="keep";undo.dataset.act="undo";
@@ -423,12 +455,16 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     t.card.remove();
     afterFilesChanged?.();
     if(n)openReview("changes");
-    refresh();scrollDown();prompt.focus();
+    recordAssistant(t);saveChat();
+    refresh();scrollDown();
+    if(isCompact()&&n)$("dsxRKeep")?.focus();else prompt.focus();
   }
   function checkItem(mark,text){const li=el("li");li.append(el("span","dsx-ck "+(mark==="✗"?"bad":""),mark),el("span",null,text));return li;}
   function resolveTurn(t,text){
-    t.resolved=true;t.actions.replaceChildren(el("span","dsx-muted",text));
+    t.resolved=true;t.resolveText=text;t.actions.replaceChildren(el("span","dsx-muted",text));
     if(review.turn===t)drawReview();
+    recordAssistant(t);saveChat();
+    if(isCompact())closeReview();
     refresh();
   }
   async function keepTurn(t){
@@ -445,6 +481,35 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       afterFilesChanged?.();
     }catch(err){status("Undo failed: "+err.message,true);}
   }
+  async function keepFile(t,path){
+    if(t.resolved)return;
+    t.fileDecisions=t.fileDecisions||{};
+    t.fileDecisions[path]="kept";
+    await settleFiles(t);
+  }
+  async function undoFile(t,path){
+    if(t.resolved)return;
+    if(!window.confirm("Undo changes to "+path+"? This file goes back to how it was, or a new file is removed."))return;
+    try{
+      await api(BASE+"/review/undo",{project:t.project,checkpoint:t.checkpoint,confirmed:true,paths:[path]});
+      t.fileDecisions=t.fileDecisions||{};
+      t.fileDecisions[path]="undone";
+      afterFilesChanged?.();
+      await settleFiles(t);
+    }catch(err){status("Undo failed: "+err.message,true);}
+  }
+  async function settleFiles(t){
+    const files=t.reviewFiles||[];
+    const pending=files.filter(c=>!t.fileDecisions?.[c.path]);
+    if(pending.length){drawReview();saveChat();refresh();return;}
+    try{await api(BASE+"/review/keep",{project:t.project,checkpoint:t.checkpoint});}catch(_){ /* already discarded */ }
+    const kept=files.filter(c=>t.fileDecisions[c.path]==="kept").length;
+    const undone=files.filter(c=>t.fileDecisions[c.path]==="undone").length;
+    const parts=[];
+    if(kept)parts.push(kept+" kept");
+    if(undone)parts.push(undone+" undone");
+    resolveTurn(t,(undone&&!kept?"↺ ":"✓ ")+parts.join(", ")+".");
+  }
 
   // ---------------------------------------------------------------- review panel
   const review={tab:"changes",turn:null,focus:null};
@@ -453,16 +518,25 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     if(!t)return;
     review.turn=t;review.tab=tab;review.focus=focus;
     $("dsxReview").hidden=false;root.classList.add("reviewing");drawReview();
+    if(isCompact())armSheet("review");
+    syncNav();
   }
   function turnRef(){return turn;}
-  function closeReview(){$("dsxReview").hidden=true;root.classList.remove("reviewing");}
+  function closeReview(){
+    $("dsxReview").hidden=true;root.classList.remove("reviewing");
+    if(isCompact()&&currentSheet==="review")disarmSheet();
+    syncNav();
+  }
   $("dsxReviewClose").addEventListener("click",closeReview);
   root.querySelector(".dsx-rtabs").addEventListener("click",e=>{const b=e.target.closest("[data-rtab]");if(!b)return;review.tab=b.dataset.rtab;drawReview();});
   $("dsxRKeep").addEventListener("click",()=>review.turn&&void keepTurn(review.turn));
   $("dsxRUndo").addEventListener("click",()=>review.turn&&void undoTurn(review.turn));
+  function reviewOpenLabel(){return isCompact()&&view==="editor"?"Show file":"Open in editor";}
+  function syncReviewOpen(){const b=$("dsxROpen");if(b)b.textContent=reviewOpenLabel();}
   $("dsxROpen").addEventListener("click",()=>{
-    const first=review.focus||(review.turn?.changes?.changes||[]).find(c=>c.change!=="deleted")?.path;
-    setView("editor");if(first)void openFile(first);
+    const first=review.focus||(review.turn?.reviewFiles||review.turn?.changes?.changes||[]).find(c=>c.change!=="deleted"&&review.turn?.fileDecisions?.[c.path]!=="undone")?.path;
+    if(view!=="editor")setView("editor");
+    if(first)void openFile(first);
   });
   function diffBlock(c){
     const box=el("div","dsx-file");
@@ -485,10 +559,22 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       if(!changes.length)body.append(el("p","dsx-muted dsx-pad","No changes to review."));
       for(const c of changes){const b=diffBlock(c);body.append(b);if(c.path===review.focus)requestAnimationFrame(()=>b.scrollIntoView({block:"nearest"}));}
     }else if(review.tab==="files"){
-      if(!changes.length)body.append(el("p","dsx-muted dsx-pad","No files changed."));
-      for(const c of changes){
-        const row=el("div","dsx-frow");row.append(el("code",null,c.path),el("span","dsx-gap"),el("span","dsx-muted",c.change));
-        if(c.change!=="deleted"){const b=el("button","btn sm","Open");b.type="button";b.onclick=()=>{setView("editor");void openFile(c.path);};row.append(b);}
+      const files=t?.reviewFiles||changes;
+      if(!files.length)body.append(el("p","dsx-muted dsx-pad","No files changed."));
+      for(const c of files){
+        const decision=t?.fileDecisions?.[c.path];
+        const row=el("div","dsx-frow");row.append(el("code",null,c.path),el("span","dsx-gap"),el("span","dsx-muted",decision||c.change));
+        if(isCompact()&&!t?.resolved&&!decision){
+          const keep=el("button","btn sm","Keep");keep.type="button";keep.title="Leave this file as the assistant left it";
+          keep.onclick=()=>void keepFile(t,c.path);
+          const undo=el("button","btn sm","Undo");undo.type="button";undo.title="Put this file back to how it was";
+          undo.onclick=()=>void undoFile(t,c.path);
+          row.append(keep,undo);
+        }
+        if(c.change!=="deleted"&&decision!=="undone"){
+          const b=el("button","btn sm",isCompact()&&view==="editor"?"Show file":"Open");b.type="button";
+          b.onclick=()=>{if(view!=="editor")setView("editor");void openFile(c.path);};row.append(b);
+        }
         body.append(row);
       }
     }else{
@@ -500,8 +586,10 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
         box.append(head);if(x.output)box.append(el("pre","dsx-diff",x.output.slice(-3000)));body.append(box);
       }
     }
-    const open=!!t&&!t.resolved&&!!changes.length;
+    const pending=(t?.reviewFiles||changes).filter(c=>!t?.fileDecisions?.[c.path]);
+    const open=!!t&&!t.resolved&&!!pending.length;
     $("dsxRKeep").disabled=!open;$("dsxRUndo").disabled=!open;
+    syncReviewOpen();
   }
 
   workbench.subscribe((type,data)=>{
@@ -510,6 +598,232 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     else if(type==="finish")void finishTurn(data);
     refresh();
   });
+
+
+  // ---------------------------------------------------------------- compact sheets and tab bar (900px and below)
+  let currentSheet=null,sheetCtl=null,sheetReturnFocus=null;
+  const sheetEl=name=>name==="review"?$("dsxReview"):name==="files"?$("dsxFilesSheet"):name==="tools"?$("dsxToolsPage"):null;
+  const focusables=node=>[...node.querySelectorAll('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(n=>!n.hidden&&n.offsetParent!==null);
+  function disarmSheet(){
+    sheetCtl?.abort();sheetCtl=null;
+    const prev=currentSheet;currentSheet=null;delete root.dataset.sheet;
+    $("dsxBackdrop").hidden=true;
+    if(prev){const p=sheetEl(prev);p?.removeAttribute("role");p?.removeAttribute("aria-modal");}
+  }
+  function closeCompactSheet(){
+    const name=currentSheet,back=sheetReturnFocus;
+    if(name==="review")closeReview();
+    else if(name==="files")closeFilesSheet();
+    else if(name==="tools")showTools(false);
+    else disarmSheet();
+    sheetReturnFocus=null;
+    if(back&&typeof back.focus==="function")try{back.focus();}catch(_){ }
+    syncNav();
+  }
+  function trapFocus(e,panel){
+    const list=focusables(panel);if(!list.length)return;
+    const first=list[0],last=list[list.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  }
+  function bindSwipe(panel,signal){
+    const handle=panel.querySelector(".dsx-sheet-handle")||panel;
+    let startY=null,startX=null;
+    const down=e=>{startY=e.clientY;startX=e.clientX;};
+    const move=e=>{
+      if(startY==null)return;
+      const dy=e.clientY-startY,dx=e.clientX-startX;
+      if(dy>24&&Math.abs(dy)>=Math.abs(dx))e.preventDefault();
+    };
+    const up=e=>{
+      if(startY==null)return;
+      const dy=e.clientY-startY,dx=e.clientX-startX;
+      startY=startX=null;
+      if(dy>72&&Math.abs(dy)>=Math.abs(dx))closeCompactSheet();
+    };
+    handle.addEventListener("pointerdown",down,{signal});
+    window.addEventListener("pointermove",move,{signal,passive:false});
+    window.addEventListener("pointerup",up,{signal});
+    window.addEventListener("pointercancel",()=>{startY=null;},{signal});
+  }
+  function armSheet(name){
+    if(!isCompact())return;
+    if(currentSheet&&currentSheet!==name){
+      const prev=currentSheet;
+      if(prev==="review"){$("dsxReview").hidden=true;root.classList.remove("reviewing");}
+      else if(prev==="files")closeFilesSheet({silent:true});
+      else if(prev==="tools"){toolsOpen=false;$("dsxToolsPage").hidden=true;$("dsxTools").setAttribute("aria-expanded","false");closeDetail();}
+      sheetCtl?.abort();sheetCtl=null;
+    }
+    currentSheet=name;root.dataset.sheet=name;
+    const panel=sheetEl(name);if(!panel)return;
+    panel.hidden=false;
+    panel.setAttribute("role","dialog");panel.setAttribute("aria-modal","true");
+    $("dsxBackdrop").hidden=false;
+    sheetReturnFocus=sheetReturnFocus||document.activeElement;
+    sheetCtl=new AbortController();
+    const sig=sheetCtl.signal;
+    $("dsxBackdrop").addEventListener("click",()=>closeCompactSheet(),{signal:sig});
+    document.addEventListener("keydown",e=>{
+      if(!isCompact()||currentSheet!==name)return;
+      if(e.key==="Escape"){e.preventDefault();closeCompactSheet();}
+      if(e.key==="Tab")trapFocus(e,panel);
+    },{signal:sig});
+    bindSwipe(panel,sig);
+    const list=focusables(panel);
+    (name==="review"?$("dsxRKeep"):list[0]||panel)?.focus?.();
+    syncNav();
+  }
+  function openFilesSheet(){
+    if(toolsOpen)showTools(false);
+    if(!$("dsxReview").hidden)closeReview();
+    if(view==="editor"){/* keep columns available */ }
+    const cols=q(".ds-columns");
+    place(cols,$("dsxFilesBody"));
+    host.dataset.mobilePanel="explorer";
+    document.getElementById("dsShowExplorer")?.click();
+    $("dsxFilesSheet").hidden=false;
+    armSheet("files");
+    if(!getProject())status("Open a project to browse its files.");
+  }
+  function closeFilesSheet({silent,moved}={}){
+    const cols=$("dsxFilesBody")?.querySelector(".ds-columns");
+    if(cols&&!moved){
+      if(view==="editor")place(cols,$("dsxEditor"));
+      else restore(cols);
+    }
+    $("dsxFilesSheet").hidden=true;
+    if(!silent){if(currentSheet==="files")disarmSheet();syncNav();}
+  }
+  $("dsxFilesClose").addEventListener("click",()=>closeCompactSheet());
+  $("dsxFilesBody").addEventListener("click",e=>{
+    if(!isCompact()||currentSheet!=="files")return;
+    const btn=e.target.closest(".ds-entry");if(!btn)return;
+    if((btn.querySelector(".ds-file-icon")?.textContent||"")==="▸")return;
+    queueMicrotask(()=>{
+      if(view!=="editor")setView("editor");
+      else place(q(".ds-columns"),$("dsxEditor"));
+      closeFilesSheet({moved:true});
+      document.getElementById("dsShowEditor")?.click();
+      syncNav();
+    });
+  });
+  function pendingReview(){
+    const t=turn;if(!t||t.resolved)return false;
+    const files=t.reviewFiles||t.changes?.changes||[];
+    return files.some(c=>!t.fileDecisions?.[c.path]);
+  }
+  function syncNav(){
+    if(!$("dsxNav"))return;
+    const badge=$("dsxNavReviewBadge");
+    const waiting=pendingReview();
+    badge.hidden=!isCompact()||!waiting;
+    badge.textContent=waiting?"1":"";
+    const active=currentSheet||(view==="editor"?"files":"chat");
+    for(const btn of $("dsxNav").querySelectorAll("[data-nav]")){
+      const on=isCompact()&&btn.dataset.nav===active&&(btn.dataset.nav!=="review"||waiting||currentSheet==="review");
+      btn.classList.toggle("on",on);
+      btn.setAttribute("aria-current",on?"page":"false");
+    }
+    $("dsxRKeep").textContent=isCompact()?"Keep changes":"Keep";
+    $("dsxRUndo").textContent=isCompact()?"Undo all":"Undo";
+  }
+  $("dsxNav").addEventListener("click",e=>{
+    const btn=e.target.closest("[data-nav]");if(!btn||!isCompact())return;
+    const go=btn.dataset.nav;
+    if(go==="chat"){
+      closeCompactSheet();
+      if(view==="editor")setView("chat");
+      syncNav();return;
+    }
+    if(go==="files"){openFilesSheet();return;}
+    if(go==="review"){
+      if(turn){openReview(review.tab||"changes");return;}
+      $("dsxReview").hidden=false;root.classList.add("reviewing");
+      $("dsxReviewBody").replaceChildren(el("p","dsx-muted dsx-pad","No changes to review yet. After a task, Keep or Undo will appear here."));
+      $("dsxRKeep").disabled=true;$("dsxRUndo").disabled=true;
+      armSheet("review");
+      return;
+    }
+    if(go==="tools"){
+      showTools(true);drawTools();void loadToolInfo();
+      $("dsxToolSearch").placeholder="Search for a language, like Python…";
+      $("dsxToolSearch").focus();
+    }
+  });
+
+  // ---------------------------------------------------------------- chat history (per project, local only)
+  let history=[];
+  let loadedProject=null;
+  function chatKey(){const p=getProject()?.project;return p?CHAT_KEY+p:null;}
+  function recordUser(text){history.push({kind:"user",text:String(text||"")});}
+  function recordAssistant(t){
+    const last=history.filter(x=>x.kind==="assistant"&&x.checkpoint===t.checkpoint).pop();
+    const entry={kind:"assistant",text:t.body?.querySelector(".dsx-answer")?.innerText||"",checkpoint:t.checkpoint||null,project:t.project,resolved:!!t.resolved,resolveText:t.resolveText||"",
+      reviewFiles:t.reviewFiles||[],fileDecisions:t.fileDecisions||{},
+      tests:[...(t.tests?.values()||[])].map(x=>({cmd:x.cmd,ok:x.ok,done:x.done,output:String(x.output||"").slice(-3000)}))};
+    if(last)Object.assign(last,entry);else history.push(entry);
+  }
+  function saveChat(){
+    const key=chatKey();if(!key)return;
+    const data=history.filter(x=>x.kind!=="pending").slice(-CHAT_MAX);
+    let json=JSON.stringify(data);
+    while(json.length>CHAT_BYTES&&data.length>2){data.shift();json=JSON.stringify(data);}
+    try{localStorage.setItem(key,json);}catch(_){ /* quota */ }
+  }
+  function clearChat(){
+    if(history.length&&!window.confirm("Clear this project's studio chat? File changes are not undone."))return;
+    thread.replaceChildren();history=[];turn=null;closeReview();
+    const key=chatKey();if(key)localStorage.removeItem(key);
+    refresh();
+  }
+  $("dsxClear").addEventListener("click",clearChat);
+  function replayItem(item){
+    if(item.kind==="user"){
+      const user=el("div","dsx-msg user");user.append(el("div","dsx-bubble",item.text||""));thread.append(user);return;
+    }
+    if(item.kind!=="assistant")return;
+    const bot=el("div","dsx-msg bot");
+    const av=el("span","dsx-av",BRAND.charAt(0));av.setAttribute("aria-hidden","true");
+    const body=el("div","dsx-turn");bot.append(av,body);
+    if(item.text){const answer=el("div","dsx-answer");for(const para of String(item.text).split(/\n{2,}/))if(para.trim())answer.append(el("p",null,para.trim()));body.append(answer);}
+    const files=item.reviewFiles||[];
+    const list=el("ul","dsx-check");
+    for(const c of files){
+      const decision=item.fileDecisions?.[c.path];
+      const li=checkItem("✓",(c.change==="added"?"Added ":c.change==="deleted"?"Deleted ":"Edited "));
+      const link=el("button","dsx-link",c.path);link.type="button";link.onclick=()=>openReview("changes",c.path);
+      li.append(link);if(decision)li.append(el("span","dsx-muted"," · "+decision));list.append(li);
+    }
+    if(list.children.length)body.append(list);
+    const actions=el("div","dsx-actions");
+    const restored={body,actions,checkpoint:item.checkpoint,project:item.project,resolved:!!item.resolved,resolveText:item.resolveText||"",reviewFiles:files,fileDecisions:item.fileDecisions||{},changes:{changes:files},tests:new Map((item.tests||[]).map((x,i)=>[x.cmd||i,x])),card:null};
+    if(item.resolved)actions.append(el("span","dsx-muted",item.resolveText||"Done."));
+    else if(files.length){
+      const keep=el("button","btn sm primary","Keep changes"),undo=el("button","btn sm","Undo"),rev=el("button","btn sm","Review changes");
+      keep.type=undo.type=rev.type="button";keep.dataset.act="keep";undo.dataset.act="undo";
+      keep.onclick=()=>void keepTurn(restored);undo.onclick=()=>void undoTurn(restored);rev.onclick=()=>openReview("changes");
+      actions.append(keep,undo,rev);turn=restored;
+    }
+    body.append(actions);thread.append(bot);
+  }
+  function loadChat(){
+    const project=getProject()?.project||"";
+    if(project===loadedProject)return;
+    thread.replaceChildren();history=[];turn=null;closeReview();
+    loadedProject=project;
+    const key=chatKey();if(!key){refresh();return;}
+    let data=[];
+    try{data=JSON.parse(localStorage.getItem(key)||"[]");}catch(_){data=[];}
+    if(!Array.isArray(data))data=[];
+    history=data;for(const item of data)replayItem(item);
+    if(turn&&turn.checkpoint&&!turn.resolved){
+      void api(BASE+"/review/changes?"+new URLSearchParams({project:turn.project,checkpoint:turn.checkpoint}))
+        .then(ch=>{turn.changes=ch;if(!turn.reviewFiles?.length)turn.reviewFiles=ch.changes||[];drawReview();})
+        .catch(()=>{});
+    }
+    refresh();
+  }
 
   // ---------------------------------------------------------------- state
   function refresh(){
@@ -532,6 +846,8 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     const empty=!thread.children.length;
     $("dsxHero").hidden=!empty||view==="editor";
     $("dsxStarters").hidden=!empty;
+    $("dsxClear").hidden=empty||!isCompact();
+    syncNav();
     root.classList.toggle("has-thread",!empty);
     $("dsxFoot").textContent=!p?"Open a project to begin. Nothing runs until you press send."
       :!trusted?"Read-only: allow changes (step 2) before the assistant can work here."
@@ -542,9 +858,18 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     $("dsxRunTests").disabled=$("dsxRunApp").disabled=busy||!trusted;
     for(const b of $("dsxStarters").children)b.disabled=busy;
   }
+  COMPACT_MQ.addEventListener?.("change",()=>{
+    if(!isCompact()&&currentSheet){
+      const name=currentSheet;
+      if(name==="files")closeFilesSheet();
+      else if(name==="tools")showTools(false);
+      else disarmSheet();
+    }else if(isCompact()&&!$("dsxReview").hidden&&currentSheet!=="review")armSheet("review");
+    syncReviewOpen();if(review.turn)drawReview();refresh();
+  });
   setView(view,{save:false});
   return {
-    projectChanged(){refresh();if(toolsOpen)void loadToolInfo();},
+    projectChanged(){loadChat();refresh();if(toolsOpen)void loadToolInfo();},
     refresh,
     setView
   };

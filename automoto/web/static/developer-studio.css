@@ -72,7 +72,7 @@
 .ds-monaco[hidden]{display:none!important}
 .ds-monaco .monaco-editor{min-height:100%}
 @media(max-width:840px){.ds-editor-actions{align-items:flex-start}.ds-editor-meta{align-items:flex-start}.ds-source,.ds-highlight{min-height:260px}.ds-monaco{height:360px}}
-@media(max-width:720px){.ds-monaco{display:none!important}}
+@media(max-width:720px){.ds-monaco{height:min(70vh,560px);min-height:280px}}
 
 /* V3 — split editor, file lifecycle and accessible, inert diff/recovery panes. */
 .ds-explorer-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px}
@@ -85,7 +85,13 @@
 .ds-diff[hidden]{display:none!important}
 .ds-editor-actions [aria-pressed="true"]{color:var(--text);border-color:var(--accent)}
 @media(max-width:840px){.ds-monaco-shell{height:360px}.ds-explorer-actions .btn{padding:6px}}
-@media(max-width:720px){.ds-monaco-shell{display:none!important}.ds-diff{min-height:190px}.ds-explorer-actions{justify-content:flex-start}}
+@media(max-width:720px){
+  .ds-monaco-shell,.ds-monaco{height:min(70vh,560px);min-height:280px}
+  .ds-diff{min-height:190px}
+  .ds-explorer-actions{justify-content:flex-start}
+  [data-mobile-panel="editor"] #dsColumns>section[aria-label="Source editor"]{display:flex;flex-direction:column;min-height:min(70vh,560px);flex:1}
+  .dsx-editor .ds-monaco-shell,.dsx-editor .ds-monaco{flex:1 1 auto;min-height:280px;height:min(70vh,560px)}
+}
 
 /* V4 — accessible multi-root navigation, command palette and responsive panes. */
 .ds-v4-roots{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:1px 4px}
@@ -471,7 +477,7 @@
 .page:has(> .page-inner.dsx-page:not(.dsx-classic)){padding:0;overflow:hidden;display:flex;flex-direction:column}
 .dsx-page:not(.dsx-classic){max-width:none;flex:1;min-height:0;display:flex;flex-direction:column;margin:0}
 .dsx-page:not(.dsx-classic)>h2,.dsx-page:not(.dsx-classic)>.lead,.dsx-page:not(.dsx-classic)>.studio-agent-bridge,.dsx-page>.studio-drop{display:none}
-.dsx{flex:1;min-height:0;display:flex;flex-direction:column;container:dsx/inline-size;color:var(--text)}
+.dsx{flex:1;min-height:0;display:flex;flex-direction:column;container:dsx/inline-size;color:var(--text);position:relative}
 .dsx[hidden],.dsx [hidden]{display:none!important}
 .dsx-gap{flex:1}
 .dsx-muted{color:var(--dim)}
@@ -630,6 +636,43 @@
 .dsx-tools-foot{display:flex;align-items:center;gap:12px;justify-content:flex-end;color:var(--dim);font-size:13px;padding-top:6px;border-top:1px solid var(--line)}
 .dsx-classic-bar{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--dim);font-size:13px}
 .dsx-classic-bar[hidden]{display:none}
+
+.dsx-nav,.dsx-backdrop,.dsx-files-sheet,.dsx-sheet-handle{display:none}
+.dsx-nav-badge{display:none}
+/* Phone and tablet only (900px and below). Desktop stays as on main. */
+@media (max-width:900px){
+  .ios-panel #iosSend:disabled,.ios-panel .btn.primary:disabled{opacity:.4;filter:grayscale(.45);cursor:not-allowed;box-shadow:none}
+  .ds-entry{min-width:0;overflow:hidden}
+  .ds-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .dsx-head{align-content:flex-start;flex:0 0 auto}
+  .dsx:not(.has-thread)[data-view="chat"] .dsx-chat{justify-content:safe center}
+  .dsx-foot{color:var(--dim)}
+  .dsx-frow{flex-wrap:wrap}
+  .dsx-frow code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 120px}
+  .dsx-prog-stop{display:none!important}
+  .dsx{--dsx-nav-h:calc(56px + env(safe-area-inset-bottom,0px))}
+  .dsx-head #dsxTools{display:none}
+  .dsx-nav{display:flex;flex:0 0 auto;align-items:stretch;justify-content:space-around;gap:2px;padding:2px 4px calc(6px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--bg2);z-index:9}
+  .dsx-nav [data-nav]{position:relative;flex:1 1 0;min-width:44px;min-height:44px;border:0;background:transparent;color:var(--faint);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px 2px;font:650 11px var(--font);border-radius:10px}
+  .dsx-nav [data-nav].on{color:var(--accent)}
+  .dsx-nav-ic{display:block;width:22px;height:22px}
+  .dsx-nav-ic svg{display:block;width:22px;height:22px}
+  .dsx-nav-badge{display:inline-flex;position:absolute;top:2px;right:calc(50% - 22px);min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--accent);color:var(--on-accent,#04110b);font:800 10px var(--font);align-items:center;justify-content:center}
+  .dsx-nav-badge[hidden]{display:none}
+  .dsx-backdrop:not([hidden]){display:block;position:absolute;inset:0;background:rgba(0,0,0,.45);z-index:7}
+  .dsx-sheet-handle{display:block;width:44px;height:5px;border-radius:99px;background:var(--line2);margin:8px auto 4px;flex:none}
+  .dsx-files-sheet:not([hidden]){display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg2);z-index:8}
+  .dsx-sheet-head{display:flex;align-items:center;gap:8px;padding:4px 14px 8px}
+  .dsx-sheet-head h2{margin:0;font-size:16px}
+  .dsx-sheet-body{flex:1;min-height:0;overflow:auto;padding:0 8px 12px}
+  .dsx-sheet-body .ds-columns{min-height:240px;display:flex;flex-direction:column;flex:1}
+  .dsx-files-sheet #dsColumns>section[aria-label="Source editor"],
+  .dsx-files-sheet .ds-panel-handle{display:none!important}
+  .dsx-files-sheet #dsColumns>section[aria-label="Project files"]{display:flex!important;flex-direction:column;min-height:0;flex:1}
+  .dsx-rfoot .btn{min-height:44px;padding:10px 16px}
+  .dsx-tools{z-index:8;background:var(--bg)}
+  .dsx-tools .dsx-tools-head h2{font-size:18px}
+}
 @container dsx (max-width:900px){
   .dsx.reviewing[data-view="chat"] .dsx-body{grid-template-columns:minmax(0,1fr)}
   .dsx-review{position:absolute;left:0;right:0;bottom:0;top:auto;height:72%;z-index:6;border-left:0;border-top:1px solid var(--line2);border-radius:18px 18px 0 0;box-shadow:var(--shadow)}
@@ -641,13 +684,45 @@
   .dsx-head{padding:8px 14px}
 }
 @container dsx (max-width:560px){
+  .dsx:not(.has-thread)[data-view="chat"] .dsx-chat{justify-content:flex-start}
+  .dsx-head{row-gap:8px}
+  .dsx-head .dsx-gap{flex-basis:100%;height:0;min-height:0;overflow:hidden;margin:0;padding:0}
   .dsx-editor .ds-columns{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}
   .dsx-editor .ds-panel-handle{display:none}
   .dsx-hero{font-size:22px}
   .dsx-scroll,.dsx-dock{padding-left:12px;padding-right:12px}
   .dsx-tools{padding:18px 14px}
 }
+@media (max-width:819px){
+  .dsx.reviewing[data-view="chat"] .dsx-body,.dsx[data-sheet] .dsx-body{grid-template-columns:minmax(0,1fr)}
+  .dsx-review,.dsx-files-sheet,.dsx-tools{
+    position:absolute;left:0;right:0;bottom:var(--dsx-nav-h,56px);top:auto;
+    height:min(74%,calc(100% - var(--dsx-nav-h,56px) - 8px));
+    z-index:8;border-left:0;border-top:1px solid var(--line2);border-radius:18px 18px 0 0;box-shadow:var(--shadow);
+  }
+  .dsx[data-view="editor"] .dsx-review{width:auto;top:auto}
+  .dsx-tools:has(#dsxToolDetail:not([hidden])){
+    top:0;height:auto;bottom:var(--dsx-nav-h,56px);border-radius:0;
+  }
+}
+@media (min-width:820px) and (max-width:900px){
+  .dsx.reviewing[data-view="chat"] .dsx-body,.dsx[data-sheet] .dsx-body{grid-template-columns:minmax(0,1fr)}
+  .dsx-review,.dsx-files-sheet,.dsx-tools{
+    position:absolute;top:0;right:0;bottom:var(--dsx-nav-h,56px);left:auto;
+    width:min(420px,52%);height:auto;z-index:8;
+    border-left:1px solid var(--line2);border-top:0;border-radius:0;box-shadow:var(--shadow);
+  }
+  .dsx[data-view="editor"] .dsx-review{width:min(420px,52%);top:0}
+  .dsx-tools:has(#dsxToolDetail:not([hidden])){
+    left:0;width:auto;height:auto;
+  }
+}
+@media (max-width:900px) and (prefers-reduced-motion:reduce){
+  .dsx-review,.dsx-files-sheet,.dsx-tools,.dsx-backdrop{transition:none!important;animation:none!important}
+}
 /* Simple editor view: the everyday controls only. Encoding, recovery, split and diff tools stay in the classic layout. */
+.dsx-editor .ds-mobile-switch{display:none;align-items:center;gap:6px;flex:0 0 auto;padding:8px 12px;position:sticky;top:0;z-index:3;background:var(--bg);border-bottom:1px solid var(--line)}
+@media(max-width:720px){.dsx-editor .ds-mobile-switch{display:flex}}
 .dsx-editor .ds-panel-header{flex-wrap:wrap;padding:10px 12px}
 .dsx-editor .ds-panel-header h3{overflow-wrap:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%}
 .dsx-editor :is(#dsEncoding,#dsLineEnding,label:has(#dsEncoding),label:has(#dsLineEnding),.ds-auto-label,#dsSplit,#dsDiff,#dsSnapshot,#dsRecover,#dsReloadFile,.ds-readonly,#dsFileInfo,.ds-footnote,#dsLimit,.ds-editor-modes,#dsTrash,#dsRestore,#dsRename){display:none!important}

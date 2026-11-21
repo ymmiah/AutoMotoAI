@@ -95,3 +95,20 @@ def test_toolchains_reports_path_availability_without_running(client):
     data = http.get(BASE + "/review/toolchains", headers=AUTH).json()
     assert "typescript" in data["toolchains"] and "installed" in data["toolchains"]["python"]
     assert "not run" in data["verification"]
+
+
+def test_undo_selected_paths_leaves_other_files(client):
+    http, repo = client
+    _trust(http, repo)
+    cp = http.post(BASE + "/review/start", headers=AUTH, json={"project": str(repo)}).json()["checkpoint"]
+    (repo / "src" / "Counter.tsx").write_text("changed\n", encoding="utf-8")
+    (repo / "src" / "Counter.test.tsx").write_text("new\n", encoding="utf-8")
+    undone = http.post(BASE + "/review/undo", headers=AUTH, json={
+        "project": str(repo), "checkpoint": cp, "confirmed": True, "paths": ["src/Counter.test.tsx"],
+    })
+    assert undone.status_code == 200, undone.text
+    assert undone.json()["removed"] == ["src/Counter.test.tsx"]
+    assert (repo / "src" / "Counter.tsx").read_text(encoding="utf-8") == "changed\n"
+    assert not (repo / "src" / "Counter.test.tsx").exists()
+    leftover = http.get(BASE + "/review/changes", headers=AUTH, params={"project": str(repo), "checkpoint": cp}).json()
+    assert {c["path"] for c in leftover["changes"]} == {"src/Counter.tsx"}
