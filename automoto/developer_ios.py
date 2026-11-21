@@ -200,10 +200,12 @@ def deployment_message(facts: dict[str, Any] | None = None) -> dict[str, Any]:
 
 def wizard_steps(facts: dict[str, Any] | None = None) -> list[dict[str, str]]:
     facts = facts or current_facts()
-    place = deployment_message(facts)["message"]
     who = brand.short()
     return [
-        {"n": "1", "title": "This computer", "text": place},
+        {"n": "1", "title": "This computer", "text": (
+            "Read the status at the top of this page first. If the tools are not "
+            "ready, finish the later steps before you send anything to Apple."
+        )},
         {"n": "2", "title": "Xcode, from Apple", "text": (
             "Download Xcode.xip once from Apple's developer downloads. "
             f"{who} does not keep a copy and will not fetch one for you."

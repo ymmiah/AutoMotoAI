@@ -4,6 +4,9 @@
    the trusted project and a confirmation, and Keep / Undo use the review checkpoint API. */
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const VIEW_KEY="automoto.developer.view";
+const CHAT_KEY="automoto.developer.chat.";
+const CHAT_MAX=24;
+const CHAT_BYTES=120000;
 const VIEWS=new Set(["chat","editor","classic"]);
 const READ=new Set(["read_file","list_dir","grep","search_files","project_inspect"]);
 const WRITE=new Set(["write_file","edit_file"]);
@@ -80,6 +83,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       '<button type="button" class="btn sm dsx-only-editor" id="dsxRunTests">✓ Run tests</button>'+
       '<button type="button" class="btn sm" id="dsxView" aria-pressed="false">Open in editor</button>'+
       '<button type="button" class="btn sm" id="dsxTools" aria-expanded="false" aria-controls="dsxToolsPage">⚙ Tools</button>'+
+      '<button type="button" class="btn sm" id="dsxClear" hidden>Clear chat</button>'+
     '</header>'+
     '<div class="dsx-body" id="dsxBody">'+
       '<div class="dsx-editor" id="dsxEditor" aria-label="Files and editor"></div>'+
@@ -164,12 +168,13 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       toolsOpen=false;
     }else{
       place(q(".ds-toolbar"),$("dsxProjectPop"));place(q("#dsRootStrip"),$("dsxProjectPop"));
-      if(next==="editor"){place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
-      else{restore(q(".ds-columns"));restore(statusLine);}
+      if(next==="editor"){place(q(".ds-mobile-switch"),$("dsxEditor"));place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
+      else{restore(q(".ds-mobile-switch"));restore(q(".ds-columns"));restore(statusLine);}
       $("dsxView").textContent=next==="editor"?"Back to chat":"Open in editor";
       $("dsxView").setAttribute("aria-pressed",String(next==="editor"));
       showTools(toolsOpen);
     }
+    syncReviewOpen();
     refresh();
   }
   $("dsxView").addEventListener("click",()=>setView(view==="editor"?"chat":"editor"));
@@ -323,9 +328,9 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     const bot=el("div","dsx-msg bot");
     const av=el("span","dsx-av",BRAND.charAt(0));av.setAttribute("aria-hidden","true");
     const body=el("div","dsx-turn");bot.append(av,body);
-    const card=el("div","dsx-progress");card.innerHTML='<div class="dsx-prog-head"><b>Working on it</b><span class="dsx-gap"></span><button type="button" class="btn sm dsx-prog-stop">Stop</button></div><div class="dsx-bar"><span></span></div><ol class="dsx-phases"></ol>';
-    card.querySelector(".dsx-prog-stop").addEventListener("click",()=>$("dsxStop").click());
+    const card=el("div","dsx-progress");card.innerHTML='<div class="dsx-prog-head"><b>Working on it</b></div><div class="dsx-bar"><span></span></div><ol class="dsx-phases"></ol>';
     body.append(card);thread.append(user,bot);
+    recordUser(note);saveChat();
     turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false};
     drawProgress();refresh();scrollDown();
   }
@@ -385,7 +390,6 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     if(!turn||turn.done)return;
     const t=turn;t.done=true;drawProgress();
     t.card.querySelector(".dsx-prog-head b").textContent=kind==="error"?"Stopped":"Done";
-    t.card.querySelector(".dsx-prog-stop").remove();
     t.card.classList.add("finished");
     const answer=el("div","dsx-answer");
     for(const para of String(message||"").split(/\n{2,}/))if(para.trim())answer.append(el("p",null,para.trim()));
@@ -408,6 +412,8 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     if(list.children.length)t.body.insertBefore(list,t.card);
     const actions=el("div","dsx-actions");t.actions=actions;
     const n=t.changes?.changes?.length||0;
+    t.reviewFiles=n?(t.changes.changes||[]).map(c=>({...c})):[]
+    t.fileDecisions=t.fileDecisions||{};
     if(n){
       const keep=el("button","btn sm primary","Keep changes"),undo=el("button","btn sm","Undo"),rev=el("button","btn sm","Review changes");
       keep.type=undo.type=rev.type="button";keep.dataset.act="keep";undo.dataset.act="undo";
@@ -423,12 +429,14 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     t.card.remove();
     afterFilesChanged?.();
     if(n)openReview("changes");
+    recordAssistant(t);saveChat();
     refresh();scrollDown();prompt.focus();
   }
   function checkItem(mark,text){const li=el("li");li.append(el("span","dsx-ck "+(mark==="✗"?"bad":""),mark),el("span",null,text));return li;}
   function resolveTurn(t,text){
-    t.resolved=true;t.actions.replaceChildren(el("span","dsx-muted",text));
+    t.resolved=true;t.resolveText=text;t.actions.replaceChildren(el("span","dsx-muted",text));
     if(review.turn===t)drawReview();
+    recordAssistant(t);saveChat();
     refresh();
   }
   async function keepTurn(t){
@@ -445,6 +453,35 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       afterFilesChanged?.();
     }catch(err){status("Undo failed: "+err.message,true);}
   }
+  async function keepFile(t,path){
+    if(t.resolved)return;
+    t.fileDecisions=t.fileDecisions||{};
+    t.fileDecisions[path]="kept";
+    await settleFiles(t);
+  }
+  async function undoFile(t,path){
+    if(t.resolved)return;
+    if(!window.confirm("Undo changes to "+path+"? This file goes back to how it was, or a new file is removed."))return;
+    try{
+      await api(BASE+"/review/undo",{project:t.project,checkpoint:t.checkpoint,confirmed:true,paths:[path]});
+      t.fileDecisions=t.fileDecisions||{};
+      t.fileDecisions[path]="undone";
+      afterFilesChanged?.();
+      await settleFiles(t);
+    }catch(err){status("Undo failed: "+err.message,true);}
+  }
+  async function settleFiles(t){
+    const files=t.reviewFiles||[];
+    const pending=files.filter(c=>!t.fileDecisions?.[c.path]);
+    if(pending.length){drawReview();saveChat();refresh();return;}
+    try{await api(BASE+"/review/keep",{project:t.project,checkpoint:t.checkpoint});}catch(_){ /* already discarded */ }
+    const kept=files.filter(c=>t.fileDecisions[c.path]==="kept").length;
+    const undone=files.filter(c=>t.fileDecisions[c.path]==="undone").length;
+    const parts=[];
+    if(kept)parts.push(kept+" kept");
+    if(undone)parts.push(undone+" undone");
+    resolveTurn(t,(undone&&!kept?"↺ ":"✓ ")+parts.join(", ")+".");
+  }
 
   // ---------------------------------------------------------------- review panel
   const review={tab:"changes",turn:null,focus:null};
@@ -460,9 +497,12 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
   root.querySelector(".dsx-rtabs").addEventListener("click",e=>{const b=e.target.closest("[data-rtab]");if(!b)return;review.tab=b.dataset.rtab;drawReview();});
   $("dsxRKeep").addEventListener("click",()=>review.turn&&void keepTurn(review.turn));
   $("dsxRUndo").addEventListener("click",()=>review.turn&&void undoTurn(review.turn));
+  function reviewOpenLabel(){return view==="editor"?"Show file":"Open in editor";}
+  function syncReviewOpen(){const b=$("dsxROpen");if(b)b.textContent=reviewOpenLabel();}
   $("dsxROpen").addEventListener("click",()=>{
-    const first=review.focus||(review.turn?.changes?.changes||[]).find(c=>c.change!=="deleted")?.path;
-    setView("editor");if(first)void openFile(first);
+    const first=review.focus||(review.turn?.reviewFiles||review.turn?.changes?.changes||[]).find(c=>c.change!=="deleted"&&review.turn?.fileDecisions?.[c.path]!=="undone")?.path;
+    if(view!=="editor")setView("editor");
+    if(first)void openFile(first);
   });
   function diffBlock(c){
     const box=el("div","dsx-file");
@@ -485,10 +525,22 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       if(!changes.length)body.append(el("p","dsx-muted dsx-pad","No changes to review."));
       for(const c of changes){const b=diffBlock(c);body.append(b);if(c.path===review.focus)requestAnimationFrame(()=>b.scrollIntoView({block:"nearest"}));}
     }else if(review.tab==="files"){
-      if(!changes.length)body.append(el("p","dsx-muted dsx-pad","No files changed."));
-      for(const c of changes){
-        const row=el("div","dsx-frow");row.append(el("code",null,c.path),el("span","dsx-gap"),el("span","dsx-muted",c.change));
-        if(c.change!=="deleted"){const b=el("button","btn sm","Open");b.type="button";b.onclick=()=>{setView("editor");void openFile(c.path);};row.append(b);}
+      const files=t?.reviewFiles||changes;
+      if(!files.length)body.append(el("p","dsx-muted dsx-pad","No files changed."));
+      for(const c of files){
+        const decision=t?.fileDecisions?.[c.path];
+        const row=el("div","dsx-frow");row.append(el("code",null,c.path),el("span","dsx-gap"),el("span","dsx-muted",decision||c.change));
+        if(!t?.resolved&&!decision){
+          const keep=el("button","btn sm","Keep");keep.type="button";keep.title="Leave this file as the assistant left it";
+          keep.onclick=()=>void keepFile(t,c.path);
+          const undo=el("button","btn sm","Undo");undo.type="button";undo.title="Put this file back to how it was";
+          undo.onclick=()=>void undoFile(t,c.path);
+          row.append(keep,undo);
+        }
+        if(c.change!=="deleted"&&decision!=="undone"){
+          const b=el("button","btn sm",view==="editor"?"Show file":"Open");b.type="button";
+          b.onclick=()=>{if(view!=="editor")setView("editor");void openFile(c.path);};row.append(b);
+        }
         body.append(row);
       }
     }else{
@@ -500,8 +552,10 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
         box.append(head);if(x.output)box.append(el("pre","dsx-diff",x.output.slice(-3000)));body.append(box);
       }
     }
-    const open=!!t&&!t.resolved&&!!changes.length;
+    const pending=(t?.reviewFiles||changes).filter(c=>!t?.fileDecisions?.[c.path]);
+    const open=!!t&&!t.resolved&&!!pending.length;
     $("dsxRKeep").disabled=!open;$("dsxRUndo").disabled=!open;
+    syncReviewOpen();
   }
 
   workbench.subscribe((type,data)=>{
@@ -510,6 +564,79 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     else if(type==="finish")void finishTurn(data);
     refresh();
   });
+
+  // ---------------------------------------------------------------- chat history (per project, local only)
+  let history=[];
+  let loadedProject=null;
+  function chatKey(){const p=getProject()?.project;return p?CHAT_KEY+p:null;}
+  function recordUser(text){history.push({kind:"user",text:String(text||"")});}
+  function recordAssistant(t){
+    const last=history.filter(x=>x.kind==="assistant"&&x.checkpoint===t.checkpoint).pop();
+    const entry={kind:"assistant",text:t.body?.querySelector(".dsx-answer")?.innerText||"",checkpoint:t.checkpoint||null,project:t.project,resolved:!!t.resolved,resolveText:t.resolveText||"",
+      reviewFiles:t.reviewFiles||[],fileDecisions:t.fileDecisions||{},
+      tests:[...(t.tests?.values()||[])].map(x=>({cmd:x.cmd,ok:x.ok,done:x.done,output:String(x.output||"").slice(-3000)}))};
+    if(last)Object.assign(last,entry);else history.push(entry);
+  }
+  function saveChat(){
+    const key=chatKey();if(!key)return;
+    const data=history.filter(x=>x.kind!=="pending").slice(-CHAT_MAX);
+    let json=JSON.stringify(data);
+    while(json.length>CHAT_BYTES&&data.length>2){data.shift();json=JSON.stringify(data);}
+    try{localStorage.setItem(key,json);}catch(_){ /* quota */ }
+  }
+  function clearChat(){
+    if(history.length&&!window.confirm("Clear this project's studio chat? File changes are not undone."))return;
+    thread.replaceChildren();history=[];turn=null;closeReview();
+    const key=chatKey();if(key)localStorage.removeItem(key);
+    refresh();
+  }
+  $("dsxClear").addEventListener("click",clearChat);
+  function replayItem(item){
+    if(item.kind==="user"){
+      const user=el("div","dsx-msg user");user.append(el("div","dsx-bubble",item.text||""));thread.append(user);return;
+    }
+    if(item.kind!=="assistant")return;
+    const bot=el("div","dsx-msg bot");
+    const av=el("span","dsx-av",BRAND.charAt(0));av.setAttribute("aria-hidden","true");
+    const body=el("div","dsx-turn");bot.append(av,body);
+    if(item.text){const answer=el("div","dsx-answer");for(const para of String(item.text).split(/\n{2,}/))if(para.trim())answer.append(el("p",null,para.trim()));body.append(answer);}
+    const files=item.reviewFiles||[];
+    const list=el("ul","dsx-check");
+    for(const c of files){
+      const decision=item.fileDecisions?.[c.path];
+      const li=checkItem("✓",(c.change==="added"?"Added ":c.change==="deleted"?"Deleted ":"Edited "));
+      const link=el("button","dsx-link",c.path);link.type="button";link.onclick=()=>openReview("changes",c.path);
+      li.append(link);if(decision)li.append(el("span","dsx-muted"," · "+decision));list.append(li);
+    }
+    if(list.children.length)body.append(list);
+    const actions=el("div","dsx-actions");
+    const restored={body,actions,checkpoint:item.checkpoint,project:item.project,resolved:!!item.resolved,resolveText:item.resolveText||"",reviewFiles:files,fileDecisions:item.fileDecisions||{},changes:{changes:files},tests:new Map((item.tests||[]).map((x,i)=>[x.cmd||i,x])),card:null};
+    if(item.resolved)actions.append(el("span","dsx-muted",item.resolveText||"Done."));
+    else if(files.length){
+      const keep=el("button","btn sm primary","Keep changes"),undo=el("button","btn sm","Undo"),rev=el("button","btn sm","Review changes");
+      keep.type=undo.type=rev.type="button";keep.dataset.act="keep";undo.dataset.act="undo";
+      keep.onclick=()=>void keepTurn(restored);undo.onclick=()=>void undoTurn(restored);rev.onclick=()=>openReview("changes");
+      actions.append(keep,undo,rev);turn=restored;
+    }
+    body.append(actions);thread.append(bot);
+  }
+  function loadChat(){
+    const project=getProject()?.project||"";
+    if(project===loadedProject)return;
+    thread.replaceChildren();history=[];turn=null;closeReview();
+    loadedProject=project;
+    const key=chatKey();if(!key){refresh();return;}
+    let data=[];
+    try{data=JSON.parse(localStorage.getItem(key)||"[]");}catch(_){data=[];}
+    if(!Array.isArray(data))data=[];
+    history=data;for(const item of data)replayItem(item);
+    if(turn&&turn.checkpoint&&!turn.resolved){
+      void api(BASE+"/review/changes?"+new URLSearchParams({project:turn.project,checkpoint:turn.checkpoint}))
+        .then(ch=>{turn.changes=ch;if(!turn.reviewFiles?.length)turn.reviewFiles=ch.changes||[];drawReview();})
+        .catch(()=>{});
+    }
+    refresh();
+  }
 
   // ---------------------------------------------------------------- state
   function refresh(){
@@ -532,6 +659,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
     const empty=!thread.children.length;
     $("dsxHero").hidden=!empty||view==="editor";
     $("dsxStarters").hidden=!empty;
+    $("dsxClear").hidden=empty;
     root.classList.toggle("has-thread",!empty);
     $("dsxFoot").textContent=!p?"Open a project to begin. Nothing runs until you press send."
       :!trusted?"Read-only: allow changes (step 2) before the assistant can work here."
@@ -544,7 +672,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
   }
   setView(view,{save:false});
   return {
-    projectChanged(){refresh();if(toolsOpen)void loadToolInfo();},
+    projectChanged(){loadChat();refresh();if(toolsOpen)void loadToolInfo();},
     refresh,
     setView
   };

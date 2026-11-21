@@ -2,6 +2,8 @@
 
 ## Unreleased — Developer Studio V32–V34 on main
 
+- Developer Studio polish: the phone-width toolbar no longer covers the first setup step; the editor stays visible below 720px with a Files / Code toggle instead of hiding the code; light-theme helper text meets 4.5:1 contrast; the iPhone steps no longer repeat the same paragraph, and Send to Apple looks disabled until you tick the box; there is only one Stop button during a task; the review footer says "Show file" when you are already in the editor; file-tree names ellipsis instead of wrapping mid-extension; and the beginner status bar no longer shows a checksum (it stays on the tooltip).
+- The studio chat is saved per project in this browser, so it comes back when you reopen the project after a reload, with a Clear chat button. The Files tab can keep or undo one file at a time.
 - Developer Studio V32 (Fortran, COBOL, Ada, Pascal, Assembly: inert inspection and approved compilation), V33 (WebAssembly source and component evidence, the workbench layout) and V34 (guided "Start here" steps and starter tasks) join `main`, alongside the iPhone toolchain panel. See `docs/DEVELOPER-STUDIO-V32.md` to `V34.md`.
 - The workbench uses the whole centre pane of the three-pane layout and sizes itself from that pane, not the window, so it no longer squeezes beside the sidebar and preview panel. The iPhone panel moves into the Extensions & tools drawer with the other specialist tools.
 - Trusting or revoking a project now updates the "Start here" guide and the Run task button straight away. Before, they changed only after the next keystroke.

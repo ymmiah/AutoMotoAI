@@ -177,7 +177,8 @@ export function mountDeveloperEditor({api,host,project,status,onFileOpened=()=>{
     el("dsSplit").disabled=!tab||!monacoAdapter;
     el("dsRecoveryAuto").disabled=!project()?.trusted;
     el("dsEditorState").textContent=!tab?"No source selected":
-      tab.saving?"Saving…":tab.dirty?"Unsaved changes":tab.sha256?"Saved · SHA-256 "+tab.sha256.slice(0,12):"Read-only";
+      tab.saving?"Saving…":tab.dirty?"Unsaved changes":tab.sha256?"Saved":"Read-only";
+    el("dsEditorState").title=tab&&tab.sha256&&!tab.dirty&&!tab.saving?"Checksum "+tab.sha256:"";
     el("dsEditorLang").textContent=tab?syntaxFor(tab):"Text";
     el("dsEditorSize").textContent=tab?tab.encoding+" · "+tab.text.length+" characters":"";
     el("dsSaveHint").textContent=project()?.trusted
@@ -195,7 +196,8 @@ export function mountDeveloperEditor({api,host,project,status,onFileOpened=()=>{
     el("dsEncoding").value=tab.encoding==="cp1252"?"cp1252":"auto";
     el("dsLineEnding").value=tab.newline;
     el("dsFilename").textContent=tab.path.split("/").pop();
-    el("dsFileInfo").textContent=tab.path+" · "+tab.size+" bytes · original SHA-256 "+tab.sha256;
+    el("dsFileInfo").textContent=tab.path+" · "+tab.size+" bytes";
+    el("dsFileInfo").title=tab.sha256?"Checksum "+tab.sha256:"";
     el("dsHighlighted").hidden=true;el("dsHighlighted").style.display="none";
     el("dsDiffPreview").hidden=true;
     el("dsSourceText").hidden=!!monacoAdapter;

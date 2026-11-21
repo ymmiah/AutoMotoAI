@@ -135,6 +135,13 @@ def test_msix_and_windows_without_wsl_say_why(monkeypatch):
     assert message["code"] == "wsl" and "WSL" in message["message"]
 
 
+def test_wizard_status_is_not_repeated_as_step_one():
+    steps = developer_ios.wizard_steps()
+    status = developer_ios.deployment_message()["message"]
+    assert steps[0]["text"] != status
+    assert "top of this page" in steps[0]["text"]
+
+
 def test_wizard_create_listing_and_refuse_until_the_button(client, tmp_path, caplog):
     wizard = client.get(BASE + "/wizard", headers=AUTH)
     assert wizard.status_code == 200, wizard.text
