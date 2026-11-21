@@ -1813,6 +1813,13 @@ let browser;
   writeFileSync(path.join(devProject,'.env'),'PRIVATE_KEY=never-disclose');
   const devBefore=readFileSync(path.join(devProject,'main.ts'));
   await page.locator('.nav [data-page="developer"]').click();
+  // The chat-first view is the default; this suite drives every expert panel, so it uses the classic layout.
+  await page.locator('#dsxRoot').waitFor();
+  assert.equal(await page.locator('#dsxRoot').getAttribute('data-view'),'chat');
+  assert.equal(await page.locator('#dsxStarters .dsx-starter').count(),4);
+  await page.locator('#dsxTools').click();
+  await page.locator('#dsxClassic').click();
+  await page.waitForFunction(()=>document.querySelector('#dsxRoot')?.dataset.view==='classic');
   await page.locator('#dsPath').waitFor();
   await page.locator('#dsMonaco .monaco-editor').waitFor({state:'visible'});
   assert.equal(await page.locator('#dsMonaco').isVisible(),true,'Must load Monaco locally');
