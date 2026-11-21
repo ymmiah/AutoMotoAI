@@ -13,10 +13,34 @@ set -euo pipefail
 # though V23_ANDROID_RUNNING is in the bytes already written. The green run and
 # the following red runs on the same emulator build were that race. adb's exit
 # status is not the assertion; the marker in the captured hierarchy is.
+#
+# A cold GitHub emulator can also show a system "isn't responding" dialog
+# (for example "Pixel Launcher isn't responding") over the sample app. That
+# dialog belongs to the emulator, not to V23, so tap its "Wait" button and
+# bring the activity back to the front before the next dump. The marker
+# check itself is unchanged.
+v23_dismiss_system_anr() {
+  local dump="$1"
+  grep -F -q -- "isn't responding" "$dump" || return 1
+  local bounds
+  bounds=$(grep -o -E 'text="Wait"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$dump" \
+    | grep -o -E '\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]' | head -n 1 || true)
+  printf '%s\n' "System 'isn't responding' dialog on screen; dismissing it with Wait" >&2
+  if [[ -n "$bounds" ]]; then
+    local x1 y1 x2 y2
+    read -r x1 y1 x2 y2 <<<"$(tr '[],' '   ' <<<"$bounds")"
+    adb shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2)) >/dev/null 2>&1 || true
+  else
+    adb shell input keyevent KEYCODE_ENTER >/dev/null 2>&1 || true
+  fi
+  adb shell am start -n com.automoto.v23/.MainActivity >/dev/null 2>&1 || true
+  return 0
+}
+
 v23_wait_for_ui_marker() {
   local marker="V23_ANDROID_RUNNING"
   local remote="/sdcard/v23-window.xml"
-  local attempts="${V23_UI_ATTEMPTS:-15}"
+  local attempts="${V23_UI_ATTEMPTS:-30}"
   local pause="${V23_UI_PAUSE_SECONDS:-2}"
   local work="${TMPDIR:-/tmp}/v23-ui-marker"
   local dest="$work/window.xml"
@@ -38,6 +62,9 @@ v23_wait_for_ui_marker() {
     if [[ "$bytes" != 0 ]] && grep -F -q -- "$marker" "$dest"; then
       printf '%s\n' "V23_ANDROID_RUNNING visible in UI hierarchy (attempt ${attempt}, ${bytes} bytes)"
       return 0
+    fi
+    if [[ "$bytes" != 0 ]]; then
+      v23_dismiss_system_anr "$dest" || true
     fi
     if (( attempt < attempts )); then
       printf '%s\n' "UI marker not visible yet (attempt ${attempt}/${attempts}, ${bytes} bytes); retrying" >&2
