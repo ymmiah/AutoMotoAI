@@ -25,6 +25,8 @@ const RUN_APP="Start this app locally for a quick check: find its start command,
 // Tools & languages cards. "roots" are the existing panels each card opens; "tc" keys the
 // path-only availability check in developer_review.TOOLCHAINS (no tc = built in).
 const TOOLS=[
+  ["run","Run & preview","Run your app and tests, and see it live","▶","#4caf50","builtin",["dsRunRoot"],null],
+  ["git","Git","Changes, branches, commits and conflicts","⎇","#f05033","builtin",["dsGitRoot"],null],
   ["typescript","TypeScript & JavaScript","Node scripts, type checks and tests","TS","#3178c6","web",["dsJavaScriptRoot"],"typescript"],
   ["frontend","Web pages","Accessibility and responsive preview","UI","#e44d8a","web",["dsFrontendRoot"],"javascript"],
   ["php","PHP & WordPress","Composer and WordPress checks","PHP","#7a86b8","web",["dsPhpRoot"],"php"],
@@ -59,7 +61,7 @@ const CATS=[["all","All"],["installed","Installed"],["web","Web"],["mobile","Mob
 
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
 
-export function mountDeveloperSimple({api,host,workbench,getProject,openFile,afterFilesChanged,status}){
+export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,openFile,afterFilesChanged,status}){
   const BASE="/api/developer/studio";
   const shell=host.querySelector(".ds-shell");
   const q=sel=>host.querySelector(sel);
@@ -172,6 +174,7 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
   // ---------------------------------------------------------------- views
   let view=VIEWS.has(localStorage.getItem(VIEW_KEY))?localStorage.getItem(VIEW_KEY):"chat";
   let toolsOpen=false;
+  let lastRealTests=null;
   function setView(next,{save=true}={}){
     view=next;if(save)localStorage.setItem(VIEW_KEY,next);
     const classic=next==="classic";
@@ -321,8 +324,18 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
   prompt.addEventListener("input",refresh);
   prompt.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();comp.requestSubmit();}});
   comp.addEventListener("submit",e=>{e.preventDefault();void submit(prompt.value);});
-  $("dsxRunTests").addEventListener("click",()=>void submit(RUN_TESTS));
-  $("dsxRunApp").addEventListener("click",()=>void submit(RUN_APP));
+  // V41/V44: Run app / Run tests use the real, approval-gated runner when the project has a
+  // detected command, and fall back to asking the assistant when it doesn't.
+  function openTool(id){
+    const t=TOOLS.find(x=>x[0]===id);if(!t)return;
+    showTools(true);drawTools();void loadToolInfo();openDetail(t);
+  }
+  async function realRun(kind){
+    if(runner&&await runner.hasRecipe(kind).catch(()=>false)){openTool("run");await runner.run(kind);return;}
+    void submit(kind==="app"?RUN_APP:RUN_TESTS);
+  }
+  $("dsxRunTests").addEventListener("click",()=>void realRun("test"));
+  $("dsxRunApp").addEventListener("click",()=>void realRun("app"));
   $("dsxStop").addEventListener("click",async()=>{
     if(!window.confirm("Stop the current "+BRAND+" task?"))return;
     try{await workbench.cancelTask();}catch(err){status("Stop failed: "+err.message,true);}
@@ -579,11 +592,14 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
       }
     }else{
       const tests=[...(t?.tests?.values()||[])];
+      if(lastRealTests)tests.push(lastRealTests);
       if(!tests.length)body.append(el("p","dsx-muted dsx-pad","No tests ran in this task. Use Run tests in the editor view, or ask the assistant to add some."));
       for(const x of tests){
         const box=el("div","dsx-file");const head=el("div","dsx-file-h");
         head.append(el("code",null,x.cmd||"tests"),el("span","dsx-gap"),el("span","dsx-badge "+(x.ok?"b-ok":x.done?"b-bad":"b-no"),x.ok?"passed":x.done?"failed":"running"));
-        box.append(head);if(x.output)box.append(el("pre","dsx-diff",x.output.slice(-3000)));body.append(box);
+        box.append(head);
+        if(x.summary){const chips=el("div","dsr-chips dsx-pad");chips.append(el("span","dsx-badge b-ok",x.summary.passed+" passed"),el("span","dsx-badge "+(x.summary.failed?"b-bad":"b-no"),x.summary.failed+" failed"),el("span","dsx-badge b-no",x.summary.skipped+" skipped"));box.append(chips);}
+        if(x.output)box.append(el("pre","dsx-diff",x.output.slice(-3000)));body.append(box);
       }
     }
     const pending=(t?.reviewFiles||changes).filter(c=>!t?.fileDecisions?.[c.path]);
@@ -869,7 +885,9 @@ export function mountDeveloperSimple({api,host,workbench,getProject,openFile,aft
   });
   setView(view,{save:false});
   return {
-    projectChanged(){loadChat();refresh();if(toolsOpen)void loadToolInfo();},
+    projectChanged(){lastRealTests=null;loadChat();refresh();if(toolsOpen)void loadToolInfo();},
+    testResult(r){lastRealTests={...r,cmd:"Last test run · "+r.cmd};if(review.turn&&review.tab==="tests"&&!$("dsxReview").hidden)drawReview();},
+    openTool,
     refresh,
     setView
   };
