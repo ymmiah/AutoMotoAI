@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import atexit
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -48,7 +49,6 @@ MAX_MANIFEST = 256 * 1024
 APP_SECONDS = 60 * 60
 TEST_SECONDS = 15 * 60
 MAX_LIVE = 4
-LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]", "0.0.0.0")
 URL_RE = re.compile(r"https?://(127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0|\[::\])(?::(\d{2,5}))?(/[^\s'\"<>\x1b]*)?")
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 APP_SCRIPTS = ("dev", "start", "serve", "preview")
@@ -276,7 +276,13 @@ def _non_loopback_addresses() -> list[str]:
             found.add(s.getsockname()[0])
     except OSError:
         pass
-    return sorted(a for a in found if not a.startswith("127.") and a != "0.0.0.0")
+    def outside(addr: str) -> bool:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            return False
+        return not (ip.is_loopback or ip.is_unspecified)
+    return sorted(a for a in found if outside(a))
 
 
 def _reachable(host: str, port: int, timeout: float = 0.25) -> bool:
