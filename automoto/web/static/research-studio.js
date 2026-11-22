@@ -1,5 +1,6 @@
 /* Research Studio V1: private, source-pinned evidence workspace.
    All source, title, quote and notes values are rendered with textContent. */
+import {copyText,flash} from "./copy.js";
 import {researchRequest,verifiedResearchView,researchNotes} from "./document-research-model.js";
 import {mountResearchDiscovery} from "./research-discovery.js";
 import {mountResearchComparison} from "./research-comparison.js";
@@ -230,10 +231,9 @@ export async function mountResearchStudio({api,page,toast,uploadCapsule,download
   };
   el("rsCopy").onclick=async()=>{
     if(!latest||!latestRequest)return;
-    try{
-      await navigator.clipboard.writeText(researchNotes(latestRequest.query,latest));
-      notice("Research evidence notes copied. Check original source context before publication.");
-    }catch(error){notice("Clipboard copy unavailable: "+error.message,true);}
+    const ok=await copyText(researchNotes(latestRequest.query,latest));flash(el("rsCopy"),ok);
+    if(ok)notice("Research evidence notes copied. Check original source context before publication.");
+    else notice("Clipboard copy unavailable. Select the notes and press Ctrl+C.",true);
   };
   mountResearchDiscovery({host:el("rsDiscoveryRoot"),api,refreshSources,toast});
   mountResearchComparison({host:el("rsComparisonRoot"),api,toast});

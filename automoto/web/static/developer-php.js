@@ -1,4 +1,5 @@
 /* Developer Studio V16: PHP/WordPress with central-agent release readiness. */
+import {copyText,flash} from "./copy.js";
 export function mountDeveloperPHP({api,host,getProject,editor,status}) {
   const root=host.querySelector("#dsPhpRoot"),BASE="/api/developer/studio/php";
   root.innerHTML=
@@ -126,9 +127,7 @@ export function mountDeveloperPHP({api,host,getProject,editor,status}) {
       el("dsPhpResults").append(text);
       const copy=document.createElement("button");copy.className="btn sm";copy.type="button";
       copy.textContent="Copy for guarded V2 editor review";
-      copy.onclick=()=>{text.focus();text.select();
-        if(navigator.clipboard?.writeText)void navigator.clipboard.writeText(text.value).catch(()=>{});
-      };
+      copy.onclick=async()=>{text.focus();text.select();flash(copy,await copyText(text.value));};
       el("dsPhpResults").append(copy);
       line("No file changed. Open this same plugin in the V2 editor, review the exact diff and save using its original checksum, then run PHP -l and the plugin's tests.",true);
       message("Proposed limited WordPress fix previewed, not applied or deployed.");

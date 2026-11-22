@@ -525,6 +525,11 @@ open this guide, forget tab keys.
 | `A` / `D` | Approve / deny the waiting approval card |
 | `Esc` | Stop a run, close dialogs |
 
+**Copy buttons.** Every code block, command, log, diff and file path in the app has a copy button in its
+top-right corner (or just after a path or command). It's always visible and stays in place while the box
+scrolls. Press it, or Tab to it and press Enter or Space. It shows **Copied** and screen readers hear
+"Copied". Copy buttons never appear on anything that looks like a password, key or token.
+
 ---
 
 ## 17. Example prompts to copy
