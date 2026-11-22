@@ -21,6 +21,8 @@ GitLab, and brings in new ones from there. It works with the account you connect
 changes until you press **Bring them in** (a fast-forward) or, if both sides changed, **Combine both**
 (a merge; conflicts go to Checkpoints, where you pick what to keep).
 
+After sharing, **Tools → Ask for a review** opens a draft pull or merge request and shows the website's checks. See [PULL-REQUESTS-AND-CI.md](PULL-REQUESTS-AND-CI.md).
+
 ## What is checked before anything is sent
 
 Every outgoing checkpoint is scanned, not only the latest files. A password added in one checkpoint

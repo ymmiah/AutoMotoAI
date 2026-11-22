@@ -546,6 +546,14 @@ checkpoints. If sharing fails for any reason, your work is saved as a `.patch` i
 `Documents/AutoMoto/patches` with step-by-step commands for Windows, Mac or Linux, each with a copy
 button. See [SHARE-TO-GITHUB.md](SHARE-TO-GITHUB.md).
 
+**Ask for a review.** Developer Studio → Tools → **Ask for a review** opens a draft pull request
+(GitHub) or merge request (GitLab) from a shared branch. The title and description are written from
+your checkpoints, and you can change them. A confirm dialog shows exactly what is sent, and AutoMoto
+never merges. **Checks on GitHub** shows the website's checks in the same small ring card as Run my
+app ("5/6", failing names, Check again). It only reads. If anything fails, you get step-by-step
+instructions with a copy button on every link and command. See
+[PULL-REQUESTS-AND-CI.md](PULL-REQUESTS-AND-CI.md).
+
 ---
 
 ## 17. Example prompts to copy
