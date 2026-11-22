@@ -7,6 +7,7 @@
    page as text. Nothing is stored in the browser. */
 import {ring} from "./developer-beginner.js";
 import {renderFallback} from "./developer-share.js";
+import {hydrateIcons} from "./icons.js";
 
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
@@ -119,28 +120,24 @@ export function approvalCard(entry,{api,getProject,decide,showFile}){
 export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFile,chat,onBack,status}){
   const BASE="/api/developer/studio";
   const box=el("div","dsw");box.id="dswRoot";
-  // Chat column: a small header, the status strip and the Developer chat itself (moved in on open).
+  // Chat column: a small status strip (only once something has happened) and the Developer chat
+  // itself, moved in on open. "Manual controls" and "All tools" live in the page's ••• menu.
   const col=el("section","dsw-chatcol");col.setAttribute("aria-label","Chat with "+BRAND);
-  const top=el("div","dsw-top");
-  const av=el("span","dsx-av",BRAND.charAt(0));av.setAttribute("aria-hidden","true");
-  const ttl=el("div","dsw-title");ttl.append(el("b",null,BRAND),el("small",null,"Edit, test & share"));
-  const manual=btn("Manual controls","sm dsw-manual");manual.id="dswManual";manual.setAttribute("aria-expanded","false");manual.setAttribute("aria-controls","dswLive");
-  const back=btn("← All tools","sm");back.id="dswBack";back.onclick=()=>onBack?.();
-  top.append(av,ttl,el("span","dsx-gap"),manual,back);
-  const strip=el("div","dsw-strip");strip.setAttribute("aria-label","Where you are");
+  const strip=el("div","dsw-strip");strip.setAttribute("aria-label","Where you are");strip.hidden=true;
   const pills={};
-  for(const [id,label] of [["file","Your files"],["test","Last test"],["share","On the website"]]){
-    const b=el("button","dsw-pill");b.type="button";b.id="dswPill-"+id;b.dataset.mode=id;b.title=label;
-    const mk=el("span","dsw-mk");mk.setAttribute("aria-hidden","true");const t=el("span","dsw-pill-t");
-    b.append(mk,t);strip.append(b);pills[id]={b,mk,t};
+  for(const id of ["file","test","share"]){
+    const b=el("button","dsw-pill");b.type="button";b.id="dswPill-"+id;b.dataset.mode=id;
+    const mk=el("span","dsw-dot");mk.setAttribute("aria-hidden","true");const t=el("span","dsw-pill-t");
+    b.append(mk,t);strip.append(b);pills[id]={b,t};
   }
   const chatSlot=el("div","dsw-chatslot");
-  col.append(top,strip,chatSlot);
-  // Live panel: the file being edited, the test result, sharing or the project map.
+  col.append(strip,chatSlot);
+  // Live panel: the file being edited, the test result, sharing or the project map. Beside the chat
+  // when there's room; a slide-in panel (tablets) or slide-up sheet (phones) otherwise.
   const live=el("aside","dsw-live");live.id="dswLive";live.setAttribute("aria-label","Live view");
   const handle=el("div","dsx-sheet-handle");handle.setAttribute("aria-hidden","true");
   const lhead=el("div","dsw-live-head");const ltitle=el("h3","dsw-live-title","Your files");
-  const lclose=btn("Done","sm dsw-live-close",()=>openLive(false));
+  const lclose=btn("Close","sm dsw-live-close",()=>{openLive(false);chat.focus?.();});
   lhead.append(ltitle,el("span","dsx-gap"),lclose);
   const MODES=[["file","Files","Your files"],["test","Test","Test results"],["share","Share","Share to GitHub or GitLab"],["map","Map","Project map"]];
   const seg=el("div","dsw-seg");seg.setAttribute("role","group");seg.setAttribute("aria-label","Manual controls");seg.hidden=true;
@@ -154,7 +151,8 @@ export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFil
   const shareParts={git:el("div"),share:el("div"),review:el("div")};
   slots.share.append(shareParts.git,shareParts.share,shareParts.review,acct);
   live.append(handle,lhead,seg,...Object.values(slots));
-  box.append(col,live);
+  const scrim=el("div","dsw-scrim");scrim.setAttribute("aria-hidden","true");scrim.onclick=()=>openLive(false);
+  box.append(col,scrim,live);
   // Friendly empty state and quick chips, put into the chat only while the workspace is open.
   const hello=el("div","dsw-hello");
   const hav=el("span","dsw-hello-av",BRAND.charAt(0));hav.setAttribute("aria-hidden","true");
@@ -163,9 +161,10 @@ export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFil
   const chips=el("div","dsw-chips");chips.setAttribute("role","group");chips.setAttribute("aria-label","Quick actions");
   for(const [id,label] of CHIPS){const b=el("button","dsw-chip",label);b.type="button";b.dataset.chip=id;chips.append(b);}
 
-  let open=false,mode="file",move=null,sync=null,syncFor=null,syncSeq=0,timer=null,watch=null,os=null;
+  let open=false,mode="file",move=null,sync=null,syncFor=null,syncSeq=0,timer=null,watch=null,os=null,active=false,activeFor=null;
   const project=()=>getProject()?.project||null;
   const unsaved=()=>{try{return !!editor?.hasUnsaved?.();}catch{return false;}};
+  const overlay=()=>getComputedStyle(live).position==="absolute";
   function setMode(id){
     mode=id;
     for(const [m,,title] of MODES){slots[m].hidden=m!==id;segBtns[m].setAttribute("aria-pressed",String(m===id));if(m===id)ltitle.textContent=title;}
@@ -174,36 +173,54 @@ export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFil
   }
   function openLive(on,id){
     if(id)setMode(id);
-    box.classList.toggle("live-open",!!on);manual.setAttribute("aria-expanded",String(!!on||!seg.hidden));
-    if(on)queueMicrotask(()=>lclose.offsetParent&&lclose.focus());
+    box.classList.toggle("live-open",!!on);
+    if(on)queueMicrotask(()=>overlay()&&lclose.focus());
   }
-  manual.onclick=()=>{
-    const sheet=getComputedStyle(live).position==="absolute";
-    if(sheet){seg.hidden=false;openLive(!box.classList.contains("live-open"));}
-    else{seg.hidden=!seg.hidden;manual.setAttribute("aria-expanded",String(!seg.hidden));}
-  };
+  /** Manual controls: the full Run my app, Checkpoints, Share and Project map panels. */
+  function manualControls(){
+    seg.hidden=false;
+    if(overlay())openLive(true);
+    queueMicrotask(()=>(segBtns[mode]||seg.firstChild)?.focus?.());
+  }
+  // The page's ••• menu gets two extra items while the workspace is open. The shell rebuilds the menu
+  // on every click, so they are added right after it (text only, no HTML).
+  const more=document.querySelector("#convMore"),menu=document.querySelector("#convMenu");
+  more?.addEventListener("click",()=>{
+    if(!open||!menu||menu.hidden)return;
+    const close=()=>menu.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));
+    const item=(label,id,ic,fn)=>{const b=el("button","dsw-menu-item",label);b.type="button";b.dataset.icon=ic;b.setAttribute("role","menuitem");b.dataset.ws=id;b.onclick=()=>{close();fn();};return b;};
+    const sep=el("div");sep.setAttribute("role","separator");
+    menu.prepend(item("Manual controls","manual","wrench",manualControls),item("All tools","tools","grid",()=>onBack?.()),sep);
+    hydrateIcons(menu);
+    menu.querySelector("[role=menuitem]")?.focus();
+  });
   seg.addEventListener("click",e=>{const b=e.target.closest("[data-mode]");if(b)setMode(b.dataset.mode);});
   strip.addEventListener("click",e=>{const b=e.target.closest("[data-mode]");if(b)openLive(true,b.dataset.mode);});
   chips.addEventListener("click",e=>{const b=e.target.closest("[data-chip]");if(b)quick(b.dataset.chip,b.textContent);});
-  box.addEventListener("keydown",e=>{if(e.key==="Escape"&&box.classList.contains("live-open")){openLive(false);manual.focus();}});
+  box.addEventListener("keydown",e=>{if(e.key==="Escape"&&box.classList.contains("live-open")&&overlay()){openLive(false);chat.focus?.();}});
 
   // ------------------------------------------------------------ strip
+  // Hidden until something has happened here (an edit, a test or a checkpoint), in plain words.
+  // Numbers only go in the tooltip.
   function draw(){
-    const dirty=unsaved(),f=pills.file;
-    f.b.className="dsw-pill t-"+(dirty?"warn":"ok");f.mk.replaceChildren(el("span","dsw-dot"));f.t.textContent=dirty?"Unsaved":"Saved";
-    const t=runner?.getState?.().test,p=pills.test;let tone="idle",label="Not tested";
+    const p=project();if(activeFor!==p){active=false;activeFor=p;}
+    const dirty=unsaved(),t=runner?.getState?.().test,gs=git?.getState?.().state||{};
+    const changed=(gs.files||[]).filter(f=>f.unstaged||f.staged).length;
+    if(dirty||t||changed)active=true;
+    strip.hidden=!active;
+    const set=(id,tone,label,tip)=>{const x=pills[id];x.b.className="dsw-pill t-"+tone;x.t.textContent=label;x.b.title=tip;x.b.setAttribute("aria-label",label+". "+tip);};
+    set("file",dirty?"warn":"ok",dirty?"Changes not saved":"All saved",
+      dirty?"Press Save in the editor.":changed?plural(changed,"file")+" changed since your last checkpoint.":"Everything is saved.");
     const s=t?.summary||{},passed=s.passed||0,total=passed+(s.failed||0);
-    if(t?.live){tone="busy";label="Testing…";}
-    else if(t?.status==="passed"){tone="ok";label=total?passed+"/"+total+" passed":"Passed";}
-    else if(t&&t.status!=="stopped"){tone="bad";label=s.failed?plural(s.failed,"test")+" failing":"Failing";}
-    p.b.className="dsw-pill t-"+tone;p.mk.replaceChildren(ring(total&&!t?.live?passed:null,t?.live?0:total,tone,tone==="ok"?"✓":tone==="bad"?"!":tone==="busy"?"…":"–"));p.t.textContent=label;
-    const h=pills.share;const st=sync?.sync||{},n=st.unshared||0;let stone="idle",slabel="Not set up";
-    if(!project())slabel="No project";
-    else if(sync&&!sync.error&&st.state==="shared"){stone="ok";slabel="All shared";}
-    else if(sync&&!sync.error&&n){stone="warn";slabel=n+" not shared";}
-    h.b.className="dsw-pill t-"+stone;h.mk.replaceChildren(el("span","dsw-up",stone==="ok"?"✓":"⇧"));h.t.textContent=slabel;
-    h.b.title=sync?.target?"On "+(NAMES[sync.target.provider]||"the website"):"On the website";
+    if(t?.live)set("test","busy","Testing…","Your tests are running.");
+    else if(t?.status==="passed")set("test","ok","Tests passed",total?passed+" of "+total+" checks passed.":"Your tests passed.");
+    else if(t&&t.status!=="stopped")set("test","bad","Tests failing",s.failed?s.failed+" of "+total+" checks failed.":"Your tests didn't pass.");
+    else set("test","idle","Not tested yet","Tap to test your app.");
+    const st=sync?.sync||{},n=st.unshared||0,site=NAMES[sync?.target?.provider]||"GitHub or GitLab";
+    if(sync&&!sync.error&&st.state==="shared")set("share","ok","Everything shared","Everything is on "+site+".");
+    else set("share",n?"warn":"idle","Not shared yet",n?plural(n,"checkpoint")+" not on "+site+" yet.":"Nothing is on "+site+" yet.");
   }
+  function noteActivity(){active=true;draw();}
   async function loadSync(){
     const p=project();if(!p){sync=null;syncFor=null;draw();return null;}
     const seq=++syncSeq;
@@ -265,7 +282,7 @@ export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFil
       const before=runner.getState()[kind]?.run_id;
       const ok=await runner.start(r,{confirmed:true});
       if(!ok){done(b,"It didn't start. See Manual controls → Test.");return;}
-      done(b,kind==="test"?"Running your tests…":"Starting your app…");
+      done(b,kind==="test"?"Running your tests…":"Starting your app…");noteActivity();
       if(!isSheet())setMode("test");
       const res=await waitRun(kind,before);
       if(kind==="test")testCard(body,res);
@@ -316,7 +333,7 @@ export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFil
         go.disabled=no.disabled=true;
         const r=await git.saveCheckpoint(m,name?{name:name.value.trim(),email:email.value.trim()}:null);
         if(!r){done(b,"It didn't save. "+(git.getState().lastError||"See Manual controls → Share."));res(false);return;}
-        done(b,"✓ Saved “"+m+"”.",true);await loadSync();
+        done(b,"✓ Saved “"+m+"”.",true);noteActivity();await loadSync();
         res(then?await then():true);
       };
     });
@@ -408,7 +425,7 @@ export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFil
 
   // ------------------------------------------------------------ open / close
   let lastAsk="";
-  const isSheet=()=>getComputedStyle(live).position==="absolute";
+  const isSheet=overlay;
   function find(sel){return sel.startsWith(".")?q(sel):q("#"+sel);}
   function show(m="file",{section,place,openPanel=false}={}){
     move=place;open=true;
@@ -434,8 +451,9 @@ export function mountWorkspace({api,q,getProject,runner,git,editor,share,openFil
     hello.remove();chips.remove();box.classList.remove("live-open");
   }
   /** Show a file in the live panel (on phones only when asked, so the chat stays in view). */
-  function showFile(path,{open:want=false}={}){
+  function showFile(path,{open:want=false,changed=false}={}){
     if(!open)return false;
+    if(changed){void git?.load?.();noteActivity();}
     setMode("file");if(path)void openFile?.(path);
     if(want)openLive(true);
     return true;

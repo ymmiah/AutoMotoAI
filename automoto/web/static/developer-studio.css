@@ -798,13 +798,8 @@
 }
 .dsg-viewer>.btn{align-self:flex-start}
 
-/* Edit, test & share status pills and chat result cards (styles further down): the same ring as every
-   card, drawn smaller in the pills. Kept here so no later media query touches the ring. */
-.dsw-pill .dsb-gauge{width:24px;gap:0}
-.dsw-pill .dsb-ring{width:24px;height:24px}
-.dsw-pill .dsb-ring b{width:19px;height:19px;font-size:9.5px}
-.dsw-pill .dsb-ring b.mid,.dsw-pill .dsb-ring b.long{font-size:8px}
-.dsw-pill .dsb-ring-of{display:none}
+/* Edit, test & share result cards in the chat (styles further down). Kept here so no later media
+   query touches the ring. */
 .dsw-result.dsb-check{margin:0;max-width:560px}
 /* Beginner faces for Run my app and Checkpoints (Git): guided steps plus a small health ring. */
 .dsb{display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:18px;margin:0 0 12px}
@@ -1064,23 +1059,21 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .dsx[data-ws] #dsxToolDetail{flex:1;min-height:0;gap:0}
 .dsx[data-ws] #dsxDetailBody{flex:1;min-height:0;display:flex;flex-direction:column}
 .dsx[data-ws] #dsxHero,.dsx[data-ws] #dsxStarters{display:none}
-.dsw{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);overflow:hidden}
+.dsw{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);overflow:hidden;overflow:clip}
 .dsw-chatcol{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line)}
-.dsw-top{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
-.dsw-title{display:flex;flex-direction:column;line-height:1.2;min-width:0}
-.dsw-title b{font-size:15px}
-.dsw-title small{font-size:12px;color:var(--dim)}
-.dsw-manual[aria-expanded="true"]{border-color:var(--accent)}
-.dsw-strip{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px}
-.dsw-pill{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:3px 12px 3px 4px;border:1px solid var(--line);border-radius:99px;background:var(--panel);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
+.dsw-strip{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px 0}
+.dsw-strip[hidden]{display:none}
+.dsw-pill{display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:3px 11px 3px 10px;border:1px solid var(--line);border-radius:99px;background:var(--panel);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
 .dsw-pill:hover{border-color:var(--line2)}
 .dsw-pill:focus-visible,.dsw-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.dsw-mk{flex:none;display:grid;place-items:center;width:24px;height:24px}
-.dsw-dot{width:10px;height:10px;border-radius:50%;background:var(--ok)}
+.dsw-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--faint,var(--dim))}
+.dsw-pill.t-ok .dsw-dot{background:var(--ok)}
 .dsw-pill.t-warn .dsw-dot{background:var(--warn,#e0a526)}
-.dsw-up{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--panel2);font-size:12px;font-weight:700;color:var(--dim)}
-.dsw-pill.t-ok .dsw-up{color:var(--ok)}
-.dsw-pill.t-warn .dsw-up{color:var(--warn,#e0a526)}
+.dsw-pill.t-bad .dsw-dot{background:var(--bad)}
+.dsw-pill.t-busy .dsw-dot{background:var(--accent)}
+.dsw-scrim{display:none}
+.am-dd .dsw-menu-item{justify-content:flex-start;text-align:left}
+.dsx[data-ws] #dsxCompProject{display:none}
 .dsw-chatslot{flex:1;min-height:0;display:flex;flex-direction:column}
 .dsw .dsx-chat{flex:1;min-height:0;justify-content:flex-start!important;overflow:hidden!important;background:transparent}
 .dsw .dsx-scroll{flex:1 1 auto!important;overflow:auto!important;padding:16px 16px 8px}
@@ -1129,20 +1122,25 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .dsw-fallback{max-width:620px}
 .dsw-fallback .dss-fallback{margin:0;border:0;padding:0;background:transparent}
 .dsw .dsx-msg.bot .dsx-turn{min-width:0}
-/* Narrow tablets (portrait, next to the app menu): the chat on top, the live panel below it. */
+/* Narrow tablets (portrait, next to the app menu): the chat gets the width and the live panel slides in
+   from the right over it, with Close. */
 @container dsx (min-width:500px) and (max-width:700px){
-  .dsw{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.5fr) minmax(0,1fr)}
-  .dsw-chatcol{border-right:0;border-bottom:1px solid var(--line)}
-  .dsw-edit .ds-columns{grid-template-columns:minmax(150px,36%) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .dsw{grid-template-columns:minmax(0,1fr)}
+  .dsw-chatcol{border-right:0}
+  .dsw-live{position:absolute;top:0;right:0;bottom:0;width:min(420px,86%);z-index:5;border-left:1px solid var(--line2);box-shadow:var(--shadow);transform:translateX(105%);visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
+  .dsw.live-open .dsw-live{transform:none;visibility:visible;transition:transform .2s ease}
+  .dsw-live-close{display:inline-flex;min-height:40px}
+  .dsw-edit .ds-columns{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+}
+@container dsx (max-width:700px){
+  .dsw.live-open .dsw-scrim{display:block;position:absolute;inset:0;z-index:4;background:rgba(0,0,0,.4)}
 }
 /* Phones: the chat fills the screen and the live panel slides up as a sheet. */
 @container dsx (max-width:499px){
   .dsw{grid-template-columns:minmax(0,1fr)}
   .dsw-chatcol{border-right:0}
-  .dsw-top{padding:8px 12px}
-  .dsw-top .dsx-av{display:none}
-  .dsw-strip{padding:6px 12px;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-  .dsw-pill{flex:none;min-height:36px}
+  .dsw-strip{padding:8px 12px 0;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .dsw-pill{flex:none;min-height:34px}
   .dsw .dsx-scroll{padding:12px 12px 6px}
   .dsw .dsx-dock{padding:6px 12px 10px}
   .dsw-chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -12px;padding:2px 12px;scrollbar-width:none}

@@ -73,3 +73,14 @@ def test_beginner_copy_and_chips():
     for chip in ("Explain my project", "Fix the error", "Test my app", "Share to GitHub", "Ask for a review", "Map my project"):
         assert f'"{chip}"' in js
     assert "ChatGPT" not in js
+
+
+def test_header_buttons_live_in_the_page_menu_and_the_strip_waits_for_activity():
+    js = _read("developer-workspace.js")
+    assert '"#convMore"' in js and '"Manual controls"' in js and '"All tools"' in js
+    assert "dswManual" not in js and "dswBack" not in js
+    assert 'strip.hidden=true' in js and "strip.hidden=!active" in js
+    for words in ("All saved", "Changes not saved", "Tests passed", "Not tested yet", "Not shared yet", "Everything shared"):
+        assert f'"{words}"' in js
+    css = _read("developer-studio.css")
+    assert ".dsx[data-ws] #dsxCompProject{display:none}" in css

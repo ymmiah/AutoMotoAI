@@ -168,7 +168,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   // Edit, test & share: the same chat, moved beside a live panel. Quick actions it handles itself
   // add their cards to this thread; everything else goes to the assistant through submit().
   const workspace=mountWorkspace({api,q:sel=>root.querySelector(sel)||q(sel),getProject,runner,git,editor,share,openFile,status,
-    chat:{exchange:t=>exchange(t),submit:(t,o)=>submit(t,o),scroll:()=>scrollDown(),busy:()=>workbench.isBusy()},
+    chat:{exchange:t=>exchange(t),submit:(t,o)=>submit(t,o),scroll:()=>scrollDown(),busy:()=>workbench.isBusy(),focus:()=>prompt.focus({preventScroll:true})},
     onBack:()=>{closeDetail();if(!isCompact())$("dsxToolSearch")?.focus({preventScroll:true});}});
   function togglePop(force){
     const pop=$("dsxProjectPop"),open=typeof force==="boolean"?force:pop.hidden;
@@ -466,7 +466,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   function onApproval({callId,entry}){
     if(!turn)return;
     const row=approvalCard(entry,{api,getProject,decide:allow=>workbench.approve(callId,allow),
-      showFile:(path,{open:want,after,peek}={})=>{if(workspace.showFile(path,{open:want&&!after}))return;if(after||peek)return;if(view!=="editor")setView("editor");void openFile(path);}});
+      showFile:(path,{open:want,after,peek}={})=>{if(workspace.showFile(path,{open:want&&!after,changed:!!after}))return;if(after||peek)return;if(view!=="editor")setView("editor");void openFile(path);}});
     turn.body.insertBefore(row,turn.card.nextSibling);scrollDown();
   }
   async function finishTurn({message,kind}){
@@ -512,7 +512,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     t.body.insertBefore(actions,t.card);
     t.card.remove();
     afterFilesChanged?.();
-    if(n){if(workspace.open)workspace.showFile(t.changes.changes.find(c=>c.change!=="deleted")?.path);else openReview("changes");}
+    if(n){if(workspace.open)workspace.showFile(t.changes.changes.find(c=>c.change!=="deleted")?.path,{changed:true});else openReview("changes");}
     recordAssistant(t);saveChat();
     refresh();scrollDown();
     if(isCompact()&&n)$("dsxRKeep")?.focus();else prompt.focus();

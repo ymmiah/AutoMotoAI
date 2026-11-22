@@ -47,6 +47,13 @@ async function stable(page) { await page.evaluate(() => new Promise(r => request
 async function shot(page, name) { if (!SHOTS) return; await stable(page); await page.screenshot({ path: path.join(SHOTS, name) }); }
 const lastBot = page => page.locator('#dsxThread .dsx-msg.bot').last();
 async function bottom(page) { await page.evaluate(() => { const s = document.querySelector('#dswRoot .dsx-scroll'); if (s) s.scrollTop = s.scrollHeight; }); }
+// "Manual controls" and "All tools" are in the page's ••• menu while the workspace is open.
+async function menu(page, id) {
+  await page.locator('#convMore').click();
+  await page.locator(`#convMenu [data-ws="${id}"]`).click();
+}
+const pill = (page, id) => page.locator(`#dswPill-${id} .dsw-pill-t`).innerText();
+const tip = (page, id) => page.locator(`#dswPill-${id}`).getAttribute('title');
 async function openWorkspace(page, compact) {
   await page.evaluate(() => document.querySelector('.nav [data-page="developer"]').click());
   await page.locator('#dsxRoot').waitFor();
@@ -76,18 +83,23 @@ async function stubAssistant(page, seen) {
   });
 }
 // Share is stubbed at the website step only (no network): status gets a signed-in account, plan and
-// share answer like the engine. The .patch fallback is the real engine call.
-async function stubShare(page, mode) {
+// share answer like the engine, with the engine's own count of checkpoints not shared yet, so every
+// card and tooltip shows the same number. The .patch fallback is the real engine call.
+async function stubShare(page, mode, H) {
+  const unsharedNow = async () => (await (await fetch(`${base}/api/developer/studio/remote/status?project=${encodeURIComponent(proj)}`, { headers: H })).json()).sync.unshared;
   await page.route('**/remote/status?**', async r => {
     const res = await r.fetch(); const j = await res.json();
     j.accounts = [{ status: 'ok', login: 'demo-user', provider: 'github', host: 'github.com' }];
+    if (mode.sharedHead && mode.sharedHead === git('rev-parse', 'HEAD')) j.sync = { ...j.sync, state: 'shared', unshared: 0 };
     r.fulfill({ response: res, json: j });
   });
-  await page.route('**/remote/plan', r => {
+  await page.route('**/remote/plan', async r => {
     if (mode.refuse) return r.fulfill({ json: { ok: false, summary: 'GitHub turned this share down.', commits: [], commit_count: 0, files: [], file_count: 0, blocks: [{ rule: 'non_ff', message: 'GitHub has newer work on main. Get the latest first, or share it yourself.' }], warnings: [], remote_branch: 'main' } });
-    r.fulfill({ json: { ok: true, summary: 'This sends your checkpoints to main on example/demo.', commits: [{ short: 'abc1234', subject: 'Fix add', author: 'T' }, { short: 'def5678', subject: 'Add more', author: 'T' }], commit_count: 3, files: ['src/app.js'], file_count: 1, blocks: [], warnings: [], remote_branch: 'main', action_sha256: 'a'.repeat(64) } });
+    const n = await unsharedNow(); mode.count = n;
+    const commits = git('log', '-n', String(n), '--format=%h%x09%s').split('\n').map(l => { const [short, subject] = l.split('\t'); return { short, subject, author: 'T' }; });
+    r.fulfill({ json: { ok: true, summary: 'This sends your checkpoints to main on example/demo.', commits, commit_count: n, files: ['src/app.js'], file_count: 1, blocks: [], warnings: [], remote_branch: 'main', action_sha256: 'a'.repeat(64) } });
   });
-  await page.route('**/remote/share', r => { mode.shares.push(r.request().postDataJSON()); r.fulfill({ json: { ok: true, message: 'Sent 3 checkpoints to main on example/demo.', links: { branch: 'https://github.com/example/demo/tree/main' } } }); });
+  await page.route('**/remote/share', r => { mode.shares.push(r.request().postDataJSON()); mode.sharedHead = git('rev-parse', 'HEAD'); r.fulfill({ json: { ok: true, message: `Sent ${mode.count} checkpoints to main on example/demo.`, links: { branch: 'https://github.com/example/demo/tree/main' } } }); });
 }
 let browser; const errors = [];
 (async () => {
@@ -104,12 +116,12 @@ let browser; const errors = [];
   assert.deepEqual({ state: st.sync.state, unshared: st.sync.unshared }, { state: 'ahead', unshared: 2 });
   browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), args: ['--no-sandbox'] });
   for (const [name, vp, compact] of [['desktop', { width: 1280, height: 800 }, false], ['tablet', { width: 820, height: 1180 }, true], ['phone', { width: 390, height: 844 }, true]]) {
-    git('reset', '-q', '--hard', startHead); writeFileSync(path.join(proj, 'src', 'app.js'), BUG); git('commit', '-q', '-am', 'Start again', '--allow-empty');
+    git('reset', '-q', '--hard', startHead);
     const ctx = await browser.newContext({ viewport: vp, colorScheme: 'dark', reducedMotion: 'reduce', ...(name === 'phone' ? { hasTouch: true, isMobile: true } : {}) });
     const page = await ctx.newPage(); page.on('pageerror', e => errors.push(name + ': ' + e.message));
     const dialogs = []; page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
     const seen = { agent: [], approve: [] }, mode = { refuse: false, shares: [] };
-    await stubAssistant(page, seen); await stubShare(page, mode);
+    await stubAssistant(page, seen); await stubShare(page, mode, H);
     const launch = await (await fetch(`${base}/api/session/launch`, { method: 'POST', headers: H, body: '{}' })).json().catch(() => null);
     await page.goto(launch?.url || `${base}/?launch=${token}`);
     await page.locator('.nav [data-page="developer"]').waitFor({ state: 'attached' });
@@ -121,17 +133,22 @@ let browser; const errors = [];
     assert.equal(await page.locator('#dsxPrompt').isVisible(), true);
     assert.equal(await page.locator('#dsxHero').isVisible(), false);
     assert.equal(await page.locator('.dsw-tab, .dsw-chatcol [role="tablist"]').count(), 0, 'no heavy tabs');
-    await page.waitForFunction(() => /not shared/.test(document.querySelector('#dswPill-share')?.textContent || ''));
-    assert.equal(await page.locator('#dswPill-file .dsw-pill-t').innerText(), 'Saved');
-    assert.equal(await page.locator('#dswPill-test .dsw-pill-t').innerText(), 'Not tested');
-    const liveShown = await page.locator('#dswLive').isVisible();
-    assert.equal(liveShown, name !== 'phone', 'live panel beside the chat on desktop/tablet, a sheet on phones');
-    if (name !== 'phone') assert.equal(await page.locator('#dswLive .dsw-edit .ds-columns').isVisible(), true, 'your files beside the chat');
+    assert.equal(await page.locator('.dsw-strip').isVisible(), false, 'no status strip before anything has happened');
+    assert.equal(await page.locator('.dsw-top, #dswManual, #dswBack').count(), 0, 'no header buttons taking space from the chat');
+    assert.equal(await page.locator('#dsxCompProject').isVisible(), false, 'no project chip in the composer');
+    assert.equal(await page.locator('#dswLive').isVisible(), name === 'desktop', 'live panel beside the chat on desktop, slide-in on tablet, sheet on phone');
+    if (name === 'desktop') assert.equal(await page.locator('#dswLive .dsw-edit .ds-columns').isVisible(), true, 'your files beside the chat');
     const chatW = await page.locator('.dsw-chatcol').evaluate(e => e.getBoundingClientRect().width), boxW = await page.locator('#dswRoot').evaluate(e => e.getBoundingClientRect().width);
     const chatH = await page.locator('.dsw-chatcol').evaluate(e => e.getBoundingClientRect().height), boxH = await page.locator('#dswRoot').evaluate(e => e.getBoundingClientRect().height);
     assert.ok(chatW / boxW > 0.5 && chatH / boxH > 0.5, `chat is the biggest part (${chatW}x${chatH} of ${boxW}x${boxH})`);
     await shot(page, `empty-${name}.png`);
     if (name === 'phone' && SHOTS) { await stable(page); const b = await page.locator('.dsx-dock').boundingBox(); await page.screenshot({ path: path.join(SHOTS, 'phone-chips.png'), clip: { x: 0, y: Math.max(0, b.y - 8), width: vp.width, height: b.height + 16 } }); }
+    // The ••• menu holds Manual controls and All tools.
+    await page.locator('#convMore').click();
+    assert.deepEqual(await page.locator('#convMenu [data-ws]').allTextContents(), ['Manual controls', 'All tools']);
+    if (name === 'phone') await shot(page, 'phone-menu.png');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#convMenu').isVisible(), false);
     // 1. Fix the error: the assistant's change shows as a diff, nothing is written until Apply.
     await page.locator('.dsw-chip', { hasText: 'Fix the error' }).click();
     await page.locator('#dsxThread .dsw-ask').waitFor({ timeout: 15000 });
@@ -149,6 +166,9 @@ let browser; const errors = [];
     await page.waitForFunction(() => /Now it adds/.test(document.querySelector('#dsxThread')?.textContent || ''), null, { timeout: 15000 });
     assert.equal(readFileSync(path.join(proj, 'src', 'app.js'), 'utf8'), FIXED);
     await page.locator('.dsx-actions [data-act="undo"]').waitFor({ timeout: 15000 });
+    await page.locator('.dsw-strip').waitFor();
+    assert.deepEqual([await pill(page, 'file'), await pill(page, 'test'), await pill(page, 'share')], ['All saved', 'Not tested yet', 'Not shared yet']);
+    assert.match(await tip(page, 'file'), /1 file changed since your last checkpoint/);
     await bottom(page); await shot(page, `${name}-2-applied.png`);
     // 2. Test my app: an inline card with the exact command, then the real approval-gated runner.
     const before = dialogs.length;
@@ -163,7 +183,8 @@ let browser; const errors = [];
     assert.equal(dialogs.length, before, 'the inline card is the confirm, no extra dialog');
     assert.equal(await lastBot(page).locator('.dsw-result .dsb-ring b').innerText(), '3');
     assert.match(await lastBot(page).locator('.dsw-result .dsb-check-text > b').innerText(), /All 3 checks passed/);
-    await page.waitForFunction(() => /3\/3 passed/.test(document.querySelector('#dswPill-test')?.textContent || ''));
+    await page.waitForFunction(() => /Tests passed/.test(document.querySelector('#dswPill-test')?.textContent || ''));
+    assert.equal(await tip(page, 'test'), '3 of 3 checks passed.');
     await bottom(page); await shot(page, `${name}-3-test-pass.png`);
     // 3. Share to GitHub: save a checkpoint, see what goes, then Share.
     await lastBot(page).locator('.btn', { hasText: 'Share to GitHub' }).click();
@@ -173,8 +194,13 @@ let browser; const errors = [];
     if (await save.locator('input[aria-label="Your name"]').count()) { await save.locator('input[aria-label="Your name"]').fill('Demo'); await save.locator('input[aria-label="Your email"]').fill('demo@example.com'); }
     await save.locator('input[aria-label="Describe your change"]').fill('Fix add');
     await save.locator('.btn', { hasText: 'Save checkpoint' }).click();
-    const confirm = lastBot(page).locator('.dsw-card', { hasText: 'Share 3 checkpoints to example/demo?' });
+    const confirm = lastBot(page).locator('.dsw-card', { hasText: /^Share \d+ checkpoints? to example\/demo\?/ });
     await confirm.waitFor({ timeout: 10000 });
+    const n = mode.count;
+    assert.equal(n, 3, 'two earlier checkpoints plus the one just saved');
+    assert.equal(await confirm.locator('b').first().innerText(), `Share ${n} checkpoints to example/demo?`);
+    assert.equal(await confirm.locator('.dsw-files li').count(), n, 'one line per checkpoint');
+    await page.waitForFunction(k => (document.querySelector('#dswPill-share')?.title || '').startsWith(k + ' checkpoints not on GitHub'), n);
     assert.equal(git('log', '-1', '--format=%s'), 'Fix add');
     assert.equal(mode.shares.length, 0, 'nothing is sent before Share');
     assert.match(await confirm.innerText(), /No passwords, keys/);
@@ -185,6 +211,8 @@ let browser; const errors = [];
     assert.deepEqual({ ...mode.shares[0], project: undefined }, { project: undefined, remote_branch: 'main', action_sha256: 'a'.repeat(64), confirmed: true });
     assert.equal(await done.locator('a').getAttribute('href'), 'https://github.com/example/demo/tree/main');
     assert.equal(await done.locator('a').getAttribute('rel'), 'noopener noreferrer');
+    assert.match(await done.innerText(), new RegExp(`Sent ${n} checkpoints`));
+    await page.waitForFunction(() => /Everything shared/.test(document.querySelector('#dswPill-share')?.textContent || ''));
     await bottom(page); await shot(page, `${name}-5-shared.png`);
     // A refused share: the .patch fallback with a copy button on every command (real engine call).
     if (name !== 'tablet') {
@@ -200,25 +228,32 @@ let browser; const errors = [];
       mode.refuse = false;
     }
     assert.equal(await page.locator('#dsxThread img').count(), 0, 'project and website text never becomes HTML');
-    const wide = await page.evaluate(() => { const d = document.querySelector('#dswRoot'); const s = d.querySelector('.dsx-scroll'); return Math.max(d.scrollWidth - d.clientWidth, s.scrollWidth - s.clientWidth, document.documentElement.scrollWidth - document.documentElement.clientWidth); });
+    const wide = await page.evaluate(() => { const d = document.querySelector('#dswRoot'); const s = d.querySelector('.dsx-scroll'); return Math.max(getComputedStyle(d).overflowX === 'clip' ? 0 : d.scrollWidth - d.clientWidth, s.scrollWidth - s.clientWidth, document.documentElement.scrollWidth - document.documentElement.clientWidth); });
     assert.ok(wide <= 1, `no sideways scroll on ${name} (${wide}px)`);
-    // Status pills open the live panel; on phones it slides up and Done closes it.
+    // Status pills open the live panel; on tablets it slides in from the right, on phones it slides up,
+    // and Close puts it away.
     await page.locator('#dswPill-test').click();
     assert.equal(await page.locator('#dswLive #dsRunRoot').isVisible(), true);
-    if (name === 'phone') {
-      await shot(page, 'phone-sheet-test.png');
+    if (name !== 'desktop') {
+      if (name === 'tablet') {
+        const b = await page.locator('#dswLive').boundingBox(), c = await page.locator('#dswRoot').boundingBox();
+        assert.ok(Math.abs(b.x + b.width - (c.x + c.width)) <= 1 && b.width < c.width * 0.9 && b.height >= c.height - 1, 'a panel from the right edge, full height');
+        assert.equal(await page.locator('.dsw-scrim').isVisible(), true, 'the chat dims behind the panel');
+        await shot(page, 'tablet-slide-in.png');
+      } else await shot(page, 'phone-sheet-test.png');
+      assert.equal(await page.locator('.dsw-live-close').innerText(), 'Close');
       await page.locator('.dsw-live-close').click(); await delay(300);
       assert.equal(await page.locator('#dswLive').isVisible(), false);
     }
-    // Manual controls: the old panels are a small toggle away.
-    await page.locator('#dswManual').click();
+    // Manual controls (••• menu): the old panels are a small step away.
+    await menu(page, 'manual');
     assert.equal(await page.locator('.dsw-seg').isVisible(), true);
     await page.locator('.dsw-seg .btn', { hasText: 'Share' }).click();
     for (const id of ['dsGitRoot', 'dsShareRoot', 'dsReviewRoot']) assert.equal(await page.locator(`#dswLive #${id}`).isVisible(), true, id);
-    if (name === 'phone') await page.locator('.dsw-live-close').click();
+    if (name !== 'desktop') await page.locator('.dsw-live-close').click();
     // The old cards are shortcuts: they open the workspace with the right live panel showing.
     for (const [card, m] of [['run', 'test'], ['git', 'share'], ['share', 'share'], ['review', 'share'], ['account', 'share']]) {
-      await page.locator('#dswBack').click();
+      await menu(page, 'tools');
       await page.locator(`.dsx-card[data-tool="${card}"]`).click();
       await page.locator('#dswRoot').waitFor();
       assert.equal(await page.locator(`#dswLive .dsw-${m === 'file' ? 'edit' : m}`).isVisible(), true, card);
@@ -227,7 +262,8 @@ let browser; const errors = [];
       if (card === 'account') { assert.equal(await page.locator('#dswAccount').getAttribute('open'), ''); assert.equal(await page.locator('#dswAccount .dsa').isVisible(), true); }
     }
     // Leaving puts every panel back.
-    await page.locator('#dswBack').click();
+    if (name !== 'desktop') await page.locator('.dsw-live-close').click();
+    await menu(page, 'tools');
     assert.equal(await page.locator('#dsxDetailBody').evaluate(e => e.children.length), 0, 'panels go back where they came from');
     assert.equal(await page.locator('.ds-shell .ds-columns').count(), 1);
     assert.equal(await page.locator('.dsw-hello, .dsw-chips').count(), 0, 'hello and chips leave with the workspace');
@@ -238,7 +274,7 @@ let browser; const errors = [];
       await page.locator('#dsxTools').click();
       await page.locator('.dsx-card[data-tool="workspace"]').click();
       assert.equal(await page.locator('#dswLive .ds-columns').count(), 1);
-      await page.locator('#dswBack').click();
+      await menu(page, 'tools');
       assert.equal(await page.locator('#dsxEditor .ds-columns').count(), 1, 'editor view keeps its files and code');
       await page.locator('#dsxToolsBack').click();
       await page.locator('#dsxView').click();
