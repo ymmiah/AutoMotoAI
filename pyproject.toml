@@ -39,6 +39,8 @@ dependencies = [
   "Pillow>=10",
   # Data files (v5.4)
   "PyYAML>=6,<7",
+  # GitHub/GitLab sign-in: tokens only in the OS keychain (Windows Credential Manager, macOS Keychain, Secret Service)
+  "keyring>=25.6,<26",
   "tomli>=2; python_version < '3.11'",
 ]
 

@@ -530,6 +530,14 @@ top-right corner (or just after a path or command). It's always visible and stay
 scrolls. Press it, or Tab to it and press Enter or Space. It shows **Copied** and screen readers hear
 "Copied". Copy buttons never appear on anything that looks like a password, key or token.
 
+**Connect GitHub or GitLab.** Developer Studio → Tools → **Connect GitHub or GitLab** signs you in with a
+fine-grained token in three guided steps: choose GitHub or GitLab (or your own GitLab server), open the
+pre-filled token page, and paste the token. The token is kept only in your computer's password store
+(Windows Credential Manager, macOS Keychain or your Linux keyring), never in files or the browser. You
+see who you're signed in as, when the token ends and what it can do, with a warning if it's too broad
+or never expires. Tokens found in a `.env` file can be moved into the password store. See
+[GIT-SIGN-IN.md](GIT-SIGN-IN.md).
+
 ---
 
 ## 17. Example prompts to copy

@@ -117,8 +117,8 @@ def test_service_classification(args, level):
 def test_service_call_uses_fixed_host_and_redacts_token(monkeypatch):
     seen = {}
 
-    def fake(url, method="GET", data=None, headers=None, timeout=20):
-        seen.update(url=url, headers=headers)
+    def fake(url, method="GET", data=None, headers=None, timeout=20, **kw):
+        seen.update(url=url, headers=headers, allow=kw.get("allow_hosts"))
         return netguard.Response(url, 200, "application/json", json.dumps({"echo": "tok-123"}).encode())
 
     monkeypatch.setattr(netguard, "request", fake)
@@ -126,6 +126,7 @@ def test_service_call_uses_fixed_host_and_redacts_token(monkeypatch):
     out = services.call("github", "GET", "//evil.example/x", {"per_page": 1})
     assert seen["url"].startswith("https://api.github.com//evil.example/x")
     assert seen["headers"]["Authorization"] == "Bearer tok-123"
+    assert seen["allow"] == {"api.github.com"}  # exact-host egress allowlist
     assert "tok-123" not in out and "[redacted]" in out
 
 

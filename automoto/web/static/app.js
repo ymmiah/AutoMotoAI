@@ -27,7 +27,19 @@ const state = {
   route: "", pageTimer: null, busy: false, me: null, quota: null, drafts: new Map(),
 };
 
-const keys = () => { try { return JSON.parse(sessionStorage.getItem("automoto_keys") || "{}"); } catch { return {}; } };
+// AI provider keys only. GitHub/GitLab tokens never live in browser storage: they are kept in the OS
+// keychain by the engine (Developer Studio > Tools > Connect GitHub or GitLab), so any old entry is dropped.
+const GIT_KEY_IDS = ["github", "gitlab", "gh", "github_token", "gitlab_token"];
+const keys = () => {
+  let k = {};
+  try { k = JSON.parse(sessionStorage.getItem("automoto_keys") || "{}") || {}; } catch { return {}; }
+  if (GIT_KEY_IDS.some((id) => id in k)) {
+    for (const id of GIT_KEY_IDS) delete k[id];
+    try { sessionStorage.setItem("automoto_keys", JSON.stringify(k)); } catch { /* storage unavailable */ }
+  }
+  return k;
+};
+keys();
 async function api(path, body, method) {
   const r = await fetch(path, {
     method: method || (body !== undefined ? "POST" : "GET"),
@@ -1440,7 +1452,7 @@ PAGES.tools = async () => {
     '<div id="svcList"></div><div id="appList"></div>';
   try {
     const sv = (await api("/api/services")).services;
-    $("#svcList").innerHTML = `<div class="toolbar" style="margin-top:16px"><b>Services (service_api)</b><span class="muted">GET is safe, everything else asks first. Tokens come from .env or this tab's keys.</span></div>
+    $("#svcList").innerHTML = `<div class="toolbar" style="margin-top:16px"><b>Services (service_api)</b><span class="muted">GET is safe, everything else asks first. GitHub and GitLab use the account you connect in Developer Studio (kept in your computer's password store); other tokens come from .env or this tab's keys.</span></div>
       <div class="grid">${sv.map((x) => `<div class="card"><h3>${icon("globe")}${esc(x.name)} ${x.configured ? statusPill("on") : x.public_reads ? '<span class="pill">public reads</span>' : '<span class="pill off">no token</span>'} <span class="pill st-${esc(x.status)}">${esc(STATUS_LABEL[x.status] || x.status)}</span></h3><div class="muted" style="font-size:13px">Token: <code>${esc(x.env.join(" or "))}</code> · <a href="${esc(x.docs)}" target="_blank" rel="noopener">API docs</a></div></div>`).join("")}</div>`;
   } catch { /* optional */ }
   try {
@@ -1717,7 +1729,7 @@ PAGES.settings = async () => {
   };
   $("#keyForm").onsubmit = async (e) => {
     e.preventDefault();
-    const obj = {}; for (const [n, v] of new FormData(e.target)) if (String(v).trim()) obj[n] = String(v).trim();
+    const obj = {}; for (const [n, v] of new FormData(e.target)) if (String(v).trim() && !GIT_KEY_IDS.includes(n)) obj[n] = String(v).trim();
     sessionStorage.setItem("automoto_keys", JSON.stringify(obj));
     await refreshStatus(); toast(Object.keys(obj).length ? "Keys set for this tab only" : "No keys entered");
   };

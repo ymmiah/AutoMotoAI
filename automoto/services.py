@@ -3,9 +3,13 @@
 One tool, ``service_api(service, method, path, query?, body?)``, calls the service's official
 REST API with *your* token:
 
-* Tokens come from the per-run BYOK keys (``keys={"github": ...}``) or environment variables
+* Tokens come from the per-run BYOK keys (``keys={"vercel": ...}``) or environment variables
   (``GITHUB_TOKEN``, ``GITLAB_TOKEN``, ``VERCEL_TOKEN``, ``FIGMA_TOKEN``, ``NOTION_TOKEN``, ``ZOTERO_API_KEY``). They are sent only to
-  that service's API host and never appear in tool output, events or logs.
+  that service's API host (an exact-host egress allowlist) and never appear in tool output, events or logs.
+* GitHub and GitLab prefer the account signed in through the Developer Studio (OS keychain, see
+  ``git_auth.py``). BYOK browser keys are **ignored** for them, so their tokens never live in browser
+  storage. A project's .env can't redirect the GitLab host (``GITLAB_URL`` is read with
+  ``config.env_trusted`` and must be gitlab.com or a server you added).
 * The host is fixed per service: ``path`` can't change it (no ``://``, ``..``, ``@``, ``\\``).
   Requests go through the SSRF guard.
 * ``GET`` is read-only (safe). ``POST``/``PUT``/``PATCH``/``DELETE`` are risky (approval).
@@ -24,7 +28,7 @@ import urllib.parse
 from dataclasses import dataclass
 from typing import Any
 
-from automoto import config, netguard
+from automoto import config, netguard, redaction
 
 
 @dataclass
@@ -82,16 +86,55 @@ class ServiceError(Exception):
     pass
 
 
+GIT_SERVICES = ("github", "gitlab")
+
+
+def _gitlab_host_from_env() -> str | None:
+    raw = config.env_trusted("GITLAB_URL")
+    if not raw:
+        return None
+    if not raw.startswith("https://"):
+        raise ServiceError("GITLAB_URL must be https://")
+    host = (urllib.parse.urlsplit(raw).hostname or "").lower()
+    from automoto import git_auth
+
+    if host not in git_auth.allowed_hosts("gitlab"):
+        raise ServiceError(f"GITLAB_URL host {host} isn't on your allowed GitLab servers. Add it in Developer "
+                           "Studio > Tools > Connect GitHub or GitLab first.")
+    return host
+
+
+def _resolve(svc: Service, keys: dict[str, str] | None) -> tuple[str | None, str, str]:
+    """(token, base URL, auth style) for a service."""
+    if svc.id in GIT_SERVICES:
+        from automoto import git_auth
+
+        want = _gitlab_host_from_env() if svc.id == "gitlab" else None
+        found = git_auth.token_for(svc.id, want)
+        if found:
+            tok, host, kind = found
+            base = git_auth.api_base(svc.id, host)
+            return tok, base, ("bearer" if svc.id == "github" or kind == "oauth" else "private-token")
+        host = want or ("gitlab.com" if svc.id == "gitlab" else "")
+        base = f"https://{host}/api/v4" if svc.id == "gitlab" else svc.base
+        for name in svc.env:  # plaintext .env tokens still work (back-compat); the UI offers to move them
+            v = config.env(name)
+            if v:
+                return v, base, svc.auth
+        return None, base, svc.auth
+    return token(svc, keys), svc.base, svc.auth
+
+
 def base_url(svc: Service) -> str:
-    if svc.id == "gitlab":
-        b = (config.env("GITLAB_URL") or svc.base).rstrip("/")
-        if not b.startswith("https://"):
-            raise ServiceError("GITLAB_URL must be https://")
-        return b if b.endswith("/api/v4") else b + "/api/v4"
-    return svc.base
+    return _resolve(svc, None)[1]
 
 
 def token(svc: Service, keys: dict[str, str] | None) -> str | None:
+    if svc.id in GIT_SERVICES:
+        try:
+            return _resolve(svc, None)[0]  # never from browser keys
+        except ServiceError:
+            return None
     t = (keys or {}).get(svc.id)
     if t:
         return t.strip()
@@ -141,15 +184,17 @@ def call(service: str, method: str = "GET", path: str = "/", query: dict[str, An
         raise ServiceError(reason)
     method = (method or "GET").upper()
     path = check_path(path)
-    tok = token(svc, keys)
+    tok, base, auth = _resolve(svc, keys)
     if not tok and not (svc.optional_auth and method == "GET"):
+        if svc.id in GIT_SERVICES:
+            raise ServiceError(f"{svc.name} needs you to sign in: Developer Studio > Tools > Connect GitHub or GitLab")
         raise ServiceError(f"{svc.name} needs a token: set {svc.env[0]} in .env or add a '{svc.id}' key in Settings")
     if svc.id == "zotero" and "{user}" in path:
         uid = config.env("ZOTERO_USER_ID")
         if not uid or not uid.isdigit():
             raise ServiceError("set ZOTERO_USER_ID (your numeric user id from zotero.org/settings/keys)")
         path = path.replace("{user}", uid)
-    url = base_url(svc) + path
+    url = base + path
     if query:
         if not isinstance(query, dict):
             raise ServiceError("query must be an object")
@@ -158,13 +203,14 @@ def call(service: str, method: str = "GET", path: str = "/", query: dict[str, An
     if svc.id == "github":
         headers.update({"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
     if tok:
-        if svc.auth == "bearer":
+        redaction.register(tok)
+        if auth == "bearer":
             headers["Authorization"] = f"Bearer {tok}"
-        elif svc.auth == "private-token":
+        elif auth == "private-token":
             headers["PRIVATE-TOKEN"] = tok
-        elif svc.auth == "zotero":
+        elif auth == "zotero":
             headers["Zotero-API-Key"] = tok
-        elif svc.auth == "figma":
+        elif auth == "figma":
             headers["X-Figma-Token"] = tok
     if svc.id == "notion":
         headers["Notion-Version"] = "2022-06-28"
@@ -173,12 +219,12 @@ def call(service: str, method: str = "GET", path: str = "/", query: dict[str, An
         data = json.dumps(body).encode()
         headers["Content-Type"] = "application/json"
     try:
-        r = netguard.request(url, method=method, data=data, headers=headers, timeout=25)
+        host = urllib.parse.urlsplit(base).hostname or ""
+        r = netguard.request(url, method=method, data=data, headers=headers, timeout=25,
+                             allow_hosts={host} if svc.id in GIT_SERVICES else None)
     except netguard.BlockedURL as exc:
         raise ServiceError(f"blocked: {exc}") from None
-    text = r.text()
-    if tok:
-        text = text.replace(tok, "[redacted]")
+    text = redaction.redact(r.text(), (tok,) if tok else ())
     try:
         text = json.dumps(json.loads(text), indent=1, ensure_ascii=False)
     except ValueError:
