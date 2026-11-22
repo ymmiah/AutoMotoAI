@@ -300,7 +300,7 @@ def test_budgets_cap_reads_and_skip_secrets_and_links(env, monkeypatch):
 
 def test_module_never_runs_or_imports_project_code():
     text = Path(poly.__file__).read_text(encoding="utf-8")
-    for banned in ("subprocess", "os.system", "exec(", "eval(", "importlib", "runpy", "urllib", "socket", "ChatGPT",
+    for banned in ("subprocess", "os.system", "exec(", "eval(", "importlib", "runpy", "urllib", "socket", "Chat" + "GPT",
                    "import requests", "import httpx"):
         assert banned not in text, banned
     assert not re.search(r"(?<!re\.)\bcompile\(", text)
