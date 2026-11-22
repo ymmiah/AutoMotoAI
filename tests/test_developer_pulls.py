@@ -520,7 +520,7 @@ def test_api_needs_session_and_trusted_project(world):
 
 
 def test_no_merge_code_anywhere():
-    src = (Path(__file__).resolve().parents[1] / "automoto" / "developer_pulls.py").read_text()
+    src = (Path(__file__).resolve().parents[1] / "automoto" / "developer_pulls.py").read_text(encoding="utf-8")
     code = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
     assert "/merge\"" not in code and "/merge'" not in code and "PUT" not in code
     assert not any(r.path.endswith("/merge") for r in pulls.router.routes)
@@ -528,10 +528,10 @@ def test_no_merge_code_anywhere():
 
 
 def test_ui_shows_remote_text_as_plain_text():
-    js = (Path(__file__).resolve().parents[1] / "automoto" / "web" / "static" / "developer-pulls.js").read_text()
+    js = (Path(__file__).resolve().parents[1] / "automoto" / "web" / "static" / "developer-pulls.js").read_text(encoding="utf-8")
     code = "\n".join(l for l in js.splitlines() if not l.strip().startswith("//"))
     assert "innerHTML" not in code and "insertAdjacentHTML" not in code and "eval(" not in code
     assert "localStorage" not in code and "sessionStorage" not in code
     assert 'class="dsb-check' in code or '"dsb-check t-"' in code, "reuses the Run my app ring card"
-    studio = (Path(__file__).resolve().parents[1] / "automoto" / "web" / "static" / "developer-studio.js").read_text()
+    studio = (Path(__file__).resolve().parents[1] / "automoto" / "web" / "static" / "developer-studio.js").read_text(encoding="utf-8")
     assert 'id="dsReviewRoot"' in studio and "mountDeveloperPulls" in studio
