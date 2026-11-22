@@ -186,6 +186,10 @@ from automoto import developer_mobile
 app.include_router(developer_mobile.router)  # V25 Flutter/Dart, React Native, locked package evidence and consented offline tasks
 from automoto import developer_shell
 app.include_router(developer_shell.router)  # V26 Bash/Zsh/Fish/PowerShell/Batch inspection, syntax checks, literal fixtures
+from automoto import developer_run
+app.include_router(developer_run.router)  # V41/V44 approved real runs, test results and loopback-only live preview
+from automoto import developer_git
+app.include_router(developer_git.router)  # V45 local Git confined to the project; never pushes
 from automoto import developer_scripting
 app.include_router(developer_scripting.router)  # V27 Ruby Lua Perl Groovy package and explicit toolchain adapters
 from automoto import developer_science
@@ -569,6 +573,8 @@ class RoutineIn(BaseModel):
 
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
        "connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; "
+       # V44 live preview: only apps the user started, on this computer's loopback address.
+       "frame-src 'self' http://127.0.0.1:* http://localhost:*; "
        "form-action 'self'")
 
 

@@ -1,0 +1,76 @@
+name: Developer Studio V41-V45 run, preview and local Git
+
+on:
+  pull_request:
+    paths:
+      - "automoto/developer_run.py"
+      - "automoto/developer_git.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-run.js"
+      - "automoto/web/static/developer-git.js"
+      - "automoto/web/static/developer-beginner.js"
+      - "automoto/web/static/developer-simple.js"
+      - "automoto/web/static/developer-studio.js"
+      - "automoto/web/static/developer-studio.css"
+      - "tests/test_developer_run_git.py"
+      - "docs/DEVELOPER-STUDIO-V41-V45.md"
+      - ".github/workflows/developer-run-git-v41-v45.yml"
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_run.py"
+      - "automoto/developer_git.py"
+      - ".github/workflows/developer-run-git-v41-v45.yml"
+  schedule:
+    # Weekly macOS coverage, staggered.
+    - cron: "10 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_run.py
+        automoto/developer_git.py
+        automoto/web/static/developer-run.js
+        automoto/web/static/developer-git.js
+        automoto/web/static/developer-beginner.js
+        tests/test_developer_run_git.py
+        docs/DEVELOPER-STUDIO-V41-V45.md
+        .github/workflows/developer-run-git-v41-v45.yml
+
+  run-git:
+    needs: paths
+    name: V41-V45 run, preview and Git (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Run, preview and Git security tests
+        run: |
+          python -m compileall -q automoto/developer_run.py automoto/developer_git.py tests/test_developer_run_git.py
+          python -m pytest -q -rs tests/test_developer_run_git.py
+      - name: JavaScript syntax
+        run: |
+          node --check automoto/web/static/developer-run.js
+          node --check automoto/web/static/developer-git.js
+          node --check automoto/web/static/developer-beginner.js
+          node --check automoto/web/static/developer-simple.js
+          node --check automoto/web/static/developer-studio.js

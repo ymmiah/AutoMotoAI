@@ -33,6 +33,9 @@ import {mountDeveloperLegacy} from "./developer-legacy.js";
 import {mountDeveloperWorkbench} from "./developer-workbench.js";
 import {mountDeveloperWasm} from "./developer-wasm.js";
 import {mountDeveloperSimple} from "./developer-simple.js";
+import {mountDeveloperRun} from "./developer-run.js";
+import {mountDeveloperGit} from "./developer-git.js";
+import {mountBeginnerPanels} from "./developer-beginner.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
@@ -78,6 +81,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsLogicRoot" aria-label="Haskell OCaml Lisp Scheme Prolog source and fixed interpreter tools"></div>'+
       '<div id="dsLegacyRoot" aria-label="Fortran COBOL Ada Pascal Assembly and Visual Basic source and fixed compiler evidence"></div>'+
       '<div id="dsWasmRoot" aria-label="WebAssembly WAT WASM WIT WASI component source evidence"></div>'+  
+      '<div id="dsRunRoot" aria-label="Run the app, run tests and preview it locally"></div>'+
+      '<div id="dsGitRoot" aria-label="Local Git: changes, branches, commits and conflicts"></div>'+
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Files or code"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Files</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Code</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -129,6 +134,9 @@ export async function mountDeveloperStudio({api,page,toast}) {
   const iosStudio=mountDeveloperIos({api,host,getProject:()=>project});
   legacyStudio=mountDeveloperLegacy({api,host,getProject:()=>project,status});
   wasmStudio=mountDeveloperWasm({api,host,getProject:()=>project,status});
+  const runStudio=mountDeveloperRun({api,host,getProject:()=>project,status,onTestResult:r=>simple?.testResult(r)});
+  const gitStudio=mountDeveloperGit({api,host,getProject:()=>project,status,afterFilesChanged(){if(project&&!editor.hasUnsaved()){editor.reset();void list(directory);}}});
+  mountBeginnerPanels({host,runner:runStudio,git:gitStudio});
   workbench=mountDeveloperWorkbench({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
@@ -213,6 +221,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       legacyStudio.projectChanged();
       workbench.projectChanged();
       wasmStudio.projectChanged();
+      void runStudio.projectChanged();
+      gitStudio.projectChanged();
       await iosStudio.projectChanged();
       simple?.projectChanged();
       byId("dsPath").value=data.project;
@@ -361,7 +371,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       :"Revoke this project's trusted status? Source files will not change."))return;
     try {
       project=await api(BASE+"/trust",{project:project.project,trusted:next,confirmed:true});
-      showTrust();editor.trustChanged();workbench?.projectChanged();simple?.projectChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
+      showTrust();editor.trustChanged();workbench?.projectChanged();simple?.projectChanged();void runStudio.trustChanged();gitStudio.trustChanged();await lsp.trustChanged();await adapters.trustChanged();texBuild.trustChanged();await locations();
       status(next?"Project trusted. Editing enabled; execution disabled.":"Project trust revoked; editing disabled.");
     }catch(error){status("Unable to change trust: "+error.message,true);}
   });
@@ -372,7 +382,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   };
   window.addEventListener("hashchange",lspCleanup);
   // Simple chat-first and editor views on top of the same panels (classic layout stays available).
-  simple=mountDeveloperSimple({api,host,workbench,getProject:()=>project,openFile:preview,status,
+  simple=mountDeveloperSimple({api,host,workbench,runner:runStudio,git:gitStudio,getProject:()=>project,openFile:preview,status,
     afterFilesChanged(){if(project&&!editor.hasUnsaved()){editor.reset();void list(directory);}}});
   try {
     await locations();
