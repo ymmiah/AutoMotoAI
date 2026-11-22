@@ -2,6 +2,7 @@
    one searchable Tools & languages page, and the classic all-panels layout for experts.
    Nothing here runs code by itself: starter cards only fill the prompt, every task needs
    the trusted project and a confirmation, and Keep / Undo use the review checkpoint API. */
+import {mountWorkspace} from "./developer-workspace.js";
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const VIEW_KEY="automoto.developer.view";
 const CHAT_KEY="automoto.developer.chat.";
@@ -25,6 +26,7 @@ const RUN_APP="Start this app locally for a quick check: find its start command,
 // Tools & languages cards. "roots" are the existing panels each card opens; "tc" keys the
 // path-only availability check in developer_review.TOOLCHAINS (no tc = built in).
 const TOOLS=[
+  ["workspace","Edit, test & share","Change a file, test it and send it to GitHub or GitLab, all in one place","✎","#22c55e","builtin",[],null],
   ["run","Run my app","Start it, see it live and check it works","▶","#4caf50","builtin",["dsRunRoot"],null],
   ["git","Checkpoints (Git)","Save versions of your work and try ideas safely","⎇","#f05033","builtin",["dsGitRoot"],null],
   ["account","Connect GitHub or GitLab","Sign in safely so you can share your work later","⇪","#8b7bff","builtin",["dsAccountRoot"],null],
@@ -61,11 +63,13 @@ const TOOLS=[
   ["adapters","Build & debug adapters","Approved local build, test and debug tools","Db","#7aa2ff","builtin",["dsAdaptersRoot"],null],
   ["agent","Agent reviews & release plans","Send a review or readiness plan to the central agent",BRAND.charAt(0),"#7aa2ff","builtin",[".studio-agent-bridge"],null]
 ];
+// The old cards still work: they open the right tab of the one workspace.
+const WORKSPACE_TAB={run:["test"],git:["share"],share:["share"],review:["share"],account:["share","account"]};
 const CATS=[["all","All"],["installed","Installed"],["web","Web"],["mobile","Mobile"],["systems","Systems"],["data","Data & science"],["writing","Writing"],["builtin","Built in"]];
 
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
 
-export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,openFile,afterFilesChanged,status}){
+export function mountDeveloperSimple({api,host,workbench,runner,git,editor,getProject,openFile,afterFilesChanged,status}){
   const BASE="/api/developer/studio";
   const shell=host.querySelector(".ds-shell");
   const q=sel=>host.querySelector(sel);
@@ -161,6 +165,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   place(q(".ds-toolbar"),$("dsxProjectPop"));
   place(q("#dsRootStrip"),$("dsxProjectPop"));
   const statusLine=q("#dsStatus");
+  const workspace=mountWorkspace({api,q,getProject,runner,git,editor});
   function togglePop(force){
     const pop=$("dsxProjectPop"),open=typeof force==="boolean"?force:pop.hidden;
     pop.hidden=!open;$("dsxProject").setAttribute("aria-expanded",String(open));
@@ -190,6 +195,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
       for(const node of marks.keys())restore(node);
       toolsOpen=false;
     }else{
+      if(workspace.open){toolsOpen=false;closeDetail();}
       place(q(".ds-toolbar"),$("dsxProjectPop"));place(q("#dsRootStrip"),$("dsxProjectPop"));
       if(isCompact()&&currentSheet==="files")closeFilesSheet({silent:true,moved:next==="editor"});
       if(next==="editor"){place(q(".ds-mobile-switch"),$("dsxEditor"));place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
@@ -239,20 +245,39 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
     if(!items.length)grid.append(el("p","dsx-empty","No tools match. Try another word."));
   }
   let detailNodes=[];
-  function openDetail(t){
+  function openDetail(t,{tab,section}={}){
+    const route=WORKSPACE_TAB[t[0]];
+    if(route){tab=tab||route[0];section=section||route[1];t=TOOLS.find(x=>x[0]==="workspace");}
+    if(t[0]==="workspace"&&workspace.open){
+      workspace.select(tab||"edit");
+      if(section==="account")workspace.show(tab||"share",{section,place:keep});
+      return;
+    }
     closeDetail();
     $("dsxDetailTitle").textContent=t[1];
     const body=$("dsxDetailBody");
+    if(t[0]==="workspace"){
+      // The workspace takes the editor too, so the files sheet must not hold it.
+      if(isCompact()&&currentSheet==="files")closeFilesSheet({silent:true});
+      body.append(workspace.show(tab||"edit",{section,place:keep}));
+    }
     for(const sel of t[6]){
       const node=sel.startsWith(".")?host.querySelector(sel):q("#"+sel);
       if(node){place(node,body);detailNodes.push(node);}
     }
-    if(!detailNodes.length)body.append(el("p","dsx-empty","This panel is not available here."));
+    if(!detailNodes.length&&t[0]!=="workspace")body.append(el("p","dsx-empty","This panel is not available here."));
     $("dsxToolGrid").hidden=true;$("dsxDetected").hidden=true;root.querySelector(".dsx-tools-bar").hidden=true;
     $("dsxToolDetail").hidden=false;$("dsxDetailBack").focus();
   }
+  function keep(node,parent){place(node,parent);if(!detailNodes.includes(node))detailNodes.push(node);}
   function closeDetail(){
+    const hadWorkspace=workspace.open;
     for(const n of detailNodes)restore(n);detailNodes=[];
+    if(hadWorkspace){
+      workspace.hide();
+      // The editor view keeps its files and code where they were.
+      if(view==="editor"&&!root.hidden){place(q(".ds-mobile-switch"),$("dsxEditor"));place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
+    }
     $("dsxDetailBody").replaceChildren();
     $("dsxToolDetail").hidden=true;$("dsxToolGrid").hidden=false;root.querySelector(".dsx-tools-bar").hidden=false;
     $("dsxDetected").hidden=!detected;
@@ -330,9 +355,10 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   comp.addEventListener("submit",e=>{e.preventDefault();void submit(prompt.value);});
   // V41/V44: Run app / Run tests use the real, approval-gated runner when the project has a
   // detected command, and fall back to asking the assistant when it doesn't.
-  function openTool(id){
+  function openTool(id,opts){
     const t=TOOLS.find(x=>x[0]===id);if(!t)return;
-    showTools(true);drawTools();void loadToolInfo();openDetail(t);
+    if(!toolsOpen){showTools(true);drawTools();void loadToolInfo();}
+    openDetail(t,opts);
   }
   async function realRun(kind){
     if(runner&&await runner.hasRecipe(kind).catch(()=>false)){openTool("run");await runner.run(kind);return;}
@@ -889,7 +915,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   });
   setView(view,{save:false});
   return {
-    projectChanged(){lastRealTests=null;loadChat();refresh();if(toolsOpen)void loadToolInfo();},
+    projectChanged(){lastRealTests=null;loadChat();refresh();if(toolsOpen)void loadToolInfo();workspace.refresh();},
     testResult(r){lastRealTests={...r,cmd:"Last test run · "+r.cmd};if(review.turn&&review.tab==="tests"&&!$("dsxReview").hidden)drawReview();},
     openTool,
     refresh,

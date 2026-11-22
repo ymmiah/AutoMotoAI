@@ -1226,6 +1226,38 @@ def _write_files(root: Path, repo: str | None, rb: str, head: str, base: str | N
 
 
 # ------------------------------------------------------------------ status for the UI
+def sync_summary(root: Path, st: dict | None = None) -> dict:
+    """How many local checkpoints aren't on the website yet. Offline only: it compares HEAD with the
+    last head AutoMoto shared on this branch (audit log) or brought in with Get latest (private ref)."""
+    st = st if st is not None else dgit._status(root)
+    branch = st.get("branch")
+    dirty = not st.get("clean", True)
+    if st.get("initial"):
+        return {"state": "no_checkpoints", "unshared": 0, "branch": branch, "dirty": dirty}
+    bases: list[str] = []
+    for item in audit_tail(str(root), 200):
+        if item.get("action") == "share" and item.get("result") == "ok" and item.get("branch") == branch:
+            head = str(item.get("head") or "")
+            if re.fullmatch(r"[0-9a-f]{7,40}", head):
+                bases.append(head)
+            break
+    if branch:
+        bases.append(_private_ref(branch))
+    found = []
+    for ref in bases:
+        sha = dgit._run(root, ["rev-parse", "--verify", "--quiet", ref + "^{commit}"], check=False).stdout.decode().strip()
+        if sha:
+            found.append(sha)
+    args = ["rev-list", "--count", "HEAD", *[f"^{sha}" for sha in found], "--"]
+    done = dgit._run(root, args, check=False)
+    try:
+        count = int(done.stdout.decode().strip() or 0)
+    except ValueError:
+        count = 0
+    state = ("never_shared" if not found else "shared" if count == 0 else "ahead")
+    return {"state": state, "unshared": count, "branch": branch, "dirty": dirty}
+
+
 def status(root: Path) -> dict:
     accts = [a for a in git_auth.status()["accounts"]]
     target = saved_target(root)
@@ -1235,7 +1267,7 @@ def status(root: Path) -> dict:
     return {"version": VERSION, "accounts": accts, "target": target, "suggestion": suggest_from_origin(root),
             "branch": st.get("branch"), "detached": st.get("detached"), "clean": st.get("clean"),
             "has_commits": not st.get("initial"), "push_permission": perm, "recent": last,
-            "patch_folder": str(patch_dir()), "os": host_os()}
+            "patch_folder": str(patch_dir()), "os": host_os(), "sync": sync_summary(root, st)}
 
 
 # ------------------------------------------------------------------ HTTP API (local only, click-driven)

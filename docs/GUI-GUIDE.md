@@ -554,6 +554,13 @@ app ("5/6", failing names, Check again). It only reads. If anything fails, you g
 instructions with a copy button on every link and command. See
 [PULL-REQUESTS-AND-CI.md](PULL-REQUESTS-AND-CI.md).
 
+**Edit, test & share.** Developer Studio → Tools → **Edit, test & share** is one place to change a file,
+check it works and send it to GitHub or GitLab. Three tabs run along the top: **Edit** (your files and the
+editor), **Test** (Run my app: start it, see it live, check it works) and **Share** (save a checkpoint, share
+it, ask for a review). The strip under the tabs always shows whether you have unsaved changes, the last test
+result and how many checkpoints aren't shared yet. Tap any part of the strip to jump to its tab. Nothing runs
+or gets sent until you press the button and confirm, exactly as on the separate cards, which still work.
+
 **Project map.** Developer Studio → Tools → **Project map** shows the languages in your project and
 how its files link, which frontend calls reach which API routes and data models ("2 of 3 calls
 matched a route" in the small ring card), and the parts of a big project, with build commands to
