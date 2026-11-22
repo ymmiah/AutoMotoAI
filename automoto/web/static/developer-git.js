@@ -31,7 +31,9 @@ export function mountDeveloperGit({api,host,getProject,status,afterFilesChanged}
     '</div>'+
     '<p class="dsr-status" id="dsgStatus" role="status" aria-live="polite">Open a project to see its Git status.</p></section>';
   const $=id=>root.querySelector("#"+id);
-  let state=null,seq=0,busy=false;
+  let state=null,seq=0,busy=false,branchList=[],lastError=null;
+  const listeners=new Set();
+  const notify=()=>{for(const fn of listeners)try{fn();}catch(e){console.error(e);}};
   const say=(text,bad)=>{$("dsgStatus").textContent=text;$("dsgStatus").classList.toggle("bad",!!bad);};
   const trusted=()=>!!getProject()?.trusted;
 
@@ -42,13 +44,13 @@ export function mountDeveloperGit({api,host,getProject,status,afterFilesChanged}
     try{
       const d=await api(BASE+"/status?"+new URLSearchParams({project:p}));
       if(id!==seq)return;
-      state=d;draw();
-    }catch(e){if(id===seq){state=null;$("dsgMain").hidden=true;$("dsgInit").hidden=true;say("Git isn't available here: "+e.message,true);}}
+      state=d;draw();notify();
+    }catch(e){if(id===seq){state=null;$("dsgMain").hidden=true;$("dsgInit").hidden=true;say("Git isn't available here: "+e.message,true);notify();}}
   }
   async function act(path,body,done){
     if(busy)return null;busy=true;syncButtons();
-    try{const d=await api(BASE+path,{project:getProject().project,...body});if(d&&d.repository!==undefined)state={...state,...d};draw();done&&say(done);afterFilesChanged?.();return d;}
-    catch(e){say(e.message,true);if(e.status===428)$("dsgIdent").hidden=false;return null;}
+    try{const d=await api(BASE+path,{project:getProject().project,...body});if(d&&d.repository!==undefined)state={...state,...d};draw();done&&say(done);afterFilesChanged?.();notify();return d;}
+    catch(e){say(e.message,true);if(e.status===428)$("dsgIdent").hidden=false;lastError=e;notify();return null;}
     finally{busy=false;syncButtons();}
   }
   function row(f,kind){
@@ -92,7 +94,7 @@ export function mountDeveloperGit({api,host,getProject,status,afterFilesChanged}
     try{
       const d=await api(BASE+"/branches?"+new URLSearchParams({project:p}));
       const sel=$("dsgBranch");sel.replaceChildren();
-      const list=d.branches||[];
+      const list=d.branches||[];branchList=list;notify();
       if(!list.length)sel.append(new Option(state.branch||"main",state.branch||"main",true,true));
       for(const b of list)sel.append(new Option(b.name,b.name,b.current,b.current));
     }catch{}
@@ -124,24 +126,25 @@ export function mountDeveloperGit({api,host,getProject,status,afterFilesChanged}
       diffView(path,d.hidden?"":d.diff,d.hidden?d.reason:staged?"staged":d.untracked?"new file":"not staged yet");
     }catch(e){diffView(path,"",e.message);}
   }
-  async function showConflict(path){
-    const v=$("dsgViewer");v.replaceChildren();
+  async function showConflict(path,into,friendly=false){
+    const v=into||$("dsgViewer");v.replaceChildren();
+    const L=friendly?{ours:"Your version",theirs:"The other version",mine:"Use mine",their:"Use theirs",both:"Keep both",save:"Use my choices",ask:"Save "+path+" with your choices?"}
+      :{ours:"Yours",theirs:"Theirs",mine:"Keep mine",their:"Keep theirs",both:"Keep both",save:"Save and mark resolved",ask:"Save "+path+" with your choices and mark it resolved?"};
     let d;
     try{d=await api(BASE+"/conflict?"+new URLSearchParams({project:getProject().project,path}));}
     catch(e){v.append(el("p","dsr-status bad",e.message));return;}
     const choices=d.blocks.map(()=>null);
-    const head=el("div","dsx-file-h");head.append(el("code",null,path),el("span","dsx-gap"),el("span","dsr-note",d.blocks.length+" conflict"+(d.blocks.length>1?"s":"")));
-    v.append(head);
-    const save=el("button","btn sm primary","Save and mark resolved");save.type="button";save.disabled=true;
+    if(!friendly){const head=el("div","dsx-file-h");head.append(el("code",null,path),el("span","dsx-gap"),el("span","dsr-note",d.blocks.length+" conflict"+(d.blocks.length>1?"s":"")));v.append(head);}
+    const save=el("button","btn sm primary",L.save);save.type="button";save.disabled=true;
     d.blocks.forEach((b,i)=>{
       const card=el("div","dsg-conflict");
-      card.append(el("p","dsr-note","Lines "+b.start_line+"–"+b.end_line));
+      card.append(el("p","dsr-note",friendly?(d.blocks.length>1?"Disagreement "+(i+1)+" of "+d.blocks.length:"Both versions changed these lines:"):"Lines "+b.start_line+"–"+b.end_line));
       const cols=el("div","dsg-sides");
       const side=(title,text)=>{const c=el("div","dsg-side");c.append(el("b",null,title),el("pre",null,text||"(empty)"));return c;};
-      cols.append(side("Yours · "+(b.ours_label||"current"),b.ours),side("Theirs · "+(b.theirs_label||"incoming"),b.theirs));
+      cols.append(side(friendly?L.ours:L.ours+" · "+(b.ours_label||"current"),b.ours),side(friendly?L.theirs+(b.theirs_label?" (from "+b.theirs_label.replace(/^feature\//,"")+")":""):L.theirs+" · "+(b.theirs_label||"incoming"),b.theirs));
       card.append(cols);
       const pick=el("div","dsg-pick");pick.setAttribute("role","group");pick.setAttribute("aria-label","Choose for conflict "+(i+1));
-      for(const [val,label] of [["ours","Keep mine"],["theirs","Keep theirs"],["both","Keep both"]]){
+      for(const [val,label] of [["ours",L.mine],["theirs",L.their],["both",L.both]]){
         const btn=el("button","btn sm",label);btn.type="button";btn.setAttribute("aria-pressed","false");
         btn.onclick=()=>{choices[i]=val;for(const x of pick.children)x.setAttribute("aria-pressed",String(x===btn));save.disabled=choices.some(c=>!c)||!trusted();};
         pick.append(btn);
@@ -149,9 +152,9 @@ export function mountDeveloperGit({api,host,getProject,status,afterFilesChanged}
       card.append(pick);v.append(card);
     });
     save.onclick=async()=>{
-      if(!window.confirm("Save "+path+" with your choices and mark it resolved?"))return;
+      if(!window.confirm(L.ask))return;
       const done=await act("/resolve",{path,choices,expected_sha256:d.sha256,confirmed:true},"Resolved "+path+".");
-      if(done)v.replaceChildren(el("p","dsr-note","Resolved "+path+". Commit when you're ready."));
+      if(done)v.replaceChildren(el("p","dsr-note","Fixed "+path+". Save a checkpoint when you're ready."));
     };
     v.append(save);
   }
@@ -185,5 +188,23 @@ export function mountDeveloperGit({api,host,getProject,status,afterFilesChanged}
     const d=await act("/commit",body,"Committed. Saved on this computer; nothing was pushed.");
     if(d){$("dsgMessage").value="";$("dsgViewer").replaceChildren(el("p","dsr-note","Committed “"+message.split("\n")[0]+"”."));syncButtons();}
   });
-  return {load,projectChanged(){$("dsgViewer").replaceChildren(el("p","dsr-note","Pick a file to see what changed."));void load();},trustChanged(){void load();}};
+  async function fetchDiff(path,staged=false){
+    const d=await api(BASE+"/diff?"+new URLSearchParams({project:getProject().project,path,staged:String(staged)}));
+    return d.hidden?"":d.diff;
+  }
+  async function saveCheckpoint(message,author){
+    lastError=null;
+    const paths=(state?.files||[]).filter(f=>!f.conflict&&f.unstaged&&!f.secret_like).map(f=>f.path);
+    if(paths.length&&!(await act("/stage",{paths,stage:true})))return null;
+    const body={message,confirmed:true};
+    if(author?.name&&author?.email){body.author_name=author.name;body.author_email=author.email;}
+    return act("/commit",body,"Checkpoint saved on this computer. Nothing was uploaded.");
+  }
+  return {load,fetchDiff,saveCheckpoint,showConflict,
+    init:()=>act("/init",{confirmed:true},"Git is now tracking this project."),
+    newIdea:name=>act("/branch",{name,switch:true},"Now trying "+name+".").then(async d=>{if(d)await load();return d;}),
+    switchTo:name=>act("/switch",{name},"Switched to "+name+".").then(async d=>{await load();return d;}),
+    onChange(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
+    getState:()=>({state,branches:branchList,busy,lastError,trusted:trusted(),project:getProject()}),
+    projectChanged(){$("dsgViewer").replaceChildren(el("p","dsr-note","Pick a file to see what changed."));void load();},trustChanged(){void load();}};
 }

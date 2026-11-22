@@ -25,8 +25,8 @@ const RUN_APP="Start this app locally for a quick check: find its start command,
 // Tools & languages cards. "roots" are the existing panels each card opens; "tc" keys the
 // path-only availability check in developer_review.TOOLCHAINS (no tc = built in).
 const TOOLS=[
-  ["run","Run & preview","Run your app and tests, and see it live","▶","#4caf50","builtin",["dsRunRoot"],null],
-  ["git","Git","Changes, branches, commits and conflicts","⎇","#f05033","builtin",["dsGitRoot"],null],
+  ["run","Run my app","Start it, see it live and check it works","▶","#4caf50","builtin",["dsRunRoot"],null],
+  ["git","Checkpoints (Git)","Save versions of your work and try ideas safely","⎇","#f05033","builtin",["dsGitRoot"],null],
   ["typescript","TypeScript & JavaScript","Node scripts, type checks and tests","TS","#3178c6","web",["dsJavaScriptRoot"],"typescript"],
   ["frontend","Web pages","Accessibility and responsive preview","UI","#e44d8a","web",["dsFrontendRoot"],"javascript"],
   ["php","PHP & WordPress","Composer and WordPress checks","PHP","#7a86b8","web",["dsPhpRoot"],"php"],

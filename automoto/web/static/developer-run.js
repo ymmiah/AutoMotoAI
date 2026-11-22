@@ -20,6 +20,8 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
   const $=id=>root.querySelector("#"+id);
   let recipes=[],trusted=false,loadedFor=null,seq=0;
   const runs={app:null,test:null};
+  const listeners=new Set();
+  const notify=()=>{for(const fn of listeners)try{fn();}catch(e){console.error(e);}};
   const say=(text,bad)=>{$("dsrStatus").textContent=text;$("dsrStatus").classList.toggle("bad",!!bad);};
 
   async function load(force=false){
@@ -32,7 +34,7 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
       if(id!==seq)return recipes;
       recipes=(d.recipes||[]).slice().sort((a,b)=>(a.kind==="app"?0:1)-(b.kind==="app"?0:1));trusted=!!d.trusted;loadedFor=p;
       for(const r of d.runs||[])if(r.live&&!runs[r.kind])track(r);
-      draw();
+      draw();notify();
       say(!recipes.length?"No start or test command found. Ask the assistant to set one up."
         :!trusted?"Allow changes for this project first. Then you can run it."
         :"Pick what to run. Nothing starts until you approve it.");
@@ -138,6 +140,7 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
       }
     }
     if(run.reason)say(run.reason,run.status==="blocked_exposed"||run.status==="timed_out");
+    notify();
   }
   function poll(st){
     clearTimeout(st.timer);
@@ -153,7 +156,7 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
     },700);
   }
   function finished(st,run){
-    draw();
+    draw();notify();
     if(run.kind==="test"){
       const s=run.summary||{};
       say(run.status==="passed"?"Tests passed: "+(s.passed||0)+" passed, "+(s.skipped||0)+" skipped."
@@ -178,11 +181,16 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
   }
   $("dsrRefresh").addEventListener("click",()=>void load(true));
   return {
-    load,run,pick,
+    load,run,pick,start,
+    stop:kind=>stopRun(kind),
+    onChange(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
+    getState:()=>({project:getProject(),recipes,trusted,
+      app:runs.app?{...runs.app.run,log:runs.app.log?.textContent||""}:null,
+      test:runs.test?{...runs.test.run,log:runs.test.log?.textContent||""}:null}),
     hasRecipe:async kind=>{await load();return !!pick(kind);},
     async projectChanged(){
       for(const k of ["app","test"]){const st=runs[k];if(st){clearTimeout(st.timer);st.box.hidden=true;st.box.replaceChildren();runs[k]=null;}}
-      loadedFor=null;await load(true);
+      loadedFor=null;notify();await load(true);
     },
     async trustChanged(){await load(true);}
   };

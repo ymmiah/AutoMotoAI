@@ -334,3 +334,40 @@ def test_conflict_parser_handles_diff3():
     assert blocks[0]["base"] == "orig" and blocks[0]["ours"] == "mine"
     assert dgit.resolve_text(text, ["theirs"]) == "a\ntheirs\nz"
     assert dgit.resolve_text(text, ["ours"]) == "a\nmine\nz"
+
+
+# ---------------------------------------------------------------- beginner panels (guided steps + ring)
+STATIC = Path(__file__).resolve().parents[1] / "automoto" / "web" / "static"
+
+
+def test_beginner_panels_are_guided_steps_only():
+    js = (STATIC / "developer-beginner.js").read_text(encoding="utf-8")
+    css = (STATIC / "developer-studio.css").read_text(encoding="utf-8")
+    # One design only: no design switch stored in the browser, no leftover option code.
+    assert "automoto.developer.beginner" not in js
+    assert "localStorage" not in js
+    for gone in ("runA", "gitA", "runC", "gitC", "VARIANTS", "dsb-hero", "dsb-tiles", "dsb-timeline"):
+        assert gone not in js
+        assert gone not in css
+    assert "Try your app in 3 steps" in js and "Save a checkpoint in 3 steps" in js
+    # The result, the small ring and Check again share one card.
+    assert '"Check again"' in js and "function checkCard(" in js
+    assert 'card.append(text,button)' in js
+    assert 'checks passed' in js and 'setAttribute("role","img")' in js
+    # The card has the same fixed geometry at every width: no media query touches it.
+    media = css[css.index("/* Beginner faces"):]
+    for block in media.split("@media")[1:]:
+        assert "dsb-check" not in block and "dsb-ring" not in block
+    assert "grid-template-columns:46px" in css and "width:46px;height:46px" in css
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_beginner_panels_friendly_test_names(tmp_path):
+    mod = tmp_path / "beginner.mjs"
+    mod.write_text((STATIC / "developer-beginner.js").read_text(encoding="utf-8"), encoding="utf-8")
+    script = (
+        f"import {{friendlyName}} from {json.dumps(mod.as_uri())};"
+        "console.log(JSON.stringify(['tests/test_counter.py::test_clamp_high','TestCounterLimits','web/test_dark-mode.js'].map(friendlyName)));"
+    )
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60, check=True)
+    assert json.loads(out.stdout) == ["Clamp high", "Counter Limits", "Dark mode"]

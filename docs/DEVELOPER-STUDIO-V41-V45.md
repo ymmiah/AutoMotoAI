@@ -6,11 +6,11 @@ All three live behind entry points that already existed. The desktop chat view l
 
 | Where | What you get |
 | --- | --- |
-| **Tools → Run & preview** | The commands found in the project, a Run button for each, live output, test counts and the preview. |
-| **Run app / Run tests** (editor view) | Opens Run & preview and starts the detected command once you approve it. If the project has no detected command, the button asks the assistant instead, as it did before. |
+| **Tools → Run my app** | Three guided steps: 1 Start your app, 2 See it live, 3 Check it works. Step 3 shows the result in one card: a small health ring (for example "3/4"), the result in plain words with the names of failing checks, and a Check again button. The expert view (every command, live output and test counts) is under Advanced details. |
+| **Run app / Run tests** (editor view) | Opens Run my app and starts the detected command once you approve it. If the project has no detected command, the button asks the assistant instead, as it did before. |
 | **Review → Tests** | Also shows the latest real test run, with passed, failed and skipped counts. |
-| **Tools → Git** | Branch picker, new branch, staged and unstaged files, diffs, commit box, recent commits and a conflict view. |
-| **Phone and tablet (900px and below)** | The same panels open from the Tools tab, using the existing sheet. On a tablet the sheet sits beside the chat. |
+| **Tools → Checkpoints (Git)** | Three guided steps: 1 See what changed (tap a file for its diff), 2 Describe it (a message is suggested), 3 Save checkpoint. A conflict becomes step 1, "Fix the disagreement", with Keep mine, Keep theirs and Keep both. The expert view (branch picker, new branch, staging, diffs, commit box, recent commits) is under Advanced details. |
+| **Phone and tablet (900px and below)** | The same panels open from the Tools tab, using the existing sheet. On a tablet the sheet sits beside the chat. The test result card has the same size, spacing and alignment at every width: a 46px ring, 12px from the text, with a 36px Check again button under the result. |
 
 ## V41: real run and test results
 

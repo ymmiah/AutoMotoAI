@@ -8,6 +8,7 @@ on:
       - "automoto/server.py"
       - "automoto/web/static/developer-run.js"
       - "automoto/web/static/developer-git.js"
+      - "automoto/web/static/developer-beginner.js"
       - "automoto/web/static/developer-simple.js"
       - "automoto/web/static/developer-studio.js"
       - "automoto/web/static/developer-studio.css"
@@ -42,6 +43,7 @@ jobs:
         automoto/developer_git.py
         automoto/web/static/developer-run.js
         automoto/web/static/developer-git.js
+        automoto/web/static/developer-beginner.js
         tests/test_developer_run_git.py
         docs/DEVELOPER-STUDIO-V41-V45.md
         .github/workflows/developer-run-git-v41-v45.yml
@@ -69,5 +71,6 @@ jobs:
         run: |
           node --check automoto/web/static/developer-run.js
           node --check automoto/web/static/developer-git.js
+          node --check automoto/web/static/developer-beginner.js
           node --check automoto/web/static/developer-simple.js
           node --check automoto/web/static/developer-studio.js

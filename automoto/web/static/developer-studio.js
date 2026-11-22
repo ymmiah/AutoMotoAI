@@ -35,6 +35,7 @@ import {mountDeveloperWasm} from "./developer-wasm.js";
 import {mountDeveloperSimple} from "./developer-simple.js";
 import {mountDeveloperRun} from "./developer-run.js";
 import {mountDeveloperGit} from "./developer-git.js";
+import {mountBeginnerPanels} from "./developer-beginner.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
   const host=page("Developer Studio",
@@ -135,6 +136,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   wasmStudio=mountDeveloperWasm({api,host,getProject:()=>project,status});
   const runStudio=mountDeveloperRun({api,host,getProject:()=>project,status,onTestResult:r=>simple?.testResult(r)});
   const gitStudio=mountDeveloperGit({api,host,getProject:()=>project,status,afterFilesChanged(){if(project&&!editor.hasUnsaved()){editor.reset();void list(directory);}}});
+  mountBeginnerPanels({host,runner:runStudio,git:gitStudio});
   workbench=mountDeveloperWorkbench({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
