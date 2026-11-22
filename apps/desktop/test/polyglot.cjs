@@ -47,7 +47,7 @@ async function openMap(page, compact) {
   if (compact) await page.locator('#dsxNavTools').click(); else await page.locator('#dsxTools').click();
   await page.locator('.dsx-card[data-tool="polyglot"]').click();
   await page.locator('#dsxToolDetail .dsp .dsb-steps').waitFor();
-  await page.locator('.dsp .btn', { hasText: 'Map it' }).click();
+  await page.locator('.dsp .btn', { hasText: 'Map my project' }).click();
   await page.locator('.dsp .dsb-check').first().waitFor();
 }
 const ringBox = page => page.evaluate(() => {
@@ -79,23 +79,27 @@ let browser;
     boxes[name] = await ringBox(page);
     if (name === 'desktop') {
       assert.equal(await page.locator('.dsp .dsb-step').count(), 5, 'five guided steps');
-      assert.match(await page.locator('.dsp .dsb-check-text b').first().textContent(), /files? read of/);
+      assert.match(await page.locator('.dsp .dsb-check-text b').first().textContent(), /^Mapped \d+ files$/);
+      assert.equal(await page.locator('.dsp .dsb-ring b').first().textContent(), await page.evaluate(() => document.querySelector('.dsp .dsb-ring-of').textContent.replace('of ', '')), 'all files read');
+      assert.equal(await page.locator('.dsp details[open]').count(), 0, 'details start collapsed');
       assert.match(await page.locator('.dsp .dsb-check-text p').first().textContent(), /TypeScript|Python/);
-      await page.locator('.dsp .btn', { hasText: 'Follow the calls' }).click();
-      await page.locator('.dsp .dsb-check-text b', { hasText: 'calls matched a route' }).waitFor();
-      assert.match(await page.locator('.dsp').textContent(), /2 of 3 calls matched a route/);
+      await page.locator('.dsp .btn', { hasText: 'Check the connections' }).click();
+      await page.locator('.dsp .dsb-check-text b', { hasText: 'connections work' }).waitFor();
+      assert.match(await page.locator('.dsp').textContent(), /2 of 3 connections work/);
+      assert.ok(await page.locator('.dsp .dsb-step').nth(1).locator('.dsb-step-main > .dsp-few > .dsp-items > li').count() <= 3, 'at most 3 visible');
       assert.match(await page.locator('.dsp').textContent(), /list_users/);
       assert.match(await page.locator('.dsp').textContent(), /Django model/);
       assert.equal(await page.locator('.dsp img').count(), 0, 'project text never becomes HTML');
       // Rename: preview -> confirm dialog with the exact files -> written -> undo puts it back.
       const inputs = page.locator('.dsp .dsb-step').nth(3).locator('input');
       await inputs.nth(0).fill('loadUsers'); await inputs.nth(1).fill('fetchUsers');
-      await page.locator('.dsp .btn', { hasText: 'Preview changes' }).click();
-      await page.locator('.dsp .dsb-check-text b', { hasText: /places? in 2 files/ }).waitFor();
-      await page.waitForFunction(() => [...document.querySelectorAll('.dsp .dsp-diff')].every(p => p.querySelector('.copy-anchor button')));
+      await page.locator('.dsp .btn', { hasText: /^Preview$/ }).click();
+      await page.locator('.dsp .dsp-result b', { hasText: /changes? in 2 files/ }).waitFor();
+      await page.locator('.dsp summary', { hasText: 'Show the changes' }).click();
+      await page.waitForFunction(() => { const c = [...document.querySelectorAll('.dsp .dsp-code')]; return c.length && c.every(p => p.querySelector('.copy-anchor button')); });
       assert.equal(readFileSync(path.join(proj, 'web/src/App.tsx'), 'utf8'), appBefore, 'preview changes nothing');
       await page.locator('.dsp .btn', { hasText: /^Rename$/ }).click();
-      await page.locator('.dsp .dsa-alert.ok', { hasText: 'Renamed loadUsers to fetchUsers' }).waitFor();
+      await page.locator('.dsp .dsp-result b', { hasText: 'Renamed loadUsers to fetchUsers' }).waitFor();
       assert.match(dialogs.at(-1), /Rename loadUsers to fetchUsers\?/); assert.match(dialogs.at(-1), /web\/src\/App\.tsx \(2\)/);
       const after = readFileSync(path.join(proj, 'web/src/App.tsx'), 'utf8');
       assert.match(after, /import \{ fetchUsers \}/); assert.match(after, /\/\/ loadUsers in a comment/);
@@ -103,12 +107,13 @@ let browser;
       await page.locator('.dsp .dsa-alert.ok', { hasText: 'Put back' }).waitFor();
       assert.equal(readFileSync(path.join(proj, 'web/src/App.tsx'), 'utf8'), appBefore, 'undo restores the file');
       // Packages: commands are shown with copy buttons, never run.
-      await page.locator('.dsp .btn', { hasText: 'Show packages' }).click();
-      await page.locator('.dsp .dsp-pkg').first().waitFor();
-      await page.evaluate(() => document.querySelectorAll('.dsp .dsp-pkg').forEach(d => { d.open = true; }));
+      await page.locator('.dsp .btn', { hasText: 'Show the parts' }).click();
+      await page.locator('.dsp .dsp-big', { hasText: 'parts' }).waitFor();
+      assert.match(await page.locator('.dsp').textContent(), /Languages that work together: Rust ↔ Python/);
+      await page.locator('.dsp summary', { hasText: 'How to build each part' }).click();
       assert.match(await page.locator('.dsp').textContent(), /npm workspaces/);
       assert.match(await page.locator('.dsp').textContent(), /Rust ↔ Python \(PyO3\)/);
-      await page.waitForFunction(() => { const c = [...document.querySelectorAll('.dsp .dss-cmd')]; return c.length >= 3 && c.every(p => p.querySelector('.copy-anchor button')); });
+      await page.waitForFunction(() => { const c = [...document.querySelectorAll('.dsp .dsp-code')]; return c.length >= 3 && c.every(p => p.querySelector('.copy-anchor button')); });
       assert.match(await page.locator('.dsp').textContent(), /cd web && npm run build/);
     } else {
       const wide = await page.evaluate(() => document.querySelector('#dsxToolDetail').scrollWidth - document.querySelector('#dsxToolDetail').clientWidth);

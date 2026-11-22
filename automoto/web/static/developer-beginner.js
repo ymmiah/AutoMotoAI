@@ -147,11 +147,18 @@ function miniDiff(text){
   if(!pre.childNodes.length)pre.append(el("span",null,"No text changes."));
   return pre;
 }
+// The shared health ring (Run my app, Checks on GitHub, Project map). A thin ring with one big
+// number inside and room around it; the "of N" goes under the ring, never inside it.
+const short=n=>n>=10000?Math.round(n/1000)+"k":n>=1000?(Math.round(n/100)/10)+"k":String(n);
 export function ring(passed,total,tone,fallback){
-  const r=el("div","dsb-ring sm t-"+tone);r.setAttribute("role","img");
+  const wrap=el("div","dsb-gauge");
+  const r=el("div","dsb-ring t-"+tone);r.setAttribute("role","img");
   r.setAttribute("aria-label",total?passed+" of "+total+" checks passed":tone==="busy"?"Checking":tone==="ok"?"Checks passed":tone==="idle"?"Check stopped":"Checks did not pass");
   r.style.setProperty("--p",(total?Math.round(100*passed/total):tone==="ok"?100:0)+"%");
-  r.append(el("b",null,total?passed+"/"+total:fallback));return r;
+  const text=total?short(passed):fallback;
+  const len=String(text).length;const b=el("b",len>=4?"long":len===3?"mid":null,text);r.append(b);wrap.append(r);
+  if(total)wrap.append(el("span","dsb-ring-of","of "+short(total)));
+  return wrap;
 }
 // The test result, the small health ring and the Check again button sit together in one
 // card, so they keep the same size, spacing and alignment on phone, tablet and desktop.
