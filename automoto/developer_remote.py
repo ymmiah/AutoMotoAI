@@ -914,8 +914,11 @@ def pull(root: Path, remote_branch: str | None, expected: str, combine: bool, co
     theirs = _git(root, ["rev-parse", "--verify", _private_ref(rb) + "^{commit}"], check=False).strip()
     if theirs != expected:
         raise RemoteError("The website changed since you looked. Press Get latest again.", "stale", 409)
-    if not dgit._status(root)["clean"]:
-        raise RemoteError("Save a checkpoint (or undo your edits) before bringing in new changes.", "dirty", 409)
+    st = dgit._status(root)
+    if not st["clean"]:
+        names = ", ".join(f["path"] for f in st["files"][:5])
+        raise RemoteError("Save a checkpoint (or undo your edits) before bringing in new changes. Changed: "
+                          + names + ".", "dirty", 409)
     with dgit._lock(root):
         if _ancestor(root, head, theirs):
             done = dgit._run(root, ["merge", "--ff-only", "--no-edit", theirs], check=False)

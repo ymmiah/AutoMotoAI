@@ -103,7 +103,8 @@ class FakeAPI:
 
 
 def _git(cwd, *args, check=True):
-    return subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@example.com",
+    # core.autocrlf=false: match the engine, which ignores the system config Git for Windows ships with.
+    return subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "core.autocrlf=false",
                            "-c", "init.defaultBranch=main", "-c", "protocol.file.allow=always", *args],
                           cwd=cwd, capture_output=True, text=True, check=check)
 
@@ -475,7 +476,7 @@ def test_get_latest_fast_forward_and_combine(world):
     f = post(w, "/fetch", root).json()
     assert f["state"] == "diverged" and f["ahead"] == 1
     r = post(w, "/pull", root, expected=f["expected"], confirmed=True)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "diverged"
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "diverged", r.text
     r = post(w, "/pull", root, expected=f["expected"], confirmed=True, combine=True)
     assert r.status_code == 409 and r.json()["detail"]["code"] == "identity"
     _git(root, "config", "user.name", "T")
