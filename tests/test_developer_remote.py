@@ -339,7 +339,7 @@ def test_share_new_repo_end_to_end_and_token_never_lands_anywhere(world, monkeyp
     real_run = subprocess.run
 
     def spy(argv, *a, **kw):
-        if isinstance(argv, list) and argv and str(argv[0]).endswith("git"):
+        if isinstance(argv, list) and argv and Path(str(argv[0])).stem.lower() == "git":
             seen.append((list(argv), dict(kw.get("env") or {})))
         return real_run(argv, *a, **kw)
 
@@ -466,7 +466,7 @@ def test_get_latest_fast_forward_and_combine(world):
     assert "\x1b" not in f["incoming"][0]["subject"] and "<script>" in f["incoming"][0]["subject"]  # plain text
     assert _git(root, "branch", "--format=%(refname)").stdout.strip() == "refs/heads/main"
     r = post(w, "/pull", root, expected=f["expected"], confirmed=True)
-    assert r.status_code == 200 and r.json()["mode"] == "fast_forward"
+    assert r.status_code == 200 and r.json()["mode"] == "fast_forward", r.text
     assert (root / "theirs.txt").exists()
     # Both sides change: combine.
     commit(other, "t2.txt", "2\n", "Theirs 2")
