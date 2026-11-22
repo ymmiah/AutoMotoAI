@@ -919,3 +919,51 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 }
 @media (pointer:coarse){.dsa-consent input{width:22px;height:22px}}
 
+/* Share to GitHub or GitLab (PR 3). Lives in Tools only; the desktop main screen is unchanged. */
+.dss .dss-row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.dss-field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--dim);min-width:0;flex:0 0 auto;max-width:440px}
+.dss-row .dss-field{flex:1 1 220px}
+.dss-field input,.dss-field select{min-height:40px;padding:0 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:14px var(--mono)}
+.dss-field select{font-family:inherit}
+.dss-pick{display:flex;flex-direction:column;gap:8px;max-width:480px}
+.dss-summary{margin:0;font-weight:600;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.dss-commits{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-width:560px}
+.dss-commits li{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;gap:10px;align-items:baseline;padding:6px 10px;border-radius:8px;background:var(--panel2);font-size:13px}
+.dss-commits code{font:12px var(--mono);color:var(--accent)}
+.dss-commits span{overflow-wrap:anywhere;white-space:pre-wrap}
+.dss-commits small{color:var(--dim);font-size:12px}
+.dss-files>summary{cursor:pointer;color:var(--accent);font-size:13px}
+.dss-files ul{margin:6px 0 0;padding-left:18px;font:12.5px var(--mono);color:var(--dim);max-height:220px;overflow:auto;overflow-wrap:anywhere}
+.dss-blocks,.dss-warns{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;max-width:560px}
+.dss-blocks li,.dss-warns li{padding:9px 12px;border-radius:10px;font-size:13.5px;line-height:1.45;background:var(--panel2);border:1px solid var(--line);overflow-wrap:anywhere}
+.dss-blocks li{border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.dss-blocks li::before{content:"✕ ";color:var(--bad);font-weight:700}
+.dss-warns li.amber{border-color:color-mix(in srgb,#f0b429 55%,var(--line))}
+.dss-warns li.amber::before{content:"⚠ ";color:#f0b429}
+.dss-ok{margin:0;color:var(--ok);font-size:13.5px;font-weight:600}
+.dss-latest,.dss-fallback{display:flex;flex-direction:column;gap:10px;margin-top:14px;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);max-width:640px}
+.dss-fallback{border-color:color-mix(in srgb,#f0b429 50%,var(--line))}
+.dss-fallback h4{margin:0;font-size:16px}
+.dss-fallback>p{margin:0;font-size:13.5px;line-height:1.5}
+.dss-detail>summary{cursor:pointer;color:var(--dim);font-size:12.5px}
+.dss-log{margin:6px 0 0;padding:10px;border-radius:8px;background:var(--panel);font:12px var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}
+.dss-file{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;min-width:0}
+.dss-file code{font:12px var(--mono);color:var(--dim);overflow-wrap:anywhere;min-width:0}
+.dss-os{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--panel);align-self:flex-start}
+.dss-os .btn{min-height:34px;border:0;background:transparent}
+.dss-os .btn[aria-pressed="true"]{background:var(--accent);color:#06210f;font-weight:600}
+.dss-steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
+.dss-steps li{font-size:13.5px;line-height:1.45}
+.dss-steps li>p{margin:0 0 4px}
+.dss-steps li>.btn,.dss-steps li>a.btn{margin-top:2px}
+.dss-cmd{margin:0;padding:10px 12px;border-radius:8px;background:var(--panel);border:1px solid var(--line);font:12.5px var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.dss-cmd>code{display:block;margin-right:36px}
+@media (pointer:coarse){.dss-cmd>code{margin-right:48px}.dss-cmd{min-height:52px;box-sizing:border-box}}
+.dss a.btn{text-decoration:none;display:inline-flex;align-items:center;color:var(--text)}
+.dss .btn.link{background:none;border:0;color:var(--accent);padding:6px 0;margin-top:10px}
+@media (max-width:900px){
+  .dss-commits li{grid-template-columns:max-content minmax(0,1fr)}
+  .dss-commits small{grid-column:2}
+  .dss-field input,.dss-field select{min-height:44px}
+  .dss-os .btn{min-height:44px;min-width:64px}
+}
