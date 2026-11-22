@@ -30,19 +30,57 @@ def _data_env_file() -> str:
     return os.path.abspath(os.path.join(os.path.expanduser(base), ".env"))
 
 
+# Where each value read from a .env file came from: name -> (file, value). Real environment
+# variables are never listed here. Used to keep project .env files from redirecting tokens.
+ENV_SOURCES: dict[str, tuple[str, str]] = {}
+
+
 def load_env_files() -> list[str]:
     try:  # python-dotenv is optional at import time (tests don't need it)
         from dotenv import load_dotenv
     except Exception:  # pragma: no cover
         return []
     loaded: list[str] = []
+
+    def _load(p: str) -> bool:
+        before = set(os.environ)
+        ok = load_dotenv(p, override=False)
+        for name in set(os.environ) - before:
+            ENV_SOURCES[name] = (os.path.abspath(p), os.environ[name])
+        return ok
+
     for p in env_files():
-        if load_dotenv(p, override=False):
+        if _load(p):
             loaded.append(p)
     data = _data_env_file()  # after the others, so AUTOMOTO_DATA_DIR from a local .env counts
-    if data not in loaded and os.path.isfile(data) and load_dotenv(data, override=False):
+    if data not in loaded and os.path.isfile(data) and _load(data):
         loaded.append(data)
     return loaded
+
+
+def env_source(name: str) -> str | None:
+    """The .env file a variable's current value came from, or None for a real environment variable."""
+    src = ENV_SOURCES.get(name)
+    if src and os.getenv(name) == src[1]:
+        return src[0]
+    return None
+
+
+def env_trusted(name: str, default: str | None = None) -> str | None:
+    """Like env(), but a value that came from a project/current-folder .env is ignored.
+
+    Hosts and client IDs that decide where a token is sent may only come from a real environment
+    variable or from AutoMoto's own ``~/.automoto/.env`` - never from a repository's .env."""
+    src = env_source(name)
+    if src is None or os.path.normcase(src) == os.path.normcase(_data_env_file()):
+        return env(name, default)
+    try:
+        from dotenv import dotenv_values
+
+        own = dotenv_values(_data_env_file()).get(name) if os.path.isfile(_data_env_file()) else None
+    except Exception:  # pragma: no cover
+        own = None
+    return (own or "").strip() or default
 
 
 LOADED_ENV_FILES = load_env_files()

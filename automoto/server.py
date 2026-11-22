@@ -190,6 +190,8 @@ from automoto import developer_run
 app.include_router(developer_run.router)  # V41/V44 approved real runs, test results and loopback-only live preview
 from automoto import developer_git
 app.include_router(developer_git.router)  # V45 local Git confined to the project; never pushes
+from automoto import git_auth
+app.include_router(git_auth.router)  # V46-V48 PR 2: GitHub/GitLab sign-in, tokens only in the OS keychain
 from automoto import developer_scripting
 app.include_router(developer_scripting.router)  # V27 Ruby Lua Perl Groovy package and explicit toolchain adapters
 from automoto import developer_science

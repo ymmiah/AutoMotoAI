@@ -24,6 +24,9 @@ pandas>=2
 # Data files and archives (v5.4): YAML (safe_load only), TOML on Python 3.10.
 # Optional extras: pyarrow (Parquet, ~150 MB), py7zr (.7z without the 7-Zip CLI), tomli-w (TOML writing).
 PyYAML>=6,<7
+
+# GitHub/GitLab sign-in: tokens only in the OS keychain (Windows Credential Manager, macOS Keychain, Secret Service)
+keyring>=25.6,<26
 tomli>=2; python_version < "3.11"
 
 # Optional desktop automation (typing, hotkeys, screenshots). Safe to skip on servers.

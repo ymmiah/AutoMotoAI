@@ -27,6 +27,7 @@ const RUN_APP="Start this app locally for a quick check: find its start command,
 const TOOLS=[
   ["run","Run my app","Start it, see it live and check it works","▶","#4caf50","builtin",["dsRunRoot"],null],
   ["git","Checkpoints (Git)","Save versions of your work and try ideas safely","⎇","#f05033","builtin",["dsGitRoot"],null],
+  ["account","Connect GitHub or GitLab","Sign in safely so you can share your work later","⇪","#8b7bff","builtin",["dsAccountRoot"],null],
   ["typescript","TypeScript & JavaScript","Node scripts, type checks and tests","TS","#3178c6","web",["dsJavaScriptRoot"],"typescript"],
   ["frontend","Web pages","Accessibility and responsive preview","UI","#e44d8a","web",["dsFrontendRoot"],"javascript"],
   ["php","PHP & WordPress","Composer and WordPress checks","PHP","#7a86b8","web",["dsPhpRoot"],"php"],

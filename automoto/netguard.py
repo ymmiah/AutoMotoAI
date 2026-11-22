@@ -19,7 +19,7 @@ import socket
 import ssl
 import time
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 ALLOWED_PORTS = {80, 443, 8080, 8443}
 MAX_BYTES = 2_000_000
@@ -150,6 +150,7 @@ class Response:
     status: int
     content_type: str
     body: bytes
+    headers: dict = field(default_factory=dict)  # lower-case names
 
     def text(self) -> str:
         charset = "utf-8"
@@ -164,15 +165,23 @@ SENSITIVE_HEADERS = {"authorization", "proxy-authorization", "cookie", "private-
 
 def request(url: str, *, method: str = "GET", data: bytes | None = None, headers: dict[str, str] | None = None,
             timeout: float = 20, max_redirects: int = 4, max_bytes: int = MAX_BYTES,
-            total_timeout: float | None = None, min_rate: int = 0) -> Response:
+            total_timeout: float | None = None, min_rate: int = 0,
+            allow_hosts: "set[str] | frozenset[str] | tuple[str, ...] | None" = None) -> Response:
     # ``timeout`` is per socket operation; ``total_timeout`` caps the whole request so a server that
     # trickles bytes (or stalls between reads) cannot hang the agent. ``min_rate`` (bytes/s, checked after a
     # 15 s grace period) fails fast on a throttled connection so the caller can retry on a fresh one.
+    # ``allow_hosts`` (egress allowlist): every hop, redirects included, must go to one of these exact
+    # https hosts. Anything else is refused before DNS, so a token can never be sent elsewhere.
+    allowed = {h.lower().rstrip(".") for h in allow_hosts} if allow_hosts is not None else None
     start = time.monotonic()
     deadline = start + (total_timeout if total_timeout is not None else max(60.0, timeout * 4))
     for _ in range(max_redirects + 1):
         if time.monotonic() > deadline:
             raise BlockedURL("request took too long")
+        if allowed is not None:
+            hop = urllib.parse.urlsplit(url.strip())
+            if hop.scheme != "https" or (hop.hostname or "").lower().rstrip(".") not in allowed:
+                raise BlockedURL(f"{hop.hostname or 'that address'} is not on the allowed list for this request")
         parts, ip = check_url(url)
         port = parts.port or (443 if parts.scheme == "https" else 80)
         cls = _PinnedHTTPS if parts.scheme == "https" else _PinnedHTTP
@@ -206,7 +215,8 @@ def request(url: str, *, method: str = "GET", data: bytes | None = None, headers
                 chunks.append(piece)
                 got += len(piece)
             body = b"".join(chunks)[:max_bytes]
-            return Response(url, resp.status, resp.getheader("Content-Type") or "", body)
+            return Response(url, resp.status, resp.getheader("Content-Type") or "", body,
+                            {k.lower(): v for k, v in (resp.getheaders() if hasattr(resp, "getheaders") else [])})
         finally:
             conn.close()
     raise BlockedURL("too many redirects")

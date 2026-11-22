@@ -35,6 +35,7 @@ import {mountDeveloperWasm} from "./developer-wasm.js";
 import {mountDeveloperSimple} from "./developer-simple.js";
 import {mountDeveloperRun} from "./developer-run.js";
 import {mountDeveloperGit} from "./developer-git.js";
+import {mountDeveloperAccount} from "./developer-account.js";
 import {mountBeginnerPanels} from "./developer-beginner.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
@@ -83,6 +84,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsWasmRoot" aria-label="WebAssembly WAT WASM WIT WASI component source evidence"></div>'+  
       '<div id="dsRunRoot" aria-label="Run the app, run tests and preview it locally"></div>'+
       '<div id="dsGitRoot" aria-label="Local Git: changes, branches, commits and conflicts"></div>'+
+      '<div id="dsAccountRoot" aria-label="Connect GitHub or GitLab"></div>'+
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Files or code"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Files</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Code</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -137,6 +139,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   const runStudio=mountDeveloperRun({api,host,getProject:()=>project,status,onTestResult:r=>simple?.testResult(r)});
   const gitStudio=mountDeveloperGit({api,host,getProject:()=>project,status,afterFilesChanged(){if(project&&!editor.hasUnsaved()){editor.reset();void list(directory);}}});
   mountBeginnerPanels({host,runner:runStudio,git:gitStudio});
+  mountDeveloperAccount({api,host,status});
   workbench=mountDeveloperWorkbench({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,

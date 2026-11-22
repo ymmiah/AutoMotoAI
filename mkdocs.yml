@@ -14,6 +14,7 @@ nav:
   - GUI guide: GUI-GUIDE.md
   - What you can ask for: CAPABILITIES.md
   - Studios the assistant can use: STUDIO-ASSISTANT.md
+  - Connect GitHub or GitLab: GIT-SIGN-IN.md
   - Install: INSTALL.md
   - iPhone apps: IOS.md
   - Offline AI (no key, no internet): OFFLINE.md
