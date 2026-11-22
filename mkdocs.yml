@@ -17,6 +17,7 @@ nav:
   - Connect GitHub or GitLab: GIT-SIGN-IN.md
   - Share to GitHub or GitLab: SHARE-TO-GITHUB.md
   - Ask for a review and checks: PULL-REQUESTS-AND-CI.md
+  - Project map and safe rename: PROJECT-MAP.md
   - Install: INSTALL.md
   - iPhone apps: IOS.md
   - Offline AI (no key, no internet): OFFLINE.md

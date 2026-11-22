@@ -196,6 +196,8 @@ from automoto import developer_remote
 app.include_router(developer_remote.router)  # V46-V48 PR 3: share/get latest with a single-use credential, pre-push scan, .patch fallback
 from automoto import developer_pulls
 app.include_router(developer_pulls.router)  # V46-V48 PR 4: draft pull/merge requests (click-only, never merges) and read-only checks
+from automoto import developer_polyglot
+app.include_router(developer_polyglot.router)  # V37-V40: polyglot project map, API trace, safe rename, monorepo packages (static, never runs code)
 from automoto import developer_scripting
 app.include_router(developer_scripting.router)  # V27 Ruby Lua Perl Groovy package and explicit toolchain adapters
 from automoto import developer_science
