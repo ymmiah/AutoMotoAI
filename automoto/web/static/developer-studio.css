@@ -798,14 +798,14 @@
 }
 .dsg-viewer>.btn{align-self:flex-start}
 
-/* One workspace status strip (styles further down): the same ring as every card, drawn smaller and
-   without the "of N" line. Kept here so no later media query touches the ring. */
-.dsw-fact .dsb-gauge{width:34px;gap:0}
-.dsw-fact .dsb-ring{width:34px;height:34px}
-.dsw-fact .dsb-ring b{width:28px;height:28px;font-size:12px}
-.dsw-fact .dsb-ring b.mid{font-size:10.5px}
-.dsw-fact .dsb-ring b.long{font-size:9.5px}
-.dsw-fact .dsb-ring-of{display:none}
+/* Edit, test & share status pills and chat result cards (styles further down): the same ring as every
+   card, drawn smaller in the pills. Kept here so no later media query touches the ring. */
+.dsw-pill .dsb-gauge{width:24px;gap:0}
+.dsw-pill .dsb-ring{width:24px;height:24px}
+.dsw-pill .dsb-ring b{width:19px;height:19px;font-size:9.5px}
+.dsw-pill .dsb-ring b.mid,.dsw-pill .dsb-ring b.long{font-size:8px}
+.dsw-pill .dsb-ring-of{display:none}
+.dsw-result.dsb-check{margin:0;max-width:560px}
 /* Beginner faces for Run my app and Checkpoints (Git): guided steps plus a small health ring. */
 .dsb{display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:18px;margin:0 0 12px}
 .dsb-h{margin:0;font-size:18px}
@@ -1057,75 +1057,103 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
   .dsp .btn.dsp-all{min-height:44px}
 }
 
-/* One workspace: Edit, Test and Share in one place (Tools > Edit, test & share) */
-.dsw{display:flex;flex-direction:column;gap:12px;min-width:0}
-.dsw-head{position:sticky;top:0;z-index:4;display:flex;flex-direction:column;gap:8px;margin:-6px 0 0;padding:6px 0 8px;background:var(--bg)}
-.dsw-brief{display:none}
-.dsw-jump{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.dsw-jump-b{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px 6px 6px;border:1px solid var(--line);border-radius:99px;background:var(--panel);color:var(--text);font:inherit;font-size:13px;cursor:pointer}
-.dsw-jump-b:hover{border-color:var(--line2)}
-.dsw-jump-b .dsw-n{width:24px;height:24px;font-size:12px}
-.dsw-tabs{display:flex;align-items:stretch;gap:6px;padding:4px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
-.dsw-tab{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:var(--dim);font:inherit;text-align:left;cursor:pointer}
-.dsw-tab:hover{background:var(--hover);color:var(--text)}
-.dsw-tab.on{background:var(--panel2);color:var(--text);box-shadow:inset 0 0 0 1px var(--accent)}
-.dsw-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.dsw-n{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--line);color:var(--text);font-size:13px;font-weight:700}
-.dsw-tab.on .dsw-n{background:var(--accent);color:var(--on-accent,#04110b)}
-.dsw-tab[data-state="ok"] .dsw-n{background:var(--ok);color:#04110b}
-.dsw-tab[data-state="bad"] .dsw-n{background:var(--bad);color:#fff}
-.dsw-tab-t{display:flex;flex-direction:column;min-width:0;line-height:1.25}
-.dsw-tab-t b{font-size:15px}
-.dsw-tab-t small{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dsw-arrow{align-self:center;color:var(--faint,var(--dim));font-size:18px}
-.dsw-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.dsw-fact{display:flex;align-items:center;gap:10px;min-width:0;min-height:58px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);font:inherit;text-align:left;cursor:pointer}
-.dsw-fact:hover{border-color:var(--line2)}
-.dsw-fact:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.dsw-fact.t-warn{box-shadow:inset 3px 0 0 var(--warn,#e0a526)}
-.dsw-fact.t-bad{box-shadow:inset 3px 0 0 var(--bad)}
-.dsw-fact.t-ok{box-shadow:inset 3px 0 0 var(--ok)}
-.dsw-mark{flex:none;display:grid;place-items:center;width:34px;height:34px}
-.dsw-fact-t{display:flex;flex-direction:column;min-width:0;line-height:1.3}
-.dsw-fact-t b{font-size:14px;overflow-wrap:anywhere}
-.dsw-fact-t small{font-size:12px;color:var(--dim)}
-.dsw-dot{width:12px;height:12px;border-radius:50%;background:var(--ok)}
-.dsw-fact.t-warn .dsw-dot{background:var(--warn,#e0a526)}
-.dsw-up{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--panel2);font-size:16px;font-weight:700;color:var(--dim)}
-.dsw-fact.t-ok .dsw-up{color:var(--ok)}
-.dsw-fact.t-warn .dsw-up{color:var(--warn,#e0a526)}
-.dsw-pane{display:flex;flex-direction:column;gap:12px;min-width:0}
-.dsw-pane[hidden]{display:none}
-.dsw-lead{margin:0;font-size:14px;line-height:1.5;color:var(--dim);max-width:620px}
-.dsw-note{margin:0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--warn,#e0a526) 14%,transparent);font-size:13px;line-height:1.45}
-.dsw-slot{min-width:0}
-.dsw-edit>.dsw-slot{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
-.dsw-edit .ds-columns{min-height:420px}
-.dsw-part{display:flex;flex-direction:column;gap:8px;min-width:0}
+/* Edit, test & share: the Developer chat first, with a live panel beside it (a slide-up sheet on phones).
+   Only shown inside Tools > Edit, test & share, so the main screens are unchanged. */
+.dsx[data-ws] .dsx-tools{padding:0;gap:0;overflow:hidden}
+.dsx[data-ws] .dsx-tools-head,.dsx[data-ws] .dsx-detail-head,.dsx[data-ws] .dsx-tools-foot{display:none}
+.dsx[data-ws] #dsxToolDetail{flex:1;min-height:0;gap:0}
+.dsx[data-ws] #dsxDetailBody{flex:1;min-height:0;display:flex;flex-direction:column}
+.dsx[data-ws] #dsxHero,.dsx[data-ws] #dsxStarters{display:none}
+.dsw{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);overflow:hidden}
+.dsw-chatcol{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line)}
+.dsw-top{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.dsw-title{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.dsw-title b{font-size:15px}
+.dsw-title small{font-size:12px;color:var(--dim)}
+.dsw-manual[aria-expanded="true"]{border-color:var(--accent)}
+.dsw-strip{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px}
+.dsw-pill{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:3px 12px 3px 4px;border:1px solid var(--line);border-radius:99px;background:var(--panel);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
+.dsw-pill:hover{border-color:var(--line2)}
+.dsw-pill:focus-visible,.dsw-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dsw-mk{flex:none;display:grid;place-items:center;width:24px;height:24px}
+.dsw-dot{width:10px;height:10px;border-radius:50%;background:var(--ok)}
+.dsw-pill.t-warn .dsw-dot{background:var(--warn,#e0a526)}
+.dsw-up{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--panel2);font-size:12px;font-weight:700;color:var(--dim)}
+.dsw-pill.t-ok .dsw-up{color:var(--ok)}
+.dsw-pill.t-warn .dsw-up{color:var(--warn,#e0a526)}
+.dsw-chatslot{flex:1;min-height:0;display:flex;flex-direction:column}
+.dsw .dsx-chat{flex:1;min-height:0;justify-content:flex-start!important;overflow:hidden!important;background:transparent}
+.dsw .dsx-scroll{flex:1 1 auto!important;overflow:auto!important;padding:16px 16px 8px}
+.dsw .dsx-dock{padding:8px 16px 14px}
+.dsw-hello{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;margin:auto 0;padding:28px 8px}
+.dsx.has-thread .dsw-hello{display:none}
+.dsw-hello-av{display:grid;place-items:center;width:56px;height:56px;border-radius:18px;background:var(--accent);color:var(--on-accent,#04110b);font-size:26px;font-weight:800}
+.dsw-hello h2{margin:6px 0 0;font-size:24px;letter-spacing:-.01em;max-width:440px}
+.dsw-hello p{margin:0;color:var(--dim);font-size:14px;line-height:1.5;max-width:420px}
+.dsw-chips{display:flex;flex-wrap:wrap;gap:8px}
+.dsw-chip{min-height:36px;padding:7px 14px;border:1px solid var(--line2);border-radius:99px;background:var(--panel);color:var(--text);font:inherit;font-size:13.5px;cursor:pointer}
+.dsw-chip:hover{background:var(--hover);border-color:var(--accent)}
+.dsw-live{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg2)}
+.dsw-live>.dsx-sheet-handle{display:none}
+.dsw-live-head{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.dsw-live-title{margin:0;font-size:15px}
+.dsw-live-close{display:none}
+.dsw-seg{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px;border-bottom:1px solid var(--line)}
+.dsw-seg[hidden]{display:none}
+.dsw-seg .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--text)}
+.dsw-slot{flex:1;min-height:0;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.dsw-slot[hidden]{display:none}
+.dsw-slot.dsw-edit{padding:0;overflow:hidden}
+.dsw-edit .ds-columns{min-height:0;flex:1}
 .dsw-account{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:0 14px}
 .dsw-account>summary{cursor:pointer;padding:12px 0;font-weight:600}
 .dsw-account[open]>summary{border-bottom:1px solid var(--line);margin-bottom:12px}
-.dsw-next{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
-.dsw-next-t{flex:1 1 220px;font-size:14px;line-height:1.45}
-.dsw-next-b{display:flex;flex-wrap:wrap;gap:8px}
-@media (max-width:900px){
-  .dsw-tabs{gap:2px}
-  .dsw-tab{flex-direction:column;align-items:center;gap:4px;padding:8px 4px;text-align:center;min-height:56px}
-  .dsw-tab-t small{display:none}
-  .dsw-arrow{display:none}
-  .dsw-strip{gap:6px}
-  .dsw-fact{flex-direction:column;justify-content:center;gap:4px;min-height:0;padding:8px 4px;text-align:center}
-  .dsw-fact.t-warn{box-shadow:inset 0 -3px 0 var(--warn,#e0a526)}
-  .dsw-fact.t-bad{box-shadow:inset 0 -3px 0 var(--bad)}
-  .dsw-fact.t-ok{box-shadow:inset 0 -3px 0 var(--ok)}
-  .dsw-fact-t{align-items:center}
-  .dsw-fact-t b,.dsw-fact-t small{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .dsw-brief{display:block;font-size:12.5px;font-weight:600;line-height:1.25}
-  .dsw-up{width:28px;height:28px}
-  .dsw-jump-b{min-height:44px}
-  .dsw-next .btn{min-height:44px;padding:10px 16px}
-  .dsw-next-b{width:100%}
-  .dsw-next-b .btn{flex:1 1 auto}
-  .dsw-account>summary{padding:14px 0}
-  .dsw-edit .ds-columns{min-height:360px}
+.dsw-card{display:flex;flex-direction:column;gap:8px;margin:8px 0;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);max-width:560px;min-width:0}
+.dsw-card>b{font-size:14.5px;overflow-wrap:anywhere}
+.dsw-card>p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.45}
+.dsw-card.ok{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.dsw-card.bad{border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.dsw-card.dsw-ask{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.dsw-card .input.dsw-input{width:100%;box-sizing:border-box}
+.dsw-card textarea.dsw-input{resize:vertical;min-height:72px}
+.dsw-btns{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:2px}
+.dsw-done{font-size:13px;color:var(--dim)}
+.dsw-done.ok{color:var(--ok);font-weight:600}
+.dsw-hint{margin:0;color:var(--dim);font-size:12.5px}
+.dsw-ok{margin:0;color:var(--ok);font-size:13px}
+.dsw-warn{margin:0;color:var(--warn,#e0a526);font-size:13px}
+.dsw-files,.dsw-blocks{margin:0;padding-left:18px;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.dsw-blocks{color:var(--bad)}
+.dsw-diff{max-height:300px;overflow:auto;margin:0;border:1px solid var(--line);border-radius:10px;font-size:12px}
+.dsw-cmd{margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:12.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.dsw-fallback{max-width:620px}
+.dsw-fallback .dss-fallback{margin:0;border:0;padding:0;background:transparent}
+.dsw .dsx-msg.bot .dsx-turn{min-width:0}
+/* Narrow tablets (portrait, next to the app menu): the chat on top, the live panel below it. */
+@container dsx (min-width:500px) and (max-width:700px){
+  .dsw{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.5fr) minmax(0,1fr)}
+  .dsw-chatcol{border-right:0;border-bottom:1px solid var(--line)}
+  .dsw-edit .ds-columns{grid-template-columns:minmax(150px,36%) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 }
+/* Phones: the chat fills the screen and the live panel slides up as a sheet. */
+@container dsx (max-width:499px){
+  .dsw{grid-template-columns:minmax(0,1fr)}
+  .dsw-chatcol{border-right:0}
+  .dsw-top{padding:8px 12px}
+  .dsw-top .dsx-av{display:none}
+  .dsw-strip{padding:6px 12px;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .dsw-pill{flex:none;min-height:36px}
+  .dsw .dsx-scroll{padding:12px 12px 6px}
+  .dsw .dsx-dock{padding:6px 12px 10px}
+  .dsw-chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -12px;padding:2px 12px;scrollbar-width:none}
+  .dsw-chip{flex:none;min-height:40px}
+  .dsx:not(.has-thread) .dsw-chips{flex-wrap:wrap;overflow:visible;margin:0;padding:0}
+  .dsw-hello h2{font-size:21px}
+  .dsw-live{position:absolute;left:0;right:0;bottom:0;height:min(82%,calc(100% - 40px));z-index:5;border-top:1px solid var(--line2);border-radius:18px 18px 0 0;box-shadow:var(--shadow);transform:translateY(105%);visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
+  .dsw.live-open .dsw-live{transform:none;visibility:visible;transition:transform .2s ease}
+  .dsw-live>.dsx-sheet-handle{display:block}
+  .dsw-live-close{display:inline-flex;min-height:40px}
+  .dsw-btns .btn{min-height:44px;padding:10px 16px}
+  .dsw-card{max-width:none}
+}
+@media (prefers-reduced-motion:reduce){.dsw-live{transition:none!important}}

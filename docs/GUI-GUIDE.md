@@ -554,12 +554,15 @@ app ("5/6", failing names, Check again). It only reads. If anything fails, you g
 instructions with a copy button on every link and command. See
 [PULL-REQUESTS-AND-CI.md](PULL-REQUESTS-AND-CI.md).
 
-**Edit, test & share.** Developer Studio → Tools → **Edit, test & share** is one place to change a file,
-check it works and send it to GitHub or GitLab. Three tabs run along the top: **Edit** (your files and the
-editor), **Test** (Run my app: start it, see it live, check it works) and **Share** (save a checkpoint, share
-it, ask for a review). The strip under the tabs always shows whether you have unsaved changes, the last test
-result and how many checkpoints aren't shared yet. Tap any part of the strip to jump to its tab. Nothing runs
-or gets sent until you press the button and confirm, exactly as on the separate cards, which still work.
+**Edit, test & share.** Developer Studio → Tools → **Edit, test & share** is the chat-first place to change,
+test and share your app. Ask in your own words or tap an idea: **Explain my project**, **Fix the error**, **Test
+my app**, **Share to GitHub**, **Ask for a review** or **Map my project**. On desktop, the chat is on the left and a
+live panel on the right shows your files, the test result or sharing. On phones, the chat fills the screen and
+the panel slides up when you tap the strip or **Manual controls**. When the assistant wants to change a file,
+you see the change as a diff with **Apply** and **Skip**. Test, share and review show a card with exactly what
+will run or be sent, and nothing happens until you press its button. If sharing is refused, you get a `.patch`
+file and step-by-step commands, each with a copy button. The strip shows whether everything is saved, the last
+test result and how many checkpoints aren't shared yet. The separate cards still work.
 
 **Project map.** Developer Studio → Tools → **Project map** shows the languages in your project and
 how its files link, which frontend calls reach which API routes and data models ("2 of 3 calls
