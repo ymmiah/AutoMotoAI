@@ -57,6 +57,7 @@ const TOOLS=[
   ["language","Language detection","Which languages and frameworks a project uses","Aa","#7aa2ff","builtin",["dsLanguageRoot"],null],
   ["lsp","Language servers","Hover, definitions and diagnostics","LS","#7aa2ff","builtin",["dsLspRoot"],null],
   ["index","Search & outline","Find symbols and files across the project","⌕","#7aa2ff","builtin",["dsIndexRoot","dsNavigationRoot"],null],
+  ["polyglot","Project map","See how your files, languages and data connect","⌘","#0ea5e9","builtin",["dsPolyglotRoot"],null],
   ["adapters","Build & debug adapters","Approved local build, test and debug tools","Db","#7aa2ff","builtin",["dsAdaptersRoot"],null],
   ["agent","Agent reviews & release plans","Send a review or readiness plan to the central agent",BRAND.charAt(0),"#7aa2ff","builtin",[".studio-agent-bridge"],null]
 ];

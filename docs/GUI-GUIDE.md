@@ -554,6 +554,12 @@ app ("5/6", failing names, Check again). It only reads. If anything fails, you g
 instructions with a copy button on every link and command. See
 [PULL-REQUESTS-AND-CI.md](PULL-REQUESTS-AND-CI.md).
 
+**Project map.** Developer Studio → Tools → **Project map** shows the languages in your project and
+how its files link, which frontend calls reach which API routes and data models ("2 of 3 calls
+matched a route" in the small ring card), and the parts of a big project, with build commands to
+copy. **Rename safely** previews every change first, stops when a rename would be ambiguous or
+clash, and has Undo. Your code is only read, never run. See [PROJECT-MAP.md](PROJECT-MAP.md).
+
 ---
 
 ## 17. Example prompts to copy
