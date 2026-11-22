@@ -967,3 +967,34 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
   .dss-field input,.dss-field select{min-height:44px}
   .dss-os .btn{min-height:44px;min-width:64px}
 }
+/* Ask for a review + Checks on GitHub/GitLab (V46-V48 PR 4). Lives in Tools only; the checks card reuses
+   the Run my app health-ring card unchanged, so it measures the same on phone, tablet and desktop. */
+.dsv a.btn{text-decoration:none;display:inline-flex;align-items:center;color:var(--text)}
+.dsv .btn.link{background:none;border:0;color:var(--accent);padding:6px 0;margin-top:10px}
+.dsv-note{margin:0;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--accent) 10%,var(--panel2));border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));font-size:12.5px;color:var(--dim);max-width:560px}
+.dsv-form{max-width:560px}
+.dsv-form .dss-field{max-width:none}
+.dsv-body{min-height:120px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:13.5px/1.45 var(--mono);resize:vertical;box-sizing:border-box;width:100%}
+.dsv-check{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim)}
+.dsv-check input{width:18px;height:18px;margin:0;flex:none}
+.dsv-url{display:block;font:12px var(--mono);color:var(--dim);overflow-wrap:anywhere;max-width:560px}
+.dsv-scope{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;border:1px solid color-mix(in srgb,#f0b429 50%,var(--line));background:var(--panel2);max-width:560px}
+.dsv-scope>p{margin:0;font-size:13px;line-height:1.45}
+.dsv-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-width:560px}
+.dsv-items li{display:grid;grid-template-columns:18px minmax(0,1fr) max-content;gap:4px 8px;align-items:center;padding:6px 10px;border-radius:8px;background:var(--panel2);font-size:13px}
+.dsv-items li>small{grid-column:2/4;color:var(--dim);font-size:12px;overflow-wrap:anywhere}
+.dsv-items .dsv-name{overflow-wrap:anywhere;white-space:pre-wrap;min-width:0}
+.dsv-items .st-failed .dsv-state{color:var(--bad);font-weight:700}
+.dsv-items .st-warning .dsv-state{color:#f0b429}
+.dsv-items .st-running .dsv-state{color:var(--accent)}
+.dsv-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.dsv-detail{display:flex;flex-direction:column;gap:6px;max-width:640px}
+.dsv-log{max-height:260px}
+.dsv-log>code{display:block;margin-right:36px;white-space:pre-wrap}
+@media (pointer:coarse){.dsv-log>code{margin-right:48px}}
+@media (max-width:900px){
+  .dsv-items li{grid-template-columns:18px minmax(0,1fr)}
+  .dsv-acts{grid-column:2;justify-content:flex-start}
+  .dsv-check input{width:22px;height:22px}
+  .dsv .dss-field input{min-height:44px}
+}

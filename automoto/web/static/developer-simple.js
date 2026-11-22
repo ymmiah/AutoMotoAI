@@ -29,6 +29,7 @@ const TOOLS=[
   ["git","Checkpoints (Git)","Save versions of your work and try ideas safely","⎇","#f05033","builtin",["dsGitRoot"],null],
   ["account","Connect GitHub or GitLab","Sign in safely so you can share your work later","⇪","#8b7bff","builtin",["dsAccountRoot"],null],
   ["share","Share to GitHub or GitLab","Send your checkpoints online, safely checked first","⇧","#2ea44f","builtin",["dsShareRoot"],null],
+  ["review","Ask for a review","Open a draft pull request and see if its checks passed","⇄","#d97706","builtin",["dsReviewRoot"],null],
   ["typescript","TypeScript & JavaScript","Node scripts, type checks and tests","TS","#3178c6","web",["dsJavaScriptRoot"],"typescript"],
   ["frontend","Web pages","Accessibility and responsive preview","UI","#e44d8a","web",["dsFrontendRoot"],"javascript"],
   ["php","PHP & WordPress","Composer and WordPress checks","PHP","#7a86b8","web",["dsPhpRoot"],"php"],

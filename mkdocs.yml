@@ -16,6 +16,7 @@ nav:
   - Studios the assistant can use: STUDIO-ASSISTANT.md
   - Connect GitHub or GitLab: GIT-SIGN-IN.md
   - Share to GitHub or GitLab: SHARE-TO-GITHUB.md
+  - Ask for a review and checks: PULL-REQUESTS-AND-CI.md
   - Install: INSTALL.md
   - iPhone apps: IOS.md
   - Offline AI (no key, no internet): OFFLINE.md

@@ -147,7 +147,7 @@ function miniDiff(text){
   if(!pre.childNodes.length)pre.append(el("span",null,"No text changes."));
   return pre;
 }
-function ring(passed,total,tone,fallback){
+export function ring(passed,total,tone,fallback){
   const r=el("div","dsb-ring sm t-"+tone);r.setAttribute("role","img");
   r.setAttribute("aria-label",total?passed+" of "+total+" checks passed":tone==="busy"?"Checking":tone==="ok"?"Checks passed":tone==="idle"?"Check stopped":"Checks did not pass");
   r.style.setProperty("--p",(total?Math.round(100*passed/total):tone==="ok"?100:0)+"%");

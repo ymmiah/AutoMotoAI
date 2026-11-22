@@ -194,6 +194,8 @@ from automoto import git_auth
 app.include_router(git_auth.router)  # V46-V48 PR 2: GitHub/GitLab sign-in, tokens only in the OS keychain
 from automoto import developer_remote
 app.include_router(developer_remote.router)  # V46-V48 PR 3: share/get latest with a single-use credential, pre-push scan, .patch fallback
+from automoto import developer_pulls
+app.include_router(developer_pulls.router)  # V46-V48 PR 4: draft pull/merge requests (click-only, never merges) and read-only checks
 from automoto import developer_scripting
 app.include_router(developer_scripting.router)  # V27 Ruby Lua Perl Groovy package and explicit toolchain adapters
 from automoto import developer_science
