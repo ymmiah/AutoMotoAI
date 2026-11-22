@@ -243,8 +243,11 @@ def test_v39_python_rename_keeps_bom_and_skips_strings(env):
     assert (project / "api/use.py").read_text(encoding="utf-8") == "from .util import assist\n# helper\nprint(assist())\n"
 
 
-def test_v40_monorepo_packages_bindings_and_commands(env):
+@pytest.mark.parametrize("toml_reader", ["stdlib", "fallback"])
+def test_v40_monorepo_packages_bindings_and_commands(env, monkeypatch, toml_reader):
     client, project = env
+    if toml_reader == "fallback":  # Python 3.10 has no tomllib
+        monkeypatch.setattr(poly, "_toml", None)
     extra = {
         "package.json": '{"name": "root", "private": true, "workspaces": ["web", "shared"]}',
         "shared/package.json": '{"name": "shared", "version": "1.0.0"}',

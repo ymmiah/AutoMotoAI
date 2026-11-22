@@ -1348,7 +1348,9 @@ def _tomlish(text: Optional[str]) -> dict:
         m = re.match(r"([\w\-]+)\s*=\s*(.+)$", line)
         if m:
             val = m.group(2).strip()
-            if val.startswith("["):
+            if val.startswith("{"):
+                section[m.group(1)] = dict(re.findall(r"([\w\-]+)\s*=\s*['\"]([^'\"]*)['\"]", val))
+            elif val.startswith("["):
                 section[m.group(1)] = re.findall(r"['\"]([^'\"]+)['\"]", val)
             elif val.startswith(("'", '"')):
                 section[m.group(1)] = val.strip("'\"")
