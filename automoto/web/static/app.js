@@ -1,5 +1,6 @@
 // AutoMoto AI GUI - vanilla ES module, no build step, no CDN.
 import { icon, hydrateIcons, TOOL_ICONS } from "./icons.js";
+import { copyButton, copyText as copyToClipboard, flash as flashCopied, installCopyButtons } from "./copy.js";
 import * as shell from "./shell.js";
 import { mountStudioAgentBridge } from "./studio-agent-bridge.js";
 import { attachStudioDrop, bindStudioQueue, enqueueStudioTask } from "./studio-queue.js";
@@ -121,7 +122,8 @@ function renderMarkdown(text) {
     const pre = code.parentElement;
     const wrap = document.createElement("div");
     wrap.className = "code";
-    wrap.innerHTML = `<div class="code-head"><span>${esc(lang || "code")}</span><button class="icon-btn sm" aria-label="Copy code" title="Copy">${icon("copy")}</button></div>`;
+    wrap.innerHTML = `<div class="code-head"><span>${esc(lang || "code")}</span></div>`;
+    wrap.firstChild.append(copyButton({ getText: () => code.textContent, label: "code", cls: "icon-btn sm" }));
     pre.replaceWith(wrap);
     wrap.appendChild(pre);
     try {
@@ -130,17 +132,16 @@ function renderMarkdown(text) {
         else { code.innerHTML = hljs.highlightAuto(code.textContent).value; code.classList.add("hljs"); }
       }
     } catch { /* plain text is fine */ }
-    $("button", wrap).onclick = (e) => copyText(code.textContent, e.currentTarget);
   });
   return div;
 }
 async function copyText(text, btn) {
-  try { await navigator.clipboard.writeText(text); } catch {
-    const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
-  }
-  if (btn) { const old = btn.innerHTML; btn.innerHTML = icon("check"); setTimeout(() => (btn.innerHTML = old), 1200); }
-  else toast("Copied");
+  const ok = await copyToClipboard(text);
+  if (btn) flashCopied(btn, ok);
+  else { flashCopied(null, ok); toast(ok ? "Copied" : "Couldn't copy. Select the text and press Ctrl+C.", ok ? undefined : "warn"); }
+  return ok;
 }
+installCopyButtons(document.body);
 
 // ---------------------------------------------------------------- theme
 function applyTheme(theme, accent) {
@@ -1432,7 +1433,7 @@ PAGES.tools = async () => {
   const d = await api("/api/agent/info");
   const groups = {};
   d.tools.filter((t) => !t.hidden).forEach((t) => (groups[t.group || "other"] ||= []).push(t));
-  $("#tlList").innerHTML = `<div class="card"><dl class="kv" style="margin:0"><dt>Approvals</dt><dd>${statusPill(d.approval_mode)}</dd><dt>Sandbox</dt><dd>${esc(d.sandbox)}</dd><dt>Workspace</dt><dd><code>${esc(d.workspace)}</code></dd></dl></div>` +
+  $("#tlList").innerHTML = `<div class="card"><dl class="kv" style="margin:0"><dt>Approvals</dt><dd>${statusPill(d.approval_mode)}</dd><dt>Sandbox</dt><dd>${esc(d.sandbox)}</dd><dt>Workspace</dt><dd><code data-copy="" data-copy-label="workspace folder path">${esc(d.workspace)}</code></dd></dl></div>` +
     Object.entries(groups).map(([g, ts]) => `<div class="toolbar" style="margin-top:16px"><b style="text-transform:capitalize">${esc(g)}</b><span class="muted">${ts.length}</span></div>
     <div class="grid">${ts.map((t) => `<div class="card"><h3>${icon(TOOL_ICONS[t.name] || "wrench")}<code>${esc(t.name)}</code>${statusPill(t.level)}</h3><div class="muted" style="font-size:13px">${esc(t.description)}</div></div>`).join("")}</div>`).join("") +
     (d.mcp_errors?.length ? `<div class="card" style="margin-top:12px"><h3>${icon("alert")} MCP errors</h3><pre>${esc(d.mcp_errors.join("\n"))}</pre></div>` : "") +

@@ -1,0 +1,26 @@
+/* Shared copy button (copy.js). Lives inside code boxes and next to [data-copy] values only. */
+.copy-anchor{position:sticky;top:0;left:0;display:block;width:100%;height:0;z-index:3;pointer-events:none;white-space:normal;line-height:0}
+.copy-btn{position:relative}
+.copy-anchor .copy-btn{position:absolute;top:6px;right:6px;pointer-events:auto}
+.copy-anchor .copy-btn,.copy-inline{width:28px;height:28px;padding:0;margin:0;border-radius:8px;border:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 90%,transparent);color:var(--dim);display:inline-grid;place-items:center;cursor:pointer;
+  font:inherit;line-height:1;box-shadow:0 1px 2px rgb(0 0 0 / .12)}
+.copy-inline{width:24px;height:24px;margin-left:6px;vertical-align:middle;border-radius:6px}
+.copy-btn[hidden]{display:none!important}
+.copy-btn .svg{width:15px;height:15px}
+.copy-inline .svg{width:13px;height:13px}
+.copy-btn:hover{color:var(--text);background:var(--hover)}
+.copy-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.copy-btn.copied{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 55%,var(--line))}
+.copy-btn.copy-failed{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+.copy-btn.copied::after,.copy-btn.copy-failed::after{content:"Copied";position:absolute;right:calc(100% + 6px);top:50%;transform:translateY(-50%);
+  padding:4px 8px;border-radius:6px;background:var(--text);color:var(--bg);font:600 12px/1.2 var(--font);white-space:nowrap;pointer-events:none}
+.copy-btn.copy-failed::after{content:"Press Ctrl+C to copy"}
+.copy-btn.icon-btn{border-color:transparent;box-shadow:none;background:transparent}
+@media (pointer:coarse){
+  .copy-anchor .copy-btn{width:44px;height:44px;top:4px;right:4px}
+  .copy-inline{width:36px;height:36px}
+}
+@media (forced-colors:active){.copy-anchor .copy-btn,.copy-inline{border:1px solid ButtonText}}
+.copy-line{display:flex;align-items:center;min-width:0;max-width:100%}
+.copy-line>code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -46,7 +46,9 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
     for(const r of recipes){
       const row=el("div","dsr-recipe");row.setAttribute("role","listitem");
       const txt=el("div","dsr-recipe-t");
-      txt.append(el("b",null,r.kind==="app"?"Run app · "+r.label:"Run tests · "+r.label),el("code",null,r.command));
+      const command=el("code",null,r.command);command.dataset.copy="";command.dataset.copyLabel="command";
+      const line=el("span","copy-line");line.append(command);
+      txt.append(el("b",null,r.kind==="app"?"Run app · "+r.label:"Run tests · "+r.label),line);
       const busy=runs[r.kind]?.run?.live;
       const btn=el("button","btn sm"+(r.kind==="app"?" primary":""),r.kind==="app"?"▶ Run":"✓ Run tests");
       btn.type="button";btn.disabled=!r.available||!trusted||!!busy;
@@ -81,7 +83,7 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
     box.hidden=false;box.replaceChildren();
     const head=el("div","dsr-runhead");
     const badge=el("span","dsx-badge");const title=el("b",null,kind==="app"?"App":"Tests");
-    const cmd=el("code","dsr-cmd",run.label||run.command);
+    const cmd=el("code","dsr-cmd",run.label||run.command);if(run.command){cmd.dataset.copy=run.command;cmd.dataset.copyLabel="command";}
     const time=el("span","dsr-time");
     const stop=el("button","btn sm","Stop");stop.type="button";stop.onclick=()=>void stopRun(kind);
     head.append(title,badge,cmd,el("span","dsx-gap"),time,stop);
@@ -91,7 +93,7 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
       const pv=el("div","dsr-preview");pv.hidden=true;
       const bar=el("div","dsr-urlbar");
       const lock=el("span","dsr-lock","Local only");
-      const url=el("code","dsr-url");
+      const url=el("code","dsr-url");url.dataset.copy="";url.dataset.copyLabel="address";
       const reload=el("button","btn sm","Reload");reload.type="button";
       const open=el("a","btn sm","Open in browser");open.target="_blank";open.rel="noopener noreferrer";
       bar.append(lock,url,el("span","dsx-gap"),reload,open);
