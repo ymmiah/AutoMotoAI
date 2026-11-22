@@ -538,6 +538,14 @@ see who you're signed in as, when the token ends and what it can do, with a warn
 or never expires. Tokens found in a `.env` file can be moved into the password store. See
 [GIT-SIGN-IN.md](GIT-SIGN-IN.md).
 
+**Share to GitHub or GitLab.** Developer Studio → Tools → **Share to GitHub or GitLab** sends your
+checkpoints online in four steps: connect, pick the repository, check, share. The check lists every
+checkpoint and file, and blocks passwords, keys, `.env` files, CI files and huge files. Nothing is
+sent until you click, and force-push is never used. **Get latest** brings in other people's
+checkpoints. If sharing fails for any reason, your work is saved as a `.patch` in
+`Documents/AutoMoto/patches` with step-by-step commands for Windows, Mac or Linux, each with a copy
+button. See [SHARE-TO-GITHUB.md](SHARE-TO-GITHUB.md).
+
 ---
 
 ## 17. Example prompts to copy
