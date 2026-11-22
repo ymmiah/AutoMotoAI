@@ -88,10 +88,13 @@ async function stubAssistant(page, seen) {
 async function stubShare(page, mode, H) {
   const unsharedNow = async () => (await (await fetch(`${base}/api/developer/studio/remote/status?project=${encodeURIComponent(proj)}`, { headers: H })).json()).sync.unshared;
   await page.route('**/remote/status?**', async r => {
-    const res = await r.fetch(); const j = await res.json();
-    j.accounts = [{ status: 'ok', login: 'demo-user', provider: 'github', host: 'github.com' }];
-    if (mode.sharedHead && mode.sharedHead === git('rev-parse', 'HEAD')) j.sync = { ...j.sync, state: 'shared', unshared: 0 };
-    r.fulfill({ response: res, json: j });
+    // The page can close while this request is still in flight (end of a viewport run); ignore that.
+    try {
+      const res = await r.fetch(); const j = await res.json();
+      j.accounts = [{ status: 'ok', login: 'demo-user', provider: 'github', host: 'github.com' }];
+      if (mode.sharedHead && mode.sharedHead === git('rev-parse', 'HEAD')) j.sync = { ...j.sync, state: 'shared', unshared: 0 };
+      await r.fulfill({ response: res, json: j });
+    } catch (e) { if (!/disposed|closed/i.test(String(e && e.message))) throw e; }
   });
   await page.route('**/remote/plan', async r => {
     if (mode.refuse) return r.fulfill({ json: { ok: false, summary: 'GitHub turned this share down.', commits: [], commit_count: 0, files: [], file_count: 0, blocks: [{ rule: 'non_ff', message: 'GitHub has newer work on main. Get the latest first, or share it yourself.' }], warnings: [], remote_branch: 'main' } });
@@ -279,6 +282,7 @@ let browser; const errors = [];
       await page.locator('#dsxToolsBack').click();
       await page.locator('#dsxView').click();
     }
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     await ctx.close();
   }
   assert.deepEqual(errors, []);
