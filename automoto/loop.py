@@ -39,7 +39,7 @@ UNTRUSTED_TOOLS = {"fetch_url", "web_search", "discover", "read_feed", "library_
                    "wp_validate", "wp_security_review", "data_inspect", "data_query", "data_read", "sqlite_query",
                    "text_search", "text_tail", "pdf_text", "image_info"}
 TAINTING_TOOLS = {"fetch_url", "web_search", "download_file", "discover", "read_feed", "library_add", "page_inspect"}
-UNTRUSTED_GROUPS = ("mcp:", "services")
+UNTRUSTED_GROUPS = ("mcp:", "services", "studio:phone")  # phone screens show text written by anyone
 
 
 SECRET_ARGS = {"password", "passphrase"}

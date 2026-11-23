@@ -29,6 +29,7 @@ import {mountDeveloperFunctional} from "./developer-functional.js";
 import {mountDeveloperBeam} from "./developer-beam.js";
 import {mountDeveloperLogic} from "./developer-logic.js";
 import {mountDeveloperIos} from "./developer-ios.js";
+import {mountDeveloperPhone} from "./developer-phone.js";
 import {mountDeveloperLegacy} from "./developer-legacy.js";
 import {mountDeveloperWorkbench} from "./developer-workbench.js";
 import {mountDeveloperWasm} from "./developer-wasm.js";
@@ -104,6 +105,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
           '<div id="dsEditorRoot"></div></section>'+
       '</div>'+
       '<div id="dsIosRoot" aria-label="iPhone apps"></div>'+
+      '<div id="dsPhoneRoot" aria-label="Android phone control"></div>'+
       '<p class="ds-status" id="dsStatus" role="status" aria-live="polite">Developer Studio V1 is ready to open an approved local project.</p>'+
     '</div>');
   const byId=id=>host.querySelector("#"+id);
@@ -140,6 +142,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   beamStudio=mountDeveloperBeam({api,host,getProject:()=>project,status});
   logicStudio=mountDeveloperLogic({api,host,getProject:()=>project,status});
   const iosStudio=mountDeveloperIos({api,host,getProject:()=>project});
+  mountDeveloperPhone({api,host});
   legacyStudio=mountDeveloperLegacy({api,host,getProject:()=>project,status});
   wasmStudio=mountDeveloperWasm({api,host,getProject:()=>project,status});
   const runStudio=mountDeveloperRun({api,host,getProject:()=>project,status,onTestResult:r=>simple?.testResult(r)});

@@ -210,6 +210,8 @@ from automoto import developer_logic
 app.include_router(developer_logic.router)  # V31 static Haskell OCaml Lisp Scheme Prolog and approved local fixture tests
 from automoto import developer_ios
 app.include_router(developer_ios.router)  # iPhone toolchain, local-only, upload only after the on-screen button
+from automoto import developer_phone
+app.include_router(developer_phone.router)  # Android phone control over adb, local-only, on only after the on-screen button
 from automoto import developer_legacy
 app.include_router(developer_legacy.router)  # V32 inert legacy source and approved compilation
 from automoto import developer_wasm
