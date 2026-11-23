@@ -1,3 +1,4 @@
+import {taskPlanCard} from "./developer-task-plan.js";
 /* Developer Studio V33: VS Code-style workbench and task-scoped AutoMoto Agent.
    One prompt = one task. Never automatically issue a follow-up prompt. */
 // Brand name comes from automoto/brand.py through the page meta tag, so a rename needs no JS edit.
@@ -60,6 +61,19 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     '<button id="dsV33Send" type="submit" class="btn primary" disabled>Run task</button>'+
     '<button id="dsV33Stop" type="button" class="btn" disabled>Stop</button></div>'+
     '<p class="ds-v33-footnote">No unattended follow-up, auto-merge, publish or deployment. Approve risky actions individually.</p></form>';
+  // V52: limits remain user-visible on desktop, tablet and mobile.
+  const limitsPanel=document.createElement("section");
+  limitsPanel.className="ds-v52-limits";
+  limitsPanel.setAttribute("aria-label","Coding agent limits");
+  limitsPanel.innerHTML=
+    '<div class="ds-v52-limits-title"><strong>Bounded session</strong><span id="dsV52BudgetStatus" role="status" aria-live="polite">No task running</span></div>'+
+    '<div class="ds-v52-limit-options">'+
+    '<label>Model steps <select id="dsV52Steps"><option value="4">4</option><option value="8" selected>8</option><option value="12">12</option></select></label>'+
+    '<label>Tool calls <select id="dsV52Operations"><option value="12">12</option><option value="20" selected>20</option><option value="30">30</option></select></label>'+
+    '<label>Time limit <select id="dsV52Seconds"><option value="120">2 min</option><option value="300" selected>5 min</option><option value="600">10 min</option></select></label>'+
+    '</div>'+
+    '<p class="ds-v52-budget-detail" id="dsV52Detail">Review a plan first. Edits, commands and sharing each need a separate approval.</p>';
+  panel.insertBefore(limitsPanel,panel.querySelector(".ds-v33-timeline"));
   // V34: visible, keyboard-accessible onboarding and shortcuts.
   const guide=document.createElement("section");
   guide.className="ds-v34-guide";
@@ -108,8 +122,20 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   const prompt=el("dsV33Prompt"),send=el("dsV33Send"),stop=el("dsV33Stop");
   let taskId=null,conversationId=null,taskProject=null,pollHandle=null;
   let busy=false,closed=false,seen=0,lastStatus="",approvalIds=new Set();
-  let activeConversationProject=null,pollErrors=0;
-  const terminal=new Set(["done","completed","failed","cancelled","error","stopped"]);
+  let activeConversationProject=null,pollErrors=0,activePlan=null;
+  const budgets={
+    steps:el("dsV52Steps"),operations:el("dsV52Operations"),seconds:el("dsV52Seconds"),
+    status:el("dsV52BudgetStatus"),detail:el("dsV52Detail")
+  };
+  function showBudget(data,steps=0){
+    if(!data)return;
+    const used=Math.min(data.max_operations||0,data.operations_used||0);
+    budgets.status.textContent=steps+"/"+(data.max_steps||0)+" steps · "+used+"/"+(data.max_operations||0)+" tool calls";
+    budgets.detail.textContent=(data.limit_reason?"Limit reached: "+data.limit_reason+". ":"")+
+      "Remaining time: "+Math.ceil(Number(data.seconds_remaining)||0)+" seconds. "+
+      "Time limits are checked between model and tool actions.";
+  }
+  const terminal=new Set(["done","completed","failed","cancelled","error","stopped","limited"]);
   // Listeners let the simple chat and editor views show the same task without a second runner.
   const listeners=new Set();
   function emit(type,data){for(const fn of listeners){try{fn(type,data);}catch(e){console.error(e);}}}
@@ -126,6 +152,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     el("dsV33WorkspaceState").textContent=p?(p.trusted?"Trusted workspace":"Read-only workspace"):"No workspace";
     el("dsV33Scope").textContent=p?.trusted?"Workspace: "+p.project:"Trust a local workspace first";
     send.disabled=busy||!trusted()||prompt.value.trim().length<5;
+    for(const field of [budgets.steps,budgets.operations,budgets.seconds])field.disabled=busy;
     const step=el("dsV34Step"),hint=el("dsV34Hint");
     if(!p?.project){
       step.textContent="1 of 3 · Open a project";
@@ -155,7 +182,7 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   }
   function finish(message,kind="note"){
     if(!busy)return;
-    busy=false;taskId=null;taskProject=null;pollErrors=0;
+    busy=false;taskId=null;taskProject=null;pollErrors=0;activePlan=null;
     if(pollHandle){clearTimeout(pollHandle);pollHandle=null;}
     state.textContent="Waiting for next prompt";
     append("Task finished",message,kind);
@@ -187,6 +214,23 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       yes.className="btn sm";no.className="btn sm";
       yes.addEventListener("click",()=>void approve(callId,true,[yes,no]));
       no.addEventListener("click",()=>void approve(callId,false,[yes,no]));
+      if(entry.name==="developer_agent_patch"){
+        const evidence=entry.args||{};
+        const verified=evidence.prepared_by_server===true &&
+          typeof evidence.preview_diff==="string" && evidence.preview_diff.startsWith("--- ") &&
+          /^[0-9a-f]{64}$/.test(String(evidence.original_sha256||""));
+        desc.textContent="Checked patch to "+String(evidence.path||"source")+
+          " · "+String(evidence.changed_lines||0)+" changed lines · SHA-256 "+
+          String(evidence.original_sha256||"").slice(0,12);
+        const code=document.createElement("pre");
+        code.className="ds-v53-approval-diff";
+        code.textContent=verified?evidence.preview_diff:"Verified patch diff unavailable. Cannot approve.";
+        code.setAttribute("aria-label","Server-generated patch diff for review");
+        row.append(code);
+        yes.textContent="Apply checked patch";
+        no.textContent="Skip";
+        yes.disabled=!verified;
+      }
       row.append(desc,yes,no);log.append(row);
       emit("approval",{callId,entry});
     }
@@ -207,6 +251,10 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       }
       seen=Number.isInteger(result.next)?result.next:seen+(result.events||[]).length;
       approvals(result);
+      if(result.coding_budget){
+        showBudget(result.coding_budget,result.steps||0);
+        emit("budget",{budget:result.coding_budget,steps:result.steps||0});
+      }
       const current=String(result.status||"running").toLowerCase();
       if(current!==lastStatus){state.textContent=current;lastStatus=current;emit("status",current);}
       if(terminal.has(current)){
@@ -231,37 +279,75 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
     }
     if(busy&&taskId===id)pollHandle=setTimeout(()=>void poll(),1400);
   }
-  async function run(override,confirmed=false){
+  async function run(override,confirmed=false,approvedPlan=null){
     const note=(typeof override==="string"?override:prompt.value).trim(),p=getProject();
     if(busy||!p?.trusted||!p.project||note.length<5)return false;
-    if(!confirmed&&!window.confirm("Run one "+BRAND+" Agent coding task in this trusted workspace? "+
-      "The agent may inspect, edit and test using its configured tools. "+
-      "Risky actions still require separate approval. No automatic next prompt, "+
-      "deployment or publication is authorised."))return false;
-    busy=true;seen=0;approvalIds.clear();lastStatus="";
+
+    if(!approvedPlan){
+      // The direct classic workbench follows the same V50 review gate as the chat-first UI.
+      // A preview is never permission to execute.
+      const holder=document.createElement("div");
+      holder.className="ds-v52-plan-holder";
+      holder.textContent="Preparing a read-only coding plan…";
+      log.append(holder);log.scrollTop=log.scrollHeight;
+      try{
+        const plan=await api("/api/developer/studio/task-plan",{
+          project:p.project,request:note
+        });
+        if(getProject()?.project!==plan.project)throw Error("Workspace changed. Review again.");
+        holder.replaceChildren(taskPlanCard(plan,{
+          onStart:async()=>run(note,false,plan),
+          onEdit:text=>{prompt.value=text;prompt.focus();refresh();},
+          onOpenSource:path=>{append("Project source",path,"note");}
+        }));
+      }catch(err){
+        holder.textContent="Could not prepare a plan: "+String(err?.message||"Unknown error")+
+          ". Nothing was executed.";
+      }
+      return false;
+    }
+    if(approvedPlan.project!==p.project||!note.startsWith(approvedPlan.request)||
+       !approvedPlan.plan_id){
+      append("Plan invalid","The project or request changed. Review a fresh plan.","error");
+      return false;
+    }
+    if(!confirmed&&!window.confirm("Start this bounded coding task? The reviewed plan is not permission "+
+      "to change files, run commands or share anything; every such action requires its own approval."))return false;
+
+    const options={
+      plan_id:approvedPlan.plan_id,request:approvedPlan.request,
+      max_steps:Number(budgets.steps.value),max_operations:Number(budgets.operations.value),
+      max_seconds:Number(budgets.seconds.value)
+    };
+    busy=true;seen=0;approvalIds.clear();lastStatus="";activePlan=approvedPlan;
     taskProject=p.project;refresh();state.textContent="Starting";
-    append("You",note,"user");
-    emit("start",{note,project:taskProject});
+    budgets.status.textContent="Preparing bounded task";
+    budgets.detail.textContent="Up to "+options.max_steps+" model steps, "+options.max_operations+
+      " tool calls and "+options.max_seconds+" seconds. Every edit, run or share needs approval.";
+    append("You",note,"user");emit("start",{note,project:taskProject});
     try{
       if(conversationId&&activeConversationProject!==taskProject)conversationId=null;
       if(!conversationId){
-        const conv=await api("/api/conversations",
-          {title:"Developer Studio · "+note.slice(0,70),mode:"agent"});
+        const conv=await api("/api/conversations",{
+          title:"Developer Studio · "+approvedPlan.request.slice(0,70),mode:"agent"
+        });
         if(!conv.id)throw Error("Conversation not created");
-        conversationId=conv.id;
-        activeConversationProject=taskProject;
+        conversationId=conv.id;activeConversationProject=taskProject;
       }
       const result=await api("/api/agent",{
         conversation_id:conversationId,message:note,workspace:taskProject,
-        client:"web",max_steps:50
+        client:"web",max_steps:options.max_steps,coding:options
       });
       if(!result.task_id)throw Error("Agent did not start");
       taskId=result.task_id;
-      prompt.value="";
-      state.textContent="Working";refresh();emit("status","working");void poll();
+      if(result.coding_budget){
+        showBudget(result.coding_budget,0);
+        emit("budget",{budget:result.coding_budget,steps:0});
+      }
+      prompt.value="";state.textContent="Working";refresh();
+      emit("status","working");void poll();
       return true;
     }catch(e){
-      // Preserve the original prompt when the API rejects or fails to start the task.
       prompt.value=note;
       finish("Unable to start: "+e.message,"error");
       return false;
@@ -311,7 +397,21 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   observer.observe(document.body,{childList:true,subtree:true});
   refresh();
   return {
-    runTask:(note,{confirmed=false}={})=>run(note,confirmed),
+    runTask:(note,{confirmed=false,approvedPlan=null}={})=>run(note,confirmed,approvedPlan),
+    getCodingLimits:()=>({
+      max_steps:Number(budgets.steps.value),max_operations:Number(budgets.operations.value),
+      max_seconds:Number(budgets.seconds.value)
+    }),
+    setCodingLimits:limits=>{
+      if(busy)return false;
+      for(const [k,field] of [["max_steps",budgets.steps],
+                              ["max_operations",budgets.operations],
+                              ["max_seconds",budgets.seconds]]){
+        const value=String(limits?.[k]);
+        if([...field.options].some(option=>option.value===value))field.value=value;
+      }
+      return true;
+    },
     async cancelTask(){if(taskId&&busy)await api("/api/tasks/"+encodeURIComponent(taskId)+"/cancel",{});},
     approve:(callId,allow)=>approve(callId,allow),
     subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},
