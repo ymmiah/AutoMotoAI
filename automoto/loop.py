@@ -207,7 +207,8 @@ class Agent:
             return AgentResult(
                 "Stopped at the bounded coding " + reason + " limit. "
                 "Review the changes and test evidence before starting another task.",
-                max(0, step - 1), stopped="limited", events=events, history=history,
+                sum(1 for event in events if event.get("type") == "model"),
+                stopped="limited", events=events, history=history,
             )
 
         from automoto import planner
