@@ -28,6 +28,10 @@
 .phone-note,.phone-status{margin:0;color:var(--dim);font-size:13px;line-height:1.5}
 .phone-status.bad{color:var(--bad)}
 .phone-steps{margin:0;padding-left:1.2rem;display:grid;gap:6px;font-size:14px}
+.phone-sub{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.phone-more{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.phone-more summary{cursor:pointer;font-size:14px;font-weight:600;min-height:32px;display:flex;align-items:center}
+.phone-more .phone-steps{margin-top:8px}
 .phone-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .phone-row label{font-size:12px;font-weight:600;color:var(--dim)}
 .phone-row .input{flex:1 1 160px;min-width:0;height:42px}

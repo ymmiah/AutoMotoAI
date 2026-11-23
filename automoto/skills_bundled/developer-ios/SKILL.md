@@ -12,3 +12,4 @@ status: live
 3. Call ios_listing with a name, a description, and privacy words they actually said. Do not invent "we collect nothing".
 4. Stop. Tell them to read the page and press Send to Apple. Do not call ios_publish before that button. If ios_publish refuses, say so and stop.
 5. Never ask them to paste an Apple key into the chat. The key file stays in the secrets folder.
+6. After ios_install, offer to test the app on the iPhone or Simulator with the phone tools (skill developer-phone). They turn on phone control first.

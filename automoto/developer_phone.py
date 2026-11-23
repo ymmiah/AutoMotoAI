@@ -1,7 +1,9 @@
-"""Developer Studio phone control: an Android phone driven over adb.
+"""Developer Studio phone control: an Android phone over adb, or an iPhone through WebDriverAgent.
 
 The assistant reads the screen as text (the accessibility tree) and can tap, type,
-scroll, press keys and open apps. Nothing is installed on the phone.
+scroll, press keys and open apps. Nothing is installed on an Android phone. iPhone
+mode (``developer_phone_wda``) talks to a WebDriverAgent the person started, which
+is how iOS developers test their own apps.
 
 Safety:
 * Local only. Hosted servers refuse every route.
@@ -34,6 +36,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from automoto import config
+from automoto import developer_phone_wda as wda
 
 router = APIRouter(prefix="/api/developer/studio/phone", tags=["developer-phone"])
 
@@ -154,16 +157,17 @@ def _audit(action: str, **extra: Any) -> None:
 
 
 def list_devices() -> list[dict[str, str]]:
-    out = _adb(["devices", "-l"]).decode("utf-8", "replace")
     found = []
-    for line in out.splitlines()[1:]:
-        parts = line.split()
-        if len(parts) < 2 or not re.fullmatch(SERIAL, parts[0]):
-            continue
-        extra = dict(p.split(":", 1) for p in parts[2:] if ":" in p)
-        found.append({"serial": parts[0], "state": parts[1],
-                      "model": extra.get("model", "").replace("_", " ")[:60]})
-    return found
+    if adb_path():
+        for line in _adb(["devices", "-l"]).decode("utf-8", "replace").splitlines()[1:]:
+            parts = line.split()
+            if len(parts) < 2 or not re.fullmatch(SERIAL, parts[0]) or wda.is_iphone(parts[0]):
+                continue
+            extra = dict(p.split(":", 1) for p in parts[2:] if ":" in p)
+            found.append({"serial": parts[0], "state": parts[1], "kind": "android",
+                          "model": extra.get("model", "").replace("_", " ")[:60]})
+    iphone = wda.probe()
+    return found + ([iphone] if iphone else [])
 
 
 def _grant_state() -> dict[str, Any]:
@@ -228,10 +232,13 @@ def _render(app: str, items: list[dict[str, Any]]) -> str:
 
 
 def _dump(serial: str) -> tuple[str, list[dict[str, Any]]]:
-    raw = _adb(["exec-out", f"uiautomator dump {DUMP} >/dev/null && cat {DUMP}"], serial)
-    text = raw.decode("utf-8", "replace")
-    start = text.find("<?xml")
-    app, items = parse_screen(text[start:] if start >= 0 else text)
+    if wda.is_iphone(serial):
+        app, items = wda.dump(MAX_ELEMENTS)
+    else:
+        raw = _adb(["exec-out", f"uiautomator dump {DUMP} >/dev/null && cat {DUMP}"], serial)
+        text = raw.decode("utf-8", "replace")
+        start = text.find("<?xml")
+        app, items = parse_screen(text[start:] if start >= 0 else text)
     with _LOCK:
         _last.update({"serial": serial, "items": items})
     return app, items
@@ -266,7 +273,10 @@ def tap(body: TapIn) -> dict[str, Any]:
         target = {"label": "", "x": body.x, "y": body.y}
     else:
         raise HTTPException(422, "Give the text to tap, an element number, or x and y.")
-    _adb(["shell", "input", "tap", str(target["x"]), str(target["y"])], serial)
+    if wda.is_iphone(serial):
+        wda.tap(target["x"], target["y"])
+    else:
+        _adb(["shell", "input", "tap", str(target["x"]), str(target["y"])], serial)
     _audit("tap", serial=serial, x=target["x"], y=target["y"], label=target["label"][:60])
     return {"ok": True, "tapped": target["label"] or f'{target["x"]},{target["y"]}',
             "message": "Tapped. Read the screen to see what changed."}
@@ -280,18 +290,28 @@ def encode_text(text: str) -> str:
 
 def type_text(body: TypeIn) -> dict[str, Any]:
     serial = active_serial()
-    encoded = encode_text(body.text)
-    focused = next((it for it in _dump(serial)[1] if it["focused"] and it["field"]), None)
-    if focused is None:
+    iphone = wda.is_iphone(serial)
+    encoded = "" if iphone else encode_text(body.text)
+    if iphone:
+        field = wda.active_field()
+        focused = field and {"label": field["label"], "password": field["kind"] == "SecureTextField"}
+    else:
+        focused = next((it for it in _dump(serial)[1] if it["focused"] and it["field"]), None)
+    if not focused:
         raise HTTPException(409, "No text box is selected. Tap the text box first.")
     if focused["password"]:
         raise HTTPException(403, "That is a password box. The person must type passwords themselves.")
-    _adb(["shell", "input", "text", encoded], serial)
+    if iphone:
+        wda.type_text(body.text)
+    else:
+        _adb(["shell", "input", "text", encoded], serial)
     _audit("type", serial=serial, field=focused["label"][:60], length=len(body.text))
     return {"ok": True, "typed_characters": len(body.text), "into": focused["label"]}
 
 
 def _size(serial: str) -> tuple[int, int]:
+    if wda.is_iphone(serial):
+        return wda.size()
     out = _adb(["shell", "wm", "size"], serial).decode("utf-8", "replace")
     sizes = re.findall(r"(\d+)x(\d+)", out)
     if not sizes:
@@ -307,20 +327,30 @@ def scroll(body: ScrollIn) -> dict[str, Any]:
     # "down" shows what is further down, so the finger moves up.
     moves = {"down": (cx, cy + dy, cx, cy - dy), "up": (cx, cy - dy, cx, cy + dy),
              "right": (cx + dx, cy, cx - dx, cy), "left": (cx - dx, cy, cx + dx, cy)}
-    _adb(["shell", "input", "swipe", *map(str, moves[body.direction]), "300"], serial)
+    if wda.is_iphone(serial):
+        wda.swipe(*moves[body.direction])
+    else:
+        _adb(["shell", "input", "swipe", *map(str, moves[body.direction]), "300"], serial)
     _audit("scroll", serial=serial, direction=body.direction)
     return {"ok": True, "scrolled": body.direction}
 
 
 def press_key(body: KeyIn) -> dict[str, Any]:
     serial = active_serial()
-    _adb(["shell", "input", "keyevent", str(KEYS[body.key])], serial)
+    if wda.is_iphone(serial):
+        wda.key(body.key)
+    else:
+        _adb(["shell", "input", "keyevent", str(KEYS[body.key])], serial)
     _audit("key", serial=serial, key=body.key)
     return {"ok": True, "pressed": body.key}
 
 
 def open_app(body: OpenIn) -> dict[str, Any]:
     serial = active_serial()
+    if wda.is_iphone(serial):
+        wda.launch(body.package)
+        _audit("open", serial=serial, package=body.package)
+        return {"ok": True, "opened": body.package}
     if not PACKAGE.fullmatch(body.package):
         raise HTTPException(422, "Use the app's package name, for example com.android.settings.")
     out = _adb(["shell", "monkey", "-p", body.package, "-c", "android.intent.category.LAUNCHER", "1"], serial)
@@ -332,15 +362,20 @@ def open_app(body: OpenIn) -> dict[str, Any]:
 
 def apps() -> dict[str, Any]:
     serial = active_serial()
+    if wda.is_iphone(serial):
+        return wda.apps()
     out = _adb(["shell", "pm", "list", "packages", "-3"], serial).decode("utf-8", "replace")
     names = sorted(line.removeprefix("package:").strip() for line in out.splitlines() if line.startswith("package:"))
     return {"apps": names[:300], "note": "Installed apps you added. System apps such as com.android.settings also open."}
 
 
 def status() -> dict[str, Any]:
-    binary = adb_path()
-    devices = list_devices() if binary else []
-    return {"adb": bool(binary), "devices": devices, "control": _grant_state(),
+    return {"adb": bool(adb_path()), "devices": list_devices(), "control": _grant_state(),
+            "iphone_steps": [
+                "On the Mac, run WebDriverAgent from Xcode (Product, Test) in the Simulator or on your iPhone.",
+                "For a real iPhone: turn on Developer Mode, plug it in and forward port 8100, "
+                "for example with: iproxy 8100 8100",
+                "Press Refresh. The iPhone or Simulator appears in the list."],
             "steps": ["On the phone, open Settings, About phone, and tap Build number 7 times.",
                       "Open Developer options and turn on USB debugging.",
                       "Plug the phone in, unlock it and tap Allow on the USB debugging prompt.",
@@ -362,6 +397,7 @@ def connect(request: Request, body: ConnectIn):
     device = next((d for d in list_devices() if d["serial"] == body.serial), None)
     if device is None or device["state"] != "device":
         raise HTTPException(409, "That phone is not ready. Unlock it and tap Allow on the USB debugging prompt.")
+    wda.reset()
     with _LOCK:
         _grant.clear()
         _last.clear()
@@ -393,7 +429,8 @@ def screenshot(request: Request):
     _auth(request)
     if getattr(request.state, "automoto_agent_call", False):
         raise HTTPException(403, "Screenshots are for the panel only.")
-    png = _adb(["exec-out", "screencap", "-p"], active_serial())
+    serial = active_serial()
+    png = wda.screenshot() if wda.is_iphone(serial) else _adb(["exec-out", "screencap", "-p"], serial)
     if not png.startswith(b"\x89PNG"):
         raise HTTPException(502, "The phone did not send a picture.")
     return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})

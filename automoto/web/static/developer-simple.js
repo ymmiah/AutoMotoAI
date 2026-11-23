@@ -46,7 +46,7 @@ const TOOLS=[
   ["android","Kotlin & Android","Gradle builds and the emulator","Kt","#a97bff","mobile",["dsAndroidRoot"],"android"],
   ["swift","Swift","Swift packages and Xcode projects","Sw","#f05138","mobile",["dsSwiftRoot"],"swift"],
   ["ios","iPhone apps","Build and send to Apple only when you say","iOS","#9aa3ad","mobile",["dsIosRoot"],"ios"],
-  ["phone","Android phone control","Let the assistant use your phone, only while you allow it","Ph","#3ddc84","mobile",["dsPhoneRoot"],null],
+  ["phone","Phone control","Let the assistant use or test on an Android phone or iPhone, only while you allow it","Ph","#3ddc84","mobile",["dsPhoneRoot"],null],
   ["mobile","Flutter & React Native","Cross-platform app checks","Fl","#47c5fb","mobile",["dsMobileRoot"],"mobile"],
   ["shell","Shell & automation","Bash, PowerShell and CI scripts","$_","#4caf50","systems",["dsShellRoot"],"shell"],
   ["scripting","Ruby, Lua & Perl","Scripting languages and Groovy","Rb","#cc342d","systems",["dsScriptingRoot"],"scripting"],

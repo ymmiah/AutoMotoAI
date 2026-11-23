@@ -7,15 +7,17 @@ export function mountDeveloperPhone({api, host}) {
   const headers = {...(token ? {"X-AutoMoto-Token": token} : {}), ...(csrf ? {"X-CSRF-Token": csrf} : {})};
   root.innerHTML =
     '<section class="phone-panel" aria-labelledby="phoneTitle">' +
-      '<div class="phone-head"><h3 id="phoneTitle">Android phone control</h3>' +
+      '<div class="phone-head"><h3 id="phoneTitle">Phone control</h3>' +
         '<span class="phone-badge" id="phoneBadge">Off</span></div>' +
       '<p class="phone-note">The assistant reads the screen as text and can tap, type, scroll and open apps. ' +
         'Each action asks you first, and it never types into password boxes. Control turns itself off after 30 minutes.</p>' +
-      '<ol class="phone-steps" id="phoneSteps"></ol>' +
+      '<div id="phoneHow"><p class="phone-sub">Android phone</p><ol class="phone-steps" id="phoneSteps"></ol>' +
+        '<details class="phone-more"><summary>iPhone or iOS Simulator (for testing your app)</summary>' +
+        '<ol class="phone-steps" id="phoneIosSteps"></ol></details></div>' +
       '<div class="phone-row"><label for="phoneDevice">Phone</label>' +
         '<select id="phoneDevice" class="input"></select>' +
         '<button class="btn" type="button" id="phoneRefresh">Refresh</button></div>' +
-      '<label class="phone-check" id="phoneConsent"><input id="phoneOk" type="checkbox"> I understand the assistant can see this phone\'s screen, ' +
+      '<label class="phone-check" id="phoneConsent"><input id="phoneOk" type="checkbox"> I understand the assistant can see this screen, ' +
         'including messages and notifications, while control is on.</label>' +
       '<div class="phone-row"><button class="btn primary" type="button" id="phoneOn" disabled>Turn on phone control</button>' +
         '<button class="btn" type="button" id="phoneOff" hidden>Stop phone control</button>' +
@@ -39,9 +41,10 @@ export function mountDeveloperPhone({api, host}) {
   function draw(data) {
     devices = data.devices || [];
     on = !!data.control?.on;
-    const steps = byId("phoneSteps");
-    steps.replaceChildren(...(data.steps || []).map((text) => Object.assign(document.createElement("li"), {textContent: text})));
-    steps.hidden = on;
+    const items = (list) => (list || []).map((text) => Object.assign(document.createElement("li"), {textContent: text}));
+    byId("phoneSteps").replaceChildren(...items(data.steps));
+    byId("phoneIosSteps").replaceChildren(...items(data.iphone_steps));
+    byId("phoneHow").hidden = on;
     const select = byId("phoneDevice");
     select.replaceChildren(...devices.map((d) => {
       const label = (d.model || d.serial) + (d.state === "device" ? "" : d.state === "unauthorized" ? " (tap Allow on the phone)" : " (" + d.state + ")");
@@ -58,9 +61,10 @@ export function mountDeveloperPhone({api, host}) {
     byId("phoneShot").hidden = !on;
     if (!on) hideShot();
     ready();
-    if (!data.adb) say("adb is not installed. Install Android SDK Platform-Tools, then press Refresh.", true);
-    else if (on) say("Phone control is on for " + (data.control.model || data.control.serial) + ". Ask the assistant in chat.");
-    else say(devices.length ? "Pick the phone, tick the box and turn control on." : "Plug in the phone and press Refresh.");
+    if (on) say("Phone control is on for " + (data.control.model || data.control.serial) + ". Ask the assistant in chat.");
+    else if (devices.length) say("Pick the phone, tick the box and turn control on.");
+    else if (!data.adb) say("No phone found. For Android, install Android SDK Platform-Tools. For iPhone, start WebDriverAgent. Then press Refresh.", true);
+    else say("Plug in the phone and press Refresh.");
   }
 
   function hideShot() {

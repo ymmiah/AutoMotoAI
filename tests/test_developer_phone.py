@@ -63,6 +63,7 @@ def adb(monkeypatch):
     monkeypatch.delenv("AUTOMOTO_MODE", raising=False)
     monkeypatch.setenv("AUTOMOTO_RATE_LIMIT", "10000")
     monkeypatch.setattr(developer_phone.subprocess, "run", fake)
+    monkeypatch.setattr(developer_phone.wda, "probe", lambda: None)
     developer_phone._grant.clear()
     developer_phone._last.clear()
     yield fake
