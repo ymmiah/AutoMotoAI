@@ -172,3 +172,28 @@ def test_model_cannot_call_a_legacy_write_tool(workspace):
         )
         assert "unknown tool" in result["content"]
         assert (root / "calc.py").read_text() == OLD
+
+
+
+def test_provider_tool_ids_cannot_reuse_a_previous_approval(workspace):
+    _, root = workspace
+    with sandbox.use_root(str(root)):
+        agent = server._agent_factory(coding_budget=CodingBudget(), workspace=str(root))
+        agent._touched = []
+        # Both calls deliberately reuse the same provider-generated tool_call id.
+        original_sha = hashlib.sha256(OLD.encode("utf-8")).hexdigest()
+        def proposed():
+            return {"id": "reused-id", "name": "developer_agent_patch", "arguments": {
+                "path": "calc.py", "expected_sha256": original_sha,
+                "old_fragment": "return a - b", "new_fragment": "return a + b",
+            }}
+        ids = []
+        def decline(call, decision):
+            ids.append(call["id"])
+            return False
+        first = agent._run_call(proposed(), 1, decline, lambda _: None)
+        second = agent._run_call(proposed(), 2, decline, lambda _: None)
+        assert ids[0] != ids[1]
+        assert all(len(i) == 32 for i in ids)
+        assert "DENIED" in first["content"] and "DENIED" in second["content"]
+        assert (root / "calc.py").read_text() == OLD
