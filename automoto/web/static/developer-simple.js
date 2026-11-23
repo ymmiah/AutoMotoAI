@@ -447,7 +447,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     try{checkpoint=(await api(BASE+"/review/start",{project:p.project})).checkpoint;}
     catch(err){checkpointError=err.message;}
     startTurn(String(display||text).trim(),checkpoint,checkpointError,p.project);
-    const ok=await workbench.runTask(note,{confirmed:true});
+    const ok=await workbench.runTask(note,{confirmed:true,approvedPlan});
     if(ok){prompt.value="";attached=[];drawAttached();}
     else if(turn&&!turn.done){finishTurn({message:"The task did not start.",kind:"error"});}
     refresh();
