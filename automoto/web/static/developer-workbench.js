@@ -214,20 +214,21 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       yes.className="btn sm";no.className="btn sm";
       yes.addEventListener("click",()=>void approve(callId,true,[yes,no]));
       no.addEventListener("click",()=>void approve(callId,false,[yes,no]));
-      if(entry.name==="developer_agent_patch"){
+      if(entry.name==="developer_agent_patch"||entry.name==="developer_agent_create"){
+        const creating=entry.name==="developer_agent_create";
         const evidence=entry.args||{};
         const verified=evidence.prepared_by_server===true &&
           typeof evidence.preview_diff==="string" && evidence.preview_diff.startsWith("--- ") &&
-          /^[0-9a-f]{64}$/.test(String(evidence.original_sha256||""));
-        desc.textContent="Checked patch to "+String(evidence.path||"source")+
+          /^[0-9a-f]{64}$/.test(String(creating?evidence.after_sha256:evidence.original_sha256));
+        desc.textContent=(creating?"Create new source file ":"Checked patch to ")+String(evidence.path||"source")+
           " · "+String(evidence.changed_lines||0)+" changed lines · SHA-256 "+
-          String(evidence.original_sha256||"").slice(0,12);
+          String(creating?evidence.after_sha256:evidence.original_sha256).slice(0,12);
         const code=document.createElement("pre");
         code.className="ds-v53-approval-diff";
         code.textContent=verified?evidence.preview_diff:"Verified patch diff unavailable. Cannot approve.";
         code.setAttribute("aria-label","Server-generated patch diff for review");
         row.append(code);
-        yes.textContent="Apply checked patch";
+        yes.textContent=creating?"Create checked file":"Apply checked patch";
         no.textContent="Skip";
         yes.disabled=!verified;
       }
