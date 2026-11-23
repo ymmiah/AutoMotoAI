@@ -85,3 +85,68 @@ def public_approval(prepared: dict) -> dict:
         "syntax_checked": prepared["syntax_checked"],
         "prepared_by_server": True,
     }
+
+
+
+def create_tool() -> Tool:
+    """The only agent capability for creating new source files in V54."""
+    return Tool(
+        "developer_agent_create",
+        "Propose a NEW source file in an already existing project folder. "
+        "Cannot overwrite any file or create directories. Supply a project-"
+        "relative filename and UTF-8 source contents. AutoMoto checks filename, "
+        "size, code syntax and absent destination, prepares the exact creation "
+        "diff, then requires the human's separate Create approval. The server "
+        "uses exclusive no-clobber creation and records guarded Undo. "
+        "No commands, tests or sharing are executed.",
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "New project-relative filename under an existing folder."},
+                "text": {"type": "string", "description": "Complete UTF-8 content, at most 64 KiB and 120 lines."},
+            },
+            "required": ["path", "text"],
+            "additionalProperties": False,
+        },
+        "risky", _unavailable, group="studio:developer",
+    )
+
+
+def prepare_create(args: dict) -> dict:
+    """Build a verified, read-only, server-held new-source proposal."""
+    from automoto import developer_safe_create as create
+    try:
+        body = create.PreviewIn.model_validate({
+            "project": str(sandbox.root()),
+            "path": args["path"],
+            "text": args["text"],
+        })
+        return create.preview(studio_request("POST"), body)
+    except (HTTPException, ValidationError, KeyError, TypeError, ValueError) as exc:
+        detail = getattr(exc, "detail", None) or str(exc)
+        raise ToolFailed(str(detail)[:900]) from None
+
+
+def commit_create(prepared: dict) -> dict:
+    """The bounded loop calls this only after approval of the exact diff."""
+    from automoto import developer_safe_create as create
+    try:
+        root = patch._trusted(str(sandbox.root()))
+        return create._apply_checked(root, prepared["path"], prepared["token"])
+    except (HTTPException, ValidationError, KeyError, TypeError, ValueError) as exc:
+        detail = getattr(exc, "detail", None) or str(exc)
+        raise ToolFailed(str(detail)[:900]) from None
+
+
+def public_create(prepared: dict) -> dict:
+    """Approval evidence excludes the one-use token and original model arguments."""
+    return {
+        "path": prepared["path"],
+        "after_sha256": prepared["after_sha256"],
+        "preview_diff": prepared["preview_diff"],
+        "changed_lines": prepared["changed_lines"],
+        "syntax_checked": prepared["syntax_checked"],
+        "prepared_by_server": True,
+        "creation": True,
+        "file_exists": False,
+    }
