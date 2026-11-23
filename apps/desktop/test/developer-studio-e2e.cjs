@@ -230,6 +230,31 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   await page.waitForFunction(() => /Changes kept/.test([...document.querySelectorAll('.dsx-actions')].pop()?.textContent || ''));
   assert.match(readFileSync(counter, 'utf8'), /aria-label="Increase count"/, 'Keep leaves the change in place');
   step('Keep leaves the change and closes the checkpoint');
+
+  // V51 safe patch: first preview an exact diff (no write), then Apply and Undo.
+  await page.locator('#dsxTools').click();
+  await page.locator('.dsx-card[data-tool="patch"]').click();
+  await page.locator('#dsPatchRoot').waitFor();
+  await page.locator('.dsp-form input[name="path"]').fill('components/Counter.tsx');
+  await page.locator('.dsp-form textarea').nth(0).fill('aria-label="Increase count"');
+  await page.locator('.dsp-form textarea').nth(1).fill('aria-label="Add one"');
+  await page.locator('.dsp-form button[type="submit"]').click();
+  await page.locator('.dsp-result').waitFor();
+  assert.match(await page.locator('.dsp-diff').innerText(), /Add one/);
+  assert.match(readFileSync(counter, 'utf8'), /Increase count/, 'preview cannot change source');
+  await shot('11-safe-patch-preview.png');
+  accept();
+  await page.locator('.dsp-actions .primary').click();
+  await page.waitForFunction(() => /Patch applied/.test(document.querySelector('.dsp-message')?.textContent || ''));
+  assert.match(readFileSync(counter, 'utf8'), /Add one/, 'the separate Apply writes the patch');
+  accept();
+  await page.locator('#dsPatchRoot > .dsp-result > button').click();
+  await page.waitForFunction(() => /Patch undone/.test(document.querySelector('.dsp-message')?.textContent || ''));
+  assert.match(readFileSync(counter, 'utf8'), /Increase count/, 'Undo restores original content');
+  await page.locator('#dsxDetailBack').click();
+  await page.locator('#dsxToolsBack').click();
+  step('V51 safe patch preview, explicit Apply and checksum-bound Undo');
+
   // Tablet: the review panel opens as a side panel above the tab bar, chat stays visible.
   await page.setViewportSize({ width: 820, height: 1000 }); await delay(300);
   if (!(await page.locator('#dsxReview').isVisible())) await page.locator('.dsx-link').last().click();
