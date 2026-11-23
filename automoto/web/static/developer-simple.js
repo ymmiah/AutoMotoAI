@@ -164,6 +164,44 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   const pageInner=host;pageInner.classList.add("dsx-page");
   host.querySelector(".studio-drop")?.setAttribute("hidden","");
 
+  // V52: compact chat-first budget controls; no extra full-screen settings panel.
+  const session=el("section","dsx-session-limits");
+  session.setAttribute("aria-label","Coding task limits");
+  session.innerHTML=
+    '<button type="button" id="dsxBudgetToggle" class="dsx-budget-toggle" aria-expanded="false" aria-controls="dsxBudgetOptions">Limits: 8 steps · 20 tool calls · 5 min</button>'+
+    '<div id="dsxBudgetOptions" class="dsx-budget-options" hidden>'+
+      '<label>Model steps<select id="dsxBudgetSteps"><option value="4">4</option><option value="8" selected>8</option><option value="12">12</option></select></label>'+
+      '<label>Tool calls<select id="dsxBudgetCalls"><option value="12">12</option><option value="20" selected>20</option><option value="30">30</option></select></label>'+
+      '<label>Time limit<select id="dsxBudgetTime"><option value="120">2 minutes</option><option value="300" selected>5 minutes</option><option value="600">10 minutes</option></select></label>'+
+    '</div>';
+  $("dsxStarters").before(session);
+  const limits=()=>workbench.getCodingLimits?.()||{max_steps:8,max_operations:20,max_seconds:300};
+  const syncLimitUI=()=>{
+    const b=limits();
+    $("dsxBudgetToggle").textContent="Limits: "+b.max_steps+" steps · "+b.max_operations+" tool calls · "+(b.max_seconds/60)+" min";
+    for(const [id,key] of [["dsxBudgetSteps","max_steps"],["dsxBudgetCalls","max_operations"],["dsxBudgetTime","max_seconds"]]){
+      const field=$(id);field.value=String(b[key]);
+    }
+  };
+  syncLimitUI();
+  $("dsxBudgetToggle").addEventListener("click",()=>{
+    const next=$("dsxBudgetOptions").hidden;
+    $("dsxBudgetOptions").hidden=!next;
+    $("dsxBudgetToggle").setAttribute("aria-expanded",String(next));
+  });
+  for(const id of ["dsxBudgetSteps","dsxBudgetCalls","dsxBudgetTime"]){
+    $(id).addEventListener("change",()=>{
+      const ok=workbench.setCodingLimits?.({
+        max_steps:Number($("dsxBudgetSteps").value),
+        max_operations:Number($("dsxBudgetCalls").value),
+        max_seconds:Number($("dsxBudgetTime").value)
+      });
+      if(!ok)status("Limits cannot change while a task is running.",true);
+      syncLimitUI();
+    });
+  }
+
+
   // Project picker: the existing toolbar lives in the pill's popover.
   place(q(".ds-toolbar"),$("dsxProjectPop"));
   place(q("#dsRootStrip"),$("dsxProjectPop"));
@@ -467,10 +505,16 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     const av=el("span","dsx-av",BRAND.charAt(0));av.setAttribute("aria-hidden","true");
     const body=el("div","dsx-turn");bot.append(av,body);
     const card=el("div","dsx-progress");card.innerHTML='<div class="dsx-prog-head"><b>Working on it</b><span class="dsx-gap"></span><button type="button" class="btn sm dsx-prog-stop">Stop</button></div><div class="dsx-bar"><span></span></div><ol class="dsx-phases"></ol>';
+    const lim=limits();
+    const budgetStrip=el("p","dsx-budget-progress",
+      "Budget: 0/"+lim.max_steps+" steps · 0/"+lim.max_operations+
+      " tool calls · "+(lim.max_seconds/60)+" min maximum");
+    budgetStrip.setAttribute("role","status");
+    card.append(budgetStrip);
     card.querySelector(".dsx-prog-stop").addEventListener("click",()=>$("dsxStop").click());
     body.append(card);thread.append(user,bot);
     recordUser(note);saveChat();
-    turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false};
+    turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false,budget:null};
     drawProgress();refresh();scrollDown();
   }
   function phaseState(){
@@ -496,6 +540,15 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       if(s.detail)li.append(el("span","dsx-muted",s.detail));
       list.append(li);
     }
+  }
+  function onBudget({budget,steps}={}){
+    if(!turn||turn.done||!budget)return;
+    turn.budget={...budget,steps};
+    const strip=turn.card.querySelector(".dsx-budget-progress");
+    if(strip)strip.textContent="Budget: "+steps+"/"+budget.max_steps+" steps · "+
+      budget.operations_used+"/"+budget.max_operations+" tool calls · "+
+      Math.ceil(Number(budget.seconds_remaining)||0)+" seconds remaining"+
+      (budget.limit_reason?" · Limit: "+budget.limit_reason:"");
   }
   function onEvent(ev){
     if(!turn||turn.done)return;
@@ -537,6 +590,11 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       catch(err){t.changes=null;t.checkpointError=err.message;}
     }
     const list=el("ul","dsx-check");
+    if(t.budget){
+      const b=t.budget;
+      list.append(checkItem("✓","Session: "+b.steps+"/"+b.max_steps+" model steps, "+
+        b.operations_used+"/"+b.max_operations+" tool calls"));
+    }
     if(t.reads.size)list.append(checkItem("✓","Read "+t.reads.size+" file"+(t.reads.size===1?"":"s")));
     for(const c of t.changes?.changes||[]){
       const li=checkItem("✓",(c.change==="added"?"Added ":c.change==="deleted"?"Deleted ":"Edited "));
@@ -711,6 +769,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   workbench.subscribe((type,data)=>{
     if(type==="event")onEvent(data);
     else if(type==="approval")onApproval(data);
+    else if(type==="budget")onBudget(data);
     else if(type==="finish")void finishTurn(data);
     refresh();
   });
