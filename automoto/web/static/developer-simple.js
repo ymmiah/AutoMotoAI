@@ -439,7 +439,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       note+="\n\nReviewed suggested task sequence (not an approval to edit, execute or share):\n"+
         steps.join("\n")+"\nFollow the user's actual request; report evidence and respect every approval prompt.";
     }
-    if(attached.length)note+="\n\n"+attached.map(a=>"Attached file "+a.name+":\n```\n"+a.text+"\n```).join("\n\n");
+    if(attached.length)note+="\n\n"+attached.map(a=>"Attached file "+a.name+":\n```\n"+a.text+"\n```").join("\n\n");
     if(!window.confirm("Run one "+BRAND+" coding task in this project? The assistant may read, edit and test files. "+
       "Risky steps still ask you first, and you can keep or undo every change afterwards."))return false;
     let checkpoint=null,checkpointError=null;
