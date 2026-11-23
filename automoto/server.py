@@ -72,6 +72,17 @@ def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | 
                         if n in STUDIO_REVIEW_TOOLS and t.level == "safe"}
         return Agent(tools=registry, desktop=False, client="web", workspace=None, meter=meter)
     tl = tools_mod.build(desktop=desktop, extra=MCP_TOOLS, local_apps=local_apps)
+    if coding_budget is not None:
+        # V53: fail-closed registry for bounded coding. None of the general
+        # shell, app, memory, network, file-write, remote-share or expansion
+        # tools can be called, even if the model invents their names or the
+        # user's global approval mode is "auto".
+        from automoto.developer_coding_budget import READ_ONLY
+        from automoto.developer_agent_patch import patch_tool
+        tl = {name: tool for name, tool in tl.items()
+              if name in READ_ONLY and tool.level == "safe"}
+        transaction = patch_tool()
+        tl[transaction.name] = transaction
     if review_only:
         # Do not rely on auto_deny alone: global approval_mode=auto may bypass
         # the approval callback. Removing tools from the registry makes writes,

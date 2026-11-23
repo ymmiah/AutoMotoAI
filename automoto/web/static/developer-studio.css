@@ -1249,3 +1249,9 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .dsx-budget-options select{min-height:38px;min-width:0;width:100%;max-width:100%;color:var(--text);background:var(--code);border:1px solid var(--line);border-radius:7px;font-size:12px;padding:5px}
 .dsx-budget-progress{margin:8px 0 0;font:11px/1.5 var(--mono);color:var(--dim);overflow-wrap:anywhere}
 @media(max-width:500px){.dsx-budget-options{gap:6px;padding:8px}.dsx-budget-options select{font-size:11px;padding:4px}}
+
+
+/* V53 server-generated patch approval. Long source lines never overflow the chat. */
+.dsw-patch-diff,.ds-v53-approval-diff{max-width:100%;min-width:0;max-height:420px;overflow:auto;white-space:pre;overflow-wrap:normal;tab-size:2;font:12px/1.55 var(--mono);padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--code);color:var(--text)}
+.ds-v53-approval-diff{margin:8px 0}
+@media(max-width:600px){.dsw-patch-diff,.ds-v53-approval-diff{font-size:11px;padding:8px;max-height:300px}}
