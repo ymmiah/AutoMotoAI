@@ -425,7 +425,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   // V50: inspect the proposed steps in chat before any coding task can run.
   // This is a read-only API call; a later click still invokes the existing task
   // confirmation and the agent's per-action approval mechanism.
-  async function showTaskPlan(request,project){
+  async function showTaskPlan(request,project,display){
     const bot=el("div","dsx-msg bot");
     const body=el("div","dsx-turn");
     bot.append(el("span","dsx-av",BRAND.charAt(0)),body);
@@ -444,7 +444,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
             status("Open and trust the same project before starting this plan.",true);
             return false;
           }
-          return await submit(request,{display:request,approvedPlan:plan});
+          return await submit(request,{display:display||request,approvedPlan:plan});
         },
         onEdit:text=>{prompt.value=text;refresh();prompt.focus();},
         onOpenSource:path=>{
@@ -464,7 +464,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     // Explicitly handled quick actions stay outside the agent.
     if(workspace.open&&!display&&workspace.handle(note)){prompt.value="";refresh();return false;}
     if(!approvedPlan){
-      await showTaskPlan(note,p);
+      await showTaskPlan(note,p,display);
       prompt.value="";refresh();
       return false;
     }
