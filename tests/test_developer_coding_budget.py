@@ -103,3 +103,19 @@ def test_expired_budget_invalidates_late_approval():
     assert not target.exists()
     assert result.stopped == "limited"
     assert budget.snapshot()["limit_reason"] == "time"
+
+
+
+def test_external_file_path_is_denied_even_if_user_would_approve(tmp_path):
+    external = tmp_path / "outside-private.py"
+    external.write_text("never read this outside file", encoding="utf-8")
+    budget = CodingBudget(max_steps=3, max_operations=3, max_seconds=90)
+    approvals = []
+    a = _agent(("", [_call("read_file", path=str(external))]),
+               ("Blocked.", []), budget=budget)
+    res = a.run("Inspect project", approver=lambda *_: approvals.append(True) or True)
+    assert not approvals
+    blocked = [e for e in res.events if e.get("type") == "tool_result" and not e.get("ok")]
+    assert blocked
+    assert "outside the selected project" in blocked[0]["output"]
+    assert not any("never read this outside file" in str(x) for x in res.history)
