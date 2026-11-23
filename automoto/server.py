@@ -63,7 +63,7 @@ STUDIO_REVIEW_TOOLS = frozenset({"project_inspect", "list_dir", "search_files",
 
 def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | None = None,
                    local_apps: bool = False, meter: Any = None,
-                   review_only: bool = False) -> Agent:
+                   review_only: bool = False, coding_budget: Any = None) -> Agent:
     if tenancy.current() is not None:  # hosted user: tenant-specific safe tool registry and quota
         registry = hosted.hosted_tools()
         if review_only:
@@ -78,7 +78,7 @@ def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | 
         tl = {n: t for n, t in tl.items()
               if n in STUDIO_REVIEW_TOOLS and t.level == "safe"}
     return Agent(tools=tl, desktop=desktop and not review_only, client=client,
-                 workspace=workspace, meter=meter)
+                 workspace=workspace, meter=meter, coding_budget=coding_budget)
 
 
 def _local(request: Request) -> bool:
@@ -531,6 +531,15 @@ def _run_chat(messages, *, prefer, need_vision, keys, client, desktop: bool, met
     return {**ans.as_dict(), "text": text, "actions": actions, "learnt": learnt}
 
 
+class CodingRunIn(BaseModel):
+    """V52 developer-only limits tied to a current, source-verified V50 plan."""
+    plan_id: str = Field(..., min_length=64, max_length=64)
+    request: str = Field(..., min_length=5, max_length=2000)
+    max_steps: int = Field(8, ge=1, le=12)
+    max_operations: int = Field(20, ge=1, le=30)
+    max_seconds: int = Field(300, ge=30, le=600)
+
+
 class AgentIn(BaseModel):
     messages: list[dict[str, Any]] | None = Field(None, max_length=60)
     workspace: str | None = Field(None, max_length=1024)  # an allowed folder to work in (VS Code project)
@@ -540,6 +549,7 @@ class AgentIn(BaseModel):
     keys: dict[str, str] | None = None  # BYOK, kept only for the task's lifetime
     client: str = "web"
     max_steps: int | None = Field(None, ge=1, le=50)
+    coding: CodingRunIn | None = None  # local-only, plan-bound V52 session
 
 
 class ChatConvIn(BaseModel):
@@ -766,12 +776,43 @@ def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
             workspace = str(sandbox.check_root(body.workspace))
         except sandbox.SandboxError as exc:
             raise HTTPException(400, str(exc)) from None
+    coding_budget = None
+    if body.coding is not None:
+        from automoto import developer_studio, developer_task_plan
+        from automoto.developer_coding_budget import CodingBudget
+
+        if not _local(request) or body.client not in ("web", "desktop") or not workspace:
+            raise HTTPException(403, "Bounded coding requires a local Developer Studio project.")
+        root = developer_studio._project(workspace)
+        if not developer_studio._trusted(root, developer_studio._load()):
+            raise HTTPException(403, "Trust this exact project before starting a coding run.")
+        if not isinstance(body.message, str) or not body.message.startswith(body.coding.request):
+            raise HTTPException(422, "The coding task must match the reviewed plan request.")
+        current = developer_task_plan.task_plan(
+            request, developer_task_plan.PlanIn(
+                project=str(root), request=body.coding.request,
+            ),
+        )
+        if current["plan_id"] != body.coding.plan_id:
+            raise HTTPException(409, "Plan or source files changed. Review a fresh plan.")
+        if any(t.coding_budget is not None and
+               t.status in ("queued", "running", "waiting_approval")
+               for t in TASKS.tasks.values()):
+            raise HTTPException(409, "Another bounded coding task is still active.")
+        coding_budget = CodingBudget(
+            max_steps=body.coding.max_steps,
+            max_operations=body.coding.max_operations,
+            max_seconds=body.coding.max_seconds,
+        )
     task = TASKS.start(msgs, source="web" if meter else body.client, keys=None if meter else body.keys,
-                       prefer=body.prefer, max_steps=body.max_steps,
+                       prefer=body.prefer, max_steps=coding_budget.max_steps if coding_budget else body.max_steps,
                        agent_kwargs={"desktop": desktop, "client": body.client, "workspace": workspace,
-                                     "local_apps": _local_apps_ok(request, body.client), "meter": meter},
-                       conversation_id=conv_id, on_done=on_done, owner=_owner(request))
-    return {"task_id": task.id, "status": task.status, "conversation_id": conv_id}
+                                     "local_apps": _local_apps_ok(request, body.client), "meter": meter,
+                                     "coding_budget": coding_budget},
+                       conversation_id=conv_id, on_done=on_done, owner=_owner(request),
+                       coding_budget=coding_budget)
+    return {"task_id": task.id, "status": task.status, "conversation_id": conv_id,
+            "coding_budget": coding_budget.snapshot() if coding_budget else None}
 
 
 def _check_message(message: Any) -> None:
