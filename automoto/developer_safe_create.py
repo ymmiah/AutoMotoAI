@@ -111,12 +111,14 @@ def _parent_fd(root: Path, path: str) -> int | None:
         raise
 
 
-def _open_new(root: Path, path: str, data: bytes, parent_identity: tuple[int, int]) -> tuple[int, int]:
-    """Create and fsync with O_EXCL; never open an existing target for writing."""
+def _open_new(root: Path, path: str, data: bytes,
+              parent_identity: tuple[int, int]) -> tuple[int, int]:
+    """Exclusive creation, fsync and guarded cleanup of a partial write."""
     target = _target(root, path)
     fd_parent = _parent_fd(root, path)
     file_fd = None
     created_id = None
+    created = False
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -126,12 +128,12 @@ def _open_new(root: Path, path: str, data: bytes, parent_identity: tuple[int, in
                 raise HTTPException(409, "Destination directory changed since preview.")
             file_fd = os.open(target.name, flags, 0o600, dir_fd=fd_parent)
         else:
-            # Windows still uses exclusive creation; the directory is rechecked.
             if _parent_id(target) != parent_identity:
                 raise HTTPException(409, "Destination directory changed since preview.")
             file_fd = os.open(target, flags, 0o600)
-        created = os.fstat(file_fd)
-        created_id = (created.st_dev, created.st_ino)
+        created = True
+        info = os.fstat(file_fd)
+        created_id = (info.st_dev, info.st_ino)
         with os.fdopen(file_fd, "wb") as stream:
             file_fd = None
             stream.write(data)
@@ -143,16 +145,30 @@ def _open_new(root: Path, path: str, data: bytes, parent_identity: tuple[int, in
             except OSError:
                 pass
         return created_id
-    except FileExistsError:
-        raise HTTPException(409, "The filename already exists. Nothing was overwritten.") from None
-    except OSError:
+    except (OSError, HTTPException) as exc:
+        if created and created_id is not None:
+            # This file was created by this transaction. Remove only the exact
+            # inode, never a replacement by another writer.
+            try:
+                current = (os.stat(target.name, dir_fd=fd_parent, follow_symlinks=False)
+                           if fd_parent is not None else target.lstat())
+                if (current.st_dev, current.st_ino) == created_id:
+                    if fd_parent is not None:
+                        os.unlink(target.name, dir_fd=fd_parent)
+                    else:
+                        target.unlink()
+            except OSError:
+                pass
+        if isinstance(exc, FileExistsError):
+            raise HTTPException(409, "The filename already exists. Nothing was overwritten.") from None
+        if isinstance(exc, HTTPException):
+            raise
         raise HTTPException(403, "The source file could not be created securely.") from None
     finally:
         if file_fd is not None:
             os.close(file_fd)
         if fd_parent is not None:
             os.close(fd_parent)
-
 
 def _unchanged(root: Path, path: str, expected_sha: str, identity: tuple[int, int]) -> bool:
     """Compare a no-follow opened regular file with the exact recorded creation."""
