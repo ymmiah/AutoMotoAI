@@ -84,6 +84,52 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   await page.locator('#v53-review-fixture').evaluate(node => node.remove());
   step('V53 checked patch: verified text diff, explicit Skip, inert HTML and fail-closed missing evidence');
 
+  // V54 new-source creation gets an independently reviewed, server-owned diff.
+  const createReviewFixture = async verified => {
+    await page.evaluate(async ({verified}) => {
+      const {approvalCard} = await import('/static/developer-workspace.js');
+      window.__v54Decisions = [];
+      const mount = document.createElement('div');
+      mount.id = 'v54-create-fixture';
+      const card = approvalCard({
+        name: 'developer_agent_create',
+        args: {
+          prepared_by_server: verified,
+          creation: true,
+          file_exists: false,
+          path: 'src/new_component.tsx',
+          after_sha256: 'b'.repeat(64),
+          changed_lines: 2,
+          syntax_checked: false,
+          preview_diff: '--- /dev/null\n+++ b/src/new_component.tsx\n@@ -0,0 +1,2 @@\n+export const Message = () => <p>Hello</p>;\n+<img src=x onerror=window.__v54Xss=1>\n'
+        }
+      }, {
+        api: async () => ({}),
+        getProject: () => ({project:'/tmp/test'}),
+        decide: approved => {window.__v54Decisions.push(approved);},
+        showFile: () => {}
+      });
+      mount.append(card);document.body.append(mount);
+    }, {verified});
+  };
+  await createReviewFixture(true);
+  assert.match(await page.locator('#v54-create-fixture').innerText(), /Create checked file src\/new_component\.tsx/);
+  assert.match(await page.locator('#v54-create-fixture pre').innerText(), /\/dev\/null/);
+  assert.equal(await page.locator('#v54-create-fixture img').count(), 0, 'source is inert text');
+  assert.equal(await page.evaluate(() => window.__v54Xss), undefined);
+  assert.equal(await page.evaluate(() => window.__v54Decisions.length), 0, 'creation not implicit');
+  await page.locator('#v54-create-fixture button', {hasText:'Skip'}).click();
+  assert.deepEqual(await page.evaluate(() => window.__v54Decisions), [false]);
+  await page.locator('#v54-create-fixture').evaluate(node => node.remove());
+  await createReviewFixture(false);
+  assert.equal(
+    await page.locator('#v54-create-fixture button', {hasText:'Create checked file'}).isDisabled(),
+    true, 'an unverified creation cannot be approved'
+  );
+  await page.locator('#v54-create-fixture').evaluate(node => node.remove());
+  step('V54 new source: diff before approval, Skip, inert text, and missing-evidence refusal');
+
+
   await page.locator('.rail [data-rail-menu="studios"]').click();
   await page.locator('[data-rail-panel="studios"] a[href="#/developer"]').click();
   await page.locator('#dsxRoot').waitFor();
