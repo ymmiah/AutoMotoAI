@@ -57,8 +57,15 @@ const tip = (page, id) => page.locator(`#dswPill-${id}`).getAttribute('title');
 async function openWorkspace(page, compact) {
   await page.evaluate(() => document.querySelector('.nav [data-page="developer"]').click());
   await page.locator('#dsxRoot').waitFor();
+  // Requests still waiting when the project fails to open, to say what it was stuck on.
+  const pending = new Set(), add = r => pending.add(r), done = r => pending.delete(r);
+  page.on('request', add); page.on('requestfinished', done); page.on('requestfailed', done);
   await page.evaluate(p => { document.querySelector('#dsPath').value = p; document.querySelector('#dsOpen').click(); }, proj);
-  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''));
+  // Opening runs every studio's project check; a busy CI runner can take longer than 30s, so wait
+  // up to 60s and say what Developer Studio reported if the project still did not open.
+  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''), null, { timeout: 60000 })
+    .catch(async e => { throw new Error(`project did not open at ${page.viewportSize()?.width}px: ${await page.locator('#dsStatus').textContent().catch(() => '?')} pending=${[...pending].map(r => r.method() + ' ' + r.url().replace(base, '')).join(', ') || 'none'} (${e.message})`); });
+  page.off('request', add); page.off('requestfinished', done); page.off('requestfailed', done);
   await page.keyboard.press('Escape');
   if (compact) await page.locator('#dsxNavTools').click(); else await page.locator('#dsxTools').click();
   await page.locator('.dsx-card[data-tool="workspace"]').click();
