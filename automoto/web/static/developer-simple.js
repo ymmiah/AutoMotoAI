@@ -3,6 +3,7 @@
    Nothing here runs code by itself: starter cards only fill the prompt, every task needs
    the trusted project and a confirmation, and Keep / Undo use the review checkpoint API. */
 import {mountWorkspace,approvalCard} from "./developer-workspace.js";
+import {isCodingRequest,taskPlanCard} from "./developer-task-plan.js";
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const VIEW_KEY="automoto.developer.view";
 const CHAT_KEY="automoto.developer.chat.";
@@ -381,16 +382,66 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   let turn=null;
   const thread=$("dsxThread");
   function scrollDown(){const s=$("dsxScroll");s.scrollTop=s.scrollHeight;}
-  async function submit(text,{display}={}){
+  // V50: inspect the proposed steps in chat before any coding task can run.
+  // This is a read-only API call; a later click still invokes the existing task
+  // confirmation and the agent's per-action approval mechanism.
+  async function showTaskPlan(request,project){
+    const bot=el("div","dsx-msg bot");
+    const body=el("div","dsx-turn");
+    bot.append(el("span","dsx-av",BRAND.charAt(0)),body);
+    body.append(el("p","dsx-muted","Preparing suggested steps from this project's files…"));
+    thread.append(bot);scrollDown();
+    try{
+      const plan=await api(BASE+"/task-plan",{project:project.project,request});
+      // A plan must never be carried across a workspace switch.
+      if(getProject()?.project!==plan.project){
+        body.replaceChildren(el("p","dsx-muted","Workspace changed; this plan is no longer valid."));
+        return;
+      }
+      body.replaceChildren(taskPlanCard(plan,{
+        onStart:async()=>{
+          if(getProject()?.project!==plan.project||!getProject()?.trusted){
+            status("Open and trust the same project before starting this plan.",true);
+            return false;
+          }
+          return await submit(request,{display:request,approvedPlan:plan});
+        },
+        onEdit:text=>{prompt.value=text;refresh();prompt.focus();},
+        onOpenSource:path=>{
+          if(workspace.open&&workspace.showFile(path,{open:true}))return;
+          if(view!=="editor")setView("editor");
+          void openFile(path);
+        }
+      }));
+    }catch(err){
+      body.replaceChildren(el("p","dsx-muted","Could not preview the plan: "+String(err?.message||"Unknown error")+". No task was started."));
+    }
+    scrollDown();
+  }
+  async function submit(text,{display,approvedPlan}={}){
     const p=getProject();let note=String(text||"").trim();
-    if(!p?.trusted||note.length<5||workbench.isBusy())return;
-    // In Edit, test & share, "Test my app", "Share to GitHub" and friends are quick actions with
-    // inline confirm cards; they never go to the model.
-    if(workspace.open&&!display&&workspace.handle(note)){prompt.value="";refresh();return;}
+    if(!p?.trusted||note.length<5||workbench.isBusy())return false;
+    // Explicitly handled quick actions stay outside the agent.
+    if(workspace.open&&!display&&workspace.handle(note)){prompt.value="";refresh();return false;}
+    if(!approvedPlan&&isCodingRequest(note)){
+      await showTaskPlan(note,p);
+      prompt.value="";refresh();
+      return false;
+    }
+    if(approvedPlan&&(approvedPlan.project!==p.project||approvedPlan.request!==note)){
+      status("The reviewed plan does not match the current project or request.",true);
+      return false;
+    }
     if(workspace.open)workspace.noteAsk(display||note);
-    if(attached.length)note+="\n\n"+attached.map(a=>"Attached file "+a.name+":\n```\n"+a.text+"\n```").join("\n\n");
+    if(approvedPlan){
+      const steps=(approvedPlan.steps||[]).slice(0,6).map((step,i)=>
+        (i+1)+". "+String(step.title||"Review")+" — "+String(step.acceptance_check||"Show evidence."));
+      note+="\n\nReviewed suggested task sequence (not an approval to edit, execute or share):\n"+
+        steps.join("\n")+"\nFollow the user's actual request; report evidence and respect every approval prompt.";
+    }
+    if(attached.length)note+="\n\n"+attached.map(a=>"Attached file "+a.name+":\n```\n"+a.text+"\n```).join("\n\n");
     if(!window.confirm("Run one "+BRAND+" coding task in this project? The assistant may read, edit and test files. "+
-      "Risky steps still ask you first, and you can keep or undo every change afterwards."))return;
+      "Risky steps still ask you first, and you can keep or undo every change afterwards."))return false;
     let checkpoint=null,checkpointError=null;
     try{checkpoint=(await api(BASE+"/review/start",{project:p.project})).checkpoint;}
     catch(err){checkpointError=err.message;}
@@ -399,6 +450,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     if(ok){prompt.value="";attached=[];drawAttached();}
     else if(turn&&!turn.done){finishTurn({message:"The task did not start.",kind:"error"});}
     refresh();
+    return !!ok;
   }
   // One local exchange (a quick action in Edit, test & share): the user's words and a reply area.
   function exchange(text){
