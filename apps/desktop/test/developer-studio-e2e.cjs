@@ -41,6 +41,49 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   const accept = () => page.once('dialog', d => d.accept());
   await page.goto(base + '/?launch=' + token);
   await page.locator('.hero h2').waitFor();
+
+  // V53: display the actual server-generated diff before the user can authorise an agent edit.
+  // No model, disk write or network-based change is needed for this visual acceptance test.
+  const patchReviewFixture = async (verified) => {
+    await page.evaluate(async ({ verified }) => {
+      const { approvalCard } = await import('/static/developer-workspace.js');
+      window.__v53Decisions = [];
+      const mount = document.createElement('div');
+      mount.id = 'v53-review-fixture';
+      const card = approvalCard({
+        name: 'developer_agent_patch',
+        args: {
+          prepared_by_server: verified,
+          path: 'components/Counter.tsx',
+          original_sha256: 'a'.repeat(64),
+          changed_lines: 2,
+          syntax_checked: false,
+          preview_diff: '--- before/components/Counter.tsx\n+++ after/components/Counter.tsx\n@@ -1,2 +1,2 @@\n-<img src=x onerror=window.__v53Xss=1>\n+console.log("safe");\n'
+        }
+      },{
+        api: async () => ({}),
+        getProject: () => ({project:'/tmp/fixtures'}),
+        decide: (approved) => { window.__v53Decisions.push(approved); },
+        showFile: () => {}
+      });
+      mount.append(card);document.body.append(mount);
+    }, { verified });
+  };
+  await patchReviewFixture(true);
+  assert.match(await page.locator('#v53-review-fixture').innerText(), /Apply checked patch to components\/Counter\.tsx/);
+  assert.match(await page.locator('#v53-review-fixture pre').innerText(), /before\/components\/Counter\.tsx/);
+  assert.equal(await page.locator('#v53-review-fixture img').count(), 0, 'diff is text, not interpreted HTML');
+  assert.equal(await page.evaluate(() => window.__v53Xss), undefined, 'source text cannot execute');
+  assert.equal(await page.evaluate(() => window.__v53Decisions.length), 0, 'no implicit approval');
+  await page.locator('#v53-review-fixture button', { hasText: 'Skip' }).click();
+  assert.deepEqual(await page.evaluate(() => window.__v53Decisions), [false]);
+  await page.locator('#v53-review-fixture').evaluate(node => node.remove());
+  await patchReviewFixture(false);
+  assert.equal(await page.locator('#v53-review-fixture button', { hasText: 'Apply checked patch' }).isDisabled(),
+    true, 'unverified patch evidence cannot be approved');
+  await page.locator('#v53-review-fixture').evaluate(node => node.remove());
+  step('V53 checked patch: verified text diff, explicit Skip, inert HTML and fail-closed missing evidence');
+
   await page.locator('.rail [data-rail-menu="studios"]').click();
   await page.locator('[data-rail-panel="studios"] a[href="#/developer"]').click();
   await page.locator('#dsxRoot').waitFor();
