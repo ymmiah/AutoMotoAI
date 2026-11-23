@@ -144,6 +144,8 @@ from automoto import developer_lsp
 app.include_router(developer_lsp.router)  # V6 explicit trusted LSP lifecycle and read-only code intelligence
 from automoto import developer_index
 app.include_router(developer_index.router)  # V7 private bounded source symbol and lexical index
+from automoto import developer_grounding
+app.include_router(developer_grounding.router)  # V49 read-only file-and-line evidence for coding help
 from automoto import developer_adapters
 app.include_router(developer_adapters.router)  # V8 explicit permissioned external toolchain & DAP adapter SDK
 from automoto import developer_latex
