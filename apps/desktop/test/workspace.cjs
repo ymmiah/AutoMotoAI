@@ -57,8 +57,15 @@ const tip = (page, id) => page.locator(`#dswPill-${id}`).getAttribute('title');
 async function openWorkspace(page, compact) {
   await page.evaluate(() => document.querySelector('.nav [data-page="developer"]').click());
   await page.locator('#dsxRoot').waitFor();
+  // Requests still waiting when the project fails to open, to say what it was stuck on.
+  const pending = new Set(), add = r => pending.add(r), done = r => pending.delete(r);
+  page.on('request', add); page.on('requestfinished', done); page.on('requestfailed', done);
   await page.evaluate(p => { document.querySelector('#dsPath').value = p; document.querySelector('#dsOpen').click(); }, proj);
-  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''));
+  // Opening runs every studio's project check; a busy CI runner can take longer than 30s, so wait
+  // up to 60s and say what Developer Studio reported if the project still did not open.
+  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''), null, { timeout: 60000 })
+    .catch(async e => { throw new Error(`project did not open at ${page.viewportSize()?.width}px: ${await page.locator('#dsStatus').textContent().catch(() => '?')} pending=${[...pending].map(r => r.method() + ' ' + r.url().replace(base, '')).join(', ') || 'none'} (${e.message})`); });
+  page.off('request', add); page.off('requestfinished', done); page.off('requestfailed', done);
   await page.keyboard.press('Escape');
   if (compact) await page.locator('#dsxNavTools').click(); else await page.locator('#dsxTools').click();
   await page.locator('.dsx-card[data-tool="workspace"]').click();
@@ -154,8 +161,11 @@ let browser; const errors = [];
     assert.equal(await page.locator('#convMenu').isVisible(), false);
     // 1. Fix the error: the assistant's change shows as a diff, nothing is written until Apply.
     await page.locator('.dsw-chip', { hasText: 'Fix the error' }).click();
+    await page.locator('#dsxThread .dsx-plan').last().waitFor({ timeout: 15000 });
+    assert.equal(seen.agent.length, 0, 'the plan cannot silently run the coding agent');
+    await page.locator('.dsx-plan-actions .primary').last().click();
     await page.locator('#dsxThread .dsw-ask').waitFor({ timeout: 15000 });
-    assert.ok(dialogs.some(d => /task/i.test(d) || d.length > 0), 'the existing task prompt still asks first');
+    assert.ok(dialogs.some(d => /task/i.test(d) || d.length > 0), 'the existing task confirmation still asks');
     assert.match(seen.agent[0].task || seen.agent[0].prompt || JSON.stringify(seen.agent[0]), /Find the error/);
     assert.equal(await page.locator('#dsxThread .dsx-msg.user').last().innerText(), 'Fix the error');
     assert.match(await page.locator('.dsw-ask > b').innerText(), /Here's the change for src\/app\.js/);
