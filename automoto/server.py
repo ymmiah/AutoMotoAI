@@ -148,6 +148,8 @@ from automoto import developer_grounding
 app.include_router(developer_grounding.router)  # V49 read-only file-and-line evidence for coding help
 from automoto import developer_task_plan
 app.include_router(developer_task_plan.router)  # V50 read-only pre-approval coding task plans
+from automoto import developer_safe_patch
+app.include_router(developer_safe_patch.router)  # V51 explicit-preview small patches and conflict-safe undo
 from automoto import developer_adapters
 app.include_router(developer_adapters.router)  # V8 explicit permissioned external toolchain & DAP adapter SDK
 from automoto import developer_latex
