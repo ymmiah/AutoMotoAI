@@ -20,6 +20,27 @@
 .ios-draft{white-space:pre-wrap;font-size:14px}
 .ios-status{margin:0;color:var(--dim);font-size:13px}
 .ios-status.bad{color:var(--danger,#c44)}
+.phone-panel{display:grid;gap:12px;padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.phone-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.phone-head h3{margin:0;font-size:15px}
+.phone-badge{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.phone-badge.live{color:var(--on-accent);background:var(--ok);border-color:var(--ok)}
+.phone-note,.phone-status{margin:0;color:var(--dim);font-size:13px;line-height:1.5}
+.phone-status.bad{color:var(--bad)}
+.phone-steps{margin:0;padding-left:1.2rem;display:grid;gap:6px;font-size:14px}
+.phone-sub{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.phone-more{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.phone-more summary{cursor:pointer;font-size:14px;font-weight:600;min-height:32px;display:flex;align-items:center}
+.phone-more .phone-steps{margin-top:8px}
+.phone-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.phone-row label{font-size:12px;font-weight:600;color:var(--dim)}
+.phone-row .input{flex:1 1 160px;min-width:0;height:42px}
+.phone-panel [hidden]{display:none}
+.phone-check{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45}
+.phone-check input{margin-top:3px;flex:none}
+.phone-shot{max-width:min(320px,100%);max-height:560px;border:1px solid var(--line);border-radius:14px;justify-self:start}
+.phone-panel .btn.primary:disabled{opacity:.4;cursor:not-allowed}
+@media (pointer:coarse){.phone-panel .btn,.phone-check input{min-height:44px}.phone-check input{min-width:22px;min-height:22px}}
 .ds-columns{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1.9fr);gap:14px;min-height:470px}
 .ds-panel{min-width:0;padding:0;display:flex;flex-direction:column;overflow:hidden}
 .ds-panel-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid var(--line)}

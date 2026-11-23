@@ -81,7 +81,8 @@ STUDIO = StudioSpec(
         "and does not show source. ios_build and ios_install need the person's computer and a real iPhone. "
         "ios_listing writes a draft page and does not send it. ios_publish refuses until the person has "
         "pressed Send to Apple in the iPhone panel for that exact page. Never paste an Apple key, and "
-        "never say the app was sent unless the tool result says Apple has it. Do not show code unless asked.",
+        "never say the app was sent unless the tool result says Apple has it. Do not show code unless asked. "
+        "After ios_install, offer to test the app with the phone tools once the person turns on phone control.",
     labels={
         "ios_wizard": "Explaining the iPhone steps",
         "ios_setup": "Checking the iPhone tools",
