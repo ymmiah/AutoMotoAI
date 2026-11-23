@@ -422,7 +422,20 @@ class Agent:
                     policy.ASK, "risky",
                     "V52 coding session: explicit approval required before this action"
                 )
-        shown = mask_args(args)
+        prepared_patch = None
+        if self.coding_budget is not None and name == "developer_agent_patch" and decision.action != policy.DENY:
+            from automoto import developer_agent_patch as patch_bridge
+            from automoto.tools import ToolFailed
+            try:
+                # This is READ-ONLY: server computes the exact diff *before*
+                # a human is asked to approve. The one-use token stays here.
+                prepared_patch = patch_bridge.prepare(args)
+            except ToolFailed as exc:
+                emit({"type": "tool_result", "step": step, "id": base["tool_call_id"],
+                      "name": name, "ok": False, "output": str(exc)[:900]})
+                return {**base, "content": "PATCH REFUSED: " + str(exc)[:900]}
+        shown = (patch_bridge.public_approval(prepared_patch) if prepared_patch
+                 else mask_args(args))
         from automoto import planner
 
         emit({"type": "tool_call", "step": step, "id": base["tool_call_id"], "name": name, "args": shown,
@@ -433,7 +446,8 @@ class Agent:
                   "reason": decision.reason})
             ok = False
             try:
-                ok = bool(approver({"id": base["tool_call_id"], "name": name, "args": args}, decision))
+                ok = bool(approver({"id": base["tool_call_id"], "name": name,
+                                    "args": shown if prepared_patch else args}, decision))
             except Exception:
                 ok = False
             if ok and self.coding_budget is not None and self.coding_budget.check():
@@ -449,7 +463,18 @@ class Agent:
                   "output": f"blocked: {decision.reason}"})
             return {**base, "content": f"BLOCKED by safety policy: {decision.reason}"}
         t0 = time.monotonic()
-        ok, out = tools_mod.call(tool, self.ctx, args)
+        if prepared_patch is not None:
+            # Bypass the tool's deliberately disabled public function, NOT
+            # the V51 transaction. The verified one-use preview is committed
+            # only after the TaskManager approval for this exact diff.
+            from automoto.tools import ToolFailed
+            try:
+                out = json.dumps(patch_bridge.commit(prepared_patch), default=str)
+                ok = True
+            except ToolFailed as exc:
+                ok, out = False, str(exc)[:1200]
+        else:
+            ok, out = tools_mod.call(tool, self.ctx, args)
         if self.meter is not None:
             try:
                 self.meter.add(time.monotonic() - t0, kind="tool", detail=name)
