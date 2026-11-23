@@ -234,7 +234,10 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       }
       seen=Number.isInteger(result.next)?result.next:seen+(result.events||[]).length;
       approvals(result);
-      if(result.coding_budget)showBudget(result.coding_budget,result.steps||0);
+      if(result.coding_budget){
+        showBudget(result.coding_budget,result.steps||0);
+        emit("budget",{budget:result.coding_budget,steps:result.steps||0});
+      }
       const current=String(result.status||"running").toLowerCase();
       if(current!==lastStatus){state.textContent=current;lastStatus=current;emit("status",current);}
       if(terminal.has(current)){
@@ -320,7 +323,10 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
       });
       if(!result.task_id)throw Error("Agent did not start");
       taskId=result.task_id;
-      if(result.coding_budget)showBudget(result.coding_budget,0);
+      if(result.coding_budget){
+        showBudget(result.coding_budget,0);
+        emit("budget",{budget:result.coding_budget,steps:0});
+      }
       prompt.value="";state.textContent="Working";refresh();
       emit("status","working");void poll();
       return true;
@@ -375,6 +381,20 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
   refresh();
   return {
     runTask:(note,{confirmed=false,approvedPlan=null}={})=>run(note,confirmed,approvedPlan),
+    getCodingLimits:()=>({
+      max_steps:Number(budgets.steps.value),max_operations:Number(budgets.operations.value),
+      max_seconds:Number(budgets.seconds.value)
+    }),
+    setCodingLimits:limits=>{
+      if(busy)return false;
+      for(const [k,field] of [["max_steps",budgets.steps],
+                              ["max_operations",budgets.operations],
+                              ["max_seconds",budgets.seconds]]){
+        const value=String(limits?.[k]);
+        if([...field.options].some(option=>option.value===value))field.value=value;
+      }
+      return true;
+    },
     async cancelTask(){if(taskId&&busy)await api("/api/tasks/"+encodeURIComponent(taskId)+"/cancel",{});},
     approve:(callId,allow)=>approve(callId,allow),
     subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},
