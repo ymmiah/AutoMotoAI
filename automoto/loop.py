@@ -174,7 +174,7 @@ class Agent:
                 "Use developer_agent_patch to propose a small one-occurrence "
                 "replacement in an existing file; the server independently "
                 "computes a diff and the user must approve each exact patch. "
-                "Never claim to have created files, run tests, executed commands "
+                "For a NEW source file use developer_agent_create: the destination folder must exist; the server will show a diff and require explicit human approval. Never claim to have run tests, executed commands "
                 "or shared code: those capabilities are unavailable in this "
                 "patch-only session. If a new file or test execution is needed, "
                 "explain that a separately approved workflow is required. "
@@ -439,18 +439,20 @@ class Agent:
                     "V52 coding session: explicit approval required before this action"
                 )
         prepared_patch = None
-        if self.coding_budget is not None and name == "developer_agent_patch" and decision.action != policy.DENY:
+        if self.coding_budget is not None and name in ("developer_agent_patch", "developer_agent_create") and decision.action != policy.DENY:
             from automoto import developer_agent_patch as patch_bridge
             from automoto.tools import ToolFailed
             try:
                 # This is READ-ONLY: server computes the exact diff *before*
                 # a human is asked to approve. The one-use token stays here.
-                prepared_patch = patch_bridge.prepare(args)
+                prepared_patch = (patch_bridge.prepare_create(args) if name == "developer_agent_create"
+                                  else patch_bridge.prepare(args))
             except ToolFailed as exc:
                 emit({"type": "tool_result", "step": step, "id": base["tool_call_id"],
                       "name": name, "ok": False, "output": str(exc)[:900]})
                 return {**base, "content": "PATCH REFUSED: " + str(exc)[:900]}
-        shown = (patch_bridge.public_approval(prepared_patch) if prepared_patch
+        shown = ((patch_bridge.public_create(prepared_patch) if name == "developer_agent_create"
+                  else patch_bridge.public_approval(prepared_patch)) if prepared_patch
                  else mask_args(args))
         from automoto import planner
 
@@ -490,7 +492,8 @@ class Agent:
             # only after the TaskManager approval for this exact diff.
             from automoto.tools import ToolFailed
             try:
-                out = json.dumps(patch_bridge.commit(prepared_patch), default=str)
+                out = json.dumps((patch_bridge.commit_create(prepared_patch) if name == "developer_agent_create"
+                                  else patch_bridge.commit(prepared_patch)), default=str)
                 ok = True
             except ToolFailed as exc:
                 ok, out = False, str(exc)[:1200]
