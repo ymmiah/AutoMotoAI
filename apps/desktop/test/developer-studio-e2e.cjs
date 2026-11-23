@@ -127,6 +127,11 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   }
   await delay(400);
   assert.equal(agentCalls.length, 0, 'starter cards never start a task');
+  await page.locator('#dsxBudgetToggle').click();
+  await page.locator('#dsxBudgetSteps').selectOption('4');
+  await page.locator('#dsxBudgetCalls').selectOption('12');
+  await page.locator('#dsxBudgetTime').selectOption('120');
+  assert.match(await page.locator('#dsxBudgetToggle').innerText(), /4 steps.*12 tool calls.*2 min/);
   await page.locator('#dsxSend').click();
   await page.locator('.dsx-plan').last().waitFor();
   assert.equal(agentCalls.length, 0, 'planning is read-only and never starts a model task');
@@ -144,7 +149,8 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   let release = null, polls = 0;
   const gate = () => new Promise(r => { release = r; });
   await page.route('**/api/conversations', r => r.request().method() === 'POST' ? r.fulfill({ json: { id: 'conv-e2e' } }) : r.continue());
-  await page.route('**/api/agent', r => r.fulfill({ json: { task_id: 'task-e2e' } }));
+  const codingRuns=[];
+  await page.route('**/api/agent', r => { codingRuns.push(r.request().postDataJSON());r.fulfill({ json: { task_id: 'task-e2e' } }); });
   let script = [];
   await page.route('**/api/tasks/task-e2e?**', async r => {
     polls++;
@@ -175,6 +181,13 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => /Running tests 0 of 1/.test(document.querySelector('.dsx-progress')?.textContent || ''), null, { timeout: 15000 });
   assert.match(await page.locator('.dsx-progress').innerText(), /Planning[\s\S]*Editing 1 file[\s\S]*Ready for your review/);
+  assert.equal(codingRuns.length,1,'only one approved bounded agent run starts');
+  assert.deepEqual(
+    {steps:codingRuns[0].coding.max_steps,calls:codingRuns[0].coding.max_operations,seconds:codingRuns[0].coding.max_seconds},
+    {steps:4,calls:12,seconds:120},'the submitted coding limits match the user-selected budget'
+  );
+  assert.ok(/^[0-9a-f]{64}$/.test(codingRuns[0].coding.plan_id));
+  assert.match(await page.locator('.dsx-budget-progress').last().innerText(), /0\/4 steps.*0\/12 tool calls/);
   assert.equal(await page.locator('#dsxStop').isVisible(), true);
   assert.equal(await page.locator('#dsxSend').isDisabled(), true, 'one task at a time');
   await shot('03-run-in-progress.png');
