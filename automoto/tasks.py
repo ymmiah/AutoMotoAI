@@ -36,6 +36,7 @@ class Task:
     pending: dict[str, Any] | None = None
     conversation_id: str | None = None
     owner: str | None = None  # hosted mode: the user id that started it
+    coding_budget: Any = None  # V52 task-scoped limits shared with the agent
     cancel: threading.Event = field(default_factory=threading.Event)
     _answers: dict[str, bool] = field(default_factory=dict)
     _cv: threading.Condition = field(default_factory=threading.Condition)
@@ -45,7 +46,8 @@ class Task:
                 "created": self.created, "finished": self.finished, "pending": self.pending,
                 "steps": sum(1 for e in self.events if e.get("type") == "model"),
                 "conversation_id": self.conversation_id,
-                "result": self.result}
+                "result": self.result,
+                "coding_budget": self.coding_budget.snapshot() if self.coding_budget is not None else None}
 
 
 class TaskManager:
@@ -58,16 +60,16 @@ class TaskManager:
               keys: dict[str, str] | None = None, prefer: str | None = None, max_steps: int | None = None,
               agent_kwargs: dict[str, Any] | None = None, auto_deny: bool = False,
               conversation_id: str | None = None, on_done: Callable[[Task], None] | None = None,
-              owner: str | None = None) -> Task:
+              owner: str | None = None, coding_budget: Any = None) -> Task:
         last = next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), "")
         text = last if isinstance(last, str) else " ".join(p.get("text", "") for p in last if isinstance(p, dict))
         task = Task(id=uuid.uuid4().hex[:10], title=(title or text or "task")[:120], source=source,
-                    conversation_id=conversation_id, owner=owner)
+                    conversation_id=conversation_id, owner=owner, coding_budget=coding_budget)
         with self._lock:
             self.tasks[task.id] = task
             if len(self.tasks) > MAX_TASKS:
                 for old in sorted(self.tasks.values(), key=lambda t: t.created)[: len(self.tasks) - MAX_TASKS]:
-                    if old.status in ("done", "error", "cancelled"):
+                    if old.status in ("done", "error", "cancelled", "limited"):
                         self.tasks.pop(old.id, None)
 
         def approver(call: dict[str, Any], decision: policy.Decision) -> bool:
@@ -77,8 +79,9 @@ class TaskManager:
                 task.pending = {"id": call["id"], "name": call["name"], "args": call["args"],
                                 "reason": decision.reason, "level": decision.level}
                 task.status = "waiting_approval"
+                timeout = min(APPROVAL_TIMEOUT_S, coding_budget.remaining()) if coding_budget else APPROVAL_TIMEOUT_S
                 ok = task._cv.wait_for(lambda: call["id"] in task._answers or task.cancel.is_set(),
-                                       timeout=APPROVAL_TIMEOUT_S)
+                                       timeout=timeout)
                 answer = bool(ok) and task._answers.pop(call["id"], False) and not task.cancel.is_set()
                 task.pending = None
                 task.status = "running"
@@ -86,13 +89,16 @@ class TaskManager:
 
         def run(keys=keys) -> None:
             task.status = "running"
+            if coding_budget is not None:
+                coding_budget.start()
             try:
                 agent = self.agent_factory(**(agent_kwargs or {}))
                 res = agent.run(messages, approver=approver, on_event=task.events.append, keys=keys,
                                 prefer=prefer, max_steps=max_steps, cancel=task.cancel)
                 task.result = res.as_dict()
                 task.status = "cancelled" if res.stopped == "cancelled" else (
-                    "error" if res.stopped == "error" else "done")
+                    "limited" if res.stopped == "limited" else (
+                    "error" if res.stopped == "error" else "done"))
             except Exception as exc:  # pragma: no cover - defensive
                 task.result = {"text": f"✗ {exc.__class__.__name__}: {exc}"}
                 task.status = "error"
@@ -146,7 +152,7 @@ class TaskManager:
         end = time.time() + timeout
         while time.time() < end:
             t = self.tasks.get(task_id)
-            if t and t.status in ("done", "error", "cancelled"):
+            if t and t.status in ("done", "error", "cancelled", "limited"):
                 return t
             time.sleep(0.02)
         return self.tasks.get(task_id)
