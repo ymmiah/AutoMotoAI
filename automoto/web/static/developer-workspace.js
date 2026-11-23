@@ -76,7 +76,7 @@ export function approvalCard(entry,{api,getProject,decide,showFile}){
   const card=el("div","dsw-card dsw-ask");const bar=el("div","dsw-btns");
   const pick=(allow,buttons,okText,noText)=>{
     for(const b of buttons)b.disabled=true;
-    Promise.resolve(decide(allow)).then(()=>{bar.replaceChildren(el("span","dsw-done"+(allow?" ok":""),allow?okText:noText));if(allow&&path)showFile?.(path,{after:true});});
+    Promise.resolve(decide(allow)).then(()=>{bar.replaceChildren(el("span","dsw-done"+(allow?" ok":""),allow?okText:noText));if(allow&&path&&!["developer_agent_patch","developer_agent_create"].includes(name))showFile?.(path,{after:true});});
   };
   let path=null;
   if(name==="developer_agent_patch"||name==="developer_agent_create"){
