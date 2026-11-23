@@ -53,10 +53,18 @@ async function mock(ctx) {
 async function openReview(page, compact) {
   await page.evaluate(() => document.querySelector('.nav [data-page="developer"]').click());
   await page.locator('#dsxRoot').waitFor();
-  await page.evaluate(p => { document.querySelector('#dsPath').value = p; document.querySelector('#dsOpen').click(); }, proj);
-  // Opening runs every studio's project check; a busy CI runner can take longer than 30s, so wait
-  // up to 60s and say what Developer Studio reported if the project still did not open.
-  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''), null, { timeout: 60000 })
+  // Navigating fires both popstate and hashchange, so the Developer page can mount twice and the
+  // first Open click may land on the copy that is then replaced. Click Open again on the live page
+  // (a real user would) until the project shows, for up to 60s in total.
+  const open = () => page.evaluate(p => { document.querySelector('#dsPath').value = p; document.querySelector('#dsOpen').click(); }, proj);
+  const shown = () => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || '');
+  let opened = false;
+  for (let i = 0; i < 3 && !opened; i++) {
+    await open();
+    opened = await page.waitForFunction(shown, null, { timeout: 15000 }).then(() => true, () => false);
+  }
+  if (!opened) await open();
+  if (!opened) await page.waitForFunction(shown, null, { timeout: 15000 })
     .catch(async e => { throw new Error(`project did not open: ${await page.locator('#dsStatus').textContent().catch(() => '?')} (${e.message})`); });
   await page.keyboard.press('Escape');
   if (compact) await page.locator('#dsxNavTools').click(); else await page.locator('#dsxTools').click();
