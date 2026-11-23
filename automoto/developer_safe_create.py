@@ -219,7 +219,10 @@ def preview(request: Request, body: PreviewIn):
     target = _target(root, body.path)
     if "\x00" in body.text:
         raise HTTPException(415, "NUL bytes are not allowed in source.")
-    data = body.text.encode("utf-8")
+    try:
+        data = body.text.encode("utf-8")
+    except UnicodeError:
+        raise HTTPException(422, "Source must be valid UTF-8 text.") from None
     if len(data) > MAX_NEW_BYTES or len(body.text.splitlines()) > MAX_NEW_LINES:
         raise HTTPException(413, "A new file must be 64 KiB or less and at most 120 lines.")
     if body.path.casefold().endswith(".py"):
