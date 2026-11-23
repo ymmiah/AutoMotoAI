@@ -67,7 +67,10 @@ def test_private_route_and_rejected_paths(fixture, tmp_path):
         "project": str(tmp_path), "question": "login"}).status_code in (403, 422)
     outside = tmp_path / "external.py"
     outside.write_text("verify_login outside\n")
-    (root / "src" / "linked.py").symlink_to(outside)
+    try:
+        (root / "src" / "linked.py").symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("Cannot create symlinks on this host")
     response = client.post(BASE, headers=AUTH, json={
         "project": str(root), "question": "outside"})
     assert response.status_code == 200
