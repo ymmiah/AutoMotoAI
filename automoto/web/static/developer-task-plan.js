@@ -10,8 +10,8 @@ const el=(tag,cls,text)=>{
 
 export function isCodingRequest(value){
   const text=String(value||"").trim();
-  if(!text||/^(?:please\s+)?(?:explain|describe|what|where|why|how|tell me|show me|summarise|summarize|find|search|read|list)\b/i.test(text))return false;
-  return /\b(add|build|create|implement|fix|repair|debug|change|modify|update|improve|refactor|rewrite|remove|delete|make|develop|integrate|secure)\b/i.test(text);
+  if(!text||/^(?:please\s+)?(?:explain|describe|what|where|why|how|tell me|show me|summarise|summarize|read|list)\b/i.test(text))return false;
+  return /\b(add|build|create|implement|fix|repair|debug|change|modify|update|improve|refactor|rewrite|remove|delete|replace|make|develop|integrate|secure)\b/i.test(text);
 }
 
 /**
