@@ -95,7 +95,7 @@ def test_reviewed_diff_is_exact_and_patch_is_undoable(workspace, monkeypatch):
         snapshots.append(evidence)
         assert evidence["prepared_by_server"]
         assert evidence["path"] == "calc.py"
-        assert evidence["original_sha256"] == hashlib.sha256(OLD.encode()).hexdigest()
+        assert evidence["original_sha256"] == hashlib.sha256((root / "calc.py").read_bytes()).hexdigest()
         assert "-    return a - b" in evidence["preview_diff"]
         assert "+    return a + b" in evidence["preview_diff"]
         assert "token" not in evidence
@@ -182,7 +182,7 @@ def test_provider_tool_ids_cannot_reuse_a_previous_approval(workspace):
         agent = server._agent_factory(coding_budget=CodingBudget(), workspace=str(root))
         agent._touched = []
         # Both calls deliberately reuse the same provider-generated tool_call id.
-        original_sha = hashlib.sha256(OLD.encode("utf-8")).hexdigest()
+        original_sha = hashlib.sha256((root / "calc.py").read_bytes()).hexdigest()
         def proposed():
             return {"id": "reused-id", "name": "developer_agent_patch", "arguments": {
                 "path": "calc.py", "expected_sha256": original_sha,
