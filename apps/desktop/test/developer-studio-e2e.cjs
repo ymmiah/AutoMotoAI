@@ -168,7 +168,9 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
     writeFileSync(counter, original.replace('setN(n + 1)', 'setN(c => c + 1)'));
     writeFileSync(path.join(proj, 'components', 'Counter.test.tsx'), "test('counts', () => {});\n");
   });
-  await page.locator('.dsx-starter', { hasText: 'Find & fix a bug' }).click();
+  // The declined plan above stays in the chat, so the starter cards are hidden now: send the same
+  // starter prompt by typing it.
+  await page.locator('#dsxPrompt').fill(await page.locator('.dsx-starter', { hasText: 'Find & fix a bug' }).getAttribute('data-prompt'));
   await page.locator('#dsxSend').click();
   await page.locator('.dsx-plan').last().waitFor();
   accept();
@@ -432,8 +434,10 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   for (const b of nav.buttons) assert.ok(b.h >= 44 && b.w >= 44, 'tablet thumb target 44px+: ' + JSON.stringify(b));
   await runOnce('Reviewed the change on a tablet.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Tablet count"')));
   await page.locator('#dsxPrompt').fill('Review the change on a tablet');
-  accept();
   await page.locator('#dsxSend').click();
+  await page.locator('.dsx-plan').last().waitFor();
+  accept();
+  await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
   release();
   await page.locator('#dsxReview').waitFor({ timeout: 15000 });

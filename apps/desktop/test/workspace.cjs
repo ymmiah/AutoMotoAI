@@ -58,7 +58,10 @@ async function openWorkspace(page, compact) {
   await page.evaluate(() => document.querySelector('.nav [data-page="developer"]').click());
   await page.locator('#dsxRoot').waitFor();
   await page.evaluate(p => { document.querySelector('#dsPath').value = p; document.querySelector('#dsOpen').click(); }, proj);
-  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''));
+  // Opening runs every studio's project check; a busy CI runner can take longer than 30s, so wait
+  // up to 60s and say what Developer Studio reported if the project still did not open.
+  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''), null, { timeout: 60000 })
+    .catch(async e => { throw new Error(`project did not open: ${await page.locator('#dsStatus').textContent().catch(() => '?')} (${e.message})`); });
   await page.keyboard.press('Escape');
   if (compact) await page.locator('#dsxNavTools').click(); else await page.locator('#dsxTools').click();
   await page.locator('.dsx-card[data-tool="workspace"]').click();
