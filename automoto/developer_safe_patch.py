@@ -115,8 +115,15 @@ def _undo_record(root, path, token):
     if (data.get("identity") != studio._identity(root) or
         data.get("path") != path or
         not isinstance(data.get("previous_text"), str) or
+        not editor.SHA.fullmatch(str(data.get("before_sha256", ""))) or
         not editor.SHA.fullmatch(str(data.get("after_sha256", "")))):
         raise HTTPException(409, "Undo record does not match this project and file.")
+    try:
+        recovered = editor._encode(data["previous_text"], data["encoding"], data["newline"])
+    except (KeyError, ValueError, TypeError, HTTPException):
+        raise HTTPException(409, "Undo record encoding or content could not be verified.") from None
+    if hashlib.sha256(recovered).hexdigest() != data["before_sha256"]:
+        raise HTTPException(409, "Undo record failed its source integrity check.")
     return file, data
 
 
