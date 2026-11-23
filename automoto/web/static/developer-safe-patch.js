@@ -11,7 +11,7 @@ const make=(tag,cls,text)=>{
 export function mountDeveloperSafePatch({api,host,getProject,editor,status}){
   const box=host.querySelector("#dsPatchRoot");
   if(!box)return;
-  box.classList.add("dsp");
+  box.classList.add("ds-patch");
   box.setAttribute("aria-label","Review and undo a small code patch");
   box.append(make("h3",null,"Safe patch"),make("p","dsp-intro",
     "Change one exact piece of an existing source file. Preview the diff, then choose Apply or Dismiss. Undo is available after applying, unless the file changes again."));
