@@ -3,7 +3,7 @@
    Nothing here runs code by itself: starter cards only fill the prompt, every task needs
    the trusted project and a confirmation, and Keep / Undo use the review checkpoint API. */
 import {mountWorkspace,approvalCard} from "./developer-workspace.js";
-import {isCodingRequest,taskPlanCard} from "./developer-task-plan.js";
+import {taskPlanCard} from "./developer-task-plan.js";
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const VIEW_KEY="automoto.developer.view";
 const CHAT_KEY="automoto.developer.chat.";
@@ -424,7 +424,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     if(!p?.trusted||note.length<5||workbench.isBusy())return false;
     // Explicitly handled quick actions stay outside the agent.
     if(workspace.open&&!display&&workspace.handle(note)){prompt.value="";refresh();return false;}
-    if(!approvedPlan&&isCodingRequest(note)){
+    if(!approvedPlan){
       await showTaskPlan(note,p);
       prompt.value="";refresh();
       return false;
