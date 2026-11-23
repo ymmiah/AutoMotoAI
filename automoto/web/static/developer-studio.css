@@ -1030,14 +1030,14 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 }
 /* Project map (V37-V40). Lives in Tools only. Beginner face: one plain sentence and one big result
    per step, details collapsed, at most 3 items before "Show all". Status cards reuse the shared ring card. */
-.dsp .dsb-step{padding-bottom:26px}
-.dsp .dsb-step-main{gap:12px}
+.ds-patch .dsb-step{padding-bottom:26px}
+.ds-patch .dsb-step-main{gap:12px}
 .dsp-lead{margin:0;font-size:14px;line-height:1.5;color:var(--dim);max-width:520px}
 .dsp-big{margin:0;font-size:20px;font-weight:700;line-height:1.3}
 .dsp-fact{margin:0;font-size:14px;line-height:1.5;max-width:520px}
 .dsp-empty{margin:0;padding:14px 16px;border-radius:12px;border:1px dashed var(--line);color:var(--dim);font-size:14px;line-height:1.5;max-width:520px}
 .dsp-warn{margin:0;padding:10px 14px;border-radius:10px;background:color-mix(in srgb,#f0b429 10%,var(--panel2));font-size:13.5px;line-height:1.5;max-width:520px}
-.dsp .btn.dsp-go{min-height:44px;padding:0 22px;font-size:15px}
+.ds-patch .btn.dsp-go{min-height:44px;padding:0 22px;font-size:15px}
 .dsp-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;max-width:520px}
 .dsp-row .dss-field{flex:1 1 180px;max-width:none}
 .dsp-row>.btn{min-height:40px}
@@ -1048,7 +1048,7 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .dsp-items>li.t-ok{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--ok) 70%,transparent)}
 .dsp-item-main{font-size:14px;overflow-wrap:anywhere}
 .dsp-item-sub{font-size:12.5px;color:var(--dim);overflow-wrap:anywhere}
-.dsp .btn.dsp-all{align-self:flex-start;background:none;border:0;color:var(--accent);padding:4px 0;min-height:32px}
+.ds-patch .btn.dsp-all{align-self:flex-start;background:none;border:0;color:var(--accent);padding:4px 0;min-height:32px}
 .dsp-details{max-width:560px}
 .dsp-details>summary{cursor:pointer;color:var(--accent);font-size:13.5px;padding:4px 0;width:max-content;max-width:100%}
 .dsp-details-body{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:12px 14px;border-radius:12px;border:1px solid var(--line)}
@@ -1067,10 +1067,10 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .dsp-code>code{display:block;margin-right:36px}
 @media (pointer:coarse){.dsp-code>code{margin-right:48px}.dsp-code{min-height:52px;box-sizing:border-box}}
 @media (max-width:900px){
-  .dsp .dss-field input{min-height:44px}
+  .ds-patch .dss-field input{min-height:44px}
   .dsp-row>.btn{min-height:44px}
   .dsp-details>summary{padding:10px 0}
-  .dsp .btn.dsp-all{min-height:44px}
+  .ds-patch .btn.dsp-all{min-height:44px}
 }
 
 /* Edit, test & share: the Developer chat first, with a live panel beside it (a slide-up sheet on phones).
@@ -1176,3 +1176,49 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
   .dsw-card{max-width:none}
 }
 @media (prefers-reduced-motion:reduce){.dsw-live{transition:none!important}}
+
+
+/* V50 — source-aware task plan; the same accessible layout on mobile and desktop. */
+.dsx-plan{display:grid;gap:12px;max-width:100%;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text)}
+.dsx-plan-head{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.dsx-plan-head strong{font-size:15px}
+.dsx-plan-head p,.dsx-plan-evidence p,.dsx-plan-note{margin:5px 0 0;color:var(--dim);font-size:12px;line-height:1.5}
+.dsx-plan-count{border:1px solid var(--line);border-radius:999px;padding:4px 9px;font-size:12px;white-space:nowrap;color:var(--dim)}
+.dsx-plan-request{margin:0;padding:10px 12px;border-radius:9px;background:var(--code);overflow-wrap:anywhere;font-size:13px}
+.dsx-plan-steps{margin:0;padding-left:23px;display:grid;gap:10px}
+.dsx-plan-step{padding:10px 8px 10px 4px;border-bottom:1px solid var(--line)}
+.dsx-plan-step:last-child{border-bottom:0}
+.dsx-plan-step-title{display:flex;gap:9px;align-items:flex-start;cursor:pointer;line-height:1.4;font-size:13px}
+.dsx-plan-step-title input{flex:0 0 auto;margin:3px 0 0;accent-color:var(--accent);width:17px;height:17px}
+.dsx-plan-step p{margin:5px 0 0 26px;color:var(--dim);font-size:12px;line-height:1.5}
+.dsx-plan-step .dsx-plan-check{color:var(--text)}
+.dsx-plan-reviewed{font-size:12px;color:var(--dim);margin:0}
+.dsx-plan-evidence{display:grid;gap:6px;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:12px;min-width:0}
+.dsx-plan-evidence strong{font-size:12px}
+.dsx-plan-refs{display:flex;gap:6px;flex-wrap:wrap}
+.dsx-plan-ref{border:1px solid var(--line);background:var(--code);color:var(--text);border-radius:7px;padding:7px 10px;max-width:100%;overflow-wrap:anywhere;font:11px/1.3 var(--mono);text-align:left;cursor:pointer}
+.dsx-plan-ref:focus-visible,.dsx-plan-actions button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dsx-plan-warning{color:var(--danger,#c85d57)!important}
+.dsx-plan-actions{display:flex;flex-wrap:wrap;gap:8px}
+.dsx-plan-actions .btn{min-height:38px}
+.dsx-plan-dismissed{color:var(--dim);margin:0}
+@media(max-width:680px){.dsx-plan{padding:12px;border-radius:11px}.dsx-plan-actions .btn:first-child{flex:1 1 100%}}
+
+
+/* V51 — safe patch preview and one-click undo, no automatic writes. */
+.ds-patch{display:grid;gap:12px;max-width:100%;padding:12px;border-radius:12px;background:var(--panel);color:var(--text)}
+.ds-patch h3{margin:0;font-size:16px}
+.dsp-intro,.dsp-message{color:var(--dim);font-size:12px;line-height:1.5;margin:0}
+.dsp-message.dsp-bad{color:var(--danger,#c85d57)}
+.dsp-form{display:grid;gap:13px}
+.dsp-form label{display:grid;gap:7px;font-size:13px;font-weight:600}
+.dsp-form .input{width:100%;max-width:100%;min-height:40px;font-size:13px}
+.dsp-form textarea{font:12px/1.5 var(--mono);min-height:90px;resize:vertical;tab-size:2}
+.dsp-form label button{justify-self:start}
+.dsp-form button[type="submit"]{justify-self:start}
+.dsp-result{display:grid;gap:10px;min-width:0}
+.dsp-result[hidden]{display:none!important}
+.dsp-diff{max-width:100%;min-height:80px;max-height:420px;overflow:auto;white-space:pre;font:12px/1.55 var(--mono);border:1px solid var(--line);border-radius:8px;padding:10px}
+.dsp-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ds-patch button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:600px){.ds-patch{padding:10px}.dsp-form button[type="submit"]{width:100%}}
