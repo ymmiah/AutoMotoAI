@@ -78,11 +78,13 @@ def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | 
         # tools can be called, even if the model invents their names or the
         # user's global approval mode is "auto".
         from automoto.developer_coding_budget import READ_ONLY
-        from automoto.developer_agent_patch import patch_tool
+        from automoto.developer_agent_patch import patch_tool, create_tool
         tl = {name: tool for name, tool in tl.items()
               if name in READ_ONLY and tool.level == "safe"}
         transaction = patch_tool()
         tl[transaction.name] = transaction
+        create_transaction = create_tool()
+        tl[create_transaction.name] = create_transaction
     if review_only:
         # Do not rely on auto_deny alone: global approval_mode=auto may bypass
         # the approval callback. Removing tools from the registry makes writes,
@@ -162,6 +164,8 @@ from automoto import developer_task_plan
 app.include_router(developer_task_plan.router)  # V50 read-only pre-approval coding task plans
 from automoto import developer_safe_patch
 app.include_router(developer_safe_patch.router)  # V51 explicit-preview small patches and conflict-safe undo
+from automoto import developer_safe_create
+app.include_router(developer_safe_create.router)  # V54 no-clobber reviewed new-source creation
 from automoto import developer_adapters
 app.include_router(developer_adapters.router)  # V8 explicit permissioned external toolchain & DAP adapter SDK
 from automoto import developer_latex
