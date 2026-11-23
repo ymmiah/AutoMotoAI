@@ -136,7 +136,8 @@ class Agent:
     def __init__(self, *, tools: dict[str, tools_mod.Tool] | None = None, memory: Memory | None = None,
                  skills: dict[str, skills_mod.Skill] | None = None, desktop: bool = False,
                  extra_tools: list[tools_mod.Tool] | None = None, transport: Callable | None = None,
-                 client: str = "cli", workspace: str | None = None, meter: Any = None):
+                 client: str = "cli", workspace: str | None = None, meter: Any = None,
+                 coding_budget: Any = None):
         self.memory = memory if memory is not None else Memory()
         self.skills = skills if skills is not None else skills_mod.discover()
         self.tools = tools if tools is not None else tools_mod.build(desktop=desktop, extra=extra_tools)
@@ -147,6 +148,7 @@ class Agent:
         self.workspace = workspace  # an allowed folder to use as the working root (e.g. a VS Code project)
         self.tainted = False
         self.meter = meter  # hosted mode: usage quota (accounts.Meter) - checked before every model call
+        self.coding_budget = coding_budget  # V52: optional local Developer Studio session limits
 
     def system(self, plan: Any = None) -> str:
         from automoto import local_llm, planner
@@ -185,6 +187,9 @@ class Agent:
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
         max_steps = max_steps or max_steps_default()
+        if self.coding_budget is not None:
+            self.coding_budget.start()
+            max_steps = min(max_steps, self.coding_budget.max_steps)
         events: list[dict[str, Any]] = []
 
         def emit(ev: dict[str, Any]) -> None:
@@ -195,6 +200,15 @@ class Agent:
                     on_event(ev)
                 except Exception:  # a UI bug must not kill the task
                     pass
+
+        def end_limited(reason: str, step: int) -> AgentResult:
+            emit({"type": "coding_limit", "step": step, "reason": reason,
+                  "budget": self.coding_budget.snapshot()})
+            return AgentResult(
+                "Stopped at the bounded coding " + reason + " limit. "
+                "Review the changes and test evidence before starting another task.",
+                max(0, step - 1), stopped="limited", events=events, history=history,
+            )
 
         from automoto import planner
 
@@ -242,6 +256,10 @@ class Agent:
         fixes = 0
         specs = tc.specs_from_schemas([t.schema() for t in self.tools.values()])  # merged names still parse
         for step in range(1, max_steps + 1):
+            if self.coding_budget is not None:
+                reason = self.coding_budget.check()
+                if reason:
+                    return end_limited(reason, step)
             if cancel is not None and cancel.is_set():
                 emit({"type": "cancelled", "step": step})
                 return AgentResult("Cancelled.", step - 1, *last, stopped="cancelled", events=events, history=history)
@@ -263,6 +281,10 @@ class Agent:
                 emit({"type": "error", "step": step, "error": str(exc),
                       "tried": getattr(exc, "tried", [])})
                 return AgentResult(f"✗ {exc}", step - 1, *last, stopped="error", events=events, history=history)
+            if self.coding_budget is not None:
+                reason = self.coding_budget.check()
+                if reason:
+                    return end_limited(reason, step)
             last = (turn.provider, turn.model)
             self._meter(time.monotonic() - t_model, history, turn.text, "model", f"{turn.provider}/{turn.model}")
             failed = [t for t in turn.tried if not t.get("ok")]
@@ -322,7 +344,21 @@ class Agent:
                 emit({"type": "say", "step": step, "text": turn.text})
             history.append({"role": "assistant", "content": turn.text, "tool_calls": turn.tool_calls})
             for call in turn.tool_calls:
+                if cancel is not None and cancel.is_set():
+                    emit({"type": "cancelled", "step": step})
+                    return AgentResult("Cancelled.", step, *last, stopped="cancelled",
+                                       events=events, history=history)
+                if self.coding_budget is not None:
+                    reason = self.coding_budget.consume_operation()
+                    if reason:
+                        return end_limited(reason, step)
+                    emit({"type": "coding_budget", "step": step,
+                          "budget": self.coding_budget.snapshot()})
                 history.append(self._run_call(call, step, approver, emit))
+        # A bounded coding run must never issue a hidden, extra model request.
+        if self.coding_budget is not None:
+            self.coding_budget.mark_steps()
+            return end_limited("steps", max_steps + 1)
         # Out of steps: ask once more for a summary without tools.
         emit({"type": "max_steps", "step": max_steps})
         why = self.meter.check() if self.meter is not None else None
@@ -354,6 +390,15 @@ class Agent:
         args = tools_mod.repair_args(tool, args)  # alias names, "/uploads/x" slips etc. - before the policy sees it
         call["arguments"] = args
         decision = policy.decide(name, tool.level, args, tainted=self.tainted)
+        if self.coding_budget is not None and decision.action != policy.DENY:
+            from automoto.developer_coding_budget import READ_ONLY
+            # Ignore global auto-approval, including safe scratch writes. Only a
+            # small reviewed set of read-only tools can run without a human tap.
+            if name not in READ_ONLY or decision.level != "safe":
+                decision = policy.Decision(
+                    policy.ASK, "risky",
+                    "V52 coding session: explicit approval required before this action"
+                )
         shown = mask_args(args)
         from automoto import planner
 
@@ -368,6 +413,8 @@ class Agent:
                 ok = bool(approver({"id": base["tool_call_id"], "name": name, "args": args}, decision))
             except Exception:
                 ok = False
+            if ok and self.coding_budget is not None and self.coding_budget.check():
+                ok = False  # approval arrived after the deadline; do not execute
             emit({"type": "approval", "step": step, "id": base["tool_call_id"], "approved": ok})
             if not ok:
                 out = "DENIED by the user. Do not retry this exact call; ask or choose another approach."
