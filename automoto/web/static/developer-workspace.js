@@ -24,7 +24,7 @@ export const CHIPS=[["explain","Explain my project"],["fix","Fix the error"],["t
 // What the two AI chips ask the assistant. Only the request goes to the model; the assistant reads
 // files itself through its own tools, and every change still needs the user's Apply.
 export const AI_PROMPTS={
-  explain:"Explain what this project does and how to run it, in plain words for a beginner. Don't change any files.",
+  explain:"Use developer_sources to find relevant evidence in this project first. Explain what the project does and how to run it in plain words. Cite each verified project claim with an exact path and line range (path:Lx-Ly). Do not invent citations or instructions when project evidence is missing. Do not change any files.",
   fix:"Find the error in this project (from the tests or the error output), fix it with the smallest change, and explain the fix in one or two plain sentences."
 };
 const INTENTS=[
