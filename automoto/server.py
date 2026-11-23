@@ -750,6 +750,34 @@ def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
     _authorise(request)
     meter = _hosted_gate(request)
     desktop = config.desktop_enabled() and _local(request) and body.client != "mobile"
+    coding_budget = None
+    if body.coding is not None:
+        from automoto import developer_studio, developer_task_plan
+        from automoto.developer_coding_budget import CodingBudget
+
+        if not _local(request) or body.client not in ("web", "desktop") or not body.workspace:
+            raise HTTPException(403, "Bounded coding requires a local Developer Studio project.")
+        root = developer_studio._project(body.workspace)
+        if not developer_studio._trusted(root, developer_studio._load()):
+            raise HTTPException(403, "Trust this exact project before starting a coding run.")
+        if not isinstance(body.message, str) or not body.message.startswith(body.coding.request):
+            raise HTTPException(422, "The coding task must match the reviewed plan request.")
+        current = developer_task_plan.task_plan(
+            request, developer_task_plan.PlanIn(
+                project=str(root), request=body.coding.request,
+            ),
+        )
+        if current["plan_id"] != body.coding.plan_id:
+            raise HTTPException(409, "Plan or source files changed. Review a fresh plan.")
+        if any(t.coding_budget is not None and
+               t.status in ("queued", "running", "waiting_approval")
+               for t in TASKS.tasks.values()):
+            raise HTTPException(409, "Another bounded coding task is still active.")
+        coding_budget = CodingBudget(
+            max_steps=body.coding.max_steps,
+            max_operations=body.coding.max_operations,
+            max_seconds=body.coding.max_seconds,
+        )
     conv_id, on_done = None, None
     if body.conversation_id:
         convs = Conversations()
@@ -776,34 +804,6 @@ def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
             workspace = str(sandbox.check_root(body.workspace))
         except sandbox.SandboxError as exc:
             raise HTTPException(400, str(exc)) from None
-    coding_budget = None
-    if body.coding is not None:
-        from automoto import developer_studio, developer_task_plan
-        from automoto.developer_coding_budget import CodingBudget
-
-        if not _local(request) or body.client not in ("web", "desktop") or not workspace:
-            raise HTTPException(403, "Bounded coding requires a local Developer Studio project.")
-        root = developer_studio._project(workspace)
-        if not developer_studio._trusted(root, developer_studio._load()):
-            raise HTTPException(403, "Trust this exact project before starting a coding run.")
-        if not isinstance(body.message, str) or not body.message.startswith(body.coding.request):
-            raise HTTPException(422, "The coding task must match the reviewed plan request.")
-        current = developer_task_plan.task_plan(
-            request, developer_task_plan.PlanIn(
-                project=str(root), request=body.coding.request,
-            ),
-        )
-        if current["plan_id"] != body.coding.plan_id:
-            raise HTTPException(409, "Plan or source files changed. Review a fresh plan.")
-        if any(t.coding_budget is not None and
-               t.status in ("queued", "running", "waiting_approval")
-               for t in TASKS.tasks.values()):
-            raise HTTPException(409, "Another bounded coding task is still active.")
-        coding_budget = CodingBudget(
-            max_steps=body.coding.max_steps,
-            max_operations=body.coding.max_operations,
-            max_seconds=body.coding.max_seconds,
-        )
     task = TASKS.start(msgs, source="web" if meter else body.client, keys=None if meter else body.keys,
                        prefer=body.prefer, max_steps=coding_budget.max_steps if coding_budget else body.max_steps,
                        agent_kwargs={"desktop": desktop, "client": body.client, "workspace": workspace,
