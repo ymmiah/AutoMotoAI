@@ -154,8 +154,11 @@ let browser; const errors = [];
     assert.equal(await page.locator('#convMenu').isVisible(), false);
     // 1. Fix the error: the assistant's change shows as a diff, nothing is written until Apply.
     await page.locator('.dsw-chip', { hasText: 'Fix the error' }).click();
+    await page.locator('#dsxThread .dsx-plan').last().waitFor({ timeout: 15000 });
+    assert.equal(seen.agent.length, 0, 'the plan cannot silently run the coding agent');
+    await page.locator('.dsx-plan-actions .primary').last().click();
     await page.locator('#dsxThread .dsw-ask').waitFor({ timeout: 15000 });
-    assert.ok(dialogs.some(d => /task/i.test(d) || d.length > 0), 'the existing task prompt still asks first');
+    assert.ok(dialogs.some(d => /task/i.test(d) || d.length > 0), 'the existing task confirmation still asks');
     assert.match(seen.agent[0].task || seen.agent[0].prompt || JSON.stringify(seen.agent[0]), /Find the error/);
     assert.equal(await page.locator('#dsxThread .dsx-msg.user').last().innerText(), 'Fix the error');
     assert.match(await page.locator('.dsw-ask > b').innerText(), /Here's the change for src\/app\.js/);
