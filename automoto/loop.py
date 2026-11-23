@@ -37,6 +37,8 @@ UNTRUSTED_TOOLS = {"fetch_url", "web_search", "discover", "read_feed", "library_
                    "office_read", "office_check", "office_review", "office_recalc",
                    "archive_list", "archive_inspect", "archive_read", "archive_extract", "download_file",
                    "wp_validate", "wp_security_review", "data_inspect", "data_query", "data_read", "sqlite_query",
+                   "developer_open", "developer_read", "developer_search", "developer_sources", "developer_symbols",
+                   "developer_languages", "developer_lsp", "developer_diff",
                    "text_search", "text_tail", "pdf_text", "image_info"}
 TAINTING_TOOLS = {"fetch_url", "web_search", "download_file", "discover", "read_feed", "library_add", "page_inspect"}
 UNTRUSTED_GROUPS = ("mcp:", "services", "studio:phone")  # phone screens show text written by anyone
