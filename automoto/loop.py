@@ -393,6 +393,26 @@ class Agent:
         args = tools_mod.repair_args(tool, args)  # alias names, "/uploads/x" slips etc. - before the policy sees it
         call["arguments"] = args
         decision = policy.decide(name, tool.level, args, tainted=self.tainted)
+        if self.coding_budget is not None and isinstance(args, dict):
+            from automoto import sandbox
+            # Even a user approval must not make source paths escape the
+            # selected coding workspace. Commands still require independent
+            # review: shell arguments are not a complete filesystem sandbox.
+            for path_key in ("project", "path", "directory", "file", "src",
+                             "out", "dest", "destination", "target"):
+                candidate = args.get(path_key)
+                if not isinstance(candidate, str) or not candidate.strip():
+                    continue
+                if "://" in candidate:  # remote URLs have separate tool policy checks
+                    continue
+                try:
+                    sandbox.resolve(candidate, allow_outside=False)
+                except sandbox.SandboxError:
+                    decision = policy.Decision(
+                        policy.DENY, "blocked",
+                        "V52 coding tasks cannot access paths outside the selected project"
+                    )
+                    break
         if self.coding_budget is not None and decision.action != policy.DENY:
             from automoto.developer_coding_budget import READ_ONLY
             # Ignore global auto-approval, including safe scratch writes. Only a
