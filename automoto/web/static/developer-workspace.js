@@ -79,27 +79,28 @@ export function approvalCard(entry,{api,getProject,decide,showFile}){
     Promise.resolve(decide(allow)).then(()=>{bar.replaceChildren(el("span","dsw-done"+(allow?" ok":""),allow?okText:noText));if(allow&&path)showFile?.(path,{after:true});});
   };
   let path=null;
-  if(name==="developer_agent_patch"){
+  if(name==="developer_agent_patch"||name==="developer_agent_create"){
+    const creating=name==="developer_agent_create";
     path=relPath(args.path,getProject()?.project);
     const valid=args.prepared_by_server===true &&
       typeof args.preview_diff==="string" && args.preview_diff.startsWith("--- ") &&
-      /^[0-9a-f]{64}$/.test(String(args.original_sha256||""));
-    card.append(el("b",null,"Apply checked patch to "+path),
+      /^[0-9a-f]{64}$/.test(String(creating?args.after_sha256:args.original_sha256));
+    card.append(el("b",null,(creating?"Create checked file ":"Apply checked patch to ")+path),
       el("p",null,"AutoMoto verified this exact source diff. No file changes until you approve this one action."));
     const summary=el("p","dsw-hint",String(args.changed_lines||0)+" changed lines · "+
       (args.syntax_checked?"Python syntax checked":"Syntax not checked for this language")+
-      " · SHA-256 "+String(args.original_sha256||"").slice(0,12));
+      " · SHA-256 "+String(creating?args.after_sha256:args.original_sha256).slice(0,12));
     card.append(summary);
     const pre=el("pre","dsw-cmd dsw-patch-diff");
     pre.textContent=valid?args.preview_diff:"Patch evidence missing; approval blocked.";
     pre.setAttribute("aria-label","Server-verified patch diff, minus removes and plus adds");
     card.append(pre);
-    const yes=btn("Apply checked patch","primary"),no=btn("Skip","");
+    const yes=btn(creating?"Create checked file":"Apply checked patch","primary"),no=btn("Skip","");
     yes.disabled=!valid;
     yes.onclick=()=>{if(valid)pick(true,[yes,no],"Approved once · awaiting result","Patch skipped.");};
     no.onclick=()=>pick(false,[yes,no],"Applied once","Patch skipped.");
     bar.append(yes,no);
-    if(path){const show=btn("Show source","link");show.onclick=()=>showFile?.(path,{open:true});bar.append(show);}
+    if(path&&!creating){const show=btn("Show source","link");show.onclick=()=>showFile?.(path,{open:true});bar.append(show);}
   }else if(name==="edit_file"||name==="write_file"){
     path=relPath(args.path,getProject()?.project);
     card.append(el("b",null,"Here's the change for "+path),el("p",null,"Nothing is saved until you press Apply."));
