@@ -1237,3 +1237,15 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .ds-v52-budget-detail{margin:0;font-size:11px;line-height:1.5;color:var(--dim)}
 .ds-v52-plan-holder{max-width:100%;min-width:0}
 @media(max-width:600px){.ds-v52-limit-options{grid-template-columns:repeat(3,minmax(0,1fr))}.ds-v52-limits{padding:10px}}
+
+
+/* V52 chat budget: small by default, adjustable only before an agent run. */
+.dsx-session-limits{max-width:100%;margin:3px 0 5px;padding:0 6px;min-width:0}
+.dsx-budget-toggle{font:600 11px/1.5 var(--mono);border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:var(--panel);color:var(--dim);cursor:pointer}
+.dsx-budget-toggle:focus-visible,.dsx-budget-options select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dsx-budget-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.dsx-budget-options[hidden]{display:none!important}
+.dsx-budget-options label{display:grid;gap:5px;font-size:11px;min-width:0;color:var(--dim)}
+.dsx-budget-options select{min-height:38px;min-width:0;width:100%;max-width:100%;color:var(--text);background:var(--code);border:1px solid var(--line);border-radius:7px;font-size:12px;padding:5px}
+.dsx-budget-progress{margin:8px 0 0;font:11px/1.5 var(--mono);color:var(--dim);overflow-wrap:anywhere}
+@media(max-width:500px){.dsx-budget-options{gap:6px;padding:8px}.dsx-budget-options select{font-size:11px;padding:4px}}
