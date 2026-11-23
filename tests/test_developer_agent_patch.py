@@ -67,6 +67,7 @@ def test_bounded_registry_has_no_alternate_code_write_or_execution(workspace):
         bounded = server._agent_factory(coding_budget=CodingBudget(), workspace=str(root))
         tools = bounded.tools
         assert "developer_agent_patch" in tools
+        assert "developer_agent_create" in tools and tools["developer_agent_create"].level == "risky"
         assert tools["developer_agent_patch"].level == "risky"
         for dangerous in ("developer_save", "write_file", "edit_file", "run_shell",
                           "developer_run", "more_tools", "run_app", "run_app_script",
@@ -76,7 +77,7 @@ def test_bounded_registry_has_no_alternate_code_write_or_execution(workspace):
             "read_file", "list_dir", "search_files", "project_inspect",
             "developer_open", "developer_read", "developer_search", "developer_sources",
             "developer_symbols", "developer_languages", "developer_lsp",
-            "developer_diff", "developer_agent_patch",
+            "developer_diff", "developer_agent_patch", "developer_agent_create",
         }
         with pytest.raises(ToolFailed):
             tools["developer_agent_patch"].fn(ToolContext(), path="calc.py")
