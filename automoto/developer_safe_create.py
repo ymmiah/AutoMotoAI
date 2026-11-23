@@ -170,14 +170,17 @@ def _open_new(root: Path, path: str, data: bytes,
         if fd_parent is not None:
             os.close(fd_parent)
 
-def _unchanged(root: Path, path: str, expected_sha: str, identity: tuple[int, int]) -> bool:
+def _unchanged(root: Path, path: str, expected_sha: str,
+               identity: tuple[int, int], created_ctime_ns: int | None = None) -> bool:
     """Compare a no-follow opened regular file with the exact recorded creation."""
     target = _target(root, path, absent=False)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
     try:
         with os.fdopen(os.open(target, flags), "rb") as stream:
             info = os.fstat(stream.fileno())
-            if not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != identity:
+            if (not stat.S_ISREG(info.st_mode) or
+                (info.st_dev, info.st_ino) != identity or
+                (created_ctime_ns is not None and info.st_ctime_ns != created_ctime_ns)):
                 return False
             if info.st_size > MAX_NEW_BYTES:
                 return False
@@ -187,8 +190,9 @@ def _unchanged(root: Path, path: str, expected_sha: str, identity: tuple[int, in
         return False
 
 
-def _delete_guarded(root: Path, path: str, digest: str, identity: tuple[int, int]) -> None:
-    if not _unchanged(root, path, digest, identity):
+def _delete_guarded(root: Path, path: str, digest: str,
+                    identity: tuple[int, int], created_ctime_ns: int | None = None) -> None:
+    if not _unchanged(root, path, digest, identity, created_ctime_ns):
         raise HTTPException(409, "File was changed or replaced after creation. Undo refused.")
     target = _target(root, path, absent=False)
     fd_parent = _parent_fd(root, path)
@@ -259,10 +263,12 @@ def _apply_checked(root: Path, path: str, token: str) -> dict:
         if _parent_id(target) != tuple(item["parent_id"]):
             raise HTTPException(409, "Parent folder changed since preview.")
         created_id = _open_new(root, path, item["data"], tuple(item["parent_id"]))
+        created_ctime_ns = _target(root, path, absent=False).lstat().st_ctime_ns
         undo_id = secrets.token_hex(16)
         record = {
             "identity": item["identity"], "path": path,
             "sha256": item["sha256"], "inode": list(created_id),
+            "ctime_ns": created_ctime_ns,
             "parent_id": list(item["parent_id"]), "created_at": time.time(),
         }
         try:
@@ -272,7 +278,7 @@ def _apply_checked(root: Path, path: str, token: str) -> dict:
         except Exception:
             # A newly created file without an undo record is not acceptable.
             # Roll back only if the exact file and bytes remain unchanged.
-            _delete_guarded(root, path, item["sha256"], created_id)
+            _delete_guarded(root, path, item["sha256"], created_id, created_ctime_ns)
             raise
         PREVIEWS.pop(token, None)
         records = sorted(folder.glob("*.json"), key=lambda p: p.stat().st_mtime_ns, reverse=True)
@@ -312,12 +318,14 @@ def undo(request: Request, body: ActIn):
             item.get("path") != body.path or
             not patch.editor.SHA.fullmatch(str(item.get("sha256", ""))) or
             not isinstance(item.get("inode"), list) or len(item["inode"]) != 2 or
-            not isinstance(item.get("parent_id"), list) or len(item["parent_id"]) != 2):
+            not isinstance(item.get("parent_id"), list) or len(item["parent_id"]) != 2 or
+            type(item.get("ctime_ns")) is not int):
             raise HTTPException(409, "Undo record does not match project identity.")
         target = _target(root, body.path, absent=False)
         if _parent_id(target) != tuple(item["parent_id"]):
             raise HTTPException(409, "Parent folder changed. Undo refused.")
-        _delete_guarded(root, body.path, item["sha256"], tuple(item["inode"]))
+        _delete_guarded(root, body.path, item["sha256"], tuple(item["inode"]),
+                        item["ctime_ns"])
         record.unlink(missing_ok=True)
         return {"undone": True, "path": body.path, "removed_new_file": True,
                 "source_modified": True}
