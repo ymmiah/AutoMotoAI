@@ -53,6 +53,7 @@ COOKIE = "automoto_session"
 _LAUNCH: dict[str, float] = {}  # one-time launch tokens -> expiry
 _LAUNCH_LOCK = threading.Lock()
 MAX_IMAGES = 4
+_CODING_START_LOCK = threading.Lock()  # serialize one bounded session start at a time
 
 MCP_TOOLS: list[tools_mod.Tool] = []
 MCP_ERRORS: list[str] = []
@@ -769,10 +770,6 @@ def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
         )
         if current["plan_id"] != body.coding.plan_id:
             raise HTTPException(409, "Plan or source files changed. Review a fresh plan.")
-        if any(t.coding_budget is not None and
-               t.status in ("queued", "running", "waiting_approval")
-               for t in TASKS.tasks.values()):
-            raise HTTPException(409, "Another bounded coding task is still active.")
         coding_budget = CodingBudget(
             max_steps=body.coding.max_steps,
             max_operations=body.coding.max_operations,
@@ -804,13 +801,21 @@ def agent_start(body: AgentIn, request: Request) -> dict[str, Any]:
             workspace = str(sandbox.check_root(body.workspace))
         except sandbox.SandboxError as exc:
             raise HTTPException(400, str(exc)) from None
-    task = TASKS.start(msgs, source="web" if meter else body.client, keys=None if meter else body.keys,
-                       prefer=body.prefer, max_steps=coding_budget.max_steps if coding_budget else body.max_steps,
-                       agent_kwargs={"desktop": desktop, "client": body.client, "workspace": workspace,
-                                     "local_apps": _local_apps_ok(request, body.client), "meter": meter,
-                                     "coding_budget": coding_budget},
-                       conversation_id=conv_id, on_done=on_done, owner=_owner(request),
-                       coding_budget=coding_budget)
+    from contextlib import nullcontext
+    with _CODING_START_LOCK if coding_budget is not None else nullcontext():
+        if coding_budget is not None and any(
+            t.coding_budget is not None and
+            t.status in ("queued", "running", "waiting_approval")
+            for t in TASKS.tasks.values()
+        ):
+            raise HTTPException(409, "Another bounded coding task is still active.")
+        task = TASKS.start(msgs, source="web" if meter else body.client, keys=None if meter else body.keys,
+                           prefer=body.prefer, max_steps=coding_budget.max_steps if coding_budget else body.max_steps,
+                           agent_kwargs={"desktop": desktop, "client": body.client, "workspace": workspace,
+                                         "local_apps": _local_apps_ok(request, body.client), "meter": meter,
+                                         "coding_budget": coding_budget},
+                           conversation_id=conv_id, on_done=on_done, owner=_owner(request),
+                           coding_budget=coding_budget)
     return {"task_id": task.id, "status": task.status, "conversation_id": conv_id,
             "coding_budget": coding_budget.snapshot() if coding_budget else None}
 
