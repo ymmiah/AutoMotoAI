@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 import threading
 import time
 from dataclasses import dataclass, field
@@ -460,7 +461,7 @@ class Agent:
             # A provider may reuse a tool_call id, or send two calls with the
             # same id in one turn. Approval handles are always server-unique
             # in bounded runs so an old button cannot approve a later patch.
-            approval_id = (__import__("secrets").token_hex(16)
+            approval_id = (secrets.token_hex(16)
                            if self.coding_budget is not None else base["tool_call_id"])
             emit({"type": "approval_needed", "step": step, "id": approval_id, "name": name, "args": shown,
                   "reason": decision.reason})
