@@ -41,6 +41,7 @@ def _run(root, approver, *, path="src/hello.py", text=CONTENT):
             coding_budget=CodingBudget(max_steps=4, max_operations=5, max_seconds=90),
             workspace=str(root),
         )
+        agent._touched = []  # normally set by Agent._run; this test drives one call directly
         events = []
         answer = agent._run_call(
             {"id": "model-provided-id", "name": "developer_agent_create",

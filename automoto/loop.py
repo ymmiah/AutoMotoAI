@@ -426,7 +426,7 @@ class Agent:
                 except sandbox.SandboxError:
                     decision = policy.Decision(
                         policy.DENY, "blocked",
-                        "V52 coding tasks cannot access paths outside the selected project"
+                        "V52 coding tasks cannot access restricted paths or paths outside the selected project"
                     )
                     break
         if self.coding_budget is not None and decision.action != policy.DENY:
