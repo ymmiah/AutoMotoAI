@@ -385,6 +385,25 @@ def test_share_fast_forward_then_up_to_date(world):
     assert p["state"] == "up_to_date" and not p["ok"]
 
 
+def test_status_counts_checkpoints_not_shared_yet_offline(world, monkeypatch):
+    """The workspace strip: how many checkpoints aren't on the website yet, from local facts only."""
+    w = world
+    signin()
+    root = project(w)
+    sync = lambda: w.client.get(API + "/status", params={"project": str(root)}, headers=AUTH).json()["sync"]
+    assert sync() == {"state": "never_shared", "unshared": 1, "branch": "main", "dirty": False}
+    pick(w, root)
+    do_share(w, root, do_plan(w, root))
+    assert sync()["state"] == "shared" and sync()["unshared"] == 0
+    commit(root, "a.txt", "one\n", "Second")
+    commit(root, "b.txt", "two\n", "Third")
+    (root / "c.txt").write_text("unsaved\n", encoding="utf-8")
+    # Counting never touches the network.
+    monkeypatch.setattr(remote, "net_git", lambda *a, **k: pytest.fail("status must stay offline"))
+    monkeypatch.setattr(git_auth, "http_call", lambda *a, **k: pytest.fail("status must stay offline"))
+    assert sync() == {"state": "ahead", "unshared": 2, "branch": "main", "dirty": True}
+
+
 def test_share_to_a_new_branch_counts_only_new_commits_and_gives_review_link(world):
     w = world
     signin()

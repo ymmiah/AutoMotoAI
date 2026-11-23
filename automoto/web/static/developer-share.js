@@ -20,6 +20,35 @@ function step(n,title,state){
   const main=el("div","dsb-step-main");main.append(el("b",null,title));li.append(main);return {li,main};
 }
 
+/** The "share it yourself" steps: a saved .patch, per-OS steps and a copy button on every command
+    (copy.js adds it to each <pre>). Shared by the Share card and the chat in Edit, test & share.
+    Every text is untrusted and goes on the page as text only. */
+export function renderFallback(fb,{os,setOs,site,actions={}}){
+  const c=el("div","dss-fallback");c.setAttribute("role","region");c.setAttribute("aria-label","Share it yourself");
+  c.append(el("h4",null,fb.headline),el("p",null,fb.explain));
+  if(fb.detail){const d=el("details","dss-detail");d.append(el("summary",null,"What "+site+" said"));d.append(el("pre","dss-log",fb.detail));c.append(d);}
+  for(const f of [fb.patch,fb.bundle].filter(Boolean)){
+    const line=el("div","dss-file");
+    line.append(el("span",null,(f.kind==="bundle"?"Saved bundle (includes pictures and other binary files): ":"Saved patch: ")));
+    const code=el("code",null,f.path);code.dataset.copy="";code.dataset.copyLabel="file location";line.append(code);c.append(line);
+  }
+  if(!fb.patch&&!fb.bundle&&fb.code!=="push_protection"&&fb.code!=="scan_blocked"&&fb.commit_count===0)c.append(el("p","dsb-hint","There were no new checkpoints to save."));
+  const tabs=el("div","dss-os");tabs.setAttribute("role","group");tabs.setAttribute("aria-label","Your computer");
+  for(const [k,label] of OSES){const b=btn(label,"sm",()=>setOs(k));b.setAttribute("aria-pressed",String(os===k));tabs.append(b);}
+  c.append(tabs);
+  const ol=el("ol","dss-steps");
+  for(const s of fb.steps?.[os]||fb.steps?.[fb.os_default]||[]){
+    const li=el("li");li.append(el("p",null,s.title));
+    if(s.cmd){const pre=el("pre","dss-cmd");pre.append(el("code",null,s.cmd));li.append(pre);}
+    if(s.link)li.append(extLink(s.link.url,s.link.label));
+    const m=s.action&&actions[s.action];if(m)li.append(btn(m[0],"sm",m[1]));
+    ol.append(li);
+  }
+  c.append(ol);
+  c.append(el("p","dsb-hint","Never paste your token into a terminal or a file. Git asks you to sign in through your browser."));
+  return c;
+}
+
 export function mountDeveloperShare({api,host,getProject,status,openTool}){
   const root=host.querySelector("#dsShareRoot");if(!root)return null;
   const box=el("section","dsb dss");box.setAttribute("aria-label","Share to GitHub or GitLab");root.append(box);
@@ -177,31 +206,9 @@ export function mountDeveloperShare({api,host,getProject,status,openTool}){
   }
   // ---- fallback: share it yourself
   function fallbackCard(){
-    const fb=fallback;const c=el("div","dss-fallback");c.setAttribute("role","region");c.setAttribute("aria-label","Share it yourself");
-    c.append(el("h4",null,fb.headline),el("p",null,fb.explain));
-    if(fb.detail){const d=el("details","dss-detail");d.append(el("summary",null,"What "+siteName()+" said"));d.append(el("pre","dss-log",fb.detail));c.append(d);}
-    for(const f of [fb.patch,fb.bundle].filter(Boolean)){
-      const line=el("div","dss-file");
-      line.append(el("span",null,(f.kind==="bundle"?"Saved bundle (includes pictures and other binary files): ":"Saved patch: ")));
-      const code=el("code",null,f.path);code.dataset.copy="";code.dataset.copyLabel="file location";line.append(code);c.append(line);
-    }
-    if(!fb.patch&&!fb.bundle&&fb.code!=="push_protection"&&fb.code!=="scan_blocked"&&fb.commit_count===0)c.append(el("p","dsb-hint","There were no new checkpoints to save."));
-    const tabs=el("div","dss-os");tabs.setAttribute("role","group");tabs.setAttribute("aria-label","Your computer");
-    for(const [k,label] of OSES){const b=btn(label,"sm",()=>{osSel=k;draw();});b.setAttribute("aria-pressed",String(osSel===k));tabs.append(b);}
-    c.append(tabs);
-    const ol=el("ol","dss-steps");
-    for(const s of fb.steps[osSel]||fb.steps[fb.os_default]||[]){
-      const li=el("li");li.append(el("p",null,s.title));
-      if(s.cmd){const pre=el("pre","dss-cmd");pre.append(el("code",null,s.cmd));li.append(pre);}
-      if(s.link)li.append(extLink(s.link.url,s.link.label));
-      if(s.action){
-        const map={signin:["Connect again",()=>openTool?.("account")],get_latest:["Get latest",()=>doFetch()],retry:["Try again",()=>{fallback=null;doPlan();}],new_branch:["Share as a new branch",()=>{branch=(plan?.suggest_branch)||("automoto/"+new Date().toISOString().slice(0,16).replace(/[-:T]/g,""));fallback=null;doPlan();}]};
-        const m=map[s.action];if(m)li.append(btn(m[0],"sm",m[1]));
-      }
-      ol.append(li);
-    }
-    c.append(ol);
-    c.append(el("p","dsb-hint","Never paste your token into a terminal or a file. Git asks you to sign in through your browser."));
+    const c=renderFallback(fallback,{os:osSel,setOs:k=>{osSel=k;draw();},site:siteName(),actions:{
+      signin:["Connect again",()=>openTool?.("account")],get_latest:["Get latest",()=>doFetch()],retry:["Try again",()=>{fallback=null;doPlan();}],
+      new_branch:["Share as a new branch",()=>{branch=(plan?.suggest_branch)||("automoto/"+new Date().toISOString().slice(0,16).replace(/[-:T]/g,""));fallback=null;doPlan();}]}});
     c.append(btn("Close","sm",()=>{fallback=null;draw();}));
     return c;
   }

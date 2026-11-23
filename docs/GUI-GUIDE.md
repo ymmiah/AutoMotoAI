@@ -554,6 +554,17 @@ app ("5/6", failing names, Check again). It only reads. If anything fails, you g
 instructions with a copy button on every link and command. See
 [PULL-REQUESTS-AND-CI.md](PULL-REQUESTS-AND-CI.md).
 
+**Edit, test & share.** Developer Studio → Tools → **Edit, test & share** is the chat-first place to change,
+test and share your app. Ask in your own words or tap an idea: **Explain my project**, **Fix the error**, **Test
+my app**, **Share to GitHub**, **Ask for a review** or **Map my project**. On desktop, the chat is on the left and a
+live panel on the right shows your files, the test result or sharing. On tablets, the panel slides in from the
+right, and on phones it slides up. Press **Close** to put it away. **Manual controls** and **All tools** are in
+the ••• menu at the top. When the assistant wants to change a file,
+you see the change as a diff with **Apply** and **Skip**. Test, share and review show a card with exactly what
+will run or be sent, and nothing happens until you press its button. If sharing is refused, you get a `.patch`
+file and step-by-step commands, each with a copy button. Once you've changed or tested something, a small strip
+shows "All saved", "Tests passed" and "Not shared yet". Point at it for the numbers. The separate cards still work.
+
 **Project map.** Developer Studio → Tools → **Project map** shows the languages in your project and
 how its files link, which frontend calls reach which API routes and data models ("2 of 3 calls
 matched a route" in the small ring card), and the parts of a big project, with build commands to

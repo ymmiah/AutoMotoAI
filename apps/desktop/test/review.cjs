@@ -95,7 +95,7 @@ let browser;
     if (name === 'desktop') {
       assert.equal(await page.locator('.dsv .dsb-step').count(), 4, 'four guided steps');
       assert.match(await page.locator('.dsv .dsb-check-text b').textContent(), /5 of 6 passed/);
-      assert.equal(await page.locator('.dsv .dsb-ring b').textContent(), '5/6');
+      assert.equal(await page.locator('.dsv .dsb-ring b').textContent(), '5'); assert.equal(await page.locator('.dsv .dsb-ring-of').textContent(), 'of 6');
       assert.equal(await page.locator('.dsv img').count(), 0, 'untrusted text never becomes HTML');
       assert.equal(await page.locator('.dsv a[href^="javascript:"]').count(), 0, 'javascript: links are dropped');
       await page.locator('.dsv .btn', { hasText: 'What it said' }).click();

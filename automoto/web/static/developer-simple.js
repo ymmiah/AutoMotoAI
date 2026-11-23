@@ -2,6 +2,7 @@
    one searchable Tools & languages page, and the classic all-panels layout for experts.
    Nothing here runs code by itself: starter cards only fill the prompt, every task needs
    the trusted project and a confirmation, and Keep / Undo use the review checkpoint API. */
+import {mountWorkspace,approvalCard} from "./developer-workspace.js";
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const VIEW_KEY="automoto.developer.view";
 const CHAT_KEY="automoto.developer.chat.";
@@ -25,6 +26,7 @@ const RUN_APP="Start this app locally for a quick check: find its start command,
 // Tools & languages cards. "roots" are the existing panels each card opens; "tc" keys the
 // path-only availability check in developer_review.TOOLCHAINS (no tc = built in).
 const TOOLS=[
+  ["workspace","Edit, test & share","Ask the AI to fix, test and share your app, with your files right beside the chat","✎","#22c55e","builtin",[],null],
   ["run","Run my app","Start it, see it live and check it works","▶","#4caf50","builtin",["dsRunRoot"],null],
   ["git","Checkpoints (Git)","Save versions of your work and try ideas safely","⎇","#f05033","builtin",["dsGitRoot"],null],
   ["account","Connect GitHub or GitLab","Sign in safely so you can share your work later","⇪","#8b7bff","builtin",["dsAccountRoot"],null],
@@ -61,11 +63,13 @@ const TOOLS=[
   ["adapters","Build & debug adapters","Approved local build, test and debug tools","Db","#7aa2ff","builtin",["dsAdaptersRoot"],null],
   ["agent","Agent reviews & release plans","Send a review or readiness plan to the central agent",BRAND.charAt(0),"#7aa2ff","builtin",[".studio-agent-bridge"],null]
 ];
+// The old cards still work: they open Edit, test & share with the right live panel showing.
+const WORKSPACE_TAB={run:["test"],git:["share"],share:["share"],review:["share"],account:["share","account"]};
 const CATS=[["all","All"],["installed","Installed"],["web","Web"],["mobile","Mobile"],["systems","Systems"],["data","Data & science"],["writing","Writing"],["builtin","Built in"]];
 
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
 
-export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,openFile,afterFilesChanged,status}){
+export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share,getProject,openFile,afterFilesChanged,status}){
   const BASE="/api/developer/studio";
   const shell=host.querySelector(".ds-shell");
   const q=sel=>host.querySelector(sel);
@@ -161,6 +165,11 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   place(q(".ds-toolbar"),$("dsxProjectPop"));
   place(q("#dsRootStrip"),$("dsxProjectPop"));
   const statusLine=q("#dsStatus");
+  // Edit, test & share: the same chat, moved beside a live panel. Quick actions it handles itself
+  // add their cards to this thread; everything else goes to the assistant through submit().
+  const workspace=mountWorkspace({api,q:sel=>root.querySelector(sel)||q(sel),getProject,runner,git,editor,share,openFile,status,
+    chat:{exchange:t=>exchange(t),submit:(t,o)=>submit(t,o),scroll:()=>scrollDown(),busy:()=>workbench.isBusy(),focus:()=>prompt.focus({preventScroll:true})},
+    onBack:()=>{closeDetail();if(!isCompact())$("dsxToolSearch")?.focus({preventScroll:true});}});
   function togglePop(force){
     const pop=$("dsxProjectPop"),open=typeof force==="boolean"?force:pop.hidden;
     pop.hidden=!open;$("dsxProject").setAttribute("aria-expanded",String(open));
@@ -190,6 +199,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
       for(const node of marks.keys())restore(node);
       toolsOpen=false;
     }else{
+      if(workspace.open){toolsOpen=false;closeDetail();}
       place(q(".ds-toolbar"),$("dsxProjectPop"));place(q("#dsRootStrip"),$("dsxProjectPop"));
       if(isCompact()&&currentSheet==="files")closeFilesSheet({silent:true,moved:next==="editor"});
       if(next==="editor"){place(q(".ds-mobile-switch"),$("dsxEditor"));place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
@@ -239,20 +249,40 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
     if(!items.length)grid.append(el("p","dsx-empty","No tools match. Try another word."));
   }
   let detailNodes=[];
-  function openDetail(t){
+  function openDetail(t,{tab,section}={}){
+    const route=WORKSPACE_TAB[t[0]];
+    if(route){tab=tab||route[0];section=section||route[1];t=TOOLS.find(x=>x[0]==="workspace");}
+    if(t[0]==="workspace"&&workspace.open){
+      if(route)workspace.show(tab,{section,place:keep,openPanel:true});
+      return;
+    }
     closeDetail();
     $("dsxDetailTitle").textContent=t[1];
     const body=$("dsxDetailBody");
+    if(t[0]==="workspace"){
+      // The workspace takes the editor too, so the files sheet must not hold it.
+      if(isCompact()&&currentSheet==="files")closeFilesSheet({silent:true});
+      root.dataset.ws="1";refresh();
+      body.append(workspace.show(tab||"file",{section,place:keep,openPanel:!!route}));
+    }
     for(const sel of t[6]){
       const node=sel.startsWith(".")?host.querySelector(sel):q("#"+sel);
       if(node){place(node,body);detailNodes.push(node);}
     }
-    if(!detailNodes.length)body.append(el("p","dsx-empty","This panel is not available here."));
+    if(!detailNodes.length&&t[0]!=="workspace")body.append(el("p","dsx-empty","This panel is not available here."));
     $("dsxToolGrid").hidden=true;$("dsxDetected").hidden=true;root.querySelector(".dsx-tools-bar").hidden=true;
-    $("dsxToolDetail").hidden=false;$("dsxDetailBack").focus();
+    $("dsxToolDetail").hidden=false;
+    if(t[0]==="workspace"){if(!route)$("dsxPrompt").focus({preventScroll:true});}else $("dsxDetailBack").focus();
   }
+  function keep(node,parent){place(node,parent);if(!detailNodes.includes(node))detailNodes.push(node);}
   function closeDetail(){
+    const hadWorkspace=workspace.open;
     for(const n of detailNodes)restore(n);detailNodes=[];
+    if(hadWorkspace){
+      workspace.hide();delete root.dataset.ws;refresh();
+      // The editor view keeps its files and code where they were.
+      if(view==="editor"&&!root.hidden){place(q(".ds-mobile-switch"),$("dsxEditor"));place(q(".ds-columns"),$("dsxEditor"));place(statusLine,$("dsxEditor"));}
+    }
     $("dsxDetailBody").replaceChildren();
     $("dsxToolDetail").hidden=true;$("dsxToolGrid").hidden=false;root.querySelector(".dsx-tools-bar").hidden=false;
     $("dsxDetected").hidden=!detected;
@@ -330,9 +360,10 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   comp.addEventListener("submit",e=>{e.preventDefault();void submit(prompt.value);});
   // V41/V44: Run app / Run tests use the real, approval-gated runner when the project has a
   // detected command, and fall back to asking the assistant when it doesn't.
-  function openTool(id){
+  function openTool(id,opts){
     const t=TOOLS.find(x=>x[0]===id);if(!t)return;
-    showTools(true);drawTools();void loadToolInfo();openDetail(t);
+    if(!toolsOpen){showTools(true);drawTools();void loadToolInfo();}
+    openDetail(t,opts);
   }
   async function realRun(kind){
     if(runner&&await runner.hasRecipe(kind).catch(()=>false)){openTool("run");await runner.run(kind);return;}
@@ -349,20 +380,32 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   let turn=null;
   const thread=$("dsxThread");
   function scrollDown(){const s=$("dsxScroll");s.scrollTop=s.scrollHeight;}
-  async function submit(text){
+  async function submit(text,{display}={}){
     const p=getProject();let note=String(text||"").trim();
     if(!p?.trusted||note.length<5||workbench.isBusy())return;
+    // In Edit, test & share, "Test my app", "Share to GitHub" and friends are quick actions with
+    // inline confirm cards; they never go to the model.
+    if(workspace.open&&!display&&workspace.handle(note)){prompt.value="";refresh();return;}
+    if(workspace.open)workspace.noteAsk(display||note);
     if(attached.length)note+="\n\n"+attached.map(a=>"Attached file "+a.name+":\n```\n"+a.text+"\n```").join("\n\n");
     if(!window.confirm("Run one "+BRAND+" coding task in this project? The assistant may read, edit and test files. "+
       "Risky steps still ask you first, and you can keep or undo every change afterwards."))return;
     let checkpoint=null,checkpointError=null;
     try{checkpoint=(await api(BASE+"/review/start",{project:p.project})).checkpoint;}
     catch(err){checkpointError=err.message;}
-    startTurn(String(text).trim(),checkpoint,checkpointError,p.project);
+    startTurn(String(display||text).trim(),checkpoint,checkpointError,p.project);
     const ok=await workbench.runTask(note,{confirmed:true});
     if(ok){prompt.value="";attached=[];drawAttached();}
     else if(turn&&!turn.done){finishTurn({message:"The task did not start.",kind:"error"});}
     refresh();
+  }
+  // One local exchange (a quick action in Edit, test & share): the user's words and a reply area.
+  function exchange(text){
+    const user=el("div","dsx-msg user");user.append(el("div","dsx-bubble",String(text||"")));
+    const bot=el("div","dsx-msg bot");
+    const av=el("span","dsx-av",BRAND.charAt(0));av.setAttribute("aria-hidden","true");
+    const body=el("div","dsx-turn");bot.append(av,body);thread.append(user,bot);
+    refresh();scrollDown();return body;
   }
   function startTurn(note,checkpoint,checkpointError,project){
     const user=el("div","dsx-msg user");user.append(el("div","dsx-bubble",note));
@@ -418,15 +461,13 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
     }
     drawProgress();
   }
+  // The assistant wants to change a file or run something: an inline card with the exact diff or
+  // command. Only the user's Apply / Run once lets the waiting task go on.
   function onApproval({callId,entry}){
     if(!turn)return;
-    const row=el("div","dsx-approval");
-    row.append(el("span",null,"Needs your OK: "+String(entry?.label||entry?.description||entry?.name||"a tool step")));
-    const yes=el("button","btn sm primary","Approve once"),no=el("button","btn sm","Deny");
-    yes.type=no.type="button";
-    const act=allow=>{yes.disabled=no.disabled=true;void workbench.approve(callId,allow);row.append(el("span","dsx-muted",allow?"Approved":"Denied"));};
-    yes.onclick=()=>act(true);no.onclick=()=>act(false);
-    row.append(yes,no);turn.body.insertBefore(row,turn.card.nextSibling);scrollDown();
+    const row=approvalCard(entry,{api,getProject,decide:allow=>workbench.approve(callId,allow),
+      showFile:(path,{open:want,after,peek}={})=>{if(workspace.showFile(path,{open:want&&!after,changed:!!after}))return;if(after||peek)return;if(view!=="editor")setView("editor");void openFile(path);}});
+    turn.body.insertBefore(row,turn.card.nextSibling);scrollDown();
   }
   async function finishTurn({message,kind}){
     if(!turn||turn.done)return;
@@ -471,7 +512,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
     t.body.insertBefore(actions,t.card);
     t.card.remove();
     afterFilesChanged?.();
-    if(n)openReview("changes");
+    if(n){if(workspace.open)workspace.showFile(t.changes.changes.find(c=>c.change!=="deleted")?.path,{changed:true});else openReview("changes");}
     recordAssistant(t);saveChat();
     refresh();scrollDown();
     if(isCompact()&&n)$("dsxRKeep")?.focus();else prompt.focus();
@@ -533,6 +574,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   function openReview(tab="changes",focus=null){
     const t=[...thread.querySelectorAll(".dsx-msg.bot")].length?turnRef():null;
     if(!t)return;
+    if(workspace.open){workspace.showFile(focus||(t.reviewFiles||t.changes?.changes||[]).find(c=>c.change!=="deleted")?.path,{open:true});return;}
     review.turn=t;review.tab=tab;review.focus=focus;
     $("dsxReview").hidden=false;root.classList.add("reviewing");drawReview();
     if(isCompact())armSheet("review");
@@ -871,6 +913,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
     root.classList.toggle("has-thread",!empty);
     $("dsxFoot").textContent=!p?"Open a project to begin. Nothing runs until you press send."
       :!trusted?"Read-only: allow changes (step 2) before the assistant can work here."
+      :empty&&root.dataset.ws?"I ask before I change, run or share anything."
       :empty?"Picking a card only fills the box. Nothing runs until you press send."
       :"The assistant asks before anything risky. You keep or undo every change.";
     send.disabled=busy||!trusted||prompt.value.trim().length<5;
@@ -889,7 +932,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,getProject,o
   });
   setView(view,{save:false});
   return {
-    projectChanged(){lastRealTests=null;loadChat();refresh();if(toolsOpen)void loadToolInfo();},
+    projectChanged(){lastRealTests=null;loadChat();refresh();if(toolsOpen)void loadToolInfo();workspace.refresh();},
     testResult(r){lastRealTests={...r,cmd:"Last test run · "+r.cmd};if(review.turn&&review.tab==="tests"&&!$("dsxReview").hidden)drawReview();},
     openTool,
     refresh,

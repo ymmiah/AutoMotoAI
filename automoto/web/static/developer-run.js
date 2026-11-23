@@ -61,13 +61,15 @@ export function mountDeveloperRun({api,host,getProject,status,onTestResult}){
   }
   function pick(kind){return recipes.find(r=>r.kind===kind&&r.available)||recipes.find(r=>r.kind===kind)||null;}
 
-  async function start(r){
+  // confirmed: the caller already showed this exact command on an inline confirm card and the user
+  // pressed its button (the chat in Edit, test & share). Otherwise the confirm dialog asks.
+  async function start(r,{confirmed=false}={}){
     const p=getProject();if(!p?.project)return false;
     if(!trusted){say("Allow changes for this project first.",true);return false;}
     if(!r.available){say(r.missing+" is not installed on this computer.",true);return false;}
     const what=r.kind==="app"?"Start this app":"Run these tests";
     const where=r.kind==="app"?"\n\nIt runs on this computer only, at 127.0.0.1. Nobody else on your network can open it.":"";
-    if(!window.confirm(what+" in "+p.name+"?\n\n"+r.command+where+"\n\nYou can stop it at any time."))return false;
+    if(!confirmed&&!window.confirm(what+" in "+p.name+"?\n\n"+r.command+where+"\n\nYou can stop it at any time."))return false;
     try{
       const run=await api(BASE+"/start",{project:p.project,recipe:r.id,command_sha256:r.command_sha256,approved:true});
       track(run);draw();

@@ -394,7 +394,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
   };
   window.addEventListener("hashchange",lspCleanup);
   // Simple chat-first and editor views on top of the same panels (classic layout stays available).
-  simple=mountDeveloperSimple({api,host,workbench,runner:runStudio,git:gitStudio,getProject:()=>project,openFile:preview,status,
+  simple=mountDeveloperSimple({api,host,workbench,runner:runStudio,git:gitStudio,editor,share:shareStudio,getProject:()=>project,openFile:preview,status,
     afterFilesChanged(){if(project&&!editor.hasUnsaved()){editor.reset();void list(directory);}}});
   try {
     await locations();
