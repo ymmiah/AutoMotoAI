@@ -22,6 +22,9 @@ let log = ''; server.stdout.on('data', d => log += d); server.stderr.on('data', 
 const delay = ms => new Promise(r => setTimeout(r, ms));
 const findings = [];
 const step = (name) => { findings.push(name); console.log('✓', name); };
+// Send and wait for this request's own plan card: earlier plans stay in the chat with their
+// buttons disabled, so .last() alone could pick an old one before the new plan arrives.
+let sendForPlan;
 (async () => {
   for (let i = 0; i < 150; i++) { if (await fetch(base + '/api/health').then(r => r.ok).catch(() => false)) break; await delay(100); }
   // Small React/Next style sample project.
@@ -34,6 +37,11 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   writeFileSync(path.join(proj, 'README.md'), '# next-sample\n');
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, colorScheme: 'dark', reducedMotion: 'reduce' });
+  sendForPlan = async () => {
+    const before = await page.locator('.dsx-plan').count();
+    await page.locator('#dsxSend').click();
+    await page.waitForFunction(n => document.querySelectorAll('.dsx-plan').length > n, before);
+  };
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   const agentCalls = [];
   page.on('request', r => { if (/\/api\/(agent|conversations)$/.test(new URL(r.url()).pathname) && r.method() === 'POST') agentCalls.push(r.url()); });
@@ -221,8 +229,7 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   await page.locator('#dsxBudgetCalls').selectOption('12');
   await page.locator('#dsxBudgetTime').selectOption('120');
   assert.match(await page.locator('#dsxBudgetToggle').innerText(), /4 steps.*12 tool calls.*2 min/);
-  await page.locator('#dsxSend').click();
-  await page.locator('.dsx-plan').last().waitFor();
+  await sendForPlan();
   assert.equal(agentCalls.length, 0, 'planning is read-only and never starts a model task');
   assert.match(await page.locator('.dsx-plan').last().innerText(), /Review your plan/);
   assert.ok(await page.locator('.dsx-plan').last().locator('.dsx-plan-steps li').count() >= 4, 'plan contains concrete steps');
@@ -266,8 +273,7 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   // The declined plan above stays in the chat, so the starter cards are hidden now: send the same
   // starter prompt by typing it.
   await page.locator('#dsxPrompt').fill(await page.locator('.dsx-starter', { hasText: 'Find & fix a bug' }).getAttribute('data-prompt'));
-  await page.locator('#dsxSend').click();
-  await page.locator('.dsx-plan').last().waitFor();
+  await sendForPlan();
   accept();
   await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => /Running tests 0 of 1/.test(document.querySelector('.dsx-progress')?.textContent || ''), null, { timeout: 15000 });
@@ -323,8 +329,7 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   step('Undo restores edited files and removes new ones on disk');
   await runOnce('Added a label.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Increase count"')));
   await page.locator('#dsxPrompt').fill('Add an accessible label to the counter button');
-  await page.locator('#dsxSend').click();
-  await page.locator('.dsx-plan').last().waitFor();
+  await sendForPlan();
   accept();
   await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
@@ -496,8 +501,9 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
 
   await runOnce('Tweaked the count button label again.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Count"')));
   await page.locator('#dsxPrompt').fill('Tweak the count button label again');
+  await sendForPlan();
   accept();
-  await page.locator('#dsxSend').click();
+  await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
   release();
   await page.locator('#dsxReview').waitFor({ timeout: 15000 });
@@ -561,8 +567,7 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   for (const b of nav.buttons) assert.ok(b.h >= 44 && b.w >= 44, 'tablet thumb target 44px+: ' + JSON.stringify(b));
   await runOnce('Reviewed the change on a tablet.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Tablet count"')));
   await page.locator('#dsxPrompt').fill('Review the change on a tablet');
-  await page.locator('#dsxSend').click();
-  await page.locator('.dsx-plan').last().waitFor();
+  await sendForPlan();
   accept();
   await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
