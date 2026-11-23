@@ -49,6 +49,95 @@ let sendForPlan;
   const accept = () => page.once('dialog', d => d.accept());
   await page.goto(base + '/?launch=' + token);
   await page.locator('.hero h2').waitFor();
+
+  // V53: display the actual server-generated diff before the user can authorise an agent edit.
+  // No model, disk write or network-based change is needed for this visual acceptance test.
+  const patchReviewFixture = async (verified) => {
+    await page.evaluate(async ({ verified }) => {
+      const { approvalCard } = await import('/static/developer-workspace.js');
+      window.__v53Decisions = [];
+      const mount = document.createElement('div');
+      mount.id = 'v53-review-fixture';
+      const card = approvalCard({
+        name: 'developer_agent_patch',
+        args: {
+          prepared_by_server: verified,
+          path: 'components/Counter.tsx',
+          original_sha256: 'a'.repeat(64),
+          changed_lines: 2,
+          syntax_checked: false,
+          preview_diff: '--- before/components/Counter.tsx\n+++ after/components/Counter.tsx\n@@ -1,2 +1,2 @@\n-<img src=x onerror=window.__v53Xss=1>\n+console.log("safe");\n'
+        }
+      },{
+        api: async () => ({}),
+        getProject: () => ({project:'/tmp/fixtures'}),
+        decide: (approved) => { window.__v53Decisions.push(approved); },
+        showFile: () => {}
+      });
+      mount.append(card);document.body.append(mount);
+    }, { verified });
+  };
+  await patchReviewFixture(true);
+  assert.match(await page.locator('#v53-review-fixture').innerText(), /Apply checked patch to components\/Counter\.tsx/);
+  assert.match(await page.locator('#v53-review-fixture pre').innerText(), /before\/components\/Counter\.tsx/);
+  assert.equal(await page.locator('#v53-review-fixture img').count(), 0, 'diff is text, not interpreted HTML');
+  assert.equal(await page.evaluate(() => window.__v53Xss), undefined, 'source text cannot execute');
+  assert.equal(await page.evaluate(() => window.__v53Decisions.length), 0, 'no implicit approval');
+  await page.locator('#v53-review-fixture button', { hasText: 'Skip' }).click();
+  assert.deepEqual(await page.evaluate(() => window.__v53Decisions), [false]);
+  await page.locator('#v53-review-fixture').evaluate(node => node.remove());
+  await patchReviewFixture(false);
+  assert.equal(await page.locator('#v53-review-fixture button', { hasText: 'Apply checked patch' }).isDisabled(),
+    true, 'unverified patch evidence cannot be approved');
+  await page.locator('#v53-review-fixture').evaluate(node => node.remove());
+  step('V53 checked patch: verified text diff, explicit Skip, inert HTML and fail-closed missing evidence');
+
+  // V54 new-source creation gets an independently reviewed, server-owned diff.
+  const createReviewFixture = async verified => {
+    await page.evaluate(async ({verified}) => {
+      const {approvalCard} = await import('/static/developer-workspace.js');
+      window.__v54Decisions = [];
+      const mount = document.createElement('div');
+      mount.id = 'v54-create-fixture';
+      const card = approvalCard({
+        name: 'developer_agent_create',
+        args: {
+          prepared_by_server: verified,
+          creation: true,
+          file_exists: false,
+          path: 'src/new_component.tsx',
+          after_sha256: 'b'.repeat(64),
+          changed_lines: 2,
+          syntax_checked: false,
+          preview_diff: '--- /dev/null\n+++ b/src/new_component.tsx\n@@ -0,0 +1,2 @@\n+export const Message = () => <p>Hello</p>;\n+<img src=x onerror=window.__v54Xss=1>\n'
+        }
+      }, {
+        api: async () => ({}),
+        getProject: () => ({project:'/tmp/test'}),
+        decide: approved => {window.__v54Decisions.push(approved);},
+        showFile: () => {}
+      });
+      mount.append(card);document.body.append(mount);
+    }, {verified});
+  };
+  await createReviewFixture(true);
+  assert.match(await page.locator('#v54-create-fixture').innerText(), /Create checked file src\/new_component\.tsx/);
+  assert.match(await page.locator('#v54-create-fixture pre').innerText(), /\/dev\/null/);
+  assert.equal(await page.locator('#v54-create-fixture img').count(), 0, 'source is inert text');
+  assert.equal(await page.evaluate(() => window.__v54Xss), undefined);
+  assert.equal(await page.evaluate(() => window.__v54Decisions.length), 0, 'creation not implicit');
+  await page.locator('#v54-create-fixture button', {hasText:'Skip'}).click();
+  assert.deepEqual(await page.evaluate(() => window.__v54Decisions), [false]);
+  await page.locator('#v54-create-fixture').evaluate(node => node.remove());
+  await createReviewFixture(false);
+  assert.equal(
+    await page.locator('#v54-create-fixture button', {hasText:'Create checked file'}).isDisabled(),
+    true, 'an unverified creation cannot be approved'
+  );
+  await page.locator('#v54-create-fixture').evaluate(node => node.remove());
+  step('V54 new source: diff before approval, Skip, inert text, and missing-evidence refusal');
+
+
   await page.locator('.rail [data-rail-menu="studios"]').click();
   await page.locator('[data-rail-panel="studios"] a[href="#/developer"]').click();
   await page.locator('#dsxRoot').waitFor();
@@ -135,6 +224,11 @@ let sendForPlan;
   }
   await delay(400);
   assert.equal(agentCalls.length, 0, 'starter cards never start a task');
+  await page.locator('#dsxBudgetToggle').click();
+  await page.locator('#dsxBudgetSteps').selectOption('4');
+  await page.locator('#dsxBudgetCalls').selectOption('12');
+  await page.locator('#dsxBudgetTime').selectOption('120');
+  assert.match(await page.locator('#dsxBudgetToggle').innerText(), /4 steps.*12 tool calls.*2 min/);
   await sendForPlan();
   assert.equal(agentCalls.length, 0, 'planning is read-only and never starts a model task');
   assert.match(await page.locator('.dsx-plan').last().innerText(), /Review your plan/);
@@ -151,7 +245,8 @@ let sendForPlan;
   let release = null, polls = 0;
   const gate = () => new Promise(r => { release = r; });
   await page.route('**/api/conversations', r => r.request().method() === 'POST' ? r.fulfill({ json: { id: 'conv-e2e' } }) : r.continue());
-  await page.route('**/api/agent', r => r.fulfill({ json: { task_id: 'task-e2e' } }));
+  const codingRuns=[];
+  await page.route('**/api/agent', r => { codingRuns.push(r.request().postDataJSON());r.fulfill({ json: { task_id: 'task-e2e' } }); });
   let script = [];
   await page.route('**/api/tasks/task-e2e?**', async r => {
     polls++;
@@ -183,6 +278,13 @@ let sendForPlan;
   await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => /Running tests 0 of 1/.test(document.querySelector('.dsx-progress')?.textContent || ''), null, { timeout: 15000 });
   assert.match(await page.locator('.dsx-progress').innerText(), /Planning[\s\S]*Editing 1 file[\s\S]*Ready for your review/);
+  assert.equal(codingRuns.length,1,'only one approved bounded agent run starts');
+  assert.deepEqual(
+    {steps:codingRuns[0].coding.max_steps,calls:codingRuns[0].coding.max_operations,seconds:codingRuns[0].coding.max_seconds},
+    {steps:4,calls:12,seconds:120},'the submitted coding limits match the user-selected budget'
+  );
+  assert.ok(/^[0-9a-f]{64}$/.test(codingRuns[0].coding.plan_id));
+  assert.match(await page.locator('.dsx-budget-progress').last().innerText(), /0\/4 steps.*0\/12 tool calls/);
   assert.equal(await page.locator('#dsxStop').isVisible(), true);
   assert.equal(await page.locator('#dsxSend').isDisabled(), true, 'one task at a time');
   await shot('03-run-in-progress.png');
@@ -399,8 +501,9 @@ let sendForPlan;
 
   await runOnce('Tweaked the count button label again.', () => writeFileSync(counter, original.replace('<button', '<button aria-label="Count"')));
   await page.locator('#dsxPrompt').fill('Tweak the count button label again');
+  await sendForPlan();
   accept();
-  await page.locator('#dsxSend').click();
+  await page.locator('.dsx-plan-actions .primary').last().click();
   await page.waitForFunction(() => document.querySelectorAll('.dsx-progress:not(.finished)').length === 1, null, { timeout: 15000 });
   release();
   await page.locator('#dsxReview').waitFor({ timeout: 15000 });

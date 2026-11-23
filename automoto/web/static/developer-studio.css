@@ -1222,3 +1222,36 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .dsp-actions{display:flex;gap:8px;flex-wrap:wrap}
 .ds-patch button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:600px){.ds-patch{padding:10px}.dsp-form button[type="submit"]{width:100%}}
+
+
+/* V52: bounded coding session controls, visible in classic and responsive agent. */
+.ds-v52-limits{display:grid;gap:9px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel);color:var(--text)}
+.ds-v52-limits-title{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.ds-v52-limits-title strong{font-size:13px}
+#dsV52BudgetStatus{font:600 11px/1.3 var(--mono);color:var(--dim)}
+.ds-v52-limit-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.ds-v52-limit-options label{display:grid;gap:5px;min-width:0;color:var(--dim);font-size:11px}
+.ds-v52-limit-options select{width:100%;min-width:0;min-height:35px;border-radius:7px;background:var(--code);color:var(--text);border:1px solid var(--line);padding:5px;font-size:12px}
+.ds-v52-limit-options select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ds-v52-limit-options select:disabled{opacity:.7}
+.ds-v52-budget-detail{margin:0;font-size:11px;line-height:1.5;color:var(--dim)}
+.ds-v52-plan-holder{max-width:100%;min-width:0}
+@media(max-width:600px){.ds-v52-limit-options{grid-template-columns:repeat(3,minmax(0,1fr))}.ds-v52-limits{padding:10px}}
+
+
+/* V52 chat budget: small by default, adjustable only before an agent run. */
+.dsx-session-limits{max-width:100%;margin:3px 0 5px;padding:0 6px;min-width:0}
+.dsx-budget-toggle{font:600 11px/1.5 var(--mono);border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:var(--panel);color:var(--dim);cursor:pointer}
+.dsx-budget-toggle:focus-visible,.dsx-budget-options select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dsx-budget-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.dsx-budget-options[hidden]{display:none!important}
+.dsx-budget-options label{display:grid;gap:5px;font-size:11px;min-width:0;color:var(--dim)}
+.dsx-budget-options select{min-height:38px;min-width:0;width:100%;max-width:100%;color:var(--text);background:var(--code);border:1px solid var(--line);border-radius:7px;font-size:12px;padding:5px}
+.dsx-budget-progress{margin:8px 0 0;font:11px/1.5 var(--mono);color:var(--dim);overflow-wrap:anywhere}
+@media(max-width:500px){.dsx-budget-options{gap:6px;padding:8px}.dsx-budget-options select{font-size:11px;padding:4px}}
+
+
+/* V53 server-generated patch approval. Long source lines never overflow the chat. */
+.dsw-patch-diff,.ds-v53-approval-diff{max-width:100%;min-width:0;max-height:420px;overflow:auto;white-space:pre;overflow-wrap:normal;tab-size:2;font:12px/1.55 var(--mono);padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--code);color:var(--text)}
+.ds-v53-approval-diff{margin:8px 0}
+@media(max-width:600px){.dsw-patch-diff,.ds-v53-approval-diff{font-size:11px;padding:8px;max-height:300px}}

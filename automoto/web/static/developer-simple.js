@@ -3,7 +3,7 @@
    Nothing here runs code by itself: starter cards only fill the prompt, every task needs
    the trusted project and a confirmation, and Keep / Undo use the review checkpoint API. */
 import {mountWorkspace,approvalCard} from "./developer-workspace.js";
-import {isCodingRequest,taskPlanCard} from "./developer-task-plan.js";
+import {taskPlanCard} from "./developer-task-plan.js";
 const BRAND=document.querySelector('meta[name="automoto-brand-short"]')?.content||"AutoMoto";
 const VIEW_KEY="automoto.developer.view";
 const CHAT_KEY="automoto.developer.chat.";
@@ -14,6 +14,7 @@ const isCompact=()=>COMPACT_MQ.matches;
 const VIEWS=new Set(["chat","editor","classic"]);
 const READ=new Set(["read_file","list_dir","grep","search_files","project_inspect"]);
 const WRITE=new Set(["write_file","edit_file"]);
+const TRANSACTION_WRITE=new Set(["developer_agent_patch","developer_agent_create"]);
 const RUN=new Set(["run_command","run_shell"]);
 const TEST_RE=/\b(test|tests|pytest|jest|vitest|mocha|unittest|go test|cargo test|dotnet test|gradlew? test|mvn test|phpunit|rspec)\b/i;
 const STARTERS=[
@@ -163,6 +164,44 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   const $=id=>root.querySelector("#"+id)||classicBar.querySelector("#"+id);
   const pageInner=host;pageInner.classList.add("dsx-page");
   host.querySelector(".studio-drop")?.setAttribute("hidden","");
+
+  // V52: compact chat-first budget controls; no extra full-screen settings panel.
+  const session=el("section","dsx-session-limits");
+  session.setAttribute("aria-label","Coding task limits");
+  session.innerHTML=
+    '<button type="button" id="dsxBudgetToggle" class="dsx-budget-toggle" aria-expanded="false" aria-controls="dsxBudgetOptions">Limits: 8 steps · 20 tool calls · 5 min</button>'+
+    '<div id="dsxBudgetOptions" class="dsx-budget-options" hidden>'+
+      '<label>Model steps<select id="dsxBudgetSteps"><option value="4">4</option><option value="8" selected>8</option><option value="12">12</option></select></label>'+
+      '<label>Tool calls<select id="dsxBudgetCalls"><option value="12">12</option><option value="20" selected>20</option><option value="30">30</option></select></label>'+
+      '<label>Time limit<select id="dsxBudgetTime"><option value="120">2 minutes</option><option value="300" selected>5 minutes</option><option value="600">10 minutes</option></select></label>'+
+    '</div>';
+  $("dsxStarters").before(session);
+  const limits=()=>workbench.getCodingLimits?.()||{max_steps:8,max_operations:20,max_seconds:300};
+  const syncLimitUI=()=>{
+    const b=limits();
+    $("dsxBudgetToggle").textContent="Limits: "+b.max_steps+" steps · "+b.max_operations+" tool calls · "+(b.max_seconds/60)+" min";
+    for(const [id,key] of [["dsxBudgetSteps","max_steps"],["dsxBudgetCalls","max_operations"],["dsxBudgetTime","max_seconds"]]){
+      const field=$(id);field.value=String(b[key]);
+    }
+  };
+  syncLimitUI();
+  $("dsxBudgetToggle").addEventListener("click",()=>{
+    const next=$("dsxBudgetOptions").hidden;
+    $("dsxBudgetOptions").hidden=!next;
+    $("dsxBudgetToggle").setAttribute("aria-expanded",String(next));
+  });
+  for(const id of ["dsxBudgetSteps","dsxBudgetCalls","dsxBudgetTime"]){
+    $(id).addEventListener("change",()=>{
+      const ok=workbench.setCodingLimits?.({
+        max_steps:Number($("dsxBudgetSteps").value),
+        max_operations:Number($("dsxBudgetCalls").value),
+        max_seconds:Number($("dsxBudgetTime").value)
+      });
+      if(!ok)status("Limits cannot change while a task is running.",true);
+      syncLimitUI();
+    });
+  }
+
 
   // Project picker: the existing toolbar lives in the pill's popover.
   place(q(".ds-toolbar"),$("dsxProjectPop"));
@@ -424,7 +463,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     if(!p?.trusted||note.length<5||workbench.isBusy())return false;
     // Explicitly handled quick actions stay outside the agent.
     if(workspace.open&&!display&&workspace.handle(note)){prompt.value="";refresh();return false;}
-    if(!approvedPlan&&isCodingRequest(note)){
+    if(!approvedPlan){
       await showTaskPlan(note,p,display);
       prompt.value="";refresh();
       return false;
@@ -447,7 +486,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     try{checkpoint=(await api(BASE+"/review/start",{project:p.project})).checkpoint;}
     catch(err){checkpointError=err.message;}
     startTurn(String(display||text).trim(),checkpoint,checkpointError,p.project);
-    const ok=await workbench.runTask(note,{confirmed:true});
+    const ok=await workbench.runTask(note,{confirmed:true,approvedPlan});
     if(ok){prompt.value="";attached=[];drawAttached();}
     else if(turn&&!turn.done){finishTurn({message:"The task did not start.",kind:"error"});}
     refresh();
@@ -467,10 +506,16 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     const av=el("span","dsx-av",BRAND.charAt(0));av.setAttribute("aria-hidden","true");
     const body=el("div","dsx-turn");bot.append(av,body);
     const card=el("div","dsx-progress");card.innerHTML='<div class="dsx-prog-head"><b>Working on it</b><span class="dsx-gap"></span><button type="button" class="btn sm dsx-prog-stop">Stop</button></div><div class="dsx-bar"><span></span></div><ol class="dsx-phases"></ol>';
+    const lim=limits();
+    const budgetStrip=el("p","dsx-budget-progress",
+      "Budget: 0/"+lim.max_steps+" steps · 0/"+lim.max_operations+
+      " tool calls · "+(lim.max_seconds/60)+" min maximum");
+    budgetStrip.setAttribute("role","status");
+    card.append(budgetStrip);
     card.querySelector(".dsx-prog-stop").addEventListener("click",()=>$("dsxStop").click());
     body.append(card);thread.append(user,bot);
     recordUser(note);saveChat();
-    turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false};
+    turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),pendingWrites:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false,budget:null};
     drawProgress();refresh();scrollDown();
   }
   function phaseState(){
@@ -497,6 +542,15 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       list.append(li);
     }
   }
+  function onBudget({budget,steps}={}){
+    if(!turn||turn.done||!budget)return;
+    turn.budget={...budget,steps};
+    const strip=turn.card.querySelector(".dsx-budget-progress");
+    if(strip)strip.textContent="Budget: "+steps+"/"+budget.max_steps+" steps · "+
+      budget.operations_used+"/"+budget.max_operations+" tool calls · "+
+      Math.ceil(Number(budget.seconds_remaining)||0)+" seconds remaining"+
+      (budget.limit_reason?" · Limit: "+budget.limit_reason:"");
+  }
   function onEvent(ev){
     if(!turn||turn.done)return;
     const type=String(ev.type||"");
@@ -504,12 +558,17 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       const name=String(ev.name||""),args=ev.args&&typeof ev.args==="object"?ev.args:{};
       const path=String(args.path||args.file||args.directory||"");
       if(READ.has(name))turn.reads.add(path||name+turn.reads.size);
+      else if(TRANSACTION_WRITE.has(name)&&path)turn.pendingWrites.set(ev.id,path);
       else if(WRITE.has(name)&&path)turn.edits.set(path,true);
       else if(RUN.has(name)){
         const cmd=String(args.command||args.cmd||"");
         (TEST_RE.test(cmd)?turn.tests:turn.commands).set(ev.id,{cmd,done:false,ok:null,output:""});
       }
     }else if(type==="tool_result"){
+      if(turn.pendingWrites.has(ev.id)){
+        if(ev.ok)turn.edits.set(turn.pendingWrites.get(ev.id),true);
+        turn.pendingWrites.delete(ev.id);
+      }
       const rec=turn.tests.get(ev.id)||turn.commands.get(ev.id);
       if(rec){rec.done=true;rec.ok=!!ev.ok;rec.output=String(ev.output||"");}
     }
@@ -537,6 +596,11 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       catch(err){t.changes=null;t.checkpointError=err.message;}
     }
     const list=el("ul","dsx-check");
+    if(t.budget){
+      const b=t.budget;
+      list.append(checkItem("✓","Session: "+b.steps+"/"+b.max_steps+" model steps, "+
+        b.operations_used+"/"+b.max_operations+" tool calls"));
+    }
     if(t.reads.size)list.append(checkItem("✓","Read "+t.reads.size+" file"+(t.reads.size===1?"":"s")));
     for(const c of t.changes?.changes||[]){
       const li=checkItem("✓",(c.change==="added"?"Added ":c.change==="deleted"?"Deleted ":"Edited "));
@@ -711,6 +775,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
   workbench.subscribe((type,data)=>{
     if(type==="event")onEvent(data);
     else if(type==="approval")onApproval(data);
+    else if(type==="budget")onBudget(data);
     else if(type==="finish")void finishTurn(data);
     refresh();
   });

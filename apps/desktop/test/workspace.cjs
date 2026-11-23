@@ -60,10 +60,18 @@ async function openWorkspace(page, compact) {
   // Requests still waiting when the project fails to open, to say what it was stuck on.
   const pending = new Set(), add = r => pending.add(r), done = r => pending.delete(r);
   page.on('request', add); page.on('requestfinished', done); page.on('requestfailed', done);
-  await page.evaluate(p => { document.querySelector('#dsPath').value = p; document.querySelector('#dsOpen').click(); }, proj);
-  // Opening runs every studio's project check; a busy CI runner can take longer than 30s, so wait
-  // up to 60s and say what Developer Studio reported if the project still did not open.
-  await page.waitForFunction(() => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || ''), null, { timeout: 60000 })
+  // Navigating fires both popstate and hashchange, so the Developer page can mount twice and the
+  // first Open click may land on the copy that is then replaced. Click Open again on the live page
+  // (a real user would) until the project shows, for up to 60s in total.
+  const open = () => page.evaluate(p => { document.querySelector('#dsPath').value = p; document.querySelector('#dsOpen').click(); }, proj);
+  const shown = () => /demo/.test(document.querySelector('#dsxProjectName')?.textContent || '');
+  let opened = false;
+  for (let i = 0; i < 3 && !opened; i++) {
+    await open();
+    opened = await page.waitForFunction(shown, null, { timeout: 15000 }).then(() => true, () => false);
+  }
+  if (!opened) await open();
+  if (!opened) await page.waitForFunction(shown, null, { timeout: 15000 })
     .catch(async e => { throw new Error(`project did not open at ${page.viewportSize()?.width}px: ${await page.locator('#dsStatus').textContent().catch(() => '?')} pending=${[...pending].map(r => r.method() + ' ' + r.url().replace(base, '')).join(', ') || 'none'} (${e.message})`); });
   page.off('request', add); page.off('requestfinished', done); page.off('requestfailed', done);
   await page.keyboard.press('Escape');

@@ -179,35 +179,37 @@ def preview(request: Request, body: PreviewIn):
     }
 
 
-@router.post("/apply")
-def apply(request: Request, body: ActIn):
-    _require_ui(request)
-    root = _trusted(body.project)
-    _file(root, body.path)
-    if not TOKEN.fullmatch(body.token):
+def _apply_checked(root, path: str, token: str, request: Request):
+    """Private atomic V51 transaction; caller must enforce explicit consent.
+
+    The API route enforces UI-only authorisation. V53's bounded-agent bridge
+    calls this function only after the independent per-tool approval succeeds.
+    """
+    _file(root, path)
+    if not TOKEN.fullmatch(token):
         raise HTTPException(422, "Invalid patch identifier.")
     with LOCK:
         _prune()
-        item = PREVIEWS.get(body.token)
+        item = PREVIEWS.get(token)
         if not item:
             raise HTTPException(409, "Patch preview expired or was already used.")
-        if item["identity"] != studio._identity(root) or item["path"] != body.path:
+        if item["identity"] != studio._identity(root) or item["path"] != path:
             raise HTTPException(409, "The preview belongs to another project or file.")
-        raw, original, _, _ = _source(root, body.path)
+        raw, original, _, _ = _source(root, path)
         if hashlib.sha256(raw).hexdigest() != item["original_sha256"]:
             raise HTTPException(409, "Source changed since preview. Reopen and review.")
         undo_id = secrets.token_hex(16)
         record = {
-            "identity": item["identity"], "path": body.path,
+            "identity": item["identity"], "path": path,
             "previous_text": original, "before_sha256": item["original_sha256"],
             "after_sha256": item["after_sha256"], "encoding": item["encoding"],
             "newline": item["newline"], "created_at": time.time(),
         }
-        folder = _folder(root, body.path)
+        folder = _folder(root, path)
         lifecycle._atomic_private(folder, undo_id + ".json",
                                   json.dumps(record, ensure_ascii=False).encode("utf-8"))
         model = editor.SaveIn.model_validate({
-            "project": str(root), "path": body.path, "text": item["new_text"],
+            "project": str(root), "path": path, "text": item["new_text"],
             "encoding": item["encoding"], "newline": item["newline"],
             "expected_sha256": item["original_sha256"], "confirmed": True,
         })
@@ -216,17 +218,23 @@ def apply(request: Request, body: ActIn):
         except Exception:
             (folder / (undo_id + ".json")).unlink(missing_ok=True)
             raise
-        PREVIEWS.pop(body.token, None)
+        PREVIEWS.pop(token, None)
         records = sorted(folder.glob("*.json"), key=lambda p: p.stat().st_mtime_ns, reverse=True)
         for old in records[UNDO_RECORDS:]:
             if not old.is_symlink():
                 old.unlink(missing_ok=True)
         return {
-            "applied": result["changed"], "path": body.path,
+            "applied": result["changed"], "path": path,
             "sha256": result["sha256"], "undo_id": undo_id,
             "source_modified": result["changed"], "shared": False, "executed": False,
         }
 
+
+@router.post("/apply")
+def apply(request: Request, body: ActIn):
+    _require_ui(request)
+    root = _trusted(body.project)
+    return _apply_checked(root, body.path, body.token, request)
 
 @router.post("/undo")
 def undo(request: Request, body: ActIn):
