@@ -96,7 +96,7 @@ export function approvalCard(entry,{api,getProject,decide,showFile}){
     card.append(pre);
     const yes=btn("Apply checked patch","primary"),no=btn("Skip","");
     yes.disabled=!valid;
-    yes.onclick=()=>{if(valid)pick(true,[yes,no],"Applied once","Patch skipped.");};
+    yes.onclick=()=>{if(valid)pick(true,[yes,no],"Approved once · awaiting result","Patch skipped.");};
     no.onclick=()=>pick(false,[yes,no],"Applied once","Patch skipped.");
     bar.append(yes,no);
     if(path){const show=btn("Show source","link");show.onclick=()=>showFile?.(path,{open:true});bar.append(show);}
