@@ -131,7 +131,7 @@ const step = (name) => { findings.push(name); console.log('✓', name); };
   await page.locator('.dsx-plan').last().waitFor();
   assert.equal(agentCalls.length, 0, 'planning is read-only and never starts a model task');
   assert.match(await page.locator('.dsx-plan').last().innerText(), /Review your plan/);
-  assert.ok(await page.locator('.dsx-plan-steps li').last().count() >= 4, 'plan contains concrete steps');
+  assert.ok(await page.locator('.dsx-plan').last().locator('.dsx-plan-steps li').count() >= 4, 'plan contains concrete steps');
   await page.locator('.dsx-plan-step-title input').last().check();
   assert.match(await page.locator('.dsx-plan-reviewed').last().innerText(), /1 of \d+ steps reviewed/);
   page.once('dialog', d => d.dismiss());
