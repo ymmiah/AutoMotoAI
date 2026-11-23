@@ -457,17 +457,22 @@ class Agent:
               "label": planner.human_step(name, shown if isinstance(shown, dict) else {}),
               "decision": decision.as_dict()})
         if decision.action == policy.ASK:
-            emit({"type": "approval_needed", "step": step, "id": base["tool_call_id"], "name": name, "args": shown,
+            # A provider may reuse a tool_call id, or send two calls with the
+            # same id in one turn. Approval handles are always server-unique
+            # in bounded runs so an old button cannot approve a later patch.
+            approval_id = (__import__("secrets").token_hex(16)
+                           if self.coding_budget is not None else base["tool_call_id"])
+            emit({"type": "approval_needed", "step": step, "id": approval_id, "name": name, "args": shown,
                   "reason": decision.reason})
             ok = False
             try:
-                ok = bool(approver({"id": base["tool_call_id"], "name": name,
+                ok = bool(approver({"id": approval_id, "name": name,
                                     "args": shown if prepared_patch else args}, decision))
             except Exception:
                 ok = False
             if ok and self.coding_budget is not None and self.coding_budget.check():
                 ok = False  # approval arrived after the deadline; do not execute
-            emit({"type": "approval", "step": step, "id": base["tool_call_id"], "approved": ok})
+            emit({"type": "approval", "step": step, "id": approval_id, "approved": ok})
             if not ok:
                 out = "DENIED by the user. Do not retry this exact call; ask or choose another approach."
                 emit({"type": "tool_result", "step": step, "id": base["tool_call_id"], "name": name, "ok": False,
