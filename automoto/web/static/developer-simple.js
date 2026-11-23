@@ -14,6 +14,7 @@ const isCompact=()=>COMPACT_MQ.matches;
 const VIEWS=new Set(["chat","editor","classic"]);
 const READ=new Set(["read_file","list_dir","grep","search_files","project_inspect"]);
 const WRITE=new Set(["write_file","edit_file"]);
+const TRANSACTION_WRITE=new Set(["developer_agent_patch","developer_agent_create"]);
 const RUN=new Set(["run_command","run_shell"]);
 const TEST_RE=/\b(test|tests|pytest|jest|vitest|mocha|unittest|go test|cargo test|dotnet test|gradlew? test|mvn test|phpunit|rspec)\b/i;
 const STARTERS=[
@@ -514,7 +515,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
     card.querySelector(".dsx-prog-stop").addEventListener("click",()=>$("dsxStop").click());
     body.append(card);thread.append(user,bot);
     recordUser(note);saveChat();
-    turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false,budget:null};
+    turn={body,card,checkpoint,checkpointError,project,reads:new Set(),edits:new Map(),pendingWrites:new Map(),tests:new Map(),commands:new Map(),labels:[],done:false,changes:null,resolved:false,budget:null};
     drawProgress();refresh();scrollDown();
   }
   function phaseState(){
@@ -557,12 +558,17 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       const name=String(ev.name||""),args=ev.args&&typeof ev.args==="object"?ev.args:{};
       const path=String(args.path||args.file||args.directory||"");
       if(READ.has(name))turn.reads.add(path||name+turn.reads.size);
+      else if(TRANSACTION_WRITE.has(name)&&path)turn.pendingWrites.set(ev.id,path);
       else if(WRITE.has(name)&&path)turn.edits.set(path,true);
       else if(RUN.has(name)){
         const cmd=String(args.command||args.cmd||"");
         (TEST_RE.test(cmd)?turn.tests:turn.commands).set(ev.id,{cmd,done:false,ok:null,output:""});
       }
     }else if(type==="tool_result"){
+      if(turn.pendingWrites.has(ev.id)){
+        if(ev.ok)turn.edits.set(turn.pendingWrites.get(ev.id),true);
+        turn.pendingWrites.delete(ev.id);
+      }
       const rec=turn.tests.get(ev.id)||turn.commands.get(ev.id);
       if(rec){rec.done=true;rec.ok=!!ev.ok;rec.output=String(ev.output||"");}
     }
