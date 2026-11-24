@@ -1,0 +1,72 @@
+name: Developer Studio V43 Device and simulator tools acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_devices.py"
+      - "automoto/web/static/developer-devices.js"
+      - "tests/test_developer_devices.py"
+      - "docs/DEVELOPER-STUDIO-V43.md"
+      - ".github/workflows/developer-devices-v43.yml"
+  pull_request:
+    paths:
+      - "automoto/developer_devices.py"
+      - "automoto/developer_phone.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-devices.js"
+      - "automoto/web/static/developer-studio.js"
+      - "automoto/web/static/developer-simple.js"
+      - "tests/test_developer_devices.py"
+      - "docs/DEVELOPER-STUDIO-V43.md"
+      - ".github/workflows/developer-devices-v43.yml"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS coverage, staggered.
+    - cron: "25 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_devices.py
+        automoto/web/static/developer-devices.js
+        tests/test_developer_devices.py
+        docs/DEVELOPER-STUDIO-V43.md
+        .github/workflows/developer-devices-v43.yml
+
+  diagnostics:
+    name: V43 host diagnostics, explicit verification and signing checks (${{ matrix.os }})
+    needs: paths
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "ubuntu-24.04-arm", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Simulated hosts plus an unmocked diagnosis of this runner
+        run: |
+          python -m compileall -q automoto/developer_devices.py tests/test_developer_devices.py
+          python -m pytest -q -rs tests/test_developer_devices.py
+      - name: Panel JavaScript syntax
+        run: |
+          node --check automoto/web/static/developer-devices.js
+          node --check automoto/web/static/developer-studio.js
+          node --check automoto/web/static/developer-simple.js

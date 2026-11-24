@@ -390,6 +390,57 @@ let sendForPlan;
   await page.locator('#dsxDetailBack').click();
   await page.locator('#dsxToolsBack').click();
   step('V51 safe patch preview, explicit Apply and checksum-bound Undo');
+  // V42 debugger and V43 devices: guided steps, explicit confirmation, honest host checks.
+  writeFileSync(path.join(proj, 'prog.py'), 'def add(a, b):\n    total = a + b\n    return total\n\n\nprint("V42_RESULT", add(1, 2))\n');
+  await page.locator('#dsxTools').click();
+  await page.locator('.dsx-card[data-tool="debug"]').click();
+  await page.locator('#dsxDetailBody #dsDebugRoot').waitFor();
+  await page.locator('#dsDebugDetect').click();
+  await page.waitForFunction(() => /Pick a program/.test(document.querySelector('#dsDebugStatus')?.textContent || ''));
+  await page.locator('#dsDebugTarget').selectOption('prog.py');
+  assert.equal(await page.locator('#dsDebugBpFile').inputValue(), 'prog.py');
+  await page.locator('#dsDebugBpLine').fill('3');
+  await page.locator('#dsDebugBpAdd').click();
+  assert.match(await page.locator('#dsDebugBps').innerText(), /prog\.py : line 3/);
+  page.once('dialog', d => d.dismiss());
+  await page.locator('#dsDebugStart').click(); await delay(250);
+  assert.equal(await page.locator('#dsDebugLive').isHidden(), true, 'declining the confirmation runs nothing');
+  accept();
+  await page.locator('#dsDebugStart').click();
+  await page.waitForFunction(() => /Paused|Debugger crashed|Couldn't start/.test(document.querySelector('#dsDebugState')?.textContent || '') && !/Loading/.test(document.querySelector('#dsDebugFrames')?.textContent || ''), null, { timeout: 30000 });
+  const debugState = await page.locator('#dsDebugState').innerText();
+  if (debugState === 'Paused') {
+    await page.waitForFunction(() => /total/.test(document.querySelector('#dsDebugVars')?.textContent || ''), null, { timeout: 15000 });
+    assert.match(await page.locator('#dsDebugFrames').innerText(), /add/);
+    assert.match(await page.locator('#dsDebugWhere').innerText(), /prog\.py line 3/);
+    await page.locator('#dsDebugWatchIn').fill('a');
+    await page.locator('#dsDebugWatchAdd').click();
+    await page.waitForFunction(() => /a = 1/.test(document.querySelector('#dsDebugWatches')?.textContent || ''));
+    await shot('v42-debugger-paused.png');
+    await page.locator('#dsDebugStop').click();
+    await page.waitForFunction(() => /Stopped|Finished/.test(document.querySelector('#dsDebugState')?.textContent || ''));
+  } else {
+    assert.match(await page.locator('#dsDebugError').innerText(), /debugpy|Restart/, 'a missing debugger is reported, not hidden');
+  }
+  await page.locator('#dsDebugCrash').fill('Traceback (most recent call last):\n  File "' + path.join(proj, 'prog.py') + '", line 6, in <module>\nZeroDivisionError: division by zero\n');
+  await page.locator('#dsDebugExplain').click();
+  await page.waitForFunction(() => /ZeroDivisionError/.test(document.querySelector('#dsDebugCrashOut')?.textContent || ''));
+  assert.match(await page.locator('#dsDebugCrashOut').innerText(), /prog\.py line 6/);
+  await shot('v42-crash-explainer.png');
+  await page.locator('#dsxDetailBack').click();
+  await page.locator('.dsx-card[data-tool="devices"]').click();
+  await page.locator('#dsxDetailBody #dsDevicesRoot').waitFor();
+  await page.locator('#dsDevicesCheck').click();
+  await page.waitForFunction(() => /Checked this computer/.test(document.querySelector('#dsDevicesStatus')?.textContent || ''));
+  assert.ok(await page.locator('#dsDevicesCards .dsd-card').count() >= 6);
+  if (process.platform !== 'darwin') assert.equal(await page.locator('.dsd-card[data-check="ios_simulator"] .dsd-chip').getAttribute('data-status'), 'unsupported_host');
+  await page.locator('#dsDevicesFind').click();
+  await page.waitForFunction(() => !/Looking/.test(document.querySelector('#dsDevicesList')?.textContent || ''));
+  assert.ok(await page.locator('#dsDevicesList li').count() >= 1, 'device search always says what it found');
+  await shot('v43-devices.png');
+  await page.locator('#dsxDetailBack').click();
+  await page.locator('#dsxToolsBack').click();
+  step('V42 debugger and V43 devices: confirmation, stop points, crash explainer, honest host checks');
 
   // Tablet: the review panel opens as a side panel above the tab bar, chat stays visible.
   await page.setViewportSize({ width: 820, height: 1000 }); await delay(300);

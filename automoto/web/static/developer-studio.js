@@ -43,6 +43,8 @@ import {mountDeveloperAccount} from "./developer-account.js";
 import {mountDeveloperShare} from "./developer-share.js";
 import {mountDeveloperPulls} from "./developer-pulls.js";
 import {mountDeveloperPolyglot} from "./developer-polyglot.js";
+import {mountDeveloperDebug} from "./developer-debug.js";
+import {mountDeveloperDevices} from "./developer-devices.js";
 import {mountBeginnerPanels} from "./developer-beginner.js";
 export async function mountDeveloperStudio({api,page,toast}) {
   const BASE="/api/developer/studio";
@@ -97,6 +99,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsShareRoot" aria-label="Share to GitHub or GitLab"></div>'+
       '<div id="dsReviewRoot" aria-label="Ask for a review and see checks on GitHub or GitLab"></div>'+
       '<div id="dsPolyglotRoot" aria-label="Project map: languages, links, API calls, data models, safe rename and packages"></div>'+
+      '<div id="dsDebugRoot" aria-label="Debugger: stop points, call stack, values, crash explainer and speed check"></div>'+
+      '<div id="dsDevicesRoot" aria-label="Devices, emulators, simulators, USB boards and signing"></div>'+
       '<div id="dsNavigationRoot" aria-label="Search and navigate project files"></div>'+
       '<div class="ds-mobile-switch" role="group" aria-label="Files or code"><button type="button" id="dsShowExplorer" class="btn sm" aria-pressed="true">Files</button><button type="button" id="dsShowEditor" class="btn sm" aria-pressed="false">Code</button></div>'+
       '<div class="ds-columns" id="dsColumns">'+
@@ -161,6 +165,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
   const shareStudio=mountDeveloperShare({api,host,getProject:()=>project,status,openTool:id=>simple?.openTool(id)});
   const reviewStudio=mountDeveloperPulls({api,host,getProject:()=>project,status,openTool:id=>simple?.openTool(id)});
   const polyglotStudio=mountDeveloperPolyglot({api,host,getProject:()=>project,status,openTool:id=>simple?.openTool(id)});
+  const debugStudio=mountDeveloperDebug({api,host,getProject:()=>project});
+  const devicesStudio=mountDeveloperDevices({api,host,getProject:()=>project});
   workbench=mountDeveloperWorkbench({api,host,getProject:()=>project,status});
   const navigation=mountDeveloperNavigation({
     api,host,editor,getProject:()=>project,getDirectory:()=>directory,
@@ -248,6 +254,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       wasmStudio.projectChanged();
       void runStudio.projectChanged();
       gitStudio.projectChanged();
+      debugStudio.projectChanged();devicesStudio.projectChanged();
       await iosStudio.projectChanged();
       simple?.projectChanged();shareStudio?.projectChanged();reviewStudio?.projectChanged();polyglotStudio?.projectChanged();
       byId("dsPath").value=data.project;
