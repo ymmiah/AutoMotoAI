@@ -177,7 +177,7 @@ def test_serial_ports_listed_never_opened(env, monkeypatch):
             return list(fake) if pattern == "ttyUSB*" else []
         return _orig_glob(self, pattern)
     mp.setattr(devices.Path, "glob", glob)
-    mp.setattr(devices.os, "access", lambda path, mode: str(path) != "/dev/ttyUSB0")
+    mp.setattr(devices.os, "access", lambda path, mode: Path(path).as_posix() != "/dev/ttyUSB0")
     data = diagnose(client)
     serial = data["serial_hardware"]
     assert serial["ports"][0]["port"] == "/dev/ttyUSB0" and serial["ports_opened"] is False

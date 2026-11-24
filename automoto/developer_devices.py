@@ -253,7 +253,7 @@ def _serial_ports(host: str) -> dict:
                     continue
         for pattern in patterns:
             for path in sorted(Path("/dev").glob(pattern[5:]))[:32]:
-                ports.append({"port": str(path), "description": names.get(str(path), ""),
+                ports.append({"port": path.as_posix(), "description": names.get(str(path), ""),
                               "accessible": os.access(path, os.R_OK | os.W_OK)})
     if not ports:
         status = _item("none", "USB boards and serial hardware",
