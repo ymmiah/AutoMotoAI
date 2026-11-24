@@ -1,0 +1,99 @@
+name: Developer Studio V36 Infrastructure and configuration acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_infra.py"
+      - "automoto/web/static/developer-infra.js"
+      - "tests/test_developer_infra.py"
+      - "docs/DEVELOPER-STUDIO-V36.md"
+      - ".github/workflows/developer-infra-v36.yml"
+      - "scripts/ci/install-pinned-toolchain.sh"
+  pull_request:
+    paths:
+      - "automoto/developer_infra.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-infra.js"
+      - "automoto/web/static/developer-studio.js"
+      - "automoto/web/static/developer-simple.js"
+      - "tests/test_developer_infra.py"
+      - "docs/DEVELOPER-STUDIO-V36.md"
+      - ".github/workflows/developer-infra-v36.yml"
+      - "scripts/ci/install-pinned-toolchain.sh"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-toolchain coverage, staggered.
+    - cron: "40 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_infra.py
+        automoto/web/static/developer-infra.js
+        tests/test_developer_infra.py
+        docs/DEVELOPER-STUDIO-V36.md
+        .github/workflows/developer-infra-v36.yml
+        scripts/ci/install-pinned-toolchain.sh
+
+  inert:
+    name: V36 inspection and security tests (${{ matrix.os }})
+    needs: paths
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Auth, read-only inspection, consent and pinning tests
+        run: |
+          python -m compileall -q automoto/developer_infra.py tests/test_developer_infra.py
+          python -m pytest -q -rs tests/test_developer_infra.py
+      - name: Panel JavaScript syntax
+        run: |
+          node --check automoto/web/static/developer-infra.js
+          node --check automoto/web/static/developer-studio.js
+          node --check automoto/web/static/developer-simple.js
+
+  real-ubuntu:
+    name: Real Terraform and glslang validators (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install pinned Terraform (SHA-256 verified) and glslang on the disposable runner
+        timeout-minutes: 15
+        run: |
+          bash scripts/ci/install-pinned-toolchain.sh terraform
+          bash scripts/ci/apt-install.sh glslang-tools
+      - name: Show validator versions
+        run: |
+          terraform version
+          glslangValidator --version | head -n1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Approved offline validators on temporary copies through the API
+        env:
+          AUTOMOTO_V36_REAL_TOOL_TESTS: "1"
+        run: python -m pytest -q -rs tests/test_developer_infra.py

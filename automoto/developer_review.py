@@ -277,6 +277,8 @@ TOOLCHAINS = {
     "beam": ["erl", "elixir", "gleam"], "logic": ["ghc", "ocaml", "swipl", "sbcl"],
     "legacy": ["gfortran", "cobc", "gnat", "fpc", "nasm"], "wasm": ["wasm-tools", "wat2wasm"],
     "latex": ["tectonic", "latexmk"], "typst": ["typst", "quarto"],
+    "emerging": ["zig", "nim", "crystal", "odin", "mojo", "moon"],
+    "infra": ["terraform", "tofu", "hadolint", "glslangValidator", "nix-instantiate", "bicep", "cue", "naga"],
 }
 
 

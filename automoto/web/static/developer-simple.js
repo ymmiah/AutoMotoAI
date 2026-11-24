@@ -58,6 +58,8 @@ const TOOLS=[
   ["logic","Haskell, OCaml & Prolog","Static checks and local tests","Hs","#5e5086","systems",["dsLogicRoot"],"logic"],
   ["legacy","Fortran, COBOL & more","Ada, Pascal and Assembly","For","#8d6e63","systems",["dsLegacyRoot"],"legacy"],
   ["wasm","WebAssembly","Inspect .wat and .wasm modules","Wa","#654ff0","web",["dsWasmRoot"],"wasm"],
+  ["emerging","Zig, Nim & newer languages","Zig, Nim, Crystal, Odin, Mojo and MoonBit","Zg","#f7a41d","systems",["dsEmergingRoot"],"emerging"],
+  ["infra","Infrastructure & config","Terraform, Docker, Kubernetes, Nix and shaders, checked without deploying","IaC","#7b42bc","systems",["dsInfraRoot"],"infra"],
   ["latex","LaTeX & papers","Thesis files, citations and PDF builds","TeX","#56a35b","writing",["dsLatexRoot","dsBibliographyRoot","dsTexBuildRoot"],"latex"],
   ["manuscripts","Typst & Quarto","Manuscripts and research packages","Ty","#239dad","writing",["dsManuscriptsRoot"],"typst"],
   ["language","Language detection","Which languages and frameworks a project uses","Aa","#7aa2ff","builtin",["dsLanguageRoot"],null],
