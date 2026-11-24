@@ -274,6 +274,7 @@ TOOLCHAINS = {
     "android": ["adb", "gradle"], "swift": ["swift", "xcodebuild"], "ios": ["xcodebuild"],
     "mobile": ["flutter", "npx"], "shell": ["bash", "pwsh", "sh"], "scripting": ["ruby", "lua", "perl"],
     "science": ["Rscript", "julia"], "functional": ["scala", "dotnet", "clojure"],
+    "debug": ["gdb", "lldb-dap", "python3", "python"], "devices": ["adb", "emulator", "xcrun"],
     "beam": ["erl", "elixir", "gleam"], "logic": ["ghc", "ocaml", "swipl", "sbcl"],
     "legacy": ["gfortran", "cobc", "gnat", "fpc", "nasm"], "wasm": ["wasm-tools", "wat2wasm"],
     "latex": ["tectonic", "latexmk"], "typst": ["typst", "quarto"],

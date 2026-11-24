@@ -65,6 +65,8 @@ const TOOLS=[
   ["index","Search & outline","Find symbols and files across the project","⌕","#7aa2ff","builtin",["dsIndexRoot","dsNavigationRoot"],null],
   ["polyglot","Project map","See how your files, languages and data connect","⌘","#0ea5e9","builtin",["dsPolyglotRoot"],null],
   ["adapters","Build & debug adapters","Approved local build, test and debug tools","Db","#7aa2ff","builtin",["dsAdaptersRoot"],null],
+  ["debug","Debugger","Pause on a line, step through and see values","Bg","#e5534b","builtin",["dsDebugRoot"],"debug"],
+  ["devices","Devices & emulators","Emulators, simulators, USB boards and signing","Dv","#3ddc84","mobile",["dsDevicesRoot"],"devices"],
   ["agent","Agent reviews & release plans","Send a review or readiness plan to the central agent",BRAND.charAt(0),"#7aa2ff","builtin",[".studio-agent-bridge"],null]
 ];
 // The old cards still work: they open Edit, test & share with the right live panel showing.

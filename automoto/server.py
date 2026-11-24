@@ -240,6 +240,10 @@ from automoto import developer_wasm
 from automoto import developer_review
 app.include_router(developer_wasm.router)  # V33 inert WebAssembly source and component evidence
 app.include_router(developer_review.router)  # Keep or Undo what one coding task changed
+from automoto import developer_debug
+app.include_router(developer_debug.router)  # V42 DAP debugger host: breakpoints, stack, variables, watch, crash recovery, profiling
+from automoto import developer_devices
+app.include_router(developer_devices.router)  # V43 device and simulator diagnostics, explicit verification, signing prerequisites
 from automoto import visual_documents
 app.include_router(visual_documents.router)  # bounded multi-page drafts and PDF/PPTX exports
 from automoto import visual_brand_kits

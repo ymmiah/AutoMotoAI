@@ -1,0 +1,99 @@
+name: Developer Studio V42 Debugger and profiling acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_debug.py"
+      - "automoto/web/static/developer-debug.js"
+      - "tests/test_developer_debug.py"
+      - "tests/fixtures/v42_fake_dap.py"
+      - "docs/DEVELOPER-STUDIO-V42.md"
+      - ".github/workflows/developer-debug-v42.yml"
+  pull_request:
+    paths:
+      - "automoto/developer_debug.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-debug.js"
+      - "automoto/web/static/developer-studio.js"
+      - "automoto/web/static/developer-simple.js"
+      - "tests/test_developer_debug.py"
+      - "tests/fixtures/v42_fake_dap.py"
+      - "docs/DEVELOPER-STUDIO-V42.md"
+      - ".github/workflows/developer-debug-v42.yml"
+      - "scripts/ci/apt-install.sh"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS / real-debugger coverage, staggered.
+    - cron: "10 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_debug.py
+        automoto/web/static/developer-debug.js
+        tests/test_developer_debug.py
+        tests/fixtures/v42_fake_dap.py
+        docs/DEVELOPER-STUDIO-V42.md
+        .github/workflows/developer-debug-v42.yml
+
+  debugpy:
+    name: V42 DAP sessions, crash recovery and real debugpy (${{ matrix.os }})
+    needs: paths
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]" "debugpy==1.8.22"
+      - name: Fake adapter crash/restart, refusals, crash explainer, profiler and real debugpy sessions
+        env:
+          AUTOMOTO_V42_REAL_TOOL_TESTS: "1"
+        run: |
+          python -m compileall -q automoto/developer_debug.py tests/test_developer_debug.py tests/fixtures/v42_fake_dap.py
+          python -m pytest -q -rs tests/test_developer_debug.py
+      - name: Panel JavaScript syntax
+        run: |
+          node --check automoto/web/static/developer-debug.js
+          node --check automoto/web/static/developer-studio.js
+          node --check automoto/web/static/developer-simple.js
+
+  gdb-ubuntu:
+    name: Real GDB native debugging (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install GDB on the disposable runner
+        timeout-minutes: 10
+        run: bash scripts/ci/apt-install.sh gdb
+      - name: Show debugger version
+        run: |
+          gdb --version | head -n1
+          gcc --version | head -n1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Breakpoint, stack, variables and exit in a compiled C program through GDB's DAP
+        env:
+          AUTOMOTO_V42_REAL_GDB: "1"
+        run: python -m pytest -q -rs tests/test_developer_debug.py -k "gdb"
