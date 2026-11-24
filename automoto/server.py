@@ -230,6 +230,10 @@ from automoto import developer_beam
 app.include_router(developer_beam.router)  # V30 inert Elixir Erlang Gleam and SHA-pinned fixed BEAM tool tasks
 from automoto import developer_logic
 app.include_router(developer_logic.router)  # V31 static Haskell OCaml Lisp Scheme Prolog and approved local fixture tests
+from automoto import developer_emerging
+app.include_router(developer_emerging.router)  # V35 Zig Nim Crystal Odin Mojo MoonBit inspection and bundled toolchain checks
+from automoto import developer_infra
+app.include_router(developer_infra.router)  # V36 Terraform Nix Bicep CUE Dockerfile Kubernetes shader checks, never deploys
 from automoto import developer_ios
 app.include_router(developer_ios.router)  # iPhone toolchain, local-only, upload only after the on-screen button
 from automoto import developer_phone

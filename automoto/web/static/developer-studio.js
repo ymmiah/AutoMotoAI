@@ -28,6 +28,8 @@ import {mountDeveloperScience} from "./developer-science.js";
 import {mountDeveloperFunctional} from "./developer-functional.js";
 import {mountDeveloperBeam} from "./developer-beam.js";
 import {mountDeveloperLogic} from "./developer-logic.js";
+import {mountDeveloperEmerging} from "./developer-emerging.js";
+import {mountDeveloperInfra} from "./developer-infra.js";
 import {mountDeveloperIos} from "./developer-ios.js";
 import {mountDeveloperPhone} from "./developer-phone.js";
 import {mountDeveloperSafePatch} from "./developer-safe-patch.js";
@@ -85,6 +87,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
       '<div id="dsFunctionalRoot" aria-label="Scala F sharp Clojure source manifest and approved fixed tool evidence"></div>'+
       '<div id="dsBeamRoot" aria-label="Elixir Erlang Gleam source and fixed local BEAM tool evidence"></div>'+
       '<div id="dsLogicRoot" aria-label="Haskell OCaml Lisp Scheme Prolog source and fixed interpreter tools"></div>'+
+      '<div id="dsEmergingRoot" aria-label="Zig Nim Crystal Odin Mojo MoonBit newer languages"></div>'+
+      '<div id="dsInfraRoot" aria-label="Terraform Nix Bicep CUE Dockerfile Kubernetes and shader config checks"></div>'+
       '<div id="dsLegacyRoot" aria-label="Fortran COBOL Ada Pascal Assembly and Visual Basic source and fixed compiler evidence"></div>'+
       '<div id="dsWasmRoot" aria-label="WebAssembly WAT WASM WIT WASI component source evidence"></div>'+  
       '<div id="dsRunRoot" aria-label="Run the app, run tests and preview it locally"></div>'+
@@ -143,6 +147,8 @@ export async function mountDeveloperStudio({api,page,toast}) {
   functionalStudio=mountDeveloperFunctional({api,host,getProject:()=>project,status});
   beamStudio=mountDeveloperBeam({api,host,getProject:()=>project,status});
   logicStudio=mountDeveloperLogic({api,host,getProject:()=>project,status});
+  const emergingStudio=mountDeveloperEmerging({api,host,getProject:()=>project,status});
+  const infraStudio=mountDeveloperInfra({api,host,getProject:()=>project,status});
   const iosStudio=mountDeveloperIos({api,host,getProject:()=>project});
   mountDeveloperPhone({api,host});
   mountDeveloperSafePatch({api,host,getProject:()=>project,editor,status});
@@ -236,6 +242,7 @@ export async function mountDeveloperStudio({api,page,toast}) {
       functionalStudio.projectChanged();
       beamStudio.projectChanged();
       logicStudio.projectChanged();
+      emergingStudio.projectChanged();infraStudio.projectChanged();
       legacyStudio.projectChanged();
       workbench.projectChanged();
       wasmStudio.projectChanged();

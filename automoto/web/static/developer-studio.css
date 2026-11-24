@@ -1255,3 +1255,39 @@ a.btn.dsa-open{align-self:flex-start;text-decoration:none;display:inline-flex;al
 .dsw-patch-diff,.ds-v53-approval-diff{max-width:100%;min-width:0;max-height:420px;overflow:auto;white-space:pre;overflow-wrap:normal;tab-size:2;font:12px/1.55 var(--mono);padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--code);color:var(--text)}
 .ds-v53-approval-diff{margin:8px 0}
 @media(max-width:600px){.dsw-patch-diff,.ds-v53-approval-diff{font-size:11px;padding:8px;max-height:300px}}
+/* V35 newer languages and V36 config checks: plain cards inside the Tools page. */
+.dsq>.btn{align-self:flex-start;min-height:40px;padding:0 18px}
+.dsq-cards{display:flex;flex-direction:column;gap:10px}
+.dsq-card{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.dsq-card:not(.used){opacity:.82}
+.dsq-card p{margin:0}
+.dsq-card>.btn{align-self:flex-start;min-height:36px;padding:0 16px}
+.dsq-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.dsq-head>b{font-size:15px}
+.dsq-path{font:600 13.5px var(--mono);overflow-wrap:anywhere}
+.dsq-chip{display:inline-flex;align-items:center;min-height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.dsq-chip.t-ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.dsq-chip.t-bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.dsq-chip.t-warn{color:#e0a100;border-color:color-mix(in srgb,#e0a100 45%,var(--line))}
+.dsq-chip.t-info{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.dsq-meta{color:var(--dim);font-size:12.5px;line-height:1.45}
+.dsq-note{font-size:13px;line-height:1.45;padding:6px 10px;border-radius:8px;background:var(--panel);border-left:3px solid var(--line)}
+.dsq-note.t-ok{border-left-color:var(--ok)}
+.dsq-note.t-bad{border-left-color:var(--bad)}
+.dsq-note.t-warn{border-left-color:#e0a100}
+.dsq-note.t-info{border-left-color:var(--accent)}
+.dsq-install{font-size:13px;line-height:1.6}
+.dsq-cmd{font:12.5px var(--mono);padding:2px 6px;border-radius:6px;background:var(--code,var(--panel));overflow-wrap:anywhere}
+.dsq-findings{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.dsq-finding{padding:8px 10px;border-radius:8px;background:var(--panel);display:flex;flex-direction:column;gap:3px;font-size:13.5px}
+.dsq-ftop{display:flex;align-items:center;gap:8px}
+.dsq-fline{color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums}
+.dsq-outcome{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+.dsq-outcome.t-ok{border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
+.dsq-outcome.t-bad{border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.dsq-outcome.t-warn{border-color:color-mix(in srgb,#e0a100 40%,var(--line))}
+.dsq-out{max-height:220px;overflow:auto}
+.dsq-result:empty{display:none}
+.dsq-toollist{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:4px}
+.dsq-toollist li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
+@media (max-width:600px){.dsq-card{padding:10px 12px}.dsq-card>.btn{width:100%;justify-content:center}}

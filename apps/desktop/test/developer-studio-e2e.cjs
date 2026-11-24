@@ -200,7 +200,7 @@ let sendForPlan;
   await page.locator('#dsxToolSearch').fill('rust');
   assert.equal(await page.locator('.dsx-card').count(), 1);
   await page.locator('#dsxToolSearch').fill('');
-  for (const [tool, rootId] of [['typescript', 'dsJavaScriptRoot'], ['ios', 'dsIosRoot'], ['legacy', 'dsLegacyRoot'], ['wasm', 'dsWasmRoot'], ['lsp', 'dsLspRoot'], ['language', 'dsLanguageRoot'], ['agent', null]]) {
+  for (const [tool, rootId] of [['typescript', 'dsJavaScriptRoot'], ['ios', 'dsIosRoot'], ['legacy', 'dsLegacyRoot'], ['wasm', 'dsWasmRoot'], ['emerging', 'dsEmergingRoot'], ['infra', 'dsInfraRoot'], ['lsp', 'dsLspRoot'], ['language', 'dsLanguageRoot'], ['agent', null]]) {
     await page.locator(`.dsx-card[data-tool="${tool}"]`).click();
     await page.locator('#dsxToolDetail').waitFor();
     if (rootId) assert.equal(await page.locator(`#dsxDetailBody #${rootId}`).isVisible(), true, tool);
@@ -208,6 +208,33 @@ let sendForPlan;
     await page.locator('#dsxDetailBack').click();
   }
   assert.equal(await page.locator('#dsxDetailBody').evaluate(e => e.children.length), 0, 'panels go back where they came from');
+  // V35 newer languages and V36 config checks: read-only cards, copy buttons, nothing deployed.
+  writeFileSync(path.join(proj, 'tools.zig'), 'const std = @import("std");\npub fn main() void {}\n');
+  writeFileSync(path.join(proj, 'build.zig.zon'), '.{ .name = .tools, .version = "0.1.0", .minimum_zig_version = "0.14.0", .paths = .{""} }\n');
+  writeFileSync(path.join(proj, 'Dockerfile'), 'FROM node:latest\nCOPY . .\nCMD ["npm","start"]\n');
+  mkdirSync(path.join(proj, 'deploy'), { recursive: true });
+  writeFileSync(path.join(proj, 'deploy', 'web.yaml'), 'apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\nspec:\n  containers:\n    - name: web\n      image: nginx\n      securityContext:\n        privileged: true\n');
+  await page.locator('.dsx-card[data-tool="emerging"]').click();
+  await page.locator('#dsxDetailBody #dsEmergingRoot').waitFor();
+  await page.locator('#dsEmergingInspect').click();
+  await page.waitForFunction(() => /Found Zig/.test(document.querySelector('#dsEmergingStatus')?.textContent || ''));
+  assert.equal(await page.locator('#dsEmergingCards .dsq-card').count(), 6);
+  assert.match(await page.locator('#dsEmergingCards .dsq-card[data-language="zig"]').innerText(), /Pre-1\.0/);
+  assert.match(await page.locator('#dsEmergingCards .dsq-card[data-language="mojo"]').innerText(), /does not run/);
+  await shot('v35-newer-languages.png');
+  await page.locator('#dsxDetailBack').click();
+  await page.locator('.dsx-card[data-tool="infra"]').click();
+  await page.locator('#dsxDetailBody #dsInfraRoot').waitFor();
+  await page.locator('#dsInfraInspect').click();
+  await page.waitForFunction(() => /Nothing was deployed/.test(document.querySelector('#dsInfraStatus')?.textContent || ''));
+  assert.match(await page.locator('#dsInfraSummary').innerText(), /problem/);
+  assert.match(await page.locator('#dsInfraFiles .dsq-card[data-path="deploy/web.yaml"]').innerText(), /privileged/);
+  assert.match(await page.locator('#dsInfraFiles .dsq-card[data-path="Dockerfile"]').innerText(), /isn't pinned/);
+  await page.locator('#dsInfraRoot details.dsb-adv > summary').click();
+  assert.ok(await page.locator('#dsInfraTools .copy-inline').count() >= 1, 'validator commands have copy buttons');
+  await shot('v36-config-checks.png');
+  await page.locator('#dsxDetailBack').click();
+  step('V35 newer languages and V36 config checks: read-only cards, copy buttons');
   await page.locator('#dsxToolsBack').click();
   await page.locator('#dsxToolsPage').waitFor({ state: 'hidden' });
   assert.equal(await page.locator('#dsxBody').isVisible(), true);
