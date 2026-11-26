@@ -235,6 +235,12 @@ def world(tmp_path, monkeypatch, caplog):
     caplog.set_level(logging.DEBUG)
     monkeypatch.setenv("AUTOMOTO_WORKSPACE", str(tmp_path / "workspace"))
     monkeypatch.setenv("AUTOMOTO_RATE_LIMIT", "10000")
+    # An empty home: a developer's own ~/.gitconfig (name, email, signing) must not change the results.
+    home = tmp_path / "home"
+    home.mkdir()
+    for var in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME"):
+        monkeypatch.setenv(var, str(home))
+    monkeypatch.delenv("GIT_CONFIG_GLOBAL", raising=False)
     kc = FakeKeychain()
     monkeypatch.setattr(git_auth, "_backend_override", kc)
     api = FakeAPI()

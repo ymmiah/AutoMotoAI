@@ -82,9 +82,10 @@ New here? **[Start here: pick your device](docs/START.md)**
   [Spreadsheet & Invoice](docs/INVOICE-SPREADSHEET-V8.md),
   [Research Studio](docs/RESEARCH-STUDIO-V8.md),
   [Visual Studio](docs/VISUAL-STUDIO.md),
-  and [Developer Studio](docs/DEVELOPER-STUDIO-V9.md) through
-  [V31](docs/DEVELOPER-STUDIO-V31.md). An overview is in
-  [Studios the assistant can use](docs/STUDIO-ASSISTANT.md).
+  and [Developer Studio](docs/DEVELOPER-STUDIO-V1.md) through
+  [V54](docs/DEVELOPER-STUDIO-V54.md). An overview is in
+  [Studios the assistant can use](docs/STUDIO-ASSISTANT.md), and every
+  version is listed in [Studio version notes](docs/STUDIO-VERSIONS.md).
 - **Privacy, local-first.** No telemetry, no analytics, no ads. The app only talks
   to the providers, pages, connectors and account server you choose. Risky steps
   wait for your approval. Full list: **[Privacy policy](docs/PRIVACY.md)**.
@@ -197,7 +198,7 @@ Details, sizes and troubleshooting: **[Offline AI](docs/OFFLINE.md)**.
 | **[Install](docs/INSTALL.md)** | Every OS, Docker, updates, uninstall, troubleshooting |
 | **[Offline AI](docs/OFFLINE.md)** | Built-in models, sizes, import, and what "won't fit" means |
 | **[What you can ask for](docs/CAPABILITIES.md)** | Tasks and tools the assistant can take on |
-| **[Studios](docs/STUDIO-ASSISTANT.md)** | Document, spreadsheet, research, visual and developer studios |
+| **[Studios](docs/STUDIO-ASSISTANT.md)** · **[Version notes](docs/STUDIO-VERSIONS.md)** | Document, spreadsheet, research, visual and developer studios, and what each version added |
 | **[Privacy](docs/PRIVACY.md)** | What the app connects to, and when |
 | **[Hosting](docs/HOSTING.md)** · **[Your own server](docs/SERVER-SETUP.md)** | Accounts, daily limits, first-admin setup |
 | **[Windows distribution](docs/WINDOWS-DISTRIBUTION.md)** · **[Signing setup](docs/signing/TRUSTED_SIGNING_SETUP.md)** | Store, SmartScreen, Azure Artifact Signing (maintainers) |

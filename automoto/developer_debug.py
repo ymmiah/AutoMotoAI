@@ -602,9 +602,12 @@ class Session:
                                  "description": str(info.get("description", ""))[:500]}
                 except HTTPException:
                     exception = None
+            # Watches are evaluated before anything is published, so a paused state never shows
+            # the new stack with an empty or stale watch list.
+            watch_values = self._watch_values(frames[0]["id"] if frames else None)
             with self.lock:
                 self.frames, self.variables, self.exception = frames, variables, exception
-            self._evaluate_watches()
+                self.watch_values = watch_values
         except HTTPException as exc:
             with self.lock:
                 self.error = str(exc.detail)
@@ -614,8 +617,12 @@ class Session:
                     self.stop["inspecting"] = False
 
     def _evaluate_watches(self) -> None:
+        values = self._watch_values(self.frames[0]["id"] if self.frames else None)
+        with self.lock:
+            self.watch_values = values
+
+    def _watch_values(self, frame) -> list[dict]:
         values = []
-        frame = self.frames[0]["id"] if self.frames else None
         for expression in list(self.watches):
             if frame is None:
                 values.append({"expression": expression, "value": None, "error": "Not paused"})
@@ -627,8 +634,7 @@ class Session:
                                "type": str(body.get("type") or "")[:80], "error": None})
             except HTTPException as exc:
                 values.append({"expression": expression, "value": None, "error": str(exc.detail)[:200]})
-        with self.lock:
-            self.watch_values = values
+        return values
 
     def set_breakpoints(self, path: str, lines: list[int]) -> list[dict]:
         absolute = studio._path(self.root, path)

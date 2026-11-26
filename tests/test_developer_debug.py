@@ -142,7 +142,8 @@ def test_fake_session_stack_variables_watch_crash_and_restart(project, fake_adap
     assert again.status_code == 200, again.text
     new = again.json()
     assert new["restarts"] == 1 and new["breakpoints"]["prog.py"][0]["line"] == 3
-    restarted = wait_for(client, new["session_id"], lambda d: d["status"] == "stopped" and d["frames"])
+    restarted = wait_for(client, new["session_id"],
+                         lambda d: d["status"] == "stopped" and d["frames"] and not d["stop"]["inspecting"])
     assert restarted["watches"][0]["expression"] == "a"
     stopped = client.post(URL + "/stop", json={"session_id": new["session_id"]}, headers=AUTH).json()
     assert stopped["status"] == "stopped_by_user" and stopped["debugger_running"] is False

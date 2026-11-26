@@ -7,6 +7,8 @@ Saves, exports, trust and program runs wait for **Approve**. A repair or an offl
 proposal and does not change the file. Hosted servers never run a program on the host. Offline mode
 removes network tools such as DOI lookup.
 
+What each studio version added is listed in [Studio version notes](STUDIO-VERSIONS.md).
+
 ## What it can do
 
 | Studio | Ask for | You get |
