@@ -14,6 +14,7 @@ nav:
   - GUI guide: GUI-GUIDE.md
   - What you can ask for: CAPABILITIES.md
   - Studios the assistant can use: STUDIO-ASSISTANT.md
+  - Studio version notes: STUDIO-VERSIONS.md
   - Connect GitHub or GitLab: GIT-SIGN-IN.md
   - Share to GitHub or GitLab: SHARE-TO-GITHUB.md
   - Ask for a review and checks: PULL-REQUESTS-AND-CI.md
