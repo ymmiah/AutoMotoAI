@@ -101,6 +101,22 @@ export function approvalCard(entry,{api,getProject,decide,showFile}){
     no.onclick=()=>pick(false,[yes,no],"Applied once","Patch skipped.");
     bar.append(yes,no);
     if(path&&!creating){const show=btn("Show source","link");show.onclick=()=>showFile?.(path,{open:true});bar.append(show);}
+  }else if(name==="developer_agent_test"){
+    // V55: the server fixed this command and its time limit; the model supplied none of it.
+    const valid=args.prepared_by_server===true&&args.test_run===true&&typeof args.command==="string"&&
+      args.command.length>0&&/^[0-9a-f]{64}$/.test(String(args.command_sha256||""))&&
+      Number.isInteger(args.time_limit_seconds)&&args.time_limit_seconds>0;
+    card.append(el("b",null,"Run the tests?"),
+      el("p",null,"The assistant wants to check its work with this project's own test command, once."));
+    const pre=el("pre","dsw-cmd");pre.append(el("code",null,valid?args.command:"Test command evidence missing; approval blocked."));
+    card.append(pre,
+      el("p","dsw-hint","Stops after "+String(args.time_limit_seconds||0)+" seconds · from "+String(args.source||"the project")),
+      el("p","dsw-hint",String(args.isolation||"")));
+    const yes=btn("Run tests once","primary"),no=btn("Skip","");
+    yes.disabled=!valid;
+    yes.onclick=()=>{if(valid)pick(true,[yes,no],"Approved once · running tests","Not run.");};
+    no.onclick=()=>pick(false,[yes,no],"","Not run. The tests were not checked.");
+    bar.append(yes,no);
   }else if(name==="edit_file"||name==="write_file"){
     path=relPath(args.path,getProject()?.project);
     card.append(el("b",null,"Here's the change for "+path),el("p",null,"Nothing is saved until you press Apply."));

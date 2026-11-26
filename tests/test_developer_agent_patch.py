@@ -78,6 +78,7 @@ def test_bounded_registry_has_no_alternate_code_write_or_execution(workspace):
             "developer_open", "developer_read", "developer_search", "developer_sources",
             "developer_symbols", "developer_languages", "developer_lsp",
             "developer_diff", "developer_agent_patch", "developer_agent_create",
+            "developer_agent_test",  # V55: the detected test command only, approved per run
         }
         with pytest.raises(ToolFailed):
             tools["developer_agent_patch"].fn(ToolContext(), path="calc.py")

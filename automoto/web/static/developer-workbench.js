@@ -231,6 +231,20 @@ export function mountDeveloperWorkbench({api,host,getProject,status}){
         yes.textContent=creating?"Create checked file":"Apply checked patch";
         no.textContent="Skip";
         yes.disabled=!verified;
+      }else if(entry.name==="developer_agent_test"){
+        const evidence=entry.args||{};
+        const verified=evidence.prepared_by_server===true&&evidence.test_run===true&&
+          typeof evidence.command==="string"&&evidence.command.length>0&&
+          /^[0-9a-f]{64}$/.test(String(evidence.command_sha256||""));
+        desc.textContent="Run the project's tests once · stops after "+String(evidence.time_limit_seconds||0)+
+          " seconds · "+String(evidence.isolation||"");
+        const code=document.createElement("pre");
+        code.className="ds-v53-approval-diff";
+        code.textContent=verified?evidence.command:"Test command evidence missing. Cannot approve.";
+        code.setAttribute("aria-label","Server-chosen test command for review");
+        row.append(code);
+        yes.textContent="Run tests once";no.textContent="Skip";
+        yes.disabled=!verified;
       }
       row.append(desc,yes,no);log.append(row);
       emit("approval",{callId,entry});

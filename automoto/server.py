@@ -85,6 +85,10 @@ def _agent_factory(desktop: bool = False, client: str = "web", workspace: str | 
         tl[transaction.name] = transaction
         create_transaction = create_tool()
         tl[create_transaction.name] = create_transaction
+        # V55: the detected test command only, with a hard deadline and an approval per run.
+        from automoto.developer_agent_test import test_tool
+        test_run = test_tool()
+        tl[test_run.name] = test_run
     if review_only:
         # Do not rely on auto_deny alone: global approval_mode=auto may bypass
         # the approval callback. Removing tools from the registry makes writes,

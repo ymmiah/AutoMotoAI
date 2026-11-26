@@ -83,7 +83,7 @@ New here? **[Start here: pick your device](docs/START.md)**
   [Research Studio](docs/RESEARCH-STUDIO-V8.md),
   [Visual Studio](docs/VISUAL-STUDIO.md),
   and [Developer Studio](docs/DEVELOPER-STUDIO-V1.md) through
-  [V54](docs/DEVELOPER-STUDIO-V54.md). An overview is in
+  [V55](docs/DEVELOPER-STUDIO-V55.md). An overview is in
   [Studios the assistant can use](docs/STUDIO-ASSISTANT.md), and every
   version is listed in [Studio version notes](docs/STUDIO-VERSIONS.md).
 - **Privacy, local-first.** No telemetry, no analytics, no ads. The app only talks

@@ -1,0 +1,95 @@
+name: Developer Studio V55 Bounded agent test runs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "automoto/developer_agent_test.py"
+      - "automoto/developer_run.py"
+      - "automoto/loop.py"
+      - "tests/test_developer_agent_test.py"
+      - "docs/DEVELOPER-STUDIO-V55.md"
+      - ".github/workflows/developer-agent-test-v55.yml"
+  pull_request:
+    paths:
+      - "automoto/developer_agent_test.py"
+      - "automoto/developer_run.py"
+      - "automoto/developer_coding_budget.py"
+      - "automoto/loop.py"
+      - "automoto/server.py"
+      - "automoto/web/static/developer-workspace.js"
+      - "automoto/web/static/developer-workbench.js"
+      - "automoto/web/static/developer-simple.js"
+      - "tests/test_developer_agent_test.py"
+      - "apps/desktop/test/agent-test-card.cjs"
+      - "docs/DEVELOPER-STUDIO-V55.md"
+      - ".github/workflows/developer-agent-test-v55.yml"
+      - "scripts/ci/pr_self_changed.py"
+      - ".github/workflows/ci-path-filter.yml"
+  schedule:
+    # Weekly macOS coverage, staggered from the other Developer Studio workflows.
+    - cron: "40 9 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  paths:
+    uses: ./.github/workflows/ci-path-filter.yml
+    with:
+      patterns: |
+        automoto/developer_agent_test.py
+        tests/test_developer_agent_test.py
+        apps/desktop/test/agent-test-card.cjs
+        docs/DEVELOPER-STUDIO-V55.md
+        .github/workflows/developer-agent-test-v55.yml
+
+  runs:
+    # Real pytest runs: Windows stops a run with taskkill /T, Unix with killpg.
+    name: V55 approved test runs, deadlines and evidence (${{ matrix.os }})
+    needs: paths
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.paths.outputs.self == 'true' && '["ubuntu-latest", "macos-15", "windows-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - name: Bounded agent test runs and the V52-V54 registry guarantees
+        run: |
+          python -m compileall -q automoto/developer_agent_test.py tests/test_developer_agent_test.py
+          python -m pytest -q -rs tests/test_developer_agent_test.py tests/test_developer_agent_patch.py tests/test_developer_agent_create.py tests/test_developer_coding_budget.py
+
+  card:
+    name: V55 approval card in Chromium
+    needs: paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - name: Install Playwright Chromium
+        working-directory: apps/desktop
+        run: |
+          npm ci --no-fund --no-audit
+          npx playwright install chromium
+      - name: Card shows the server command, approves once, blocks forged evidence
+        working-directory: apps/desktop
+        run: |
+          node --check ../../automoto/web/static/developer-workspace.js
+          node --check ../../automoto/web/static/developer-workbench.js
+          node --check ../../automoto/web/static/developer-simple.js
+          node test/agent-test-card.cjs

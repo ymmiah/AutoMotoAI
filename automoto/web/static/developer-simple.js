@@ -563,6 +563,7 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
       const path=String(args.path||args.file||args.directory||"");
       if(READ.has(name))turn.reads.add(path||name+turn.reads.size);
       else if(TRANSACTION_WRITE.has(name)&&path)turn.pendingWrites.set(ev.id,path);
+      else if(name==="developer_agent_test")turn.tests.set(ev.id,{cmd:String(args.command||"tests"),done:false,ok:null,output:"",agentTest:true});
       else if(WRITE.has(name)&&path)turn.edits.set(path,true);
       else if(RUN.has(name)){
         const cmd=String(args.command||args.cmd||"");
@@ -574,7 +575,14 @@ export function mountDeveloperSimple({api,host,workbench,runner,git,editor,share
         turn.pendingWrites.delete(ev.id);
       }
       const rec=turn.tests.get(ev.id)||turn.commands.get(ev.id);
-      if(rec){rec.done=true;rec.ok=!!ev.ok;rec.output=String(ev.output||"");}
+      if(rec){
+        rec.done=true;rec.output=String(ev.output||"");
+        if(rec.agentTest){
+          // V55: a test run "succeeds" as a tool even when tests fail; only the verdict says passed.
+          let verdict=null;try{verdict=JSON.parse(rec.output.split("\n",1)[0]).verdict;}catch{verdict=null;}
+          rec.ok=!!ev.ok&&verdict==="passed";rec.verdict=verdict;
+        }else rec.ok=!!ev.ok;
+      }
     }
     drawProgress();
   }

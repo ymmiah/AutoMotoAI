@@ -226,6 +226,8 @@ STEP_LABELS = {
     "library_add": "Saving to your library", "library_search": "Searching your library",
     "discover": "Checking developer sites", "read_feed": "Reading the feed", "project_inspect": "Inspecting the project",
     "page_inspect": "Inspecting the page", "server_setup": "Preparing your server setup",
+    "developer_agent_patch": "Proposing a change to {file}", "developer_agent_create": "Proposing a new file",
+    "developer_agent_test": "Running the tests",
 }
 _KIND = {".pptx": "your slides", ".ppt": "your slides", ".odp": "your slides", ".docx": "your document",
          ".doc": "your document", ".odt": "your document", ".pdf": "the PDF", ".xlsx": "your spreadsheet",

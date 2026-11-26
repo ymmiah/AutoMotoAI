@@ -62,7 +62,7 @@ def test_registry_restricts_writes_to_existing_patch_and_new_create(root_env):
                           "routine", "developer_trust"):
             assert forbidden not in bounded.tools
         assert all(t.level == "safe" or t.name in
-                   ("developer_agent_patch", "developer_agent_create")
+                   ("developer_agent_patch", "developer_agent_create", "developer_agent_test")
                    for t in bounded.tools.values())
 
 

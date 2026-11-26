@@ -56,6 +56,7 @@ New to the studios? Start with [Studios the assistant can use](STUDIO-ASSISTANT.
 | [V52](DEVELOPER-STUDIO-V52.md) | Bounded coding agent |
 | [V53](DEVELOPER-STUDIO-V53.md) | Transactional agent patches |
 | [V54](DEVELOPER-STUDIO-V54.md) | Safe creation of new source files |
+| [V55](DEVELOPER-STUDIO-V55.md) | Bounded agent test runs with honest pass/fail evidence |
 
 Related guides: [Connect GitHub or GitLab](GIT-SIGN-IN.md) and
 [Share to GitHub or GitLab](SHARE-TO-GITHUB.md) (V46–V48),

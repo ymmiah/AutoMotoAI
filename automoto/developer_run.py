@@ -442,7 +442,6 @@ class Run:
             except OSError:
                 pass
         time.sleep(0.15)  # let the drain thread flush the tail
-        self.ended = time.time()
         if self.status in ("running", "starting"):
             if self.stop_requested:
                 self.status = "stopped"
@@ -451,6 +450,8 @@ class Run:
             else:
                 self.status = "exited"
         self.url = None if self.status != "running" else self.url
+        # Last: a reader that sees ``ended`` also sees the final status and exit code.
+        self.ended = time.time()
 
     def stop(self) -> None:
         self.stop_requested = True

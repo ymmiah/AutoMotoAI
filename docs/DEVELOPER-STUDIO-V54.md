@@ -48,4 +48,4 @@ An internal function applies the exact same checked transaction for the bounded 
 
 ## Next milestone
 
-V55: independently approved **sandboxed test-run adapters** with true subprocess/process-group timeouts, bounded logs, safe cancellation and trustworthy pass/fail evidence. Do not add an unrestricted `run_shell` tool to the bounded agent.
+Delivered in [V55](DEVELOPER-STUDIO-V55.md) as bounded agent test runs. Original plan — V55: independently approved **sandboxed test-run adapters** with true subprocess/process-group timeouts, bounded logs, safe cancellation and trustworthy pass/fail evidence. Do not add an unrestricted `run_shell` tool to the bounded agent.
