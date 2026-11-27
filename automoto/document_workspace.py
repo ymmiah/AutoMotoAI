@@ -61,6 +61,25 @@ class ReplaceIn(BaseModel):
     sha256: str = Field(..., min_length=64, max_length=64)
     find: str = Field(..., min_length=1, max_length=500)
     replace: str = Field(..., max_length=2_000)
+    # v8: XLSX cell edits, e.g. {"Sheet1!B2": "new value"}. Ignored for DOCX/PPTX.
+    cells: dict[str, Any] | None = None
+
+
+class CreateIn(BaseModel):
+    """v8: create a document from scratch in any supported format.
+
+    The same Markdown source drives DOCX, PPTX, PDF and plain-text output;
+    spreadsheets take explicit rows (or Markdown tables). Everything is
+    create-only: a new uniquely-named file in the private documents folder.
+    """
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(..., min_length=1, max_length=100)
+    format: Literal["docx", "pptx", "xlsx", "pdf", "md", "txt"] = "docx"
+    markdown: str = Field("", max_length=MAX_DRAFT_CHARS)
+    options: LayoutOptions | None = None
+    publication: PublicationOptions | None = None
+    rows: list[list[Any]] | None = Field(None, max_length=10_000)
+    sheet_name: str = Field("Sheet1", min_length=1, max_length=31)
 
 
 def _root() -> Path:
@@ -255,6 +274,167 @@ def _build_spec(body: DocumentSource) -> dict[str, Any]:
     return spec
 
 
+@router.post("/create")
+def create_document(body: CreateIn, request: Request):
+    """v8: create a new document from scratch — DOCX, PPTX, XLSX, PDF, MD or TXT.
+
+    Previously Document Assistant could only create Markdown drafts
+    (``.document.json``) and export them as DOCX/PDF. The Office engines
+    could already build PPTX/XLSX, but Document Assistant never exposed
+    them. This endpoint reuses those engines, so every format is built
+    from the same source instead of a separate code path.
+    """
+    _auth(request)
+    name = _name(body.name)
+    fmt = body.format
+    warnings: list[str] = []
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory(prefix="automoto-document-create-") as td:
+        folder = Path(td)
+        if fmt == "md":
+            produced = folder / "created.md"
+            produced.write_text(body.markdown or f"# {name}\n", encoding="utf-8")
+        elif fmt == "txt":
+            produced = folder / "created.txt"
+            produced.write_text(body.markdown or name, encoding="utf-8")
+        elif fmt == "pdf":
+            produced = folder / "created.pdf"
+            _markdown_to_pdf(office_build.markdown_to_spec(body.markdown or f"# {name}\n"),
+                             name, produced)
+        elif fmt == "docx":
+            source = DocumentSource(name=name, markdown=body.markdown or f"# {name}\n",
+                                    options=body.options, publication=body.publication)
+            spec = _build_spec(source)
+            produced = folder / "created.docx"
+            office_build.build_docx(spec, produced)
+            office.inspect_file(produced)
+        elif fmt == "pptx":
+            spec = _markdown_to_slides(body.markdown or f"# {name}\n", name)
+            produced = folder / "created.pptx"
+            office_build.create_pptx(spec, produced)
+            office.inspect_file(produced)
+        elif fmt == "xlsx":
+            rows = body.rows
+            if not rows:
+                spec = office_build.markdown_to_spec(body.markdown or "")
+                tables = [b["rows"] for b in spec["blocks"] if b.get("type") == "table"]
+                if not tables:
+                    raise HTTPException(
+                        422, "A spreadsheet needs rows or at least one Markdown table.")
+                rows = tables[0]
+                if len(tables) > 1:
+                    warnings.append("Only the first Markdown table was used for the sheet.")
+            for row in rows:
+                if len(row) > 100:
+                    raise HTTPException(422, "A spreadsheet row holds at most 100 cells.")
+            produced = folder / "created.xlsx"
+            office_build.create_xlsx(
+                {"sheets": [{"name": body.sheet_name, "rows": rows}]}, produced)
+            office.inspect_file(produced)
+        else:  # pragma: no cover - pydantic Literal guards this
+            raise HTTPException(422, "unsupported format")
+        data = produced.read_bytes()
+    target = _unique(name, "." + fmt)
+    _atomic_file(target, data)
+    return {"path": target.relative_to(_root()).as_posix(), "format": fmt,
+            "warnings": warnings,
+            "message": f"Created a new {fmt.upper()} document; no existing file was changed"}
+
+
+def _markdown_to_slides(markdown: str, name: str) -> dict[str, Any]:
+    """Turn Markdown headings into a slide deck: H1 is the title slide,
+    each H2 starts a bullets slide, deeper headings and paragraphs become
+    bullets. Image blocks are skipped (no source image is available here)."""
+    spec = office_build.markdown_to_spec(markdown)
+    slides: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+
+    def start_slide(title: str, layout: str = "bullets") -> dict[str, Any]:
+        slide: dict[str, Any] = {"layout": layout, "title": title, "bullets": []}
+        slides.append(slide)
+        return slide
+
+    for block in spec["blocks"]:
+        kind = block.get("type")
+        if kind == "heading" and block.get("level") == 1:
+            current = start_slide(block["text"], "title")
+            current["subtitle"] = name
+        elif kind == "heading" and block.get("level") == 2:
+            current = start_slide(block["text"])
+        elif kind == "heading":
+            if current is None:
+                current = start_slide(name)
+            current["bullets"].append(block["text"])
+        elif kind in ("bullets", "numbered"):
+            if current is None:
+                current = start_slide(name)
+            for item in block.get("items", []):
+                current["bullets"].append(item[0] if isinstance(item, list) else item)
+        elif kind in ("paragraph", "quote"):
+            if current is None:
+                current = start_slide(name)
+            current["bullets"].append(block["text"])
+        elif kind == "table":
+            if current is None:
+                current = start_slide(name)
+            rows = block.get("rows") or []
+            if rows:
+                slides.append({"layout": "table", "title": current["title"], "rows": rows})
+                current = None
+    if not slides:
+        slides.append({"layout": "title", "title": name, "subtitle": ""})
+    return {"slides": slides[:300]}
+
+
+def _markdown_to_pdf(spec: dict[str, Any], title: str, out: Path) -> None:
+    """Build a PDF from Markdown blocks with reportlab (no LibreOffice
+    needed), so PDF creation works even where LibreOffice is absent."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (HRFlowable, Paragraph, SimpleDocTemplate,
+                                    Spacer, Table, TableStyle)
+    from xml.sax.saxutils import escape
+
+    styles = getSampleStyleSheet()
+    heading = ParagraphStyle("da-heading", parent=styles["Heading1"],
+                             fontSize=18, leading=22, spaceBefore=14, spaceAfter=6)
+    heading2 = ParagraphStyle("da-heading2", parent=styles["Heading2"],
+                              fontSize=14, leading=18, spaceBefore=10, spaceAfter=4)
+    body = ParagraphStyle("da-body", parent=styles["BodyText"],
+                          fontSize=11, leading=15, spaceAfter=6)
+    story: list[Any] = [Paragraph(escape(title), heading), Spacer(1, 0.2 * cm)]
+    for block in spec["blocks"]:
+        kind = block.get("type")
+        text = str(block.get("text", ""))
+        if kind == "heading":
+            style = heading if block.get("level", 1) == 1 else heading2
+            story.append(Paragraph(escape(text), style))
+        elif kind in ("bullets", "numbered"):
+            for item in block.get("items", []):
+                item_text = item[0] if isinstance(item, list) else item
+                story.append(Paragraph("• " + escape(str(item_text)), body))
+        elif kind == "table":
+            rows = [[escape(str(c)) for c in row] for row in block.get("rows", [])]
+            if rows:
+                table = Table([[Paragraph(c, body) for c in row] for row in rows])
+                table.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), "#1F3864"),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), "#FFFFFF"),
+                    ("GRID", (0, 0), (-1, -1), 0.5, "#BFBFBF"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+                story.append(table)
+                story.append(Spacer(1, 0.3 * cm))
+        elif kind == "page_break":
+            from reportlab.platypus import PageBreak
+            story.append(PageBreak())
+        elif text:
+            story.append(Paragraph(escape(text), body))
+    SimpleDocTemplate(str(out), pagesize=A4, title=title,
+                      leftMargin=2.5 * cm, rightMargin=2.5 * cm,
+                      topMargin=2.5 * cm, bottomMargin=2.5 * cm).build(story)
+
+
 @router.get("/templates")
 def list_document_templates(request: Request):
     _auth(request)
@@ -336,8 +516,13 @@ def export_document(body: ExportIn, request: Request):
 def replace_copy(body: ReplaceIn, request: Request):
     _auth(request)
     source = _allowed_source(body.path)
-    if source.suffix.lower() != ".docx" or source.name.endswith(".document.json"):
-        raise HTTPException(422, "native find-and-replace is supported for DOCX copies only")
+    # v8: find-and-replace copies now cover PPTX and XLSX too, using the
+    # same Office edit engine the agent tools already use. PDF stays
+    # read-only: it has no lossless text layer to edit in place.
+    if source.suffix.lower() not in {".docx", ".pptx", ".xlsx"} \
+            or source.name.endswith(".document.json"):
+        raise HTTPException(
+            422, "native find-and-replace copies are supported for DOCX, PPTX and XLSX only")
     if not re.fullmatch(r"[0-9a-f]{64}", body.sha256):
         raise HTTPException(422, "invalid SHA-256 precondition")
     if _sha(source) != body.sha256:
@@ -346,11 +531,12 @@ def replace_copy(body: ReplaceIn, request: Request):
         office.inspect_file(source)
     except office.OfficeError as exc:
         raise HTTPException(422, str(exc)) from None
-    target = _unique(source.stem + "-revised", ".docx")
-    temporary = target.with_name(f".editing-{secrets.token_hex(8)}.docx")
+    target = _unique(source.stem + "-revised", source.suffix.lower())
+    temporary = target.with_name(f".editing-{secrets.token_hex(8)}{source.suffix.lower()}")
     try:
         shutil.copyfile(source, temporary)
-        message = office_build.edit(temporary, replace=[{"old": body.find, "new": body.replace}])
+        message = office_build.edit(temporary, replace=[{"old": body.find, "new": body.replace}],
+                                    cells=body.cells)
         count = int(re.search(r": (\d+) change", message).group(1))
         if not count:
             raise HTTPException(422, "the exact phrase was not found; no copy was saved")
@@ -368,4 +554,4 @@ def replace_copy(body: ReplaceIn, request: Request):
     finally:
         temporary.unlink(missing_ok=True)
     return {"path": target.relative_to(_root()).as_posix(), "changes": count,
-            "message": "Saved a new DOCX copy; original was not modified"}
+            "message": f"Saved a new {source.suffix[1:].upper()} copy; original was not modified"}
