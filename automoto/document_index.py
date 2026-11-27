@@ -38,6 +38,7 @@ import struct
 import urllib.error
 import urllib.request
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -326,12 +327,24 @@ class DocumentIndex:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or _index_path()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self):
+        """Open the index, yielding a connection that is always closed.
+
+        ``sqlite3.Connection`` as a context manager only commits/rolls
+        back — it never closes. Relying on refcount GC to close it leaves
+        the database file locked on Windows, where ``delete()`` then
+        cannot unlink it. Closing explicitly here makes delete reliable
+        on every platform.
+        """
         conn = sqlite3.connect(str(self.path))
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.executescript(_SCHEMA)
-        return conn
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.executescript(_SCHEMA)
+            yield conn
+        finally:
+            conn.close()
 
     # -- writes ---------------------------------------------------------
     def index_sources(self, sources: list[IndexedSource],
@@ -481,11 +494,16 @@ class DocumentIndex:
         adapter = get_adapter(adapter_name)
         query_vector = adapter.embed([query])[0]
         with self._connect() as conn:
-            placeholders = ",".join("?" for _ in live)
-            rows = conn.execute(
-                f"SELECT id, doc_path, chunk_no, section, page, offset, text FROM chunks"
-                f" WHERE doc_path IN ({placeholders}) ORDER BY id LIMIT ?",
-                (*live.keys(), MAX_INDEX_CHUNKS)).fetchall()
+            # Static SQL only: one parameterised query per live document,
+            # so no placeholder list is ever interpolated into a query.
+            rows: list[tuple] = []
+            for doc_path in sorted(live):
+                rows.extend(conn.execute(
+                    "SELECT id, doc_path, chunk_no, section, page, offset, text"
+                    " FROM chunks WHERE doc_path = ? ORDER BY id LIMIT ?",
+                    (doc_path, MAX_INDEX_CHUNKS)).fetchall())
+            rows.sort(key=lambda r: r[0])
+            rows = rows[:MAX_INDEX_CHUNKS]
             id_set = {r[0] for r in rows}
             # Lexical ranking via FTS5 BM25.
             fts_query = " OR ".join(f'"{t}"' for t in sorted(set(tokens)))
@@ -503,10 +521,12 @@ class DocumentIndex:
             try:
                 import numpy as np
                 ids = [r[0] for r in rows]
-                blobs = conn.execute(
-                    f"SELECT chunk_id, vector FROM embeddings WHERE chunk_id IN "
-                    f"({','.join('?' for _ in ids)})", (*ids,)).fetchall() if ids else []
-                by_id = {cid: _unpack(blob) for cid, blob in blobs}
+                # Static SQL only: embeddings are fetched whole and matched
+                # to chunk ids in Python, so no id list is interpolated.
+                all_blobs = conn.execute(
+                    "SELECT chunk_id, vector FROM embeddings").fetchall()
+                by_id = {cid: _unpack(blob) for cid, blob in all_blobs
+                         if cid in set(ids)}
                 matrix = np.array([by_id[i] for i in ids if i in by_id], dtype=np.float32)
                 kept = [i for i in ids if i in by_id]
                 if len(kept):
