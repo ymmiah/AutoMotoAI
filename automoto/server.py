@@ -290,6 +290,8 @@ from automoto import financial_intelligence
 app.include_router(financial_intelligence.router)  # V5 private manual cash ledger and reports
 from automoto import business_workflows
 app.include_router(business_workflows.router)  # V7 private review-only business workflow audit
+from automoto import invoice_processing
+app.include_router(invoice_processing.router)  # Phase 2 invoice extraction, validation and approval
 from automoto import spreadsheet_release
 app.include_router(spreadsheet_release.router)  # V8 private recovery, verification and readiness
 
