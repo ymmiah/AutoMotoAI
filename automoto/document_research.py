@@ -24,6 +24,7 @@ from pypdf.errors import PdfReadError
 
 from automoto import office, tenancy, local_llm
 from automoto.document_ai import _loopback_ollama, _selected_model
+from automoto.document_index import DocumentIndex, IndexedSource
 from automoto.document_workspace import _allowed_source, _draft, _root, _sha
 from automoto.visual_studio import _auth
 
@@ -53,8 +54,25 @@ class PinnedSource(BaseModel):
 class ResearchIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(..., min_length=3, max_length=320)
-    sources: list[PinnedSource] = Field(..., min_length=1, max_length=MAX_SOURCES)
+    # v8: up to 50 pinned sources (was 5). The ephemeral path still
+    # searches at most 5 at once; the index path may address the whole
+    # index, so an empty list with use_index=True searches all live docs.
+    sources: list[PinnedSource] = Field(..., min_length=0, max_length=50)
     mode: Literal["evidence", "outline", "synthesis"] = "evidence"
+    # v8: search the persistent local index instead of re-extracting sources
+    # on every request. Ephemeral search remains the default.
+    use_index: bool = False
+
+
+class IndexIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sources: list[PinnedSource] = Field(..., min_length=1, max_length=50)
+    adapter: Literal["hashed", "ollama", "sentence-transformers"] = "hashed"
+
+
+class IndexDeleteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str | None = Field(None, min_length=3, max_length=600)
 
 
 @dataclass(frozen=True)
@@ -291,6 +309,37 @@ def source_info(path: str, request: Request):
             "sha256": _sha(file), "bytes": file.stat().st_size, "read_only": True}
 
 
+@router.post("/index")
+def build_index(body: IndexIn, request: Request):
+    """v8: build (or rebuild) the persistent local index for pinned sources.
+
+    Opt-in and explicit: indexing writes only inside the private
+    ``artifacts/documents/index/`` folder. No source file is modified.
+    """
+    _auth(request)
+    index = DocumentIndex()
+    result = index.index_sources(
+        [IndexedSource(path=s.path, sha256=s.sha256) for s in body.sources],
+        adapter_name=body.adapter)
+    return {"indexed": result["indexed"], "skipped": result["skipped"],
+            "adapter": result["adapter"], "index": result["index"],
+            "note": "Sources are indexed locally only. Delete or rebuild the index "
+                    "at any time; a changed source is excluded until re-indexed."}
+
+
+@router.get("/index/status")
+def index_status(request: Request):
+    _auth(request)
+    return DocumentIndex().status()
+
+
+@router.delete("/index")
+def delete_index(body: IndexDeleteIn, request: Request):
+    """v8: delete one indexed document, or the whole index when no path is given."""
+    _auth(request)
+    return DocumentIndex().delete(body.path)
+
+
 @router.post("/query")
 def query_documents(body: ResearchIn, request: Request):
     _auth(request)
@@ -302,16 +351,39 @@ def query_documents(body: ResearchIn, request: Request):
         raise HTTPException(403, "Local AI synthesis is available only in the desktop workspace.")
     extracts = []
     partial = []
-    for src in body.sources:
-        sections, incomplete = _snapshot(src)
-        extracts.append(sections)
-        if incomplete:
-            partial.append(src.path)
-    evidence = _find_evidence(body.query, body.sources, extracts)
-    # Protect claims from mid-request changes; also recheck after any long model call.
-    for src in body.sources:
-        if _sha(_source_path(src.path)) != src.sha256:
-            raise HTTPException(409, "A source changed while evidence was being prepared.")
+    evidence: list[dict[str, Any]] = []
+    stale_sources: list[str] = []
+    retrieval = "ephemeral-lexical"
+    live_sources = len(body.sources)
+    if body.use_index:
+        # v8: search the persistent local index (FTS5 + vector, fused).
+        # Sources are SHA-checked inside the index; changed files are
+        # excluded and reported instead of being searched stale. An empty
+        # source list searches every live document in the index.
+        found = DocumentIndex().search(
+            body.query, top_k=MAX_EVIDENCE,
+            paths=[src.path for src in body.sources] or None)
+        evidence = found["results"]
+        stale_sources = found["stale_sources"]
+        live_sources = found["live_sources"]
+        retrieval = "hybrid-index"
+        if stale_sources:
+            partial.extend(stale_sources)
+    else:
+        if not body.sources or len(body.sources) > MAX_SOURCES:
+            raise HTTPException(
+                422, f"Ephemeral research takes 1 to {MAX_SOURCES} sources; "
+                     "index sources first and use use_index for larger sets.")
+        for src in body.sources:
+            sections, incomplete = _snapshot(src)
+            extracts.append(sections)
+            if incomplete:
+                partial.append(src.path)
+        evidence = _find_evidence(body.query, body.sources, extracts)
+        # Protect claims from mid-request changes; also recheck after any long model call.
+        for src in body.sources:
+            if _sha(_source_path(src.path)) != src.sha256:
+                raise HTTPException(409, "A source changed while evidence was being prepared.")
     synthesis: list[dict[str, Any]] = []
     if body.mode == "synthesis" and evidence:
         synthesis = _synthesise(body.query, evidence)
@@ -322,8 +394,9 @@ def query_documents(body: ResearchIn, request: Request):
         "question": body.query, "mode": body.mode, "evidence": evidence,
         "outline": _outline(body.query, evidence) if body.mode == "outline" else [],
         "synthesis": synthesis, "partial_sources": partial,
+        "stale_sources": stale_sources, "retrieval": retrieval,
         "has_verifiable_matches": bool(evidence), "read_only": True,
-        "source_count": len(body.sources), "requires_approval": True, "applied": False,
+        "source_count": live_sources, "requires_approval": True, "applied": False,
         "limitations": "Quotes match extracted local text, not necessarily the rendered page or factual truth. "
                        "PDF page numbers are reported when available. Extracted DOCX and drafts have no verified "
                        "page positions. Formal references require author-entered metadata. "

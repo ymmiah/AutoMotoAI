@@ -56,8 +56,30 @@ def document_export(ctx: ToolContext, name: str, markdown: str, format: str = "d
     return call_studio(document_workspace.export_document, body, studio_request("POST"))
 
 
+def document_create(ctx: ToolContext, name: str, format: str = "docx",
+                    markdown: str = "", rows: list | None = None) -> str:
+    """v8: create a new document from scratch in any format (docx, pptx,
+    xlsx, pdf, md, txt). Always a new file; nothing is overwritten."""
+    from automoto import document_workspace
+
+    data: dict = {"name": name, "format": format or "docx", "markdown": markdown or ""}
+    if rows is not None:
+        data["rows"] = rows
+    body = document_workspace.CreateIn.model_validate(data)
+    return call_studio(document_workspace.create_document, body, studio_request("POST"))
+
+
+def document_research_index(ctx: ToolContext, sources: list, adapter: str = "hashed") -> str:
+    """v8: build the persistent local document index for pinned sources.
+    Sources are {path, sha256} pairs from document_open. Local only."""
+    from automoto import document_research
+
+    body = document_research.IndexIn.model_validate({"sources": sources, "adapter": adapter})
+    return call_studio(document_research.build_index, body, studio_request("POST"))
+
+
 def document_revise(ctx: ToolContext, path: str, find: str, replace: str, sha256: str) -> str:
-    """New DOCX copy only. The studio refuses the write when sha256 is stale."""
+    """New DOCX, PPTX or XLSX copy only. The studio refuses the write when sha256 is stale."""
     from automoto import document_workspace
 
     body = document_workspace.ReplaceIn.model_validate(
@@ -107,7 +129,9 @@ STUDIO = StudioSpec(
     how="Open with document_open (keep the sha256). Write a new draft with document_save, "
         "check it with document_preflight, and publish a new Word file with document_export "
         "(publication.reference_style harvard or ieee, and publication.references the user supplied). "
+        "document_create makes a new docx, pptx, xlsx, pdf, md or txt from scratch. "
         "document_revise makes a new copy only when sha256 still matches. "
+        "document_research_index builds the persistent local index for research; "
         "document_ai_review is local and returns a proposal; do not apply it yourself. "
         "Finish by naming the file.",
     labels={
@@ -115,6 +139,8 @@ STUDIO = StudioSpec(
         "document_open": "Opening the document",
         "document_preflight": "Checking the document",
         "document_save": "Saving the draft",
+        "document_create": "Creating the document",
+        "document_research_index": "Indexing documents for research",
         "document_export": "Exporting the document",
         "document_revise": "Saving a revised copy",
         "document_ai_review": "Reviewing the wording",
@@ -130,8 +156,16 @@ STUDIO = StudioSpec(
         Tool("document_export", "Publish a new Word or PDF file from markdown, with Harvard or IEEE references "
              "when publication is set. PDF needs LibreOffice. Originals are not overwritten.",
              obj({**_PROPS, "format": S}, ["name", "markdown"]), "risky", document_export),
-        Tool("document_revise", "Replace one exact phrase in a new DOCX copy. Requires sha256 from document_open. "
-             "The original file is not changed.",
+        Tool("document_create", "Create a new document from scratch: docx, pptx, xlsx, pdf, md or txt. "
+             "Markdown drives docx/pptx/pdf; spreadsheets take rows or a Markdown table. "
+             "Always a new file; originals are not overwritten.",
+             obj({**_PROPS, "format": S, "rows": OBJ}, ["name"]), "risky", document_create),
+        Tool("document_research_index", "Build the persistent local index for pinned Document Assistant "
+             "sources so later research uses local embeddings + FTS5 instead of re-extracting. "
+             "Sources are {path, sha256} pairs from document_open. Local only, no cloud.",
+             obj({"sources": OBJ, "adapter": S}, ["sources"]), "risky", document_research_index),
+        Tool("document_revise", "Replace one exact phrase in a new DOCX, PPTX or XLSX copy. "
+             "Requires sha256 from document_open. The original file is not changed.",
              obj({"path": S, "find": S, "replace": S, "sha256": S}, ["path", "find", "replace", "sha256"]),
              "risky", document_revise),
         Tool("document_ai_review", "Ask the local offline model to proofread, rewrite or summarise. "
