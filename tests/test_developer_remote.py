@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 
 from automoto import developer_remote as remote
 from automoto import git_auth, redaction, sandbox, secretscan, server
+from tests.gitutil import run_git
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 AUTH = {"X-AutoMoto-Token": server.SESSION_TOKEN}
@@ -103,10 +104,9 @@ class FakeAPI:
 
 
 def _git(cwd, *args, check=True):
-    # core.autocrlf=false: match the engine, which ignores the system config Git for Windows ships with.
-    return subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "core.autocrlf=false",
-                           "-c", "init.defaultBranch=main", "-c", "protocol.file.allow=always", *args],
-                          cwd=cwd, capture_output=True, text=True, check=check)
+    # protocol.file.allow: local clone/push against the fake git-http-backend fixture.
+    # core.autocrlf=false is included by run_git, matching the engine on Windows.
+    return run_git(cwd, *args, check=check, extra=["-c", "protocol.file.allow=always"])
 
 
 class GitServer:
@@ -240,7 +240,7 @@ def world(tmp_path, monkeypatch, caplog):
     home.mkdir()
     for var in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME"):
         monkeypatch.setenv(var, str(home))
-    monkeypatch.delenv("GIT_CONFIG_GLOBAL", raising=False)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     kc = FakeKeychain()
     monkeypatch.setattr(git_auth, "_backend_override", kc)
     api = FakeAPI()
@@ -266,7 +266,7 @@ def world(tmp_path, monkeypatch, caplog):
 def project(w, name="app", files=None, trust=True) -> Path:
     root = sandbox.default_root() / name
     root.mkdir(parents=True, exist_ok=True)
-    _git(root, "init", "-q")
+    _git(root, "init", "-q", "-b", "main")
     for rel, text in (files or {"README.md": "hello\n"}).items():
         f = root / rel
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -898,7 +898,7 @@ def test_manual_fallback_and_windows_quoting(world):
     assert '"' + fb["patch"]["path"] + '"' in win
     assert "'" not in fb["patch"]["path"] or "\\'" in nix or "'\"'\"'" in nix
     fresh = w.tmp / "fresh-bundle"
-    _git(w.tmp, "init", "-q", str(fresh))
+    _git(w.tmp, "init", "-q", "-b", "main", str(fresh))
     _git(fresh, "pull", "-q", fb["bundle"]["path"], fb["bundle"]["ref"])
     assert (fresh / "img.png").exists()
     assert_no_token(w, root, json.dumps(fb))
