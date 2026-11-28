@@ -1,4 +1,24 @@
+import os
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_git(monkeypatch):
+    """Host Git config (signing, identity, default branch) must not change tests."""
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "0")
+    monkeypatch.delenv("GIT_CONFIG_PARAMETERS", raising=False)
+    for key in [k for k in os.environ
+                if k.startswith("GIT_CONFIG_KEY_") or k.startswith("GIT_CONFIG_VALUE_")]:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "T")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "t@example.com")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "T")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "t@example.com")
+    monkeypatch.setenv("GIT_TERMINAL_PROMPT", "0")
 
 
 @pytest.fixture(autouse=True)

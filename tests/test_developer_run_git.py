@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from automoto import developer_git as dgit
 from automoto import developer_run as drun
 from automoto import sandbox, server
+from tests.gitutil import run_git
 
 AUTH = {"X-AutoMoto-Token": server.SESSION_TOKEN}
 RUN = "/api/developer/studio/run"
@@ -204,8 +205,7 @@ def test_csp_allows_only_loopback_preview_frames(env):
 # --------------------------------------------------------------------------- V45 Git
 
 def git(root, *args):
-    return subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@example.com", *args],
-                          cwd=root, capture_output=True, text=True, check=True)
+    return run_git(root, *args)
 
 
 def gstatus(client, root):
@@ -265,7 +265,7 @@ def test_git_init_stage_commit_branch_and_never_push(env):
 @pytestmark_git
 def test_git_never_uses_parent_repository(env):
     parent = make("parent", {"README.md": "p"})
-    git(parent, "init", "-q")
+    git(parent, "init", "-q", "-b", "main")
     child = make("parent/child", {"a.txt": "a"})
     st = gstatus(env, child)
     assert st["repository"] is False
@@ -276,7 +276,7 @@ def test_git_never_uses_parent_repository(env):
 @pytestmark_git
 def test_git_refuses_repositories_that_run_programs(env):
     root = make("evil", {"a.txt": "a"})
-    git(root, "init", "-q")
+    git(root, "init", "-q", "-b", "main")
     git(root, "config", "filter.x.clean", "touch pwned")
     r = env.get(GIT + "/status", headers=AUTH, params={"project": str(root)})
     assert r.status_code == 403 and "filter.x.clean" in r.text
@@ -309,8 +309,7 @@ def test_conflict_view_and_resolution(env):
     git(root, "switch", "-q", "main")
     (root / "story.txt").write_text("start\nmy line\nend\n")
     git(root, "commit", "-q", "-am", "mine")
-    subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@example.com", "merge", "other"],
-                   cwd=root, capture_output=True)
+    run_git(root, "merge", "other", check=False)
     trust(env, root)
     st = gstatus(env, root)
     assert st["counts"]["conflicts"] == 1 and st["merging"]
@@ -326,6 +325,40 @@ def test_conflict_view_and_resolution(env):
     assert r.json()["counts"]["conflicts"] == 0
     r = post(env, "/commit", root, message="Merge other", confirmed=True, author_name="T", author_email="t@example.com")
     assert r.status_code == 200, r.text
+
+
+@pytestmark_git
+def test_commit_still_works_when_host_git_requires_signing(env, tmp_path, monkeypatch):
+    """A host that signs every commit (or defaults to master) must not break tests or the app."""
+    cfg = tmp_path / "hostile.gitconfig"
+    cfg.write_text(
+        "[commit]\n\tgpgsign = true\n"
+        "[tag]\n\tgpgsign = true\n"
+        "[init]\n\tdefaultBranch = master\n"
+        "[gpg]\n\tformat = ssh\n\tprogram = /usr/bin/false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(cfg))
+    monkeypatch.delenv("GIT_CONFIG_NOSYSTEM", raising=False)
+    monkeypatch.delenv("GIT_CONFIG_SYSTEM", raising=False)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "0")
+
+    helper_root = tmp_path / "helper-repo"
+    helper_root.mkdir()
+    git(helper_root, "init", "-q", "-b", "main")
+    (helper_root / "a.txt").write_text("a\n", encoding="utf-8")
+    git(helper_root, "add", ".")
+    git(helper_root, "commit", "-q", "-m", "ok")
+    assert git(helper_root, "symbolic-ref", "--short", "HEAD").stdout.strip() == "main"
+
+    app_root = make("signed-host", {"app.py": "print('hi')\n"})
+    trust(env, app_root)
+    assert post(env, "/init", app_root, confirmed=True).status_code == 200
+    assert post(env, "/stage", app_root, paths=["app.py"]).status_code == 200
+    result = post(env, "/commit", app_root, message="From a signing host", confirmed=True,
+                  author_name="Test Person", author_email="test@example.com")
+    assert result.status_code == 200, result.text
+    assert result.json()["recent"][0]["subject"] == "From a signing host"
 
 
 def test_conflict_parser_handles_diff3():
