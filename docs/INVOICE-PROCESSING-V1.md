@@ -103,3 +103,33 @@ deterministic with no committed binaries:
 - Currencies are limited to the configured ISO set; VAT policy defaults to
   standard 20 / reduced 5 / zero 0 and is configurable per extraction.
 - No web UI yet for the invoice queue — REST + agent tools only.
+
+## Fixes after V1 merge (PR #120)
+
+A reproduced bug hunt after the V1 merge found 9 defects, all fixed in
+`automoto/invoice_processing.py` with a regression test each (25 invoice
+tests, all passing):
+
+1. Whole thousands amounts (`1,000`, `1.000`, `12,345`) failed to parse and
+   silently lost the subtotal/total; they now parse, including `1.234.567`.
+2. The letterhead seller fallback was dead code (`_labelled_text` never
+   returns `None`); it now runs when no seller label matches, and skips
+   lines carrying a money amount so a `Total:` line is never taken as seller.
+3. Corrupt/non-UTF-8 `.txt`/`.md`/`.docx`/`.xlsx`/`.csv` sources crashed
+   with HTTP 500; they now return 422 like corrupt PDFs.
+4. Non-finite VAT rates (`NaN`, `sNaN`, `Infinity`) crashed with HTTP 500 in
+   the VAT policy and in corrections; they are now rejected with 422.
+5. Correcting a text field to a blank string bypassed required-field
+   validation and the record could be approved with no seller; blank
+   corrections are now rejected with 422, and validation treats blank
+   required fields as missing.
+6. A `Total excl. VAT:` line placed before the real total hijacked the
+   total; total extraction now skips subtotal-labelled lines.
+7. XLSX export wrote field values raw, so a value starting with `=` became
+   a live formula; it now uses the same guard as the CSV export.
+8. A currency code word mentioned anywhere (e.g. in a note about EUR) beat
+   the actual `$`/`£` symbols on money lines; symbols on amount lines now
+   take precedence.
+9. Correction values in the audit PDF were interpolated into ReportLab
+   markup unescaped; field, previous and new values are now escaped.
+

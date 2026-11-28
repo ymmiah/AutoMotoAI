@@ -234,28 +234,48 @@ def _extract_pages(path: Path) -> tuple[list[dict], bool, str | None]:
                 EOFError, PdfReadError) as exc:
             raise HTTPException(422, "Could not safely extract this PDF: " + str(exc)[:160]) from None
     if suffix in (".txt", ".md"):
-        text = path.read_text(encoding="utf-8", errors="strict")
+        try:
+            text = path.read_text(encoding="utf-8", errors="strict")
+        except (OSError, UnicodeError) as exc:
+            raise HTTPException(422, "Could not safely read this text source: "
+                                + str(exc)[:160]) from None
         return _lines_of(1, text[:MAX_TEXT_CHARS]), False, None
     if suffix == ".docx":
         from automoto import office
-        facts = office.inspect_file(path)
-        if facts.get("macros"):
-            raise HTTPException(422, "Macro-containing sources are not accepted for invoices.")
-        return _lines_of(1, office.read_docx(path)[:MAX_TEXT_CHARS]), False, None
+        try:
+            facts = office.inspect_file(path)
+            if facts.get("macros"):
+                raise HTTPException(422, "Macro-containing sources are not accepted for invoices.")
+            return _lines_of(1, office.read_docx(path)[:MAX_TEXT_CHARS]), False, None
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(422, "Could not safely extract this document: "
+                                + str(exc)[:160]) from None
     if suffix == ".xlsx":
         from openpyxl import load_workbook
-        book = load_workbook(str(path), read_only=True, data_only=True)
-        lines = []
-        for sheet in book.worksheets:
-            for row in sheet.iter_rows(values_only=True):
-                cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
-                if cells:
-                    lines.append({"page": 1, "line": len(lines) + 1,
-                                  "text": " ".join(cells), "sheet": sheet.title})
+        try:
+            book = load_workbook(str(path), read_only=True, data_only=True)
+            lines = []
+            for sheet in book.worksheets:
+                for row in sheet.iter_rows(values_only=True):
+                    cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+                    if cells:
+                        lines.append({"page": 1, "line": len(lines) + 1,
+                                      "text": " ".join(cells), "sheet": sheet.title})
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(422, "Could not safely extract this spreadsheet: "
+                                + str(exc)[:160]) from None
         return lines[:MAX_TEXT_CHARS // 40], False, None
     if suffix == ".csv":
-        text = path.read_text(encoding="utf-8-sig", errors="strict")
-        rows = list(csv.reader(io.StringIO(text)))
+        try:
+            text = path.read_text(encoding="utf-8-sig", errors="strict")
+            rows = list(csv.reader(io.StringIO(text)))
+        except (OSError, UnicodeError, csv.Error) as exc:
+            raise HTTPException(422, "Could not safely read this CSV source: "
+                                + str(exc)[:160]) from None
         lines = [{"page": 1, "line": i + 1, "text": " | ".join(c.strip() for c in row if c.strip())}
                  for i, row in enumerate(rows)
                  if any(c.strip() for c in row)]
@@ -289,7 +309,7 @@ def _parse_money(raw: str) -> Decimal | None:
         .replace("¥", "").replace("₹", "").replace("\u00a0", " ").strip()
     text = re.sub(r"^(GBP|EUR|USD|CHF|JPY)\s+", "", text, flags=re.I)
     text = text.replace(" ", "")
-    if not re.fullmatch(r"-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|-?\d+(?:[.,]\d{1,2})?", text):
+    if not re.fullmatch(r"-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|-?\d+(?:[.,]\d{1,2})?", text):
         return None
     if "," in text and "." in text:
         # The last separator is the decimal point; the other groups thousands.
@@ -301,6 +321,13 @@ def _parse_money(raw: str) -> Decimal | None:
         parts = text.split(",")
         text = text.replace(",", ".") if len(parts) == 2 and len(parts[-1]) in (1, 2) \
             else text.replace(",", "")
+    elif "." in text:
+        # A lone dot with only 3-digit groups (1.000, 1.234.567) is a thousands
+        # separator, not a decimal point; 1.5 and 12.34 stay decimal.
+        parts = text.split(".")
+        if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]) \
+                and len(parts[0].lstrip("-")) <= 3:
+            text = text.replace(".", "")
     try:
         value = Decimal(text)
     except InvalidOperation:
@@ -387,9 +414,13 @@ _SUBTOTAL_LABELS = ("subtotal", "sub-total", "net total", "net amount", "total e
 _TAX_LABELS = ("vat amount", "vat", "tax amount", "tax", "gst amount", "sales tax")
 
 
-def _labelled_money(lines: list[dict], labels: tuple[str, ...]) -> dict | None:
+def _labelled_money(lines: list[dict], labels: tuple[str, ...],
+                    skip_labels: tuple[str, ...] = ()) -> dict | None:
     pattern = re.compile(r"^\s*(?:" + "|".join(labels) + r")\s*[:#-]?\s*(.+)$", re.I)
+    skip = re.compile(r"^\s*(?:" + "|".join(skip_labels) + r")\b", re.I) if skip_labels else None
     for line in lines:
+        if skip and skip.search(line["text"]):
+            continue
         match = pattern.match(line["text"])
         if not match:
             continue
@@ -435,19 +466,28 @@ def _labelled_text(lines: list[dict], labels: tuple[str, ...],
 
 def _party(lines: list[dict], labels: tuple[str, ...], fallback_first: bool = False) -> dict:
     labelled = _labelled_text(lines, labels)
-    if labelled is not None:
+    if labelled["value"] is not None:
         return labelled
     if fallback_first:
         # Seller is often the first non-empty line(s) of a letterhead invoice.
         for line in lines[:3]:
             text = line["text"].strip()
-            if text and "invoice" not in text.lower() and len(text) <= 80:
+            if text and "invoice" not in text.lower() and len(text) <= 80 \
+                    and _money_in(text) is None:
                 return _field(text, 0.65, line, 0, len(text))
     return _field(None, 0.0)
 
 
 def _currency(lines: list[dict], totals: dict) -> dict:
     joined = "\n".join(item["text"] for item in lines)
+    # A currency symbol on a line that actually carries a money amount beats a
+    # bare code word mentioned anywhere in the document (e.g. a note about an
+    # exchange rate), so check amount lines first.
+    for symbol, code in SYMBOL_TO_CURRENCY.items():
+        for line in lines:
+            if symbol in line["text"] and _money_in(line["text"]) is not None:
+                return _field(code, 0.9, line, line["text"].index(symbol),
+                              line["text"].index(symbol) + 1)
     for code in sorted(CURRENCIES):
         if re.search(r"\b" + code + r"\b", joined):
             for line in lines:
@@ -570,7 +610,7 @@ def _parse_invoice(lines: list[dict], policy: dict[str, str]) -> dict:
     vat_number = _labelled_text(lines, _VAT_NO_LABELS, 40)
     subtotal = _labelled_money(lines, _SUBTOTAL_LABELS)
     tax_amount = _labelled_money(lines, _TAX_LABELS)
-    total = _labelled_money(lines, _TOTAL_LABELS)
+    total = _labelled_money(lines, _TOTAL_LABELS, _SUBTOTAL_LABELS)
     vat_rate = _vat_rate(lines, policy)
     currency = _currency(lines, {})
     bank = _bank_fields(lines)
@@ -617,7 +657,8 @@ def _validate(record: dict, policy: dict[str, str],
     required = {"invoice_number": "Invoice number", "issue_date": "Issue date",
                 "seller": "Seller", "total": "Total amount", "currency": "Currency"}
     for key, label in required.items():
-        if fields[key]["value"] is None:
+        value = fields[key]["value"]
+        if value is None or (isinstance(value, str) and not value.strip()):
             issues.append(_issue("missing_field", "error", f"{label} was not found in the source.", key))
 
     # Line arithmetic: qty x unit price, then lines vs subtotal, then total.
@@ -751,6 +792,11 @@ def _export_csv(record: dict) -> bytes:
     return ("\ufeff" + out.getvalue()).encode("utf-8")
 
 
+def _xlsx_safe(value: Any) -> Any:
+    """Same formula-injection guard as _csv_safe, for XLSX string cells."""
+    return _csv_safe(value) if isinstance(value, str) else value
+
+
 def _export_xlsx(record: dict) -> bytes:
     from openpyxl import Workbook
     book = Workbook()
@@ -762,27 +808,30 @@ def _export_xlsx(record: dict) -> bytes:
         if key == "bank":
             continue
         source = item.get("source") or {}
-        sheet.append([key, item["value"], item["confidence"],
+        sheet.append([key, _xlsx_safe(item["value"]), item["confidence"],
                       source.get("page"), source.get("line")])
     for key, item in fields["bank"].items():
-        sheet.append([f"bank.{key}", item["value"], item["confidence"], None, None])
+        sheet.append([f"bank.{key}", _xlsx_safe(item["value"]), item["confidence"], None, None])
     sheet.append([])
     sheet.append(["Line", "Description", "Quantity", "Unit price", "Line total"])
     for index, item in enumerate(record["lines"], start=1):
-        sheet.append([index, item["description"]["value"], item["quantity"]["value"],
-                      item["unit_price"]["value"], item["line_total"]["value"]])
+        sheet.append([index, _xlsx_safe(item["description"]["value"]),
+                      _xlsx_safe(item["quantity"]["value"]),
+                      _xlsx_safe(item["unit_price"]["value"]),
+                      _xlsx_safe(item["line_total"]["value"])])
     evidence = book.create_sheet("Evidence")
     evidence.append(["Field", "Value", "Confidence", "Verbatim source text"])
     for key, item in fields.items():
         if key == "bank":
             continue
         source = item.get("source") or {}
-        evidence.append([key, item["value"], item["confidence"], source.get("text") or ""])
+        evidence.append([key, _xlsx_safe(item["value"]), item["confidence"],
+                         _xlsx_safe(source.get("text") or "")])
     issues = book.create_sheet("Issues")
     issues.append(["Code", "Severity", "Field", "Message"])
     for issue in record["issues"]:
         issues.append([issue["code"], issue["severity"], issue.get("field") or "",
-                       issue["message"]])
+                       _xlsx_safe(issue["message"])])
     buffer = io.BytesIO()
     book.save(buffer)
     return buffer.getvalue()
@@ -856,7 +905,8 @@ def _export_pdf(record: dict) -> bytes:
         story.append(Paragraph("Manual corrections", bold))
         for correction in record["corrections"]:
             story.append(Paragraph(
-                f"{correction['field']}: {correction['previous']} -> {correction['new']} "
+                f"{escape(correction['field'])}: {escape(str(correction['previous']))} -> "
+                f"{escape(str(correction['new']))} "
                 f"({escape(correction['reason'])}, {correction['at']})", text))
     if record.get("decisions"):
         story.append(Spacer(1, 5 * mm))
@@ -927,7 +977,7 @@ def _policy(body: ExtractIn) -> dict[str, str]:
                 value = Decimal(str(rate))
             except InvalidOperation:
                 raise HTTPException(422, "Invalid VAT policy rate.") from None
-            if value < 0 or value > 100:
+            if not value.is_finite() or value < 0 or value > 100:
                 raise HTTPException(422, "VAT policy rate is outside 0-100%.")
             policy[name] = str(value)
     return policy
@@ -1018,6 +1068,8 @@ def _apply_correction(record: dict, field_path: str, value: str | None) -> Any:
     if bank:
         target = record["fields"]["bank"][bank.group(1)]
         previous = target["value"]
+        if value is not None and not value.strip():
+            raise HTTPException(422, "Correction value must not be blank.")
         target["value"] = value
         target["confidence"] = 1.0
         target["source"] = None
@@ -1037,6 +1089,8 @@ def _apply_correction(record: dict, field_path: str, value: str | None) -> Any:
                 raise HTTPException(422, "Correction value is not a valid amount.")
             target["value"] = str(_parse_money(value)) if value is not None else None
         else:
+            if value is not None and not value.strip():
+                raise HTTPException(422, "Correction value must not be blank.")
             target["value"] = value
         target["confidence"] = 1.0
         target["source"] = None
@@ -1059,7 +1113,7 @@ def _apply_correction(record: dict, field_path: str, value: str | None) -> Any:
                 rate = Decimal(str(value))
             except InvalidOperation:
                 raise HTTPException(422, "Correction value is not a valid VAT rate.") from None
-            if rate < 0 or rate > 100:
+            if not rate.is_finite() or rate < 0 or rate > 100:
                 raise HTTPException(422, "VAT rate is outside 0-100%.")
             target["value"] = str(rate)
         else:
@@ -1069,6 +1123,8 @@ def _apply_correction(record: dict, field_path: str, value: str | None) -> Any:
             raise HTTPException(422, "Correction value is not a supported currency code.")
         target["value"] = value.upper() if value is not None else None
     else:
+        if value is not None and not value.strip():
+            raise HTTPException(422, "Correction value must not be blank.")
         target["value"] = value
     target["confidence"] = 1.0
     target["source"] = None
