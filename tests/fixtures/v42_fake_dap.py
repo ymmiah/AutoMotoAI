@@ -1,6 +1,7 @@
 """A tiny fake Debug Adapter used by the V42 tests. It crashes on 'continue'."""
 import json
 import os
+import time
 import sys
 
 source = sys.argv[1] if len(sys.argv) > 1 else "prog.py"
@@ -66,6 +67,12 @@ while True:
     elif cmd == "threads":
         respond(req, {"threads": [{"id": 1, "name": "main"}]})
     elif cmd == "continue":
+        linger = float(sys.argv[sys.argv.index("--linger") + 1]) if "--linger" in sys.argv else 0.0
+        if linger:
+            # Close the pipe but stay alive a while, like an adapter that isn't reaped yet.
+            sys.stdout.flush()
+            os.close(1)
+            time.sleep(linger)
         os._exit(3)  # simulate the debugger crashing
     elif cmd == "disconnect":
         respond(req)

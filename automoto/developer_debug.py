@@ -300,6 +300,9 @@ def _relative(root: Path, raw: str | None) -> tuple[str | None, bool]:
     return Path(raw).name or raw[:120], False
 
 
+_FINAL_STATES = ("exited", "terminated", "stopped_by_user", "timed_out", "failed")
+
+
 def _kill_tree(proc: subprocess.Popen, extra_pids: set[int]) -> None:
     sid = None
     if os.name != "nt":
@@ -501,22 +504,26 @@ class Session:
                                  "message": "Not supported by AutoMoto."})
         except (EOFError, OSError, ValueError, UnicodeError, TypeError, json.JSONDecodeError):
             pass
+        # The adapter's pipe closed. Before anyone can see "adapter_crashed" (and offer Restart),
+        # make sure the adapter and the program are really gone and reaped. Otherwise a status
+        # poll in that gap says "crashed" while the debugger still shows as running.
+        if self.status not in _FINAL_STATES:
+            time.sleep(0.2)  # let the adapter's last words reach stderr_tail for the message below
+        self.cleanup()
         with self.lock:
             for event, holder in list(self.pending.values()):
                 holder.append({"_eof": True})
                 event.set()
             self.pending.clear()
-            if self.status not in ("exited", "terminated", "stopped_by_user", "timed_out", "failed"):
+            if self.status not in _FINAL_STATES:
                 self.status = "adapter_crashed"
                 self.error = ("The debugger itself stopped unexpectedly. Your program was stopped too. "
                               "Press Restart to try again with the same stop points.")
-                time.sleep(0.2)
                 if "No module named debugpy" in self.stderr_tail:
                     self.error = ("debugpy isn't installed for this Python. Install it, then press Restart: "
                                   + DEBUGGERS["debugpy"]["install"][_host()])
                 elif "dap" in self.stderr_tail.lower() and "interpreter" in self.stderr_tail.lower():
                     self.error = "This GDB is too old for debugging from AutoMoto. GDB 14 or newer is needed."
-        self.cleanup()
 
     def _event(self, name: str, body: dict) -> None:
         if name == "initialized":

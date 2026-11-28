@@ -149,6 +149,42 @@ def test_fake_session_stack_variables_watch_crash_and_restart(project, fake_adap
     assert stopped["status"] == "stopped_by_user" and stopped["debugger_running"] is False
 
 
+def test_crash_never_reports_restart_while_debugger_still_running(project, fake_adapter, monkeypatch):
+    """Regression: 'crashed + Restart available' must never be visible while the debugger runs.
+
+    The fake adapter closes its pipe but lingers for 1.5 s before exiting (as on macOS, where the
+    pipe can close before the process is reaped). Poll as fast as possible and check every
+    snapshot is self-consistent.
+    """
+    # A second fake adapter that closes its pipe on 'continue' but stays alive for 1.5 s.
+    monkeypatch.setitem(debug.DEBUGGERS, "fakedap", {**debug.DEBUGGERS["fakedap"],
+                                                     "args": [str(FAKE.resolve()), "--linger", "1.5"]})
+    real_kill = debug._kill_tree
+
+    def slow_kill(proc, extra):  # widen the old gap between "status flipped" and "process reaped"
+        time.sleep(0.5)
+        real_kill(proc, extra)
+
+    monkeypatch.setattr(debug, "_kill_tree", slow_kill)
+    client, root = project
+    trust(client, root)
+    data = detect(client, root)
+    body = start_body(root, data, "fakedap", breakpoints=[{"path": "prog.py", "line": 3}])
+    sid = client.post(URL + "/start", json=body, headers=AUTH).json()["session_id"]
+    wait_for(client, sid, lambda d: d["status"] == "stopped" and d["frames"] and not d["stop"]["inspecting"])
+    client.post(URL + "/control", json={"session_id": sid, "action": "continue"}, headers=AUTH)
+    deadline = time.monotonic() + 40
+    while True:
+        state = client.get(URL + "/state", params={"session_id": sid}, headers=AUTH).json()
+        # Whenever Restart is offered the debugger must already be stopped.
+        assert not (state["restart_available"] and state["debugger_running"]), state
+        if state["status"] == "adapter_crashed":
+            break
+        assert time.monotonic() < deadline, f"never crashed; last state {state}"
+        time.sleep(0.005)
+    assert state["restart_available"] is True and state["debugger_running"] is False
+
+
 def test_restart_refuses_changed_program(project, fake_adapter):
     client, root = project
     trust(client, root)
