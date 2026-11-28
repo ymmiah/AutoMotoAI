@@ -254,7 +254,8 @@ def test_missing_fields_are_never_invented(client):
     assert record["fields"]["issue_date"]["value"] is None
     # Currency is genuinely evidenced by the £ symbol, not invented.
     assert record["fields"]["currency"]["value"] == "GBP"
-    assert record["fields"]["currency"]["confidence"] == 0.85
+    # The £ sits on a line carrying a money amount, so it is direct evidence.
+    assert record["fields"]["currency"]["confidence"] == 0.9
 
 
 def test_non_invoice_document_and_corrupt_pdf(client):
@@ -371,7 +372,148 @@ def test_money_and_date_parsing_units():
     assert str(invoice_processing._parse_money("£1,234.56")) == "1234.56"
     assert str(invoice_processing._parse_money("100,00")) == "100.00"
     assert invoice_processing._parse_money("not money") is None
+    # Whole thousands with no pence must parse, not vanish.
+    assert str(invoice_processing._parse_money("1,000")) == "1000"
+    assert str(invoice_processing._parse_money("1.000")) == "1000"
+    assert str(invoice_processing._parse_money("12,345")) == "12345"
+    assert str(invoice_processing._parse_money("£1,000")) == "1000"
+    assert str(invoice_processing._parse_money("1,000.00")) == "1000.00"
+    assert str(invoice_processing._parse_money("1.234.567")) == "1234567"
+    # Ordinary decimals are untouched by the thousands handling.
+    assert str(invoice_processing._parse_money("1.5")) == "1.5"
+    assert str(invoice_processing._parse_money("12.34")) == "12.34"
     assert invoice_processing._parse_date("03 November 2026") == "2026-11-03"
     assert invoice_processing._parse_date("2026-11-03") == "2026-11-03"
     assert invoice_processing._parse_date("03/11/2026") == "2026-11-03"
     assert invoice_processing._parse_date("tomorrow") is None
+
+
+def test_whole_thousands_invoice_extracts(client):
+    lines = [
+        "Acme Supplies Ltd",
+        "Invoice No: INV-THOU-1",
+        "From: Acme Supplies Ltd",
+        "Bill To: Beta Retail Ltd",
+        "Invoice Date: 03 November 2026",
+        "Due Date: 03 December 2026",
+        "VAT No: GB123456789",
+        "Service 1 x £1,000 £1,000",
+        "Subtotal: £1,000",
+        "VAT 20%: £200.00",
+        "VAT: £200.00",
+        "Total: £1,200",
+    ]
+    record = _extract(client, "thousands.pdf", _pdf_bytes(lines)).json()
+    assert record["fields"]["subtotal"]["value"] == "1000", record["fields"]
+    assert record["fields"]["total"]["value"] == "1200"
+    assert len(record["lines"]) == 1
+    assert record["status"] == "ready", record["issues"]
+
+
+def test_letterhead_seller_fallback(client):
+    lines = [line for line in CLEAN if not line.startswith("From:")]
+    record = _extract(client, "letterhead.pdf", _pdf_bytes(lines)).json()
+    assert record["fields"]["seller"]["value"] == "Acme Supplies Ltd"
+    # The fallback seller is low-confidence by design, so the record still
+    # waits in the review queue — but only with a warning, not an error.
+    assert record["status"] == "needs_review"
+    assert all(i["severity"] == "warning" for i in record["issues"])
+    assert any(i["code"] == "low_confidence_field" for i in record["issues"])
+
+
+def test_corrupt_text_spreadsheet_and_document_sources_return_422(client):
+    latin1 = _extract(client, "latin1.txt",
+                      b"Invoice No: INV-LAT-1\nSeller: Caf\xe9 Supplies\nTotal: \xa310.00\n")
+    assert latin1.status_code == 422, latin1.text
+    corrupt_xlsx = _extract(client, "bad.xlsx", b"this is not a zip file at all")
+    assert corrupt_xlsx.status_code == 422, corrupt_xlsx.text
+    corrupt_docx = _extract(client, "bad.docx", b"this is not a docx file")
+    assert corrupt_docx.status_code == 422, corrupt_docx.text
+    latin1_csv = _extract(client, "latin1.csv", b"Invoice No,INV-CSV-1\nTotal,\xff10.00\n")
+    assert latin1_csv.status_code == 422, latin1_csv.text
+
+
+def test_nan_vat_rates_are_rejected(client):
+    record = _extract(client, "nan.pdf", _pdf_bytes(CLEAN)).json()
+    for bad_rate in ("NaN", "sNaN", "Infinity", "-Infinity"):
+        response = client.post(API + "/correct", headers=AUTH, json={
+            "id": record["id"], "field": "vat_rate_percent", "value": bad_rate,
+            "reason": "Checking a non-finite VAT rate is rejected."})
+        assert response.status_code == 422, (bad_rate, response.text)
+    bad_policy = _extract(client, "nan-policy.pdf", _pdf_bytes(CLEAN),
+                          vat_policy={"weird": "NaN"})
+    assert bad_policy.status_code == 422, bad_policy.text
+
+
+def test_blank_correction_is_rejected(client):
+    record = _extract(client, "blank.pdf",
+                      _pdf_bytes(["Invoice No: INV-BLANK-1", "Total: £10.00"])).json()
+    assert record["fields"]["seller"]["value"] is None
+    for blank in ("", "   "):
+        response = client.post(API + "/correct", headers=AUTH, json={
+            "id": record["id"], "field": "seller", "value": blank,
+            "reason": "Blank seller corrections must be rejected."})
+        assert response.status_code == 422, (repr(blank), response.text)
+    fixed = client.post(API + "/correct", headers=AUTH, json={
+        "id": record["id"], "field": "seller", "value": "Acme Supplies Ltd",
+        "reason": "Seller name read from the paper invoice."})
+    assert fixed.status_code == 200, fixed.text
+    dated = client.post(API + "/correct", headers=AUTH, json={
+        "id": record["id"], "field": "issue_date", "value": "2026-11-03",
+        "reason": "Issue date read from the paper invoice."})
+    assert dated.status_code == 200, dated.text
+    # Only warnings remain (no line items in this minimal fixture), so the
+    # record waits in review but approval is not blocked by an error.
+    assert dated.json()["status"] == "needs_review", dated.json()["issues"]
+    assert all(i["severity"] == "warning" for i in dated.json()["issues"])
+    approved = client.post(API + "/decide", headers=AUTH, json={
+        "id": record["id"], "action": "approve", "reason": "Corrections verified."})
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+
+
+def test_total_excl_vat_does_not_hijack_total(client):
+    lines = [line.replace("Subtotal: £44.98", "Total excl. VAT: £44.98") for line in CLEAN]
+    record = _extract(client, "excl.pdf", _pdf_bytes(lines)).json()
+    assert record["fields"]["subtotal"]["value"] == "44.98", record["fields"]
+    assert record["fields"]["total"]["value"] == "53.98"
+    assert record["status"] == "ready", record["issues"]
+
+
+def test_xlsx_export_guards_formula_values(client):
+    record = _extract(client, "formula.pdf", _pdf_bytes(CLEAN)).json()
+    corrected = client.post(API + "/correct", headers=AUTH, json={
+        "id": record["id"], "field": "seller", "value": "=2+2",
+        "reason": "Seller value starts with an equals sign."})
+    assert corrected.status_code == 200, corrected.text
+    exported = client.post(API + "/export", headers=AUTH,
+                           json={"id": record["id"], "format": "xlsx"})
+    assert exported.status_code == 200, exported.text
+    root = sandbox.default_root()
+    book = load_workbook(str(root / exported.json()["path"]))
+    assert book["Invoice"]["B2"].value == "'=2+2"
+
+
+def test_currency_symbol_on_amounts_beats_code_word_in_note(client):
+    lines = [line.replace("£", "$") for line in CLEAN]
+    lines.append("Note: EUR exchange rate was checked today")
+    record = _extract(client, "usd-note.pdf", _pdf_bytes(lines)).json()
+    assert record["fields"]["currency"]["value"] == "USD", record["fields"]
+    assert record["status"] == "ready", record["issues"]
+
+
+def test_audit_pdf_escapes_correction_values(client):
+    record = _extract(client, "markup.pdf", _pdf_bytes(CLEAN)).json()
+    corrected = client.post(API + "/correct", headers=AUTH, json={
+        "id": record["id"], "field": "seller", "value": "<b>INJECTED</b> & Sons",
+        "reason": "Seller name contains markup characters."})
+    assert corrected.status_code == 200, corrected.text
+    exported = client.post(API + "/export", headers=AUTH,
+                           json={"id": record["id"], "format": "pdf"})
+    assert exported.status_code == 200, exported.text
+    root = sandbox.default_root()
+    pdf_bytes = (root / exported.json()["path"]).read_bytes()
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    text = "\n".join((page.extract_text() or "") for page in reader.pages)
+    assert "<b>INJECTED</b>" in text
+
