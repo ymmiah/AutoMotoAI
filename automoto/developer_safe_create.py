@@ -179,8 +179,16 @@ def _unchanged(root: Path, path: str, expected_sha: str,
         with os.fdopen(os.open(target, flags), "rb") as stream:
             info = os.fstat(stream.fileno())
             if (not stat.S_ISREG(info.st_mode) or
-                (info.st_dev, info.st_ino) != identity or
-                (created_ctime_ns is not None and info.st_ctime_ns != created_ctime_ns)):
+                (info.st_dev, info.st_ino) != identity):
+                return False
+            # On Windows, st_ctime is not a reliable "unchanged since create"
+            # signal. Python can surface the NTFS change time, which Defender,
+            # the indexer, or a later open may bump while the file index and
+            # bytes stay the same — so undo would refuse a file nobody edited.
+            # A replacement still gets a new file index (and a sha256 mismatch
+            # if the contents changed). POSIX keeps the change-time guard.
+            if (os.name != "nt" and created_ctime_ns is not None and
+                    info.st_ctime_ns != created_ctime_ns):
                 return False
             if info.st_size > MAX_NEW_BYTES:
                 return False
